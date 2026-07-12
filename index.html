@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hallan Picking Sheets</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+  :root{
+    --bg:#14171c; --panel:#1e222a; --panel2:#262b35; --panel3:#2c313c;
+    --accent:#ffb627; --accent-dim:#8a6a1f; --danger:#ff5d3a; --green:#4ade80;
+    --text:#e9e7e1; --text-dim:#9aa0ac; --line:#333844;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
+  h1,h2,h3,.display{font-family:'Space Grotesk',sans-serif;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  ::selection{background:var(--accent);color:#14171c;}
+
+  /* ---- layout shell ---- */
+  #app{max-width:1100px;margin:0 auto;padding:0 20px 60px;}
+  header.topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:22px 0;border-bottom:1px solid var(--line);margin-bottom:28px;
+    position:sticky;top:0;background:var(--bg);z-index:20;
+  }
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand .tag{
+    width:34px;height:34px;background:var(--accent);color:#14171c;
+    display:flex;align-items:center;justify-content:center;font-weight:700;
+    font-family:'Space Grotesk',sans-serif;border-radius:4px;
+    clip-path:polygon(0 0,100% 0,100% 70%,50% 100%,0 70%);
+  }
+  .brand h1{font-size:18px;margin:0;letter-spacing:.3px;}
+  .brand .sub{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1.5px;margin-top:1px;}
+  nav.topnav{display:flex;gap:10px;}
+  .navbtn{
+    background:transparent;border:1px solid var(--line);color:var(--text-dim);
+    padding:8px 14px;border-radius:6px;font-size:13px;cursor:pointer;font-family:'Inter',sans-serif;
+    transition:.15s;
+  }
+  .navbtn:hover{border-color:var(--accent);color:var(--accent);}
+
+  .crumbrow{display:flex;align-items:center;gap:8px;margin-bottom:22px;color:var(--text-dim);font-size:13px;}
+  .crumbrow button{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:13px;font-family:'Inter',sans-serif;padding:0;}
+  .crumbrow button:hover{color:var(--accent);}
+  .crumbrow .sep{opacity:.4;}
+  .crumbrow .current{color:var(--text);}
+
+  .view{display:none;animation:fadein .25s ease;}
+  .view.active{display:block;}
+  @keyframes fadein{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+
+  /* ---- login ---- */
+  #view-login{display:flex;min-height:80vh;align-items:center;justify-content:center;}
+  .login-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:40px 36px;width:340px;text-align:center;}
+  .login-card .tag{width:48px;height:48px;margin:0 auto 18px;}
+  .login-card h2{margin:0 0 6px;font-size:19px;}
+  .login-card p{color:var(--text-dim);font-size:13px;margin:0 0 22px;}
+  .login-card input{
+    width:100%;padding:12px 14px;border-radius:6px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--text);font-size:14px;margin-bottom:12px;font-family:'JetBrains Mono',monospace;
+  }
+  .login-card input:focus{outline:none;border-color:var(--accent);}
+  .btn-primary{
+    width:100%;padding:12px;border-radius:6px;border:none;background:var(--accent);
+    color:#14171c;font-weight:600;font-size:14px;cursor:pointer;font-family:'Inter',sans-serif;
+  }
+  .btn-primary:hover{background:#ffc457;}
+  .login-err{color:var(--danger);font-size:12px;margin-top:10px;min-height:14px;}
+
+  /* ---- home tiles ---- */
+  .hero{margin-bottom:34px;}
+  .hero .eyebrow{color:var(--accent);font-size:11px;letter-spacing:2px;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:8px;}
+  .hero h2{font-size:30px;margin:0 0 6px;}
+  .hero p{color:var(--text-dim);margin:0;font-size:14px;}
+
+  .tilegrid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;}
+  @media(max-width:760px){.tilegrid{grid-template-columns:1fr;}}
+  .tile{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:26px 22px;
+    cursor:pointer;transition:.18s;position:relative;overflow:hidden;
+  }
+  .tile:hover{border-color:var(--accent);transform:translateY(-2px);}
+  .tile .num{font-family:'JetBrains Mono',monospace;color:var(--accent-dim);font-size:12px;letter-spacing:1px;}
+  .tile h3{margin:10px 0 6px;font-size:19px;}
+  .tile p{color:var(--text-dim);font-size:13px;margin:0;line-height:1.5;}
+  .tile.disabled{opacity:.45;cursor:not-allowed;}
+  .tile.disabled:hover{border-color:var(--line);transform:none;}
+  .tile .stub{
+    position:absolute;top:16px;right:16px;font-size:10px;text-transform:uppercase;
+    letter-spacing:1px;color:var(--text-dim);border:1px solid var(--line);padding:3px 7px;border-radius:4px;
+  }
+
+  /* ---- category grid ---- */
+  .catgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:20px;}
+  .bincard{
+    background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:18px;cursor:pointer;
+    position:relative;transition:.15s;
+  }
+  .bincard:hover{border-color:var(--accent);}
+  .bincard::before{
+    content:'';position:absolute;top:0;left:16px;width:34px;height:8px;background:var(--panel3);
+    border-radius:0 0 4px 4px;
+  }
+  .bincard h4{margin:10px 0 4px;font-size:15px;}
+  .bincard .count{font-family:'JetBrains Mono',monospace;color:var(--text-dim);font-size:12px;}
+  .add-tile{
+    background:transparent;border:1px dashed var(--line);border-radius:8px;padding:18px;
+    display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;cursor:pointer;
+    color:var(--text-dim);min-height:78px;transition:.15s;
+  }
+  .add-tile:hover{border-color:var(--accent);color:var(--accent);}
+  .add-tile .plus{font-size:22px;line-height:1;}
+
+  /* ---- item rows ---- */
+  .itemrow{
+    display:flex;align-items:center;gap:14px;background:var(--panel);border:1px solid var(--line);
+    border-radius:8px;padding:14px 16px;margin-bottom:10px;
+  }
+  .itemrow .iname{flex:1;font-size:14px;}
+  .itemrow .stockbadge{display:flex;flex-direction:column;align-items:flex-end;min-width:88px;}
+  .itemrow .stockbadge .lbl{font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;}
+  .itemrow .stockbadge .val{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700;}
+  .val.ok{color:var(--green);} .val.low{color:var(--accent);} .val.out{color:var(--danger);}
+  .stepper{display:flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:6px;overflow:hidden;}
+  .stepper button{
+    background:var(--panel2);border:none;color:var(--text);width:32px;height:32px;font-size:16px;cursor:pointer;
+  }
+  .stepper button:hover{background:var(--accent);color:#14171c;}
+  .stepper .qty{
+    width:52px;text-align:center;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;
+    background:var(--panel3);height:32px;display:flex;align-items:center;justify-content:center;
+  }
+  .rmbtn{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:13px;padding:6px;}
+  .rmbtn:hover{color:var(--danger);}
+
+  .actionbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;}
+  .btn-ghost{
+    background:var(--panel);border:1px solid var(--line);color:var(--text);padding:10px 16px;
+    border-radius:6px;cursor:pointer;font-size:13px;font-family:'Inter',sans-serif;
+  }
+  .btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
+  .btn-amber{
+    background:var(--accent);border:none;color:#14171c;padding:10px 16px;font-weight:600;
+    border-radius:6px;cursor:pointer;font-size:13px;font-family:'Inter',sans-serif;
+  }
+  .btn-amber:hover{background:#ffc457;}
+
+  /* ---- modal ---- */
+  .modal-backdrop{
+    position:fixed;inset:0;background:rgba(10,12,15,.7);display:none;align-items:flex-start;justify-content:center;
+    padding-top:8vh;z-index:100;
+  }
+  .modal-backdrop.active{display:flex;}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:26px;width:420px;max-width:92vw;}
+  .modal h3{margin:0 0 4px;font-size:17px;}
+  .modal .modal-sub{color:var(--text-dim);font-size:12px;margin:0 0 18px;}
+  .modal input[type=text]{
+    width:100%;padding:11px 13px;border-radius:6px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--text);font-size:14px;margin-bottom:10px;font-family:'Inter',sans-serif;
+  }
+  .modal input:focus{outline:none;border-color:var(--accent);}
+  .searchresults{max-height:280px;overflow-y:auto;margin-top:4px;}
+  .searchresult{
+    display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:6px;
+    cursor:pointer;font-size:13px;
+  }
+  .searchresult:hover{background:var(--panel2);}
+  .searchresult .sname{flex:1;padding-right:10px;}
+  .searchresult .sstock{font-family:'JetBrains Mono',monospace;color:var(--text-dim);font-size:12px;white-space:nowrap;}
+  .modal-close-row{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}
+  .empty-hint{color:var(--text-dim);font-size:12px;text-align:center;padding:18px 0;}
+
+  /* ---- final list ---- */
+  .catblock{margin-bottom:26px;}
+  .catblock h3{
+    font-size:15px;margin:0 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:8px;
+  }
+  .catblock h3 .tagchip{
+    background:var(--accent);color:#14171c;font-size:10px;padding:2px 8px;border-radius:20px;
+    font-family:'JetBrains Mono',monospace;font-weight:700;
+  }
+  table.finaltable{width:100%;border-collapse:collapse;}
+  table.finaltable th{
+    text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);
+    padding:6px 10px;font-weight:600;
+  }
+  table.finaltable td{padding:10px;border-top:1px solid var(--line);font-size:13px;}
+  table.finaltable td.qtycell,table.finaltable th.qtycell{text-align:right;font-family:'JetBrains Mono',monospace;font-weight:700;}
+
+  .loading{color:var(--text-dim);font-size:13px;padding:20px 0;font-family:'JetBrains Mono',monospace;}
+  .toast{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--panel3);
+    border:1px solid var(--accent);color:var(--text);padding:10px 18px;border-radius:6px;font-size:13px;
+    z-index:200;display:none;
+  }
+
+  @media print{
+    header.topbar,.crumbrow,.actionbar,.no-print{display:none !important;}
+    body{background:#fff;color:#111;}
+    .catblock h3{color:#111;border-bottom-color:#999;}
+    table.finaltable td{border-top-color:#ccc;color:#111;}
+    table.finaltable th{color:#555;}
+  }
+</style>
+</head>
+<body>
+
+<div id="toast" class="toast"></div>
+
+<!-- LOGIN -->
+<div id="view-login" class="view active">
+  <div class="login-card">
+    <div class="tag" style="display:flex;align-items:center;justify-content:center;">H</div>
+    <h2>Hallan Picking Sheets</h2>
+    <p>Enter the access code to continue</p>
+    <input type="password" id="loginPass" placeholder="Access code" autocomplete="off">
+    <button class="btn-primary" onclick="doLogin()">Enter</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none;">
+  <header class="topbar">
+    <div class="brand">
+      <div class="tag">H</div>
+      <div>
+        <h1>Hallan Picking Sheets</h1>
+        <div class="sub">Cash &amp; Carry &middot; Live Stock</div>
+      </div>
+    </div>
+    <nav class="topnav">
+      <button class="navbtn" onclick="goHome()">Home</button>
+      <button class="navbtn" onclick="showFinal()">Final List</button>
+    </nav>
+  </header>
+
+  <!-- HOME -->
+  <div id="view-home" class="view">
+    <div class="hero">
+      <div class="eyebrow">Manifest Builder</div>
+      <h2>What are you picking today?</h2>
+      <p>Choose a list type to start building a picking sheet against live stock.</p>
+    </div>
+    <div class="tilegrid">
+      <div class="tile" onclick="openListType('WAREHOUSE')">
+        <div class="num">01 &middot; BULK</div>
+        <h3>Warehouse List</h3>
+        <p>Bulk categories like 20kg, 10kg, 5kg rice. Organised by bin.</p>
+      </div>
+      <div class="tile disabled">
+        <div class="stub">Coming soon</div>
+        <div class="num">02 &middot; SHOP</div>
+        <h3>Retail List</h3>
+        <p>Shop-floor replenishment picking. Not set up yet.</p>
+      </div>
+      <div class="tile disabled">
+        <div class="stub">Coming soon</div>
+        <div class="num">03 &middot; ADHOC</div>
+        <h3>Manual List</h3>
+        <p>One-off custom picking lists. Not set up yet.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- WAREHOUSE (category grid) -->
+  <div id="view-warehouse" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span><span class="current">Warehouse List</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Bulk Storage</div>
+      <h2>Warehouse categories</h2>
+      <p>Pick a category to add items, or create a new one.</p>
+    </div>
+    <div class="catgrid" id="catgrid">
+      <div class="loading">Loading categories…</div>
+    </div>
+  </div>
+
+  <!-- CATEGORY DETAIL -->
+  <div id="view-category" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openListType('WAREHOUSE')">Warehouse List</button><span class="sep">/</span>
+      <span class="current" id="catCrumb">Category</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow" id="catEyebrow">Bin</div>
+      <h2 id="catTitle">Category</h2>
+      <p>Search stock and set the quantity required for this list.</p>
+    </div>
+    <div class="actionbar">
+      <span class="mono" id="catItemCount" style="color:var(--text-dim);font-size:12px;"></span>
+      <button class="btn-amber" onclick="openAddItemModal()">+ Add Item</button>
+    </div>
+    <div id="itemlist"></div>
+  </div>
+
+  <!-- FINAL LIST -->
+  <div id="view-final" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span><span class="current">Final Picking List</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Ready to Pick</div>
+      <h2>Final picking list</h2>
+      <p>Category-wise breakdown of everything added so far.</p>
+    </div>
+    <div class="actionbar no-print">
+      <span class="mono" id="finalMeta" style="color:var(--text-dim);font-size:12px;"></span>
+      <div style="display:flex;gap:10px;">
+        <button class="btn-ghost" onclick="window.print()">Print</button>
+        <button class="btn-amber" onclick="downloadPDF()">Download PDF</button>
+      </div>
+    </div>
+    <div id="finalContent"></div>
+  </div>
+</div>
+
+<!-- ADD CATEGORY MODAL -->
+<div class="modal-backdrop" id="modalAddCategory">
+  <div class="modal">
+    <h3>New category</h3>
+    <p class="modal-sub">e.g. 20kg Rice, 10kg Rice, 5kg Rice</p>
+    <input type="text" id="newCatName" placeholder="Category name" onkeydown="if(event.key==='Enter')submitAddCategory()">
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalAddCategory')">Cancel</button>
+      <button class="btn-amber" onclick="submitAddCategory()">Add category</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD ITEM MODAL -->
+<div class="modal-backdrop" id="modalAddItem">
+  <div class="modal">
+    <h3>Add item</h3>
+    <p class="modal-sub">Start typing to search live stock</p>
+    <input type="text" id="itemSearchInput" placeholder="Search item name…" oninput="onItemSearch()">
+    <div class="searchresults" id="searchResults"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalAddItem')">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============ CONFIG ============ */
+const API_BASE = "https://g616fa4b7bcaf76-hallandatabase.adb.uk-london-1.oraclecloudapps.com/ords/admin/picking/";
+const SITE_PASSWORD = "hallan2026"; // change this, then tell your team the new code
+
+/* ============ STATE ============ */
+let categories = [];
+let currentCategory = null;
+let searchDebounce = null;
+
+/* ============ AUTH ============ */
+function doLogin(){
+  const val = document.getElementById('loginPass').value;
+  if(val === SITE_PASSWORD){
+    localStorage.setItem('hallan_auth','1');
+    showApp();
+  } else {
+    document.getElementById('loginErr').textContent = 'Incorrect code, try again.';
+  }
+}
+function showApp(){
+  document.getElementById('view-login').classList.remove('active');
+  document.getElementById('view-login').style.display='none';
+  document.getElementById('app').style.display='block';
+  goHome();
+}
+if(localStorage.getItem('hallan_auth')==='1'){ showApp(); }
+document.getElementById('loginPass').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+
+/* ============ NAV ============ */
+function showView(id){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0,0);
+}
+function goHome(){ showView('view-home'); }
+function openListType(type){
+  if(type!=='WAREHOUSE') return;
+  showView('view-warehouse');
+  loadCategories();
+}
+
+/* ============ TOAST ============ */
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display='block';
+  clearTimeout(t._h);
+  t._h = setTimeout(()=>t.style.display='none', 2200);
+}
+
+/* ============ MODALS ============ */
+function openModal(id){ document.getElementById(id).classList.add('active'); }
+function closeModal(id){ document.getElementById(id).classList.remove('active'); }
+
+/* ============ API HELPERS ============ */
+async function apiGet(path){
+  const res = await fetch(API_BASE + path);
+  if(!res.ok) throw new Error('GET ' + path + ' failed: ' + res.status);
+  return res.json();
+}
+async function apiPost(path, body){
+  const res = await fetch(API_BASE + path, {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+  });
+  if(!res.ok) throw new Error('POST ' + path + ' failed: ' + res.status);
+  return res.json().catch(()=>({}));
+}
+async function apiPut(path, body){
+  const res = await fetch(API_BASE + path, {
+    method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+  });
+  if(!res.ok) throw new Error('PUT ' + path + ' failed: ' + res.status);
+  return res.json().catch(()=>({}));
+}
+async function apiDelete(path){
+  const res = await fetch(API_BASE + path, { method:'DELETE' });
+  if(!res.ok) throw new Error('DELETE ' + path + ' failed: ' + res.status);
+  return res.json().catch(()=>({}));
+}
+
+/* ============ CATEGORIES ============ */
+async function loadCategories(){
+  const grid = document.getElementById('catgrid');
+  grid.innerHTML = '<div class="loading">Loading categories…</div>';
+  try{
+    const data = await apiGet('categories/');
+    categories = (data.items || []).filter(c => c.list_type === 'WAREHOUSE');
+    renderCategoryGrid();
+  }catch(e){
+    grid.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load categories. Check the API connection.</div>';
+    console.error(e);
+  }
+}
+function renderCategoryGrid(){
+  const grid = document.getElementById('catgrid');
+  grid.innerHTML = '';
+  categories.forEach(c=>{
+    const div = document.createElement('div');
+    div.className = 'bincard';
+    div.onclick = () => openCategory(c);
+    div.innerHTML = `<h4>${escapeHtml(c.category_name)}</h4><div class="count">BIN-${String(c.category_id).padStart(3,'0')}</div>`;
+    grid.appendChild(div);
+  });
+  const addTile = document.createElement('div');
+  addTile.className = 'add-tile';
+  addTile.onclick = () => openModal('modalAddCategory');
+  addTile.innerHTML = `<div class="plus">+</div><div>Add category</div>`;
+  grid.appendChild(addTile);
+}
+async function submitAddCategory(){
+  const name = document.getElementById('newCatName').value.trim();
+  if(!name){ return; }
+  try{
+    await apiPost('categories/', { category_name: name, list_type: 'WAREHOUSE' });
+    document.getElementById('newCatName').value = '';
+    closeModal('modalAddCategory');
+    toast('Category added');
+    loadCategories();
+  }catch(e){
+    toast('Could not add category');
+    console.error(e);
+  }
+}
+
+/* ============ CATEGORY DETAIL / ITEMS ============ */
+async function openCategory(cat){
+  currentCategory = cat;
+  document.getElementById('catCrumb').textContent = cat.category_name;
+  document.getElementById('catTitle').textContent = cat.category_name;
+  document.getElementById('catEyebrow').textContent = 'BIN-' + String(cat.category_id).padStart(3,'0');
+  showView('view-category');
+  await loadItemsForCategory();
+}
+async function loadItemsForCategory(){
+  const list = document.getElementById('itemlist');
+  list.innerHTML = '<div class="loading">Loading items…</div>';
+  try{
+    const data = await apiGet('items/');
+    const items = (data.items || []).filter(i => i.category_id === currentCategory.category_id);
+    document.getElementById('catItemCount').textContent = items.length + ' item' + (items.length===1?'':'s') + ' in this category';
+    if(items.length === 0){
+      list.innerHTML = '<div class="empty-hint">No items yet. Click "Add Item" to search stock and add some.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    items.forEach(it => list.appendChild(renderItemRow(it)));
+  }catch(e){
+    list.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load items.</div>';
+    console.error(e);
+  }
+}
+function stockClass(stock){
+  if(stock === null || stock === undefined) return 'low';
+  if(stock <= 0) return 'out';
+  if(stock < 10) return 'low';
+  return 'ok';
+}
+function renderItemRow(it){
+  const row = document.createElement('div');
+  row.className = 'itemrow';
+  const stock = it.stock_available;
+  row.innerHTML = `
+    <div class="iname">${escapeHtml(it.item_name)}</div>
+    <div class="stockbadge">
+      <div class="lbl">Available</div>
+      <div class="val ${stockClass(stock)} mono">${stock === null || stock === undefined ? '—' : stock}</div>
+    </div>
+    <div class="stepper">
+      <button onclick="changeQty(${it.item_row_id}, ${it.qty_required}, -1)">−</button>
+      <div class="qty">${it.qty_required}</div>
+      <button onclick="changeQty(${it.item_row_id}, ${it.qty_required}, 1)">+</button>
+    </div>
+    <button class="rmbtn" onclick="removeItem(${it.item_row_id})" title="Remove">✕</button>
+  `;
+  return row;
+}
+async function changeQty(rowId, currentQty, delta){
+  const newQty = Math.max(0, currentQty + delta);
+  try{
+    await apiPut('items/' + rowId, { qty_required: newQty });
+    loadItemsForCategory();
+  }catch(e){
+    toast('Could not update quantity');
+    console.error(e);
+  }
+}
+async function removeItem(rowId){
+  try{
+    await apiDelete('items/' + rowId);
+    toast('Item removed');
+    loadItemsForCategory();
+  }catch(e){
+    toast('Could not remove item');
+    console.error(e);
+  }
+}
+
+/* ============ ADD ITEM SEARCH ============ */
+function openAddItemModal(){
+  document.getElementById('itemSearchInput').value = '';
+  document.getElementById('searchResults').innerHTML = '';
+  openModal('modalAddItem');
+  setTimeout(()=>document.getElementById('itemSearchInput').focus(), 80);
+}
+function onItemSearch(){
+  clearTimeout(searchDebounce);
+  const q = document.getElementById('itemSearchInput').value.trim();
+  const results = document.getElementById('searchResults');
+  if(q.length < 2){ results.innerHTML = ''; return; }
+  results.innerHTML = '<div class="empty-hint">Searching…</div>';
+  searchDebounce = setTimeout(async ()=>{
+    try{
+      const data = await apiGet('stock/search/?q=' + encodeURIComponent(q));
+      const items = data.items || [];
+      if(items.length === 0){
+        results.innerHTML = '<div class="empty-hint">No matches in vestock</div>';
+        return;
+      }
+      results.innerHTML = '';
+      items.forEach(it=>{
+        const div = document.createElement('div');
+        div.className = 'searchresult';
+        div.innerHTML = `<div class="sname">${escapeHtml(it.name)}</div><div class="sstock">${it.quantity} in stock</div>`;
+        div.onclick = () => addItemFromSearch(it.name);
+        results.appendChild(div);
+      });
+    }catch(e){
+      results.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Search failed</div>';
+      console.error(e);
+    }
+  }, 300);
+}
+async function addItemFromSearch(name){
+  try{
+    await apiPost('items/', { category_id: currentCategory.category_id, item_name: name, qty_required: 1 });
+    toast('Added ' + name);
+    closeModal('modalAddItem');
+    loadItemsForCategory();
+  }catch(e){
+    toast('Could not add item');
+    console.error(e);
+  }
+}
+
+/* ============ FINAL LIST ============ */
+async function showFinal(){
+  showView('view-final');
+  const content = document.getElementById('finalContent');
+  content.innerHTML = '<div class="loading">Building picking list…</div>';
+  try{
+    const [catData, itemData] = await Promise.all([apiGet('categories/'), apiGet('items/')]);
+    const cats = catData.items || [];
+    const items = itemData.items || [];
+    const grouped = {};
+    items.forEach(it=>{
+      if(!grouped[it.category_id]) grouped[it.category_id] = [];
+      grouped[it.category_id].push(it);
+    });
+    const catMap = {};
+    cats.forEach(c => catMap[c.category_id] = c);
+
+    const nonEmptyCatIds = Object.keys(grouped).filter(id => grouped[id].length > 0);
+    document.getElementById('finalMeta').textContent =
+      nonEmptyCatIds.length + ' categories · ' + items.length + ' line items';
+
+    if(items.length === 0){
+      content.innerHTML = '<div class="empty-hint">Nothing added yet. Go to Warehouse List and add items to categories first.</div>';
+      return;
+    }
+    content.innerHTML = '';
+    nonEmptyCatIds.forEach(catId=>{
+      const cat = catMap[catId];
+      const catItems = grouped[catId];
+      const block = document.createElement('div');
+      block.className = 'catblock';
+      let rows = catItems.map(it => `
+        <tr>
+          <td>${escapeHtml(it.item_name)}</td>
+          <td class="qtycell">${it.qty_required}</td>
+          <td class="qtycell">${it.stock_available === null || it.stock_available === undefined ? '—' : it.stock_available}</td>
+        </tr>`).join('');
+      block.innerHTML = `
+        <h3>${cat ? escapeHtml(cat.category_name) : 'Category'} <span class="tagchip">BIN-${String(catId).padStart(3,'0')}</span></h3>
+        <table class="finaltable">
+          <thead><tr><th>Item</th><th class="qtycell">Qty required</th><th class="qtycell">Stock available</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+      content.appendChild(block);
+    });
+  }catch(e){
+    content.innerHTML = '<div class="loading" style="color:var(--danger)">Could not build the picking list.</div>';
+    console.error(e);
+  }
+}
+async function downloadPDF(){
+  try{
+    const [catData, itemData] = await Promise.all([apiGet('categories/'), apiGet('items/')]);
+    const cats = catData.items || [];
+    const items = itemData.items || [];
+    const catMap = {}; cats.forEach(c => catMap[c.category_id] = c);
+    const grouped = {};
+    items.forEach(it=>{ if(!grouped[it.category_id]) grouped[it.category_id]=[]; grouped[it.category_id].push(it); });
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text('Hallan Cash & Carry — Picking List', 14, 18);
+    doc.setFontSize(10);
+    doc.setTextColor(120);
+    doc.text('Generated ' + new Date().toLocaleString(), 14, 24);
+    let y = 32;
+    Object.keys(grouped).forEach(catId=>{
+      const cat = catMap[catId];
+      const rows = grouped[catId].map(it => [
+        it.item_name, String(it.qty_required),
+        it.stock_available === null || it.stock_available === undefined ? '—' : String(it.stock_available)
+      ]);
+      doc.setFontSize(12);
+      doc.setTextColor(20);
+      doc.text(cat ? cat.category_name : 'Category', 14, y);
+      doc.autoTable({
+        startY: y + 3,
+        head: [['Item', 'Qty required', 'Stock available']],
+        body: rows,
+        theme: 'grid',
+        headStyles: { fillColor: [30,34,42] },
+        styles: { fontSize: 9 },
+        margin: { left: 14, right: 14 }
+      });
+      y = doc.lastAutoTable.finalY + 12;
+      if(y > 260){ doc.addPage(); y = 20; }
+    });
+    doc.save('hallan-picking-list-' + new Date().toISOString().slice(0,10) + '.pdf');
+  }catch(e){
+    toast('Could not generate PDF');
+    console.error(e);
+  }
+}
+
+/* ============ UTIL ============ */
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str ?? '';
+  return d.innerHTML;
+}
+
+/* close modals on backdrop click */
+document.querySelectorAll('.modal-backdrop').forEach(b=>{
+  b.addEventListener('click', e=>{ if(e.target === b) b.classList.remove('active'); });
+});
+</script>
+</body>
+</html>
