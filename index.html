@@ -10,9 +10,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
   :root{
-    --bg:#0e1e33; --panel:#142b47; --panel2:#1a3455; --panel3:#203f65;
-    --accent:#c9a23a; --accent-dim:#8a6c1f; --danger:#ff5d3a; --green:#4ade80;
-    --text:#f2f1ec; --text-dim:#93a8c4; --line:#28466b;
+    --bg:#ffffff; --panel:#f4f6f9; --panel2:#eceff3; --panel3:#e4e8ee;
+    --accent:#b8860b; --accent-dim:#8a6c1f; --danger:#dc2626; --green:#16a34a;
+    --text:#1a2233; --text-dim:#667085; --line:#dde1e7;
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
@@ -23,8 +23,8 @@
   /* ---- layout shell ---- */
   #app{max-width:1100px;margin:0 auto;padding:0 20px 60px;}
   header.topbar{
-    display:flex;align-items:center;justify-content:space-between;
-    padding:22px 0;border-bottom:1px solid var(--line);margin-bottom:28px;
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
+    padding:16px 0;border-bottom:1px solid var(--line);margin-bottom:24px;
     position:sticky;top:0;background:var(--bg);z-index:20;
   }
   .brand{display:flex;align-items:center;gap:12px;}
@@ -54,7 +54,7 @@
 
   /* ---- login ---- */
   #view-login{display:flex;min-height:80vh;align-items:center;justify-content:center;}
-  .login-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:40px 36px;width:340px;text-align:center;}
+  .login-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:40px 36px;width:340px;max-width:88vw;text-align:center;}
   .login-card .tag{width:48px;height:48px;margin:0 auto 18px;}
   .login-card h2{margin:0 0 6px;font-size:19px;}
   .login-card p{color:var(--text-dim);font-size:13px;margin:0 0 22px;}
@@ -122,44 +122,55 @@
   /* ---- item blocks (small, movable tiles) ---- */
   .listtogglerow{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
   .itemblocks{
-    display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:20px;
   }
   .itemblock{
     background:var(--panel);border:1px solid var(--line);border-radius:8px;
-    padding:10px 10px 8px;width:148px;display:flex;flex-direction:column;gap:6px;
+    padding:10px 10px 8px;display:flex;flex-direction:column;gap:6px;
     position:relative;cursor:grab;transition:.15s;
   }
   .itemblock:active{cursor:grabbing;}
   .itemblock:hover{border-color:var(--accent);}
   .itemblock.dragging{opacity:.35;border-style:dashed;}
   .itemblock .ibdel{
-    position:absolute;top:4px;right:5px;background:none;border:none;color:var(--text-dim);
-    font-size:12px;cursor:pointer;padding:3px;line-height:1;
+    position:absolute;top:2px;right:2px;background:none;border:none;color:var(--text-dim);
+    font-size:15px;cursor:pointer;padding:6px;line-height:1;
   }
   .itemblock .ibdel:hover{color:var(--danger);}
   .itemblock .ibname{
-    font-size:12.5px;font-weight:600;line-height:1.3;padding-right:14px;min-height:32px;
+    font-size:12.5px;font-weight:600;line-height:1.35;padding-right:16px;
+    height:34px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
   }
-  .itemblock .ibstock{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);}
+  .itemblock .ibstock{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);height:15px;}
   .itemblock .ibstock .val{font-weight:700;}
   .stepper{
     display:flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:6px;overflow:hidden;
   }
   .stepper button{
-    background:var(--panel2);border:none;color:var(--text);width:28px;height:28px;font-size:15px;cursor:pointer;flex:none;
+    background:var(--panel2);border:none;color:var(--text);width:34px;height:34px;font-size:16px;cursor:pointer;flex:none;
+    touch-action:manipulation;
   }
-  .stepper button:hover{background:var(--accent);color:#0e1e33;}
+  .stepper button:hover{background:var(--accent);color:#fff;}
+  .stepper button:active{background:var(--accent-dim);color:#fff;}
   .stepper .qty{
     flex:1;text-align:center;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:14px;
-    background:var(--panel3);height:28px;display:flex;align-items:center;justify-content:center;
+    background:var(--panel3);height:34px;display:flex;align-items:center;justify-content:center;
   }
   .add-block-tile{
     background:transparent;border:1px dashed var(--line);border-radius:8px;
-    width:148px;min-height:104px;display:flex;align-items:center;justify-content:center;
+    min-height:112px;display:flex;align-items:center;justify-content:center;
     flex-direction:column;gap:4px;color:var(--text-dim);cursor:pointer;transition:.15s;
   }
   .add-block-tile:hover{border-color:var(--accent);color:var(--accent);}
   .add-block-tile .plus{font-size:20px;line-height:1;}
+
+  @media(max-width:520px){
+    #app{padding:0 12px 40px;}
+    .itemblocks{grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;}
+    .actionbar{flex-wrap:wrap;gap:10px;}
+    .hero h2{font-size:24px;}
+    .catgrid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;}
+  }
 
   /* ---- quick add suggestions ---- */
   .quickaddhead{margin:30px 0 12px;padding-top:18px;border-top:1px dashed var(--line);}
@@ -555,6 +566,7 @@ function updateToggleBtnLabel(){
   }
 }
 async function loadItemsForCategory(){
+  // Full reload — only used the first time a category is opened.
   const list = document.getElementById('itemlist');
   list.className = 'itemblocks';
   list.innerHTML = '<div class="loading">Loading items…</div>';
@@ -585,19 +597,30 @@ function renderItemBlock(it){
   block.className = 'itemblock';
   block.draggable = true;
   block.dataset.rowId = it.item_row_id;
-  const stock = it.stock_available;
+  block.title = it.item_name;
   block.innerHTML = `
-    <button class="ibdel" onclick="removeItem(${it.item_row_id})" title="Remove">✕</button>
-    <div class="ibname">${escapeHtml(it.item_name)}</div>
-    <div class="ibstock">Avail: <span class="val ${stockClass(stock)}">${stock === null || stock === undefined ? '—' : stock}</span></div>
+    <button class="ibdel" title="Remove">✕</button>
+    <div class="ibname"></div>
+    <div class="ibstock">Avail: <span class="val"></span></div>
     <div class="stepper">
-      <button onclick="changeQty(${it.item_row_id}, ${it.qty_required}, -1)">−</button>
-      <div class="qty">${it.qty_required}</div>
-      <button onclick="changeQty(${it.item_row_id}, ${it.qty_required}, 1)">+</button>
+      <button class="ibminus" type="button">−</button>
+      <div class="qty"></div>
+      <button class="ibplus" type="button">+</button>
     </div>
   `;
+  block.querySelector('.ibname').textContent = it.item_name;
+  block.querySelector('.qty').textContent = it.qty_required;
+  setStockDisplay(block, it.stock_available);
+  block.querySelector('.ibdel').onclick = () => removeItemBlock(it, block);
+  block.querySelector('.ibminus').onclick = () => changeQtyBlock(it, block, -1);
+  block.querySelector('.ibplus').onclick = () => changeQtyBlock(it, block, 1);
   attachDragHandlers(block);
   return block;
+}
+function setStockDisplay(block, stock){
+  const val = block.querySelector('.ibstock .val');
+  val.textContent = (stock === null || stock === undefined) ? '—' : stock;
+  val.className = 'val ' + stockClass(stock);
 }
 function renderAddBlockTile(){
   const tile = document.createElement('div');
@@ -627,25 +650,72 @@ function attachDragHandlers(block){
     container.insertBefore(dragSrcBlock, before ? block : block.nextSibling);
   });
 }
-async function changeQty(rowId, currentQty, delta){
-  const newQty = Math.max(0, currentQty + delta);
-  try{
-    await apiPut('items/' + rowId, { qty_required: newQty });
-    loadItemsForCategory();
-  }catch(e){
-    toast('Could not update quantity');
+
+/* ============ QTY / REMOVE — instant, no reload/blink ============ */
+function changeQtyBlock(item, block, delta){
+  const newQty = Math.max(0, item.qty_required + delta);
+  if(newQty === item.qty_required) return;
+  item.qty_required = newQty;
+  block.querySelector('.qty').textContent = newQty;
+  apiPut('items/' + item.item_row_id, { qty_required: newQty }).catch(e=>{
+    toast('Could not save quantity — will retry');
     console.error(e);
-  }
+  });
 }
-async function removeItem(rowId){
-  try{
-    await apiDelete('items/' + rowId);
-    toast('Item removed');
-    loadItemsForCategory();
-  }catch(e){
-    toast('Could not remove item');
+function removeItemBlock(item, block){
+  block.remove();
+  currentItems = currentItems.filter(i => i !== item);
+  updateToggleBtnLabel();
+  apiDelete('items/' + item.item_row_id).then(()=>{
+    loadSuggestionsForCategory();
+  }).catch(e=>{
+    toast('Could not remove item, restoring');
     console.error(e);
-  }
+    currentItems.push(item);
+    updateToggleBtnLabel();
+    const list = document.getElementById('itemlist');
+    const tile = list.querySelector('.add-block-tile');
+    const restored = renderItemBlock(item);
+    if(tile) list.insertBefore(restored, tile); else list.appendChild(restored);
+  });
+}
+
+/* ============ ADD ITEM (optimistic — block appears instantly) ============ */
+function addItemOptimistic(name, stockGuess){
+  const tempItem = {
+    item_row_id: 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2),
+    item_name: name, qty_required: 1,
+    stock_available: (stockGuess === undefined ? null : stockGuess),
+    category_id: currentCategory.category_id
+  };
+  currentItems.push(tempItem);
+  updateToggleBtnLabel();
+  const list = document.getElementById('itemlist');
+  list.className = 'itemblocks';
+  if(list.querySelector('.loading')) list.innerHTML = '';
+  const tile = list.querySelector('.add-block-tile');
+  const block = renderItemBlock(tempItem);
+  if(tile) list.insertBefore(block, tile); else { list.appendChild(block); list.appendChild(renderAddBlockTile()); }
+
+  apiPost('items/', { category_id: currentCategory.category_id, item_name: name, qty_required: 1 })
+    .then(()=> apiGet('items/'))
+    .then(data=>{
+      const items = (data.items || []).filter(i => i.category_id === currentCategory.category_id);
+      const match = items.find(i => (i.item_name || '').toLowerCase().trim() === name.toLowerCase().trim());
+      if(match){
+        tempItem.item_row_id = match.item_row_id;
+        tempItem.stock_available = match.stock_available;
+        block.dataset.rowId = match.item_row_id;
+        setStockDisplay(block, match.stock_available);
+      }
+    })
+    .catch(e=>{
+      toast('Could not add ' + name);
+      console.error(e);
+      block.remove();
+      currentItems = currentItems.filter(i => i !== tempItem);
+      updateToggleBtnLabel();
+    });
 }
 
 /* ============ QUICK ADD SUGGESTIONS ============ */
@@ -684,19 +754,12 @@ function renderSuggestRow(it){
   const btn = document.createElement('button');
   btn.className = 'addbtn';
   btn.textContent = '+ Add';
-  btn.onclick = () => quickAdd(it.name);
+  btn.onclick = () => {
+    row.remove();
+    addItemOptimistic(it.name, stock);
+  };
   row.appendChild(btn);
   return row;
-}
-async function quickAdd(name){
-  try{
-    await apiPost('items/', { category_id: currentCategory.category_id, item_name: name, qty_required: 1 });
-    toast('Added ' + name);
-    loadItemsForCategory();
-  }catch(e){
-    toast('Could not add item');
-    console.error(e);
-  }
 }
 
 /* ============ ADD ITEM SEARCH ============ */
@@ -725,7 +788,7 @@ function onItemSearch(){
         const div = document.createElement('div');
         div.className = 'searchresult';
         div.innerHTML = `<div class="sname">${escapeHtml(it.name)}</div><div class="sstock">${it.quantity} in stock</div>`;
-        div.onclick = () => addItemFromSearch(it.name);
+        div.onclick = () => addItemFromSearch(it.name, it.quantity);
         results.appendChild(div);
       });
     }catch(e){
@@ -734,16 +797,9 @@ function onItemSearch(){
     }
   }, 300);
 }
-async function addItemFromSearch(name){
-  try{
-    await apiPost('items/', { category_id: currentCategory.category_id, item_name: name, qty_required: 1 });
-    toast('Added ' + name);
-    closeModal('modalAddItem');
-    loadItemsForCategory();
-  }catch(e){
-    toast('Could not add item');
-    console.error(e);
-  }
+function addItemFromSearch(name, stock){
+  closeModal('modalAddItem');
+  addItemOptimistic(name, stock);
 }
 
 /* ============ EMPTY LIST ============ */
