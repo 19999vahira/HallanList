@@ -13,6 +13,7 @@
     --bg:#ffffff; --panel:#f4f6f9; --panel2:#eceff3; --panel3:#e4e8ee;
     --accent:#b8860b; --accent-dim:#8a6c1f; --danger:#dc2626; --green:#16a34a;
     --text:#1a2233; --text-dim:#667085; --line:#dde1e7;
+    --header-bg:#0e1e33; --header-text:#f2f1ec; --header-text-dim:#93a8c4; --header-line:#28466b;
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
@@ -24,19 +25,20 @@
   #app{max-width:1100px;margin:0 auto;padding:0 20px 60px;}
   header.topbar{
     display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
-    padding:16px 0;border-bottom:1px solid var(--line);margin-bottom:24px;
-    position:sticky;top:0;background:var(--bg);z-index:20;
+    padding:14px 20px;border-bottom:1px solid var(--header-line);margin:0 0 24px;
+    position:sticky;top:0;background:var(--header-bg);z-index:20;
+    border-radius:0 0 10px 10px;
   }
   .brand{display:flex;align-items:center;gap:12px;}
   .brand .tag{
     width:38px;height:38px;display:flex;align-items:center;justify-content:center;
   }
   .brand .tag img{width:100%;height:100%;object-fit:contain;}
-  .brand h1{font-size:18px;margin:0;letter-spacing:.3px;}
-  .brand .sub{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1.5px;margin-top:1px;}
+  .brand h1{font-size:18px;margin:0;letter-spacing:.3px;color:var(--header-text);}
+  .brand .sub{font-size:11px;color:var(--header-text-dim);text-transform:uppercase;letter-spacing:1.5px;margin-top:1px;}
   nav.topnav{display:flex;gap:10px;}
   .navbtn{
-    background:transparent;border:1px solid var(--line);color:var(--text-dim);
+    background:transparent;border:1px solid var(--header-line);color:var(--header-text-dim);
     padding:8px 14px;border-radius:6px;font-size:13px;cursor:pointer;font-family:'Inter',sans-serif;
     transition:.15s;
   }
@@ -173,19 +175,6 @@
   }
 
   /* ---- quick add suggestions ---- */
-  .quickaddhead{margin:30px 0 12px;padding-top:18px;border-top:1px dashed var(--line);}
-  .quickaddhead h3{font-size:14px;margin:0 0 4px;}
-  .quickaddhead p{color:var(--text-dim);font-size:12px;margin:0;}
-  .suggestrow{
-    display:flex;align-items:center;gap:14px;background:var(--panel2);border:1px dashed var(--line);
-    border-radius:8px;padding:12px 16px;margin-bottom:8px;
-  }
-  .suggestrow .iname{flex:1;font-size:13px;color:var(--text-dim);}
-  .addbtn{
-    background:var(--accent);border:none;color:#0e1e33;padding:8px 14px;border-radius:6px;
-    font-weight:600;font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap;
-  }
-  .addbtn:hover{background:#ddb752;}
   .btn-danger-ghost{
     background:transparent;border:1px solid var(--danger);color:var(--danger);padding:10px 16px;
     border-radius:6px;cursor:pointer;font-size:13px;font-family:'Inter',sans-serif;
@@ -350,18 +339,10 @@
       <p>Search stock and set the quantity required for this list.</p>
     </div>
     <div class="actionbar">
-      <button class="btn-ghost" id="toggleListBtn" onclick="toggleItemList()">Show list</button>
+      <span class="mono" id="catItemCount" style="color:var(--text-dim);font-size:12px;"></span>
       <button class="btn-amber" onclick="openAddItemModal()">+ Add Item</button>
     </div>
-    <div id="itemlistWrap" style="display:none;">
-      <div id="itemlist"></div>
-    </div>
-
-    <div class="quickaddhead">
-      <h3>Quick add &middot; matches for "<span id="catQName"></span>"</h3>
-      <p>Tap + Add to add instantly at qty 1. Items already added won't show here — remove one to bring it back.</p>
-    </div>
-    <div id="suggestbox"></div>
+    <div id="itemlist"></div>
   </div>
 
   <!-- FINAL LIST -->
@@ -422,7 +403,6 @@ let categories = [];
 let currentCategory = null;
 let currentItems = [];
 let searchDebounce = null;
-let itemListVisible = false;
 let dragSrcBlock = null;
 
 /* ============ AUTH ============ */
@@ -545,25 +525,13 @@ async function openCategory(cat){
   document.getElementById('catCrumb').textContent = cat.category_name;
   document.getElementById('catTitle').textContent = cat.category_name;
   document.getElementById('catEyebrow').textContent = 'BIN-' + String(cat.category_id).padStart(3,'0');
-  itemListVisible = false;
-  document.getElementById('itemlistWrap').style.display = 'none';
-  document.getElementById('toggleListBtn').textContent = 'Show list';
   showView('view-category');
   await loadItemsForCategory();
 }
-function toggleItemList(){
-  itemListVisible = !itemListVisible;
-  document.getElementById('itemlistWrap').style.display = itemListVisible ? 'block' : 'none';
-  updateToggleBtnLabel();
-}
 function updateToggleBtnLabel(){
-  const btn = document.getElementById('toggleListBtn');
   const n = currentItems.length;
-  if(itemListVisible){
-    btn.textContent = 'Hide list (' + n + ')';
-  } else {
-    btn.textContent = 'Show list (' + n + ')';
-  }
+  const el = document.getElementById('catItemCount');
+  if(el) el.textContent = n + ' item' + (n === 1 ? '' : 's') + ' in this list';
 }
 async function loadItemsForCategory(){
   // Full reload — only used the first time a category is opened.
@@ -584,7 +552,6 @@ async function loadItemsForCategory(){
     currentItems = [];
     updateToggleBtnLabel();
   }
-  loadSuggestionsForCategory();
 }
 function stockClass(stock){
   if(stock === null || stock === undefined) return 'low';
@@ -666,9 +633,7 @@ function removeItemBlock(item, block){
   block.remove();
   currentItems = currentItems.filter(i => i !== item);
   updateToggleBtnLabel();
-  apiDelete('items/' + item.item_row_id).then(()=>{
-    loadSuggestionsForCategory();
-  }).catch(e=>{
+  apiDelete('items/' + item.item_row_id).catch(e=>{
     toast('Could not remove item, restoring');
     console.error(e);
     currentItems.push(item);
@@ -716,50 +681,6 @@ function addItemOptimistic(name, stockGuess){
       currentItems = currentItems.filter(i => i !== tempItem);
       updateToggleBtnLabel();
     });
-}
-
-/* ============ QUICK ADD SUGGESTIONS ============ */
-async function loadSuggestionsForCategory(){
-  const box = document.getElementById('suggestbox');
-  document.getElementById('catQName').textContent = currentCategory.category_name;
-  box.innerHTML = '<div class="loading">Loading quick add…</div>';
-  try{
-    const q = currentCategory.category_name;
-    const data = await apiGet('stock/search/?q=' + encodeURIComponent(q));
-    let items = data.items || [];
-    const existing = new Set(currentItems.map(it => (it.item_name || '').toLowerCase().trim()));
-    items = items.filter(it => !existing.has((it.name || '').toLowerCase().trim()));
-    if(items.length === 0){
-      box.innerHTML = '<div class="empty-hint">No quick-add matches for "' + escapeHtml(q) + '" in stock. Try "+ Add Item" to search manually.</div>';
-      return;
-    }
-    box.innerHTML = '';
-    items.slice(0, 50).forEach(it => box.appendChild(renderSuggestRow(it)));
-  }catch(e){
-    box.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load quick add suggestions.</div>';
-    console.error(e);
-  }
-}
-function renderSuggestRow(it){
-  const row = document.createElement('div');
-  row.className = 'suggestrow';
-  const stock = it.quantity;
-  row.innerHTML = `
-    <div class="iname">${escapeHtml(it.name)}</div>
-    <div class="stockbadge">
-      <div class="lbl">Available</div>
-      <div class="val ${stockClass(stock)} mono">${stock === null || stock === undefined ? '—' : stock}</div>
-    </div>
-  `;
-  const btn = document.createElement('button');
-  btn.className = 'addbtn';
-  btn.textContent = '+ Add';
-  btn.onclick = () => {
-    row.remove();
-    addItemOptimistic(it.name, stock);
-  };
-  row.appendChild(btn);
-  return row;
 }
 
 /* ============ ADD ITEM SEARCH ============ */
