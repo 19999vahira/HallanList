@@ -478,12 +478,37 @@ async function apiDelete(path){
 }
 
 /* ============ CATEGORIES ============ */
+/* ============ ORDER PERSISTENCE (localStorage) ============ */
+function getStoredOrder(key){
+  try{ return JSON.parse(localStorage.getItem(key) || '[]'); }catch(e){ return []; }
+}
+function sortByStoredOrder(arr, order, idFn){
+  if(!order || order.length === 0) return arr;
+  const idx = new Map(order.map((id,i)=>[String(id), i]));
+  return [...arr].sort((a,b)=>{
+    const ai = idx.has(String(idFn(a))) ? idx.get(String(idFn(a))) : Infinity;
+    const bi = idx.has(String(idFn(b))) ? idx.get(String(idFn(b))) : Infinity;
+    return ai - bi;
+  });
+}
+function saveCatOrder(){
+  const order = [...document.querySelectorAll('#catgrid .bincard')].map(el => el.dataset.catId);
+  localStorage.setItem('hallan_cat_order', JSON.stringify(order));
+}
+function saveItemOrder(){
+  if(!currentCategory) return;
+  const order = [...document.querySelectorAll('#itemlist .itemblock')].map(el => el.dataset.rowId);
+  localStorage.setItem('hallan_item_order_' + currentCategory.category_id, JSON.stringify(order));
+}
+
 async function loadCategories(){
   const grid = document.getElementById('catgrid');
   grid.innerHTML = '<div class="loading">Loading categories…</div>';
   try{
     const data = await apiGet('categories/');
-    categories = (data.items || []).filter(c => c.list_type === 'WAREHOUSE');
+    let cats = (data.items || []).filter(c => c.list_type === 'WAREHOUSE');
+    cats = sortByStoredOrder(cats, getStoredOrder('hallan_cat_order'), c => c.category_id);
+    categories = cats;
     renderCategoryGrid();
   }catch(e){
     grid.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load categories. Check the API connection.</div>';
@@ -497,9 +522,10 @@ function renderCategoryGrid(){
     const div = document.createElement('div');
     div.className = 'bincard';
     div.draggable = true;
+    div.dataset.catId = c.category_id;
     div.onclick = () => openCategory(c);
     div.innerHTML = `<h4>${escapeHtml(c.category_name)}</h4><div class="count">BIN-${String(c.category_id).padStart(3,'0')}</div>`;
-    attachDragHandlers(div);
+    attachDragHandlers(div, saveCatOrder);
     grid.appendChild(div);
   });
   const addTile = document.createElement('div');
@@ -544,7 +570,8 @@ async function loadItemsForCategory(){
   list.innerHTML = '<div class="loading">Loading items…</div>';
   try{
     const data = await apiGet('items/');
-    const items = (data.items || []).filter(i => i.category_id === currentCategory.category_id);
+    let items = (data.items || []).filter(i => i.category_id === currentCategory.category_id);
+    items = sortByStoredOrder(items, getStoredOrder('hallan_item_order_' + currentCategory.category_id), it => it.item_row_id);
     currentItems = items;
     updateToggleBtnLabel();
     list.innerHTML = '';
@@ -585,7 +612,7 @@ function renderItemBlock(it){
   block.querySelector('.ibdel').onclick = () => removeItemBlock(it, block);
   block.querySelector('.ibminus').onclick = () => changeQtyBlock(it, block, -1);
   block.querySelector('.ibplus').onclick = () => changeQtyBlock(it, block, 1);
-  attachDragHandlers(block);
+  attachDragHandlers(block, saveItemOrder);
   return block;
 }
 function setStockDisplay(block, stock){
@@ -601,8 +628,8 @@ function renderAddBlockTile(){
   return tile;
 }
 
-/* ============ DRAG TO REORDER BLOCKS (visual only, not saved) ============ */
-function attachDragHandlers(block){
+/* ============ DRAG TO REORDER BLOCKS (order is saved) ============ */
+function attachDragHandlers(block, onReorder){
   block.addEventListener('dragstart', e=>{
     dragSrcBlock = block;
     block.classList.add('dragging');
@@ -611,6 +638,7 @@ function attachDragHandlers(block){
   block.addEventListener('dragend', ()=>{
     block.classList.remove('dragging');
     dragSrcBlock = null;
+    if(onReorder) onReorder();
   });
   block.addEventListener('dragover', e=>{
     e.preventDefault();
@@ -637,6 +665,7 @@ function removeItemBlock(item, block){
   block.remove();
   currentItems = currentItems.filter(i => i !== item);
   updateToggleBtnLabel();
+  saveItemOrder();
   apiDelete('items/' + item.item_row_id).catch(e=>{
     toast('Could not remove item, restoring');
     console.error(e);
@@ -646,11 +675,24 @@ function removeItemBlock(item, block){
     const tile = list.querySelector('.add-block-tile');
     const restored = renderItemBlock(item);
     if(tile) list.insertBefore(restored, tile); else list.appendChild(restored);
+    saveItemOrder();
   });
 }
 
 /* ============ ADD ITEM (optimistic — block appears instantly) ============ */
 function addItemOptimistic(name, stockGuess){
+  const existing = currentItems.find(it => (it.item_name || '').toLowerCase().trim() === name.toLowerCase().trim());
+  if(existing){
+    const block = document.querySelector('#itemlist .itemblock[data-row-id="' + CSS.escape(String(existing.item_row_id)) + '"]');
+    if(block){
+      changeQtyBlock(existing, block, 1);
+    } else {
+      existing.qty_required += 1;
+      apiPut('items/' + existing.item_row_id, { qty_required: existing.qty_required }).catch(e=>console.error(e));
+    }
+    toast(name + ' already in this list — quantity increased');
+    return;
+  }
   const tempItem = {
     item_row_id: 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2),
     item_name: name, qty_required: 1,
@@ -665,6 +707,7 @@ function addItemOptimistic(name, stockGuess){
   const tile = list.querySelector('.add-block-tile');
   const block = renderItemBlock(tempItem);
   if(tile) list.insertBefore(block, tile); else { list.appendChild(block); list.appendChild(renderAddBlockTile()); }
+  saveItemOrder();
 
   apiPost('items/', { category_id: currentCategory.category_id, item_name: name, qty_required: 1 })
     .then(()=> apiGet('items/'))
@@ -676,6 +719,7 @@ function addItemOptimistic(name, stockGuess){
         tempItem.stock_available = match.stock_available;
         block.dataset.rowId = match.item_row_id;
         setStockDisplay(block, match.stock_available);
+        saveItemOrder();
       }
     })
     .catch(e=>{
