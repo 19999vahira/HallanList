@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <style>
   :root{
     --bg:#ffffff; --panel:#f4f6f9; --panel2:#eceff3; --panel3:#e4e8ee;
@@ -78,7 +79,7 @@
   .hero h2{font-size:30px;margin:0 0 6px;}
   .hero p{color:var(--text-dim);margin:0;font-size:14px;}
 
-  .tilegrid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;}
+  .tilegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px;}
   @media(max-width:760px){.tilegrid{grid-template-columns:1fr;}}
   .tile{
     background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:26px 22px;
@@ -107,6 +108,14 @@
     border-radius:0 0 4px 4px;
   }
   .bincard h4{margin:10px 0 4px;font-size:15px;}
+  .bincard .staffline{font-family:'JetBrains Mono',monospace;color:var(--text-dim);font-size:11px;margin-top:2px;}
+  .hero .staffline{color:var(--accent);font-weight:600;}
+  .historysearch{
+    max-width:320px;padding:10px 14px;border-radius:6px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--text);font-size:13px;font-family:'Inter',sans-serif;
+  }
+  .historymeta-row{display:flex;flex-wrap:wrap;gap:8px 20px;color:var(--text-dim);font-size:12px;font-family:'JetBrains Mono',monospace;margin:6px 0 18px;}
+  .historymeta-row strong{color:var(--text);font-family:'Inter',sans-serif;}
   .bincard .count{font-family:'JetBrains Mono',monospace;color:var(--text-dim);font-size:12px;}
   .add-tile{
     background:transparent;border:1px dashed var(--line);border-radius:8px;padding:18px;
@@ -217,11 +226,65 @@
   .searchresult:hover{background:var(--panel2);}
   .searchresult .sname{flex:1;padding-right:10px;}
   .searchresult .sstock{font-family:'JetBrains Mono',monospace;color:var(--text-dim);font-size:12px;white-space:nowrap;}
+
+  /* ---- barcode scanner ---- */
+  #scannerBox{
+    width:100%;max-width:260px;height:190px;margin:0 auto 12px;border-radius:8px;overflow:hidden;background:#000;
+  }
+  #scannerBox video{width:100% !important;height:100% !important;object-fit:cover;}
+  .scanmanual{display:flex;gap:8px;margin:4px 0 6px;}
+  .scanmanual input{flex:1;margin-bottom:0 !important;}
+  .scanresult-card{
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:12px;
+  }
+  .scanresult-card .srname{font-weight:600;font-size:14px;margin-bottom:4px;}
+  .scanresult-card .srbarcode{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);margin-bottom:4px;}
+  .scanresult-card .srstock{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-dim);margin-bottom:10px;}
+  .scanresult-card .srrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .scanresult-card .srrow .stepper{flex:none;}
+  .scanresult-card .srrow .btn-amber{padding:9px 16px;font-size:13px;}
+  .scanresult-card .srrow .btn-ghost{padding:9px 14px;font-size:13px;}
+  .scanfail{color:var(--danger);font-size:13px;padding:8px 0;}
+  .ibbarcode{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-dim);opacity:.75;margin-top:-2px;}
+
+  /* ---- picking checklist (partial pick) ---- */
+  .pickrow{
+    display:flex;align-items:center;justify-content:space-between;gap:14px;background:var(--panel);
+    border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-bottom:8px;transition:.15s;
+  }
+  .pickrow.partial{border-color:var(--accent);}
+  .pickrow.done{border-color:var(--green);}
+  .pickrow .pickinfo{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0;}
+  .pickrow .pname{font-size:14px;}
+  .pickrow .pname.done{color:var(--text-dim);}
+  .pickrow .pbarcode{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);}
+  .pickrow .pickqty{display:flex;align-items:center;gap:10px;flex:none;}
+  .pickrow .preq{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-dim);white-space:nowrap;}
+  .pickrow .stepper .qtyinput{
+    flex:1;width:54px;text-align:center;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:14px;
+    background:var(--panel3);height:34px;border:none;color:var(--text);-moz-appearance:textfield;
+  }
+  .pickrow .stepper .qtyinput::-webkit-outer-spin-button,
+  .pickrow .stepper .qtyinput::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+  .pickrow .stepper .qtyinput:focus{outline:2px solid var(--accent);outline-offset:-2px;}
+  .pickrow .pickall{padding:9px 12px;font-size:12px;white-space:nowrap;}
+  .pickrow .printqty{display:none;}
   .modal-close-row{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}
   .empty-hint{color:var(--text-dim);font-size:12px;text-align:center;padding:18px 0;}
 
+  /* ---- unpicked / shortfall report ---- */
+  .unpicked-select{
+    background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:10px 14px;
+    border-radius:6px;font-size:13px;font-family:'Inter',sans-serif;
+  }
+  .reasonbadge{font-size:11px;padding:3px 8px;border-radius:20px;background:var(--panel3);color:var(--text-dim);white-space:nowrap;}
+  .reasonbadge.out{background:rgba(220,38,38,.15);color:var(--danger);}
+  .reasonbadge.low{background:rgba(184,134,11,.15);color:var(--accent-dim);}
+  .errdetail{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);margin-top:6px;word-break:break-word;}
+
   /* ---- final list ---- */
   .catblock{margin-bottom:26px;}
+
   .catblock h3{
     font-size:15px;margin:0 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line);
     display:flex;align-items:center;gap:8px;
@@ -251,6 +314,14 @@
     .catblock h3{color:#111;border-bottom-color:#999;}
     table.finaltable td{border-top-color:#ccc;color:#111;}
     table.finaltable th{color:#555;}
+    .hero .eyebrow{color:#555;}
+    .hero h2{color:#111;}
+    .pickrow{border-color:#999;break-inside:avoid;}
+    .pickrow .pname{color:#111;}
+    .pickrow .pbarcode,.pickrow .preq{color:#555;}
+    .pickrow .stepper,.pickrow .pickall{display:none !important;}
+    .pickrow .printqty{display:inline-block !important;font-family:'JetBrains Mono',monospace;font-weight:700;color:#111;}
+    .historymeta-row{color:#555;}
   }
 </style>
 </head>
@@ -298,11 +369,10 @@
         <h3>Warehouse List</h3>
         <p>Bulk categories like 20kg, 10kg, 5kg rice. Organised by bin.</p>
       </div>
-      <div class="tile disabled">
-        <div class="stub">Coming soon</div>
+      <div class="tile" onclick="openListType('RETAIL')">
         <div class="num">02 &middot; SHOP</div>
         <h3>Retail List</h3>
-        <p>Shop-floor replenishment picking. Not set up yet.</p>
+        <p>Scan stock to build a shop-floor list, then pick it off the shelf.</p>
       </div>
       <div class="tile disabled">
         <div class="stub">Coming soon</div>
@@ -311,6 +381,181 @@
         <p>One-off custom picking lists. Not set up yet.</p>
       </div>
     </div>
+  </div>
+
+  <!-- RETAIL HOME (choose Making List / Picking List) -->
+  <div id="view-retail-home" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span><span class="current">Retail List</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Shop Floor</div>
+      <h2>Retail List</h2>
+      <p>Build a list by scanning stock, then pick it off the shelf.</p>
+    </div>
+    <div class="tilegrid">
+      <div class="tile" onclick="openRetailMaking()">
+        <div class="num">01 &middot; BUILD</div>
+        <h3>Making List</h3>
+        <p>Scan items and set quantities to build a new retail list.</p>
+      </div>
+      <div class="tile" onclick="openRetailPicking()">
+        <div class="num">02 &middot; PICK</div>
+        <h3>Picking List</h3>
+        <p>Work through finalised lists and pick off exact quantities.</p>
+      </div>
+      <div class="tile" onclick="openUnpickedReport()">
+        <div class="num">03 &middot; REVIEW</div>
+        <h3>Unpicked Items</h3>
+        <p>See what's still outstanding across lists, checked against live stock.</p>
+      </div>
+      <div class="tile" onclick="openHistory()">
+        <div class="num">04 &middot; ARCHIVE</div>
+        <h3>History</h3>
+        <p>Completed picking sheets — who made them, who picked them, and what was picked.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAKING LIST INDEX -->
+  <div id="view-making-index" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="showView('view-retail-home')">Retail List</button><span class="sep">/</span>
+      <span class="current">Making List</span>
+    </div>
+    <div class="hero">
+      <h2>Making List</h2>
+      <p>Start a new list, or keep building one that's already in progress.</p>
+    </div>
+    <div class="actionbar">
+      <span></span>
+      <button class="btn-amber" onclick="startCreatingList()">+ Start Creating List</button>
+    </div>
+    <div class="catgrid" id="makingListsGrid"></div>
+  </div>
+
+  <!-- MAKING LIST DETAIL -->
+  <div id="view-making-detail" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="showView('view-retail-home')">Retail List</button><span class="sep">/</span>
+      <button onclick="backToMakingIndex()">Making List</button><span class="sep">/</span>
+      <span class="current" id="makingCrumb"></span>
+    </div>
+    <div class="hero">
+      <h2 id="makingTitle"></h2>
+      <p>Elapsed time: <span class="mono" id="makingTimer">00:00:00</span></p>
+      <p class="staffline" id="makingMadeBy" style="display:none;"></p>
+    </div>
+    <div class="actionbar">
+      <span class="mono" id="makingItemCount" style="color:var(--text-dim);font-size:12px;"></span>
+      <button class="btn-amber" onclick="openScanner()">+ Add Item (Scan)</button>
+    </div>
+    <div id="makingItemList" class="itemblocks"></div>
+    <div style="margin-top:24px;">
+      <button class="btn-danger-ghost" onclick="closeMakingList()">Close List</button>
+    </div>
+  </div>
+
+  <!-- PICKING LIST INDEX -->
+  <div id="view-picking-index" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="showView('view-retail-home')">Retail List</button><span class="sep">/</span>
+      <span class="current">Picking List</span>
+    </div>
+    <div class="hero">
+      <h2>Picking List</h2>
+      <p>Finalised lists, ready to pick off the shelf.</p>
+    </div>
+    <div class="catgrid" id="pickingListsGrid"></div>
+  </div>
+
+  <!-- PICKING LIST DETAIL -->
+  <div id="view-picking-detail" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="showView('view-retail-home')">Retail List</button><span class="sep">/</span>
+      <button onclick="backToPickingIndex()">Picking List</button><span class="sep">/</span>
+      <span class="current" id="pickingCrumb"></span>
+    </div>
+    <div class="hero">
+      <h2 id="pickingTitle"></h2>
+      <p>Picking time: <span class="mono" id="pickingTimer">00:00:00</span> &middot; <span id="pickingProgress"></span></p>
+      <p class="staffline" id="pickingPickedBy" style="display:none;"></p>
+    </div>
+    <div class="actionbar no-print">
+      <span></span>
+      <div style="display:flex;gap:10px;">
+        <button class="btn-ghost" onclick="window.print()">Print</button>
+        <button class="btn-amber" onclick="downloadPickingListPDF()">Download PDF</button>
+      </div>
+    </div>
+    <div id="pickingItemList"></div>
+    <div style="margin-top:24px;" class="no-print">
+      <button class="btn-danger-ghost" onclick="endPickingList()">End List</button>
+    </div>
+  </div>
+
+  <!-- UNPICKED / SHORTFALL REPORT -->
+  <div id="view-unpicked" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="showView('view-retail-home')">Retail List</button><span class="sep">/</span>
+      <span class="current">Unpicked Items</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Shortfall Review</div>
+      <h2>Unpicked &amp; partially picked items</h2>
+      <p>Requested quantity vs. what's been picked, checked against live stock, so you can see why.</p>
+    </div>
+    <div class="actionbar">
+      <select id="unpickedListSelect" class="unpicked-select" onchange="loadUnpickedReport()"></select>
+      <button class="btn-ghost" onclick="loadUnpickedReport()">Refresh</button>
+    </div>
+    <div id="unpickedContent"></div>
+  </div>
+
+  <!-- HISTORY INDEX -->
+  <div id="view-history-index" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="showView('view-retail-home')">Retail List</button><span class="sep">/</span>
+      <span class="current">History</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Archive</div>
+      <h2>Picking sheet history</h2>
+      <p>Completed lists — who made them, who picked them, and the final result.</p>
+    </div>
+    <div class="actionbar">
+      <input type="text" id="historySearch" class="historysearch" placeholder="Search by list or staff name…" oninput="renderHistoryList()">
+      <button class="btn-ghost" onclick="loadHistory()">Refresh</button>
+    </div>
+    <div id="historyListGrid" class="catgrid"></div>
+  </div>
+
+  <!-- HISTORY DETAIL -->
+  <div id="view-history-detail" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="showView('view-retail-home')">Retail List</button><span class="sep">/</span>
+      <button onclick="backToHistoryIndex()">History</button><span class="sep">/</span>
+      <span class="current" id="historyCrumb"></span>
+    </div>
+    <div class="hero">
+      <h2 id="historyTitle"></h2>
+    </div>
+    <div class="historymeta-row" id="historyMetaRow"></div>
+    <div class="actionbar no-print">
+      <span></span>
+      <div style="display:flex;gap:10px;">
+        <button class="btn-ghost" onclick="window.print()">Print</button>
+        <button class="btn-amber" onclick="downloadHistoryPDF()">Download PDF</button>
+      </div>
+    </div>
+    <div id="historyContent"></div>
   </div>
 
   <!-- WAREHOUSE (category grid) -->
@@ -395,6 +640,23 @@
   </div>
 </div>
 
+<!-- BARCODE SCANNER MODAL -->
+<div class="modal-backdrop" id="modalScanner">
+  <div class="modal" style="width:440px;">
+    <h3>Scan barcode</h3>
+    <p class="modal-sub">Point the camera at a barcode, or type it in below</p>
+    <div id="scannerBox"></div>
+    <div id="scanFeedback"></div>
+    <div class="scanmanual">
+      <input type="text" id="manualBarcodeInput" placeholder="Type barcode…" onkeydown="if(event.key==='Enter')submitManualBarcode()">
+      <button class="btn-ghost" onclick="submitManualBarcode()">Look up</button>
+    </div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeScanner()">Done adding</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ============ CONFIG ============ */
 const API_BASE = "https://hallan-picking-backend.onrender.com/api/";
@@ -406,6 +668,84 @@ let currentCategory = null;
 let currentItems = [];
 let searchDebounce = null;
 let dragSrcBlock = null;
+let currentMakingList = null;
+let currentMakingItems = [];
+let currentPickingList = null;
+let currentPickingItems = [];
+let scannerRunning = false;
+let scannerListEl = null;
+let lastScannedCode = null;
+let lastScannedAt = 0;
+let historyLists = [];
+let currentHistoryList = null;
+let currentHistoryItems = null;
+
+/* Shared active-time tracker for Making List / Picking List.
+   Counts only time actually spent with the list open on screen — pauses when the
+   tab is hidden/backgrounded and resumes on return, instead of running off wall-clock
+   time since the list was first created. Persists to the backend every ~20s so
+   closing/reopening (or losing the tab) doesn't lose more than a few seconds. */
+const activeTimer = {
+  phase: null,        // 'making' | 'picking' | null when idle
+  listId: null,
+  baseSeconds: 0,
+  sessionStart: 0,
+  displayEl: null,
+  displayInterval: null,
+  heartbeatInterval: null
+};
+function startActiveTimer(phase, listId, baseSeconds, displayElId){
+  stopActiveTimer();
+  activeTimer.phase = phase;
+  activeTimer.listId = listId;
+  activeTimer.baseSeconds = baseSeconds || 0;
+  activeTimer.sessionStart = Date.now();
+  activeTimer.displayEl = displayElId;
+  const tick = () => {
+    const el = document.getElementById(activeTimer.displayEl);
+    if(!el) return;
+    const live = activeTimer.baseSeconds + Math.floor((Date.now() - activeTimer.sessionStart) / 1000);
+    el.textContent = formatElapsed(live);
+  };
+  tick();
+  activeTimer.displayInterval = setInterval(tick, 1000);
+  activeTimer.heartbeatInterval = setInterval(() => flushActiveTimer(false), 20000);
+}
+function flushActiveTimer(useBeacon){
+  if(!activeTimer.phase || !activeTimer.listId) return;
+  const elapsed = Math.floor((Date.now() - activeTimer.sessionStart) / 1000);
+  if(elapsed <= 0) return;
+  activeTimer.baseSeconds += elapsed;
+  activeTimer.sessionStart = Date.now();
+  const url = API_BASE + 'retail/lists/' + activeTimer.listId + '/track-time';
+  const payload = JSON.stringify({ phase: activeTimer.phase, seconds: elapsed });
+  if(useBeacon && navigator.sendBeacon){
+    navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }));
+  } else {
+    fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: payload, keepalive: !!useBeacon })
+      .catch(e => console.error('time flush failed', e));
+  }
+}
+function stopActiveTimer(){
+  if(activeTimer.phase) flushActiveTimer(false);
+  clearInterval(activeTimer.displayInterval);
+  clearInterval(activeTimer.heartbeatInterval);
+  activeTimer.phase = null;
+  activeTimer.listId = null;
+  activeTimer.displayEl = null;
+  activeTimer.displayInterval = null;
+  activeTimer.heartbeatInterval = null;
+}
+document.addEventListener('visibilitychange', () => {
+  if(!activeTimer.phase) return;
+  if(document.hidden){
+    flushActiveTimer(true); // save before the tab backgrounds/closes
+  } else {
+    activeTimer.sessionStart = Date.now(); // resume counting from now, skip the hidden gap
+  }
+});
+window.addEventListener('beforeunload', () => { if(activeTimer.phase) flushActiveTimer(true); });
+const SCAN_COOLDOWN_MS = 2500;
 
 /* ============ AUTH ============ */
 function doLogin(){
@@ -428,15 +768,16 @@ document.getElementById('loginPass').addEventListener('keydown', e=>{ if(e.key==
 
 /* ============ NAV ============ */
 function showView(id){
+  if(activeTimer.phase === 'making' && id !== 'view-making-detail') stopActiveTimer();
+  if(activeTimer.phase === 'picking' && id !== 'view-picking-detail') stopActiveTimer();
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   window.scrollTo(0,0);
 }
 function goHome(){ showView('view-home'); }
 function openListType(type){
-  if(type!=='WAREHOUSE') return;
-  showView('view-warehouse');
-  loadCategories();
+  if(type==='WAREHOUSE'){ showView('view-warehouse'); loadCategories(); return; }
+  if(type==='RETAIL'){ showView('view-retail-home'); return; }
 }
 
 /* ============ TOAST ============ */
@@ -452,28 +793,36 @@ function openModal(id){ document.getElementById(id).classList.add('active'); }
 function closeModal(id){ document.getElementById(id).classList.remove('active'); }
 
 /* ============ API HELPERS ============ */
+async function apiErrorText(res, verb, path){
+  let detail = '';
+  try{
+    const body = await res.clone().json();
+    if(body && body.error) detail = body.error;
+  }catch(e){ /* body wasn't JSON — ignore, we'll just show the status */ }
+  return verb + ' ' + path + ' failed: ' + res.status + (detail ? ' — ' + detail : '');
+}
 async function apiGet(path){
   const res = await fetch(API_BASE + path);
-  if(!res.ok) throw new Error('GET ' + path + ' failed: ' + res.status);
+  if(!res.ok) throw new Error(await apiErrorText(res, 'GET', path));
   return res.json();
 }
 async function apiPost(path, body){
   const res = await fetch(API_BASE + path, {
     method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
   });
-  if(!res.ok) throw new Error('POST ' + path + ' failed: ' + res.status);
+  if(!res.ok) throw new Error(await apiErrorText(res, 'POST', path));
   return res.json().catch(()=>({}));
 }
 async function apiPut(path, body){
   const res = await fetch(API_BASE + path, {
     method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
   });
-  if(!res.ok) throw new Error('PUT ' + path + ' failed: ' + res.status);
+  if(!res.ok) throw new Error(await apiErrorText(res, 'PUT', path));
   return res.json().catch(()=>({}));
 }
 async function apiDelete(path){
   const res = await fetch(API_BASE + path, { method:'DELETE' });
-  if(!res.ok) throw new Error('DELETE ' + path + ' failed: ' + res.status);
+  if(!res.ok) throw new Error(await apiErrorText(res, 'DELETE', path));
   return res.json().catch(()=>({}));
 }
 
@@ -511,7 +860,7 @@ async function loadCategories(){
     categories = cats;
     renderCategoryGrid();
   }catch(e){
-    grid.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load categories. Check the API connection.</div>';
+    grid.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load categories.</div>' + errDetailHtml(e);
     console.error(e);
   }
 }
@@ -578,7 +927,7 @@ async function loadItemsForCategory(){
     items.forEach(it => list.appendChild(renderItemBlock(it)));
     list.appendChild(renderAddBlockTile());
   }catch(e){
-    list.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load items.</div>';
+    list.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load items.</div>' + errDetailHtml(e);
     console.error(e);
     currentItems = [];
     updateToggleBtnLabel();
@@ -771,6 +1120,710 @@ function addItemFromSearch(name, stock){
   addItemOptimistic(name, stock);
 }
 
+/* ============ RETAIL: MAKING LIST ============ */
+function openRetailMaking(){ showView('view-making-index'); loadMakingLists(); }
+function openRetailPicking(){ showView('view-picking-index'); loadPickingLists(); }
+function openHistory(){ showView('view-history-index'); loadHistory(); }
+
+/* Remembers the last name typed in this browser so staff don't retype it every time */
+function promptStaffName(label){
+  const last = localStorage.getItem('hallan_staff_name') || '';
+  const name = (prompt(label, last) || '').trim();
+  if(name) localStorage.setItem('hallan_staff_name', name);
+  return name;
+}
+
+function formatElapsed(totalSeconds){
+  const h = String(Math.floor(totalSeconds/3600)).padStart(2,'0');
+  const m = String(Math.floor((totalSeconds%3600)/60)).padStart(2,'0');
+  const s = String(totalSeconds%60).padStart(2,'0');
+  return h+':'+m+':'+s;
+}
+
+async function loadMakingLists(){
+  const grid = document.getElementById('makingListsGrid');
+  grid.innerHTML = '<div class="loading">Loading lists…</div>';
+  try{
+    const data = await apiGet('retail/lists/');
+    const lists = (data.items || []).filter(l => l.status !== 'CLOSED');
+    if(lists.length === 0){
+      grid.innerHTML = '<div class="empty-hint">No lists yet. Tap "+ Start Creating List" to begin.</div>';
+      return;
+    }
+    grid.innerHTML = '';
+    lists.forEach(l => grid.appendChild(renderMakingListCard(l)));
+  }catch(e){
+    grid.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load lists.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+function renderMakingListCard(l){
+  const div = document.createElement('div');
+  div.className = 'bincard';
+  const isOpen = l.status === 'OPEN';
+  div.innerHTML = `
+    <h4>${escapeHtml(l.list_name)}</h4>
+    <div class="count">${l.item_count} item${l.item_count===1?'':'s'} &middot; ${isOpen ? 'In progress' : 'Finalised — ready for picking'}</div>
+    ${l.created_by ? `<div class="staffline">Made by ${escapeHtml(l.created_by)}</div>` : ''}
+  `;
+  if(isOpen){
+    div.onclick = () => openMakingListDetail(l.list_id);
+    const finBtn = document.createElement('button');
+    finBtn.className = 'btn-amber';
+    finBtn.style.cssText = 'margin-top:10px;padding:8px 14px;font-size:12px;';
+    finBtn.textContent = 'Finalise';
+    finBtn.onclick = (e) => { e.stopPropagation(); finaliseList(l.list_id); };
+    div.appendChild(finBtn);
+  } else {
+    div.style.opacity = '.8';
+    const reopenBtn = document.createElement('button');
+    reopenBtn.className = 'btn-ghost';
+    reopenBtn.style.cssText = 'margin-top:10px;padding:8px 14px;font-size:12px;';
+    reopenBtn.textContent = 'Reopen for editing';
+    reopenBtn.onclick = (e) => { e.stopPropagation(); reopenList(l.list_id); };
+    div.appendChild(reopenBtn);
+  }
+  return div;
+}
+async function reopenList(id){
+  if(!confirm('Reopen this list for editing? It will move back to "In progress" and out of Picking List until you finalise it again.')) return;
+  try{
+    await apiPost('retail/lists/' + id + '/reopen', {});
+    toast('List reopened');
+    loadMakingLists();
+  }catch(e){
+    toast('Could not reopen list');
+    console.error(e);
+  }
+}
+async function startCreatingList(){
+  try{
+    const data = await apiGet('retail/lists/');
+    const openList = (data.items || []).find(l => l.status === 'OPEN');
+    if(openList){
+      const editExisting = confirm('"' + openList.list_name + '" is already in progress.\n\nOK = keep editing that list\nCancel = start a brand new list');
+      if(editExisting){ openMakingListDetail(openList.list_id); return; }
+    }
+    const name = (prompt('Name this list (optional):', '') || '').trim();
+    const createdBy = promptStaffName('Your name (making this list):');
+    const res = await apiPost('retail/lists/', { list_name: name || undefined, created_by: createdBy || undefined });
+    openMakingListDetail(res.new_id);
+  }catch(e){
+    toast('Could not start a new list');
+    console.error(e);
+  }
+}
+async function finaliseList(id){
+  if(!confirm('Finalise this list? It will move to Picking List and stop being editable here.')) return;
+  try{
+    await apiPost('retail/lists/' + id + '/finalize', {});
+    toast('List finalised');
+    loadMakingLists();
+  }catch(e){
+    toast('Could not finalise list');
+    console.error(e);
+  }
+}
+function backToMakingIndex(){
+  stopActiveTimer();
+  showView('view-making-index');
+  loadMakingLists();
+}
+async function openMakingListDetail(id){
+  showView('view-making-detail');
+  document.getElementById('makingItemList').innerHTML = '<div class="loading">Loading…</div>';
+  try{
+    const data = await apiGet('retail/lists/' + id);
+    currentMakingList = data.list;
+    currentMakingItems = data.items || [];
+    document.getElementById('makingCrumb').textContent = currentMakingList.list_name;
+    document.getElementById('makingTitle').textContent = currentMakingList.list_name;
+    const madeByEl = document.getElementById('makingMadeBy');
+    if(currentMakingList.created_by){
+      madeByEl.textContent = 'Made by ' + currentMakingList.created_by;
+      madeByEl.style.display = 'block';
+    } else {
+      madeByEl.style.display = 'none';
+    }
+    renderMakingItems();
+    startActiveTimer('making', currentMakingList.list_id, currentMakingList.making_seconds || 0, 'makingTimer');
+  }catch(e){
+    toast('Could not open list');
+    console.error(e);
+  }
+}
+function renderMakingItems(){
+  const list = document.getElementById('makingItemList');
+  document.getElementById('makingItemCount').textContent = currentMakingItems.length + ' item' + (currentMakingItems.length===1?'':'s');
+  if(currentMakingItems.length === 0){
+    list.className = '';
+    list.innerHTML = '<div class="empty-hint">No items yet. Tap "+ Add Item (Scan)" to scan a barcode.</div>';
+    return;
+  }
+  list.className = 'itemblocks';
+  list.innerHTML = '';
+  currentMakingItems.forEach(it => list.appendChild(renderMakingItemBlock(it)));
+}
+function renderMakingItemBlock(it){
+  const block = document.createElement('div');
+  block.className = 'itemblock';
+  block.dataset.rowId = it.item_row_id;
+  block.title = it.item_name;
+  block.innerHTML = `
+    <button class="ibdel" title="Remove">✕</button>
+    <div class="ibname"></div>
+    <div class="ibbarcode"></div>
+    <div class="ibstock">Qty added: <span class="val ok"></span></div>
+    <div class="stepper">
+      <button class="ibminus" type="button">−</button>
+      <div class="qty"></div>
+      <button class="ibplus" type="button">+</button>
+    </div>
+  `;
+  block.querySelector('.ibname').textContent = it.item_name;
+  block.querySelector('.ibbarcode').textContent = it.barcode ? ('#' + it.barcode) : '';
+  block.querySelector('.qty').textContent = it.qty_added;
+  block.querySelector('.ibstock .val').textContent = it.qty_added;
+  block.querySelector('.ibdel').onclick = () => removeMakingItem(it, block);
+  block.querySelector('.ibminus').onclick = () => changeMakingQty(it, block, -1);
+  block.querySelector('.ibplus').onclick = () => changeMakingQty(it, block, 1);
+  return block;
+}
+function changeMakingQty(item, block, delta){
+  const newQty = Math.max(0, item.qty_added + delta);
+  if(newQty === item.qty_added) return;
+  item.qty_added = newQty;
+  block.querySelector('.qty').textContent = newQty;
+  block.querySelector('.ibstock .val').textContent = newQty;
+  apiPut('retail/lists/' + currentMakingList.list_id + '/items/' + item.item_row_id, { qty_added: newQty }).catch(e=>console.error(e));
+}
+function removeMakingItem(item, block){
+  block.remove();
+  currentMakingItems = currentMakingItems.filter(i => i !== item);
+  if(currentMakingItems.length === 0) renderMakingItems();
+  else document.getElementById('makingItemCount').textContent = currentMakingItems.length + ' item' + (currentMakingItems.length===1?'':'s');
+  apiDelete('retail/lists/' + currentMakingList.list_id + '/items/' + item.item_row_id).catch(e=>console.error(e));
+}
+function closeMakingList(){
+  stopActiveTimer();
+  showView('view-making-index');
+  loadMakingLists();
+}
+
+/* ============ RETAIL: BARCODE SCANNER ============ */
+function openScanner(){
+  scannerListEl = document.getElementById('scanFeedback');
+  scannerListEl.innerHTML = '';
+  document.getElementById('manualBarcodeInput').value = '';
+  lastScannedCode = null;
+  lastScannedAt = 0;
+  openModal('modalScanner');
+  startCameraScanner();
+}
+function closeScanner(){
+  stopCameraScanner();
+  closeModal('modalScanner');
+}
+let html5QrInstance = null;
+function startCameraScanner(){
+  if(typeof Html5Qrcode === 'undefined'){
+    document.getElementById('scannerBox').innerHTML = '<div class="scanfail" style="padding:14px;">Camera scanner failed to load — use the barcode field below instead.</div>';
+    return;
+  }
+  document.getElementById('scannerBox').innerHTML = '<div id="scannerVideoBox"></div>';
+  html5QrInstance = new Html5Qrcode('scannerVideoBox');
+  scannerRunning = true;
+  html5QrInstance.start(
+    { facingMode: 'environment' },
+    { fps: 10, qrbox: { width: 190, height: 100 } },
+    (decodedText) => {
+      const now = Date.now();
+      if(decodedText === lastScannedCode && (now - lastScannedAt) < SCAN_COOLDOWN_MS){
+        return; // same code decoded again within cooldown — ignore, don't re-lookup
+      }
+      lastScannedCode = decodedText;
+      lastScannedAt = now;
+      handleScannedCode(decodedText);
+    },
+    () => {}
+  ).catch(()=>{
+    document.getElementById('scannerBox').innerHTML = '<div class="scanfail" style="padding:14px;">Could not access camera — allow camera permission, or use the barcode field below.</div>';
+  });
+}
+function pauseCameraScanner(){
+  if(html5QrInstance && scannerRunning){
+    try{ html5QrInstance.pause(true); }catch(e){}
+  }
+}
+function resumeCameraScanner(){
+  if(html5QrInstance && scannerRunning){
+    try{ html5QrInstance.resume(); }catch(e){}
+  }
+}
+function stopCameraScanner(){
+  if(html5QrInstance && scannerRunning){
+    scannerRunning = false;
+    html5QrInstance.stop().then(()=>html5QrInstance.clear()).catch(()=>{});
+  }
+}
+function submitManualBarcode(){
+  const code = document.getElementById('manualBarcodeInput').value.trim();
+  if(!code) return;
+  handleScannedCode(code);
+}
+async function handleScannedCode(code){
+  document.getElementById('manualBarcodeInput').value = '';
+  pauseCameraScanner();
+  const box = document.getElementById('scanFeedback');
+  const loadingEl = document.createElement('div');
+  loadingEl.className = 'loading';
+  loadingEl.textContent = 'Looking up ' + code + '…';
+  box.prepend(loadingEl);
+  try{
+    const data = await apiGet('stock/barcode/' + encodeURIComponent(code));
+    loadingEl.remove();
+    if(!data.item){
+      const fail = document.createElement('div');
+      fail.className = 'scanfail';
+      fail.textContent = 'No stock item found for barcode ' + code;
+      box.prepend(fail);
+      resumeCameraScanner();
+      return;
+    }
+    box.prepend(renderScanResultCard(data.item, code));
+  }catch(e){
+    loadingEl.remove();
+    const fail = document.createElement('div');
+    fail.className = 'scanfail';
+    fail.textContent = 'Lookup failed for ' + code;
+    box.prepend(fail);
+    console.error(e);
+    resumeCameraScanner();
+  }
+}
+function renderScanResultCard(stock, scannedCode){
+  const card = document.createElement('div');
+  card.className = 'scanresult-card';
+  let qty = 1;
+  const barcodeText = stock.barcode || scannedCode || '—';
+  card.innerHTML = `
+    <div class="srname">${escapeHtml(stock.name)}</div>
+    <div class="srbarcode">Barcode: ${escapeHtml(barcodeText)}</div>
+    <div class="srstock">In stock: <span class="val ${stockClass(stock.quantity)}">${stock.quantity ?? '—'}</span></div>
+    <div class="srrow">
+      <div class="stepper">
+        <button class="ibminus" type="button">−</button>
+        <div class="qty">1</div>
+        <button class="ibplus" type="button">+</button>
+      </div>
+      <button class="btn-ghost srskip">Skip</button>
+      <button class="btn-amber">Add to list</button>
+    </div>
+  `;
+  const qtyEl = card.querySelector('.qty');
+  card.querySelector('.ibminus').onclick = () => { qty = Math.max(1, qty-1); qtyEl.textContent = qty; };
+  card.querySelector('.ibplus').onclick = () => { qty = qty+1; qtyEl.textContent = qty; };
+  card.querySelector('.srskip').onclick = () => {
+    card.remove();
+    resumeCameraScanner();
+  };
+  card.querySelector('.btn-amber').onclick = () => {
+    addScannedItemToMakingList(stock, qty);
+    card.remove();
+    resumeCameraScanner();
+  };
+  return card;
+}
+function addScannedItemToMakingList(stock, qty){
+  if(!currentMakingList) return;
+  const existing = currentMakingItems.find(it => it.stockid === stock.stockid || it.item_name.toLowerCase().trim() === (stock.name||'').toLowerCase().trim());
+  if(existing){
+    existing.qty_added += qty;
+    const block = document.querySelector('#makingItemList .itemblock[data-row-id="' + CSS.escape(String(existing.item_row_id)) + '"]');
+    if(block){
+      block.querySelector('.qty').textContent = existing.qty_added;
+      block.querySelector('.ibstock .val').textContent = existing.qty_added;
+    }
+    apiPut('retail/lists/' + currentMakingList.list_id + '/items/' + existing.item_row_id, { qty_added: existing.qty_added }).catch(e=>console.error(e));
+    toast(stock.name + ' quantity increased');
+    return;
+  }
+  const tempItem = {
+    item_row_id: 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2),
+    item_name: stock.name, qty_added: qty, stockid: stock.stockid || null, barcode: stock.barcode || null
+  };
+  currentMakingItems.push(tempItem);
+  const list = document.getElementById('makingItemList');
+  if(currentMakingItems.length === 1) renderMakingItems();
+  else{
+    list.appendChild(renderMakingItemBlock(tempItem));
+    document.getElementById('makingItemCount').textContent = currentMakingItems.length + ' items';
+  }
+  apiPost('retail/lists/' + currentMakingList.list_id + '/items', {
+    item_name: stock.name, stockid: stock.stockid || null, barcode: stock.barcode || null, qty_added: qty
+  }).then(()=> apiGet('retail/lists/' + currentMakingList.list_id))
+    .then(data=>{
+      const match = (data.items||[]).find(i => (i.item_name||'').toLowerCase().trim() === stock.name.toLowerCase().trim());
+      if(match){
+        const oldId = tempItem.item_row_id;
+        tempItem.item_row_id = match.item_row_id;
+        const block = document.querySelector('#makingItemList .itemblock[data-row-id="' + CSS.escape(String(oldId)) + '"]');
+        if(block) block.dataset.rowId = match.item_row_id;
+      }
+    }).catch(e=>{
+      toast('Could not save ' + stock.name);
+      console.error(e);
+    });
+  toast(stock.name + ' added');
+}
+
+/* ============ RETAIL: PICKING LIST ============ */
+async function loadPickingLists(){
+  const grid = document.getElementById('pickingListsGrid');
+  grid.innerHTML = '<div class="loading">Loading lists…</div>';
+  try{
+    const data = await apiGet('retail/lists/');
+    const lists = (data.items || []).filter(l => l.status === 'FINALIZED');
+    if(lists.length === 0){
+      grid.innerHTML = '<div class="empty-hint">No finalised lists yet — finalise one from Making List first.</div>';
+      return;
+    }
+    grid.innerHTML = '';
+    lists.forEach(l => grid.appendChild(renderPickingListCard(l)));
+  }catch(e){
+    grid.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load lists.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+function renderPickingListCard(l){
+  const div = document.createElement('div');
+  div.className = 'bincard';
+  div.onclick = () => openPickingListDetail(l.list_id);
+  const staffBits = [];
+  if(l.created_by) staffBits.push('Made by ' + escapeHtml(l.created_by));
+  if(l.picked_by) staffBits.push('Picking: ' + escapeHtml(l.picked_by));
+  div.innerHTML = `
+    <h4>${escapeHtml(l.list_name)}</h4>
+    <div class="count">${l.picked_count}/${l.item_count} picked</div>
+    ${staffBits.length ? `<div class="staffline">${staffBits.join(' &middot; ')}</div>` : ''}
+  `;
+  return div;
+}
+function backToPickingIndex(){
+  stopActiveTimer();
+  showView('view-picking-index');
+  loadPickingLists();
+}
+async function openPickingListDetail(id){
+  showView('view-picking-detail');
+  document.getElementById('pickingItemList').innerHTML = '<div class="loading">Loading…</div>';
+  const pickedBy = promptStaffName('Your name (picking this list):');
+  try{
+    await apiPost('retail/lists/' + id + '/start-picking', { picked_by: pickedBy || undefined });
+    const data = await apiGet('retail/lists/' + id);
+    currentPickingList = data.list;
+    currentPickingItems = (data.items || []).map(it => ({ ...it, qty_picked: normalizeQtyPicked(it) }));
+    document.getElementById('pickingCrumb').textContent = currentPickingList.list_name;
+    document.getElementById('pickingTitle').textContent = currentPickingList.list_name;
+    const pickedByEl = document.getElementById('pickingPickedBy');
+    if(currentPickingList.picked_by){
+      pickedByEl.textContent = 'Picked by ' + currentPickingList.picked_by;
+      pickedByEl.style.display = 'block';
+    } else {
+      pickedByEl.style.display = 'none';
+    }
+    renderPickingItems();
+    startActiveTimer('picking', currentPickingList.list_id, currentPickingList.picking_seconds || 0, 'pickingTimer');
+  }catch(e){
+    toast('Could not open list');
+    console.error(e);
+  }
+}
+function renderPickingItems(){
+  const list = document.getElementById('pickingItemList');
+  list.innerHTML = '';
+  currentPickingItems.forEach(it => list.appendChild(renderPickingRow(it)));
+  updatePickingProgress();
+}
+function normalizeQtyPicked(it){
+  if(typeof it.qty_picked === 'number') return it.qty_picked;
+  return it.picked ? it.qty_added : 0;
+}
+function pickRowStateClass(it){
+  if(it.qty_added > 0 && it.qty_picked >= it.qty_added) return ' done';
+  if(it.qty_picked > 0) return ' partial';
+  return '';
+}
+function renderPickingRow(it){
+  const row = document.createElement('div');
+  row.className = 'pickrow' + pickRowStateClass(it);
+  row.innerHTML = `
+    <div class="pickinfo">
+      <span class="pname${it.qty_added > 0 && it.qty_picked >= it.qty_added ? ' done' : ''}">${escapeHtml(it.item_name)}</span>
+      ${it.barcode ? `<span class="pbarcode">#${escapeHtml(it.barcode)}</span>` : ''}
+    </div>
+    <div class="pickqty">
+      <span class="preq">Req: ${it.qty_added}</span>
+      <div class="stepper">
+        <button class="ibminus" type="button">−</button>
+        <input class="qtyinput" type="number" min="0" max="${it.qty_added}" value="${it.qty_picked}">
+        <button class="ibplus" type="button">+</button>
+      </div>
+      <button class="btn-ghost pickall" type="button">All</button>
+      <span class="printqty">Picked: ${it.qty_picked}</span>
+    </div>
+  `;
+  row.querySelector('.ibminus').onclick = () => setPickedQty(it, row, Math.max(0, it.qty_picked - 1));
+  row.querySelector('.ibplus').onclick = () => setPickedQty(it, row, Math.min(it.qty_added, it.qty_picked + 1));
+  row.querySelector('.pickall').onclick = () => setPickedQty(it, row, it.qty_added);
+  const input = row.querySelector('.qtyinput');
+  input.addEventListener('change', () => {
+    let v = parseInt(input.value, 10);
+    if(isNaN(v) || v < 0) v = 0;
+    if(v > it.qty_added) v = it.qty_added;
+    setPickedQty(it, row, v);
+  });
+  return row;
+}
+function setPickedQty(item, row, newQty){
+  item.qty_picked = newQty;
+  item.picked = newQty >= item.qty_added && item.qty_added > 0;
+  row.className = 'pickrow' + pickRowStateClass(item);
+  row.querySelector('.qtyinput').value = newQty;
+  row.querySelector('.printqty').textContent = 'Picked: ' + newQty;
+  row.querySelector('.pname').classList.toggle('done', item.qty_added > 0 && newQty >= item.qty_added);
+  updatePickingProgress();
+  apiPut('retail/lists/' + currentPickingList.list_id + '/items/' + item.item_row_id, {
+    qty_picked: newQty, picked: item.picked
+  }).catch(e=>{
+    toast('Could not save pick for ' + item.item_name);
+    console.error(e);
+  });
+}
+function updatePickingProgress(){
+  const done = currentPickingItems.filter(i => i.qty_added > 0 && i.qty_picked >= i.qty_added).length;
+  const partial = currentPickingItems.filter(i => i.qty_picked > 0 && i.qty_picked < i.qty_added).length;
+  let txt = done + '/' + currentPickingItems.length + ' picked';
+  if(partial > 0) txt += ' · ' + partial + ' partial';
+  document.getElementById('pickingProgress').textContent = txt;
+}
+async function endPickingList(){
+  if(!confirm('End this picking list? It will be marked closed.')) return;
+  stopActiveTimer();
+  try{
+    await apiPost('retail/lists/' + currentPickingList.list_id + '/close', {});
+    toast('List closed');
+    showView('view-picking-index');
+    loadPickingLists();
+  }catch(e){
+    toast('Could not close list');
+    console.error(e);
+  }
+}
+
+/* ============ UNPICKED / SHORTFALL REPORT ============ */
+async function openUnpickedReport(){
+  showView('view-unpicked');
+  const sel = document.getElementById('unpickedListSelect');
+  sel.innerHTML = '<option value="">Loading lists…</option>';
+  document.getElementById('unpickedContent').innerHTML = '';
+  try{
+    const data = await apiGet('retail/lists/');
+    const lists = (data.items || []).filter(l => l.status === 'FINALIZED' || l.status === 'CLOSED');
+    if(lists.length === 0){
+      sel.innerHTML = '<option value="">No finalised or closed lists yet</option>';
+      document.getElementById('unpickedContent').innerHTML = '<div class="empty-hint">Finalise a Making List or close a Picking List first.</div>';
+      return;
+    }
+    sel.innerHTML = '<option value="ALL">All lists</option>' +
+      lists.map(l => `<option value="${l.list_id}">${escapeHtml(l.list_name)} (${l.status === 'CLOSED' ? 'closed' : 'picking in progress'})</option>`).join('');
+    loadUnpickedReport();
+  }catch(e){
+    sel.innerHTML = '<option value="">Could not load lists</option>';
+    document.getElementById('unpickedContent').innerHTML = errDetailHtml(e);
+    console.error(e);
+  }
+}
+async function loadUnpickedReport(){
+  const sel = document.getElementById('unpickedListSelect');
+  const content = document.getElementById('unpickedContent');
+  const chosen = sel.value;
+  if(!chosen) return;
+  content.innerHTML = '<div class="loading">Checking outstanding items against live stock…</div>';
+  try{
+    let listRefs;
+    if(chosen === 'ALL'){
+      const data = await apiGet('retail/lists/');
+      listRefs = (data.items || []).filter(l => l.status === 'FINALIZED' || l.status === 'CLOSED').map(l => l.list_id);
+    } else {
+      listRefs = [chosen];
+    }
+    let rows = [];
+    for(const listId of listRefs){
+      const detail = await apiGet('retail/lists/' + listId);
+      if(!detail.list) continue;
+      const items = (detail.items || [])
+        .map(it => ({ ...it, qty_picked: normalizeQtyPicked(it) }))
+        .filter(it => it.qty_picked < it.qty_added);
+      items.forEach(it => rows.push({ ...it, list_name: detail.list.list_name, list_status: detail.list.status }));
+    }
+    if(rows.length === 0){
+      content.innerHTML = '<div class="empty-hint">Nothing outstanding — everything requested has been picked.</div>';
+      return;
+    }
+    const uniqueNames = [...new Set(rows.map(r => r.item_name))];
+    const stockMap = {};
+    await Promise.all(uniqueNames.map(async name => {
+      try{
+        const s = await apiGet('stock/item/?name=' + encodeURIComponent(name));
+        stockMap[name] = (s.items && s.items[0]) ? s.items[0].quantity : null;
+      }catch(e){ stockMap[name] = null; }
+    }));
+    rows.sort((a,b) => (a.list_name||'').localeCompare(b.list_name||'') || a.item_name.localeCompare(b.item_name));
+
+    content.innerHTML = '';
+    const table = document.createElement('table');
+    table.className = 'finaltable';
+    const thead = document.createElement('thead');
+    thead.innerHTML = `<tr>
+      <th>List</th><th>Item</th><th>Barcode</th>
+      <th class="qtycell">Requested</th><th class="qtycell">Picked</th><th class="qtycell">Remaining</th>
+      <th class="qtycell">In stock now</th><th>Likely reason</th>
+    </tr>`;
+    const tbody = document.createElement('tbody');
+    rows.forEach(r=>{
+      const remaining = r.qty_added - r.qty_picked;
+      const stock = stockMap[r.item_name];
+      let reason = 'Not yet picked', reasonClass = '';
+      if(stock === null || stock === undefined){ reason = 'Stock unknown'; }
+      else if(stock <= 0){ reason = 'Out of stock'; reasonClass = 'out'; }
+      else if(stock < remaining){ reason = 'Short — only ' + stock + ' available'; reasonClass = 'low'; }
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${escapeHtml(r.list_name)}${r.list_status === 'CLOSED' ? ' <span class="tagchip" style="font-size:9px;">closed</span>' : ''}</td>
+        <td>${escapeHtml(r.item_name)}</td>
+        <td class="mono" style="font-size:11px;color:var(--text-dim);">${r.barcode ? escapeHtml(r.barcode) : '—'}</td>
+        <td class="qtycell">${r.qty_added}</td>
+        <td class="qtycell">${r.qty_picked}</td>
+        <td class="qtycell" style="font-weight:700;">${remaining}</td>
+        <td class="qtycell"><span class="val ${stockClass(stock)}">${stock===null||stock===undefined?'—':stock}</span></td>
+        <td><span class="reasonbadge ${reasonClass}">${reason}</span></td>
+      `;
+      tbody.appendChild(tr);
+    });
+    table.appendChild(thead);
+    table.appendChild(tbody);
+    content.appendChild(table);
+  }catch(e){
+    content.innerHTML = '<div class="loading" style="color:var(--danger)">Could not build the report.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+
+/* ============ HISTORY (ARCHIVE OF CLOSED LISTS) ============ */
+async function loadHistory(){
+  const grid = document.getElementById('historyListGrid');
+  grid.innerHTML = '<div class="loading">Loading history…</div>';
+  const searchBox = document.getElementById('historySearch');
+  if(searchBox) searchBox.value = '';
+  try{
+    const data = await apiGet('retail/lists/');
+    historyLists = (data.items || []).filter(l => l.status === 'CLOSED')
+      .sort((a,b) => new Date(b.closed_at || b.started_at) - new Date(a.closed_at || a.started_at));
+    renderHistoryList();
+  }catch(e){
+    grid.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load history.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+function renderHistoryList(){
+  const grid = document.getElementById('historyListGrid');
+  const q = (document.getElementById('historySearch').value || '').toLowerCase().trim();
+  const filtered = !q ? historyLists : historyLists.filter(l =>
+    (l.list_name || '').toLowerCase().includes(q) ||
+    (l.created_by || '').toLowerCase().includes(q) ||
+    (l.picked_by || '').toLowerCase().includes(q)
+  );
+  if(filtered.length === 0){
+    grid.innerHTML = '<div class="empty-hint">' +
+      (historyLists.length === 0
+        ? 'No completed lists yet — a list appears here once it\'s picked and closed.'
+        : 'No matches for that search.') +
+      '</div>';
+    return;
+  }
+  grid.innerHTML = '';
+  filtered.forEach(l => grid.appendChild(renderHistoryCard(l)));
+}
+function renderHistoryCard(l){
+  const div = document.createElement('div');
+  div.className = 'bincard';
+  div.onclick = () => openHistoryDetail(l.list_id);
+  const closedDate = l.closed_at ? new Date(l.closed_at).toLocaleDateString() : '';
+  const staffBits = [];
+  if(l.created_by) staffBits.push('Made by ' + escapeHtml(l.created_by));
+  if(l.picked_by) staffBits.push('Picked by ' + escapeHtml(l.picked_by));
+  div.innerHTML = `
+    <h4>${escapeHtml(l.list_name)}</h4>
+    <div class="count">${l.item_count} item${l.item_count===1?'':'s'} &middot; closed ${closedDate}</div>
+    ${staffBits.length ? `<div class="staffline">${staffBits.join(' &middot; ')}</div>` : ''}
+  `;
+  return div;
+}
+function backToHistoryIndex(){
+  showView('view-history-index');
+}
+async function openHistoryDetail(id){
+  showView('view-history-detail');
+  document.getElementById('historyMetaRow').innerHTML = '';
+  document.getElementById('historyContent').innerHTML = '<div class="loading">Loading…</div>';
+  try{
+    const data = await apiGet('retail/lists/' + id);
+    const list = data.list;
+    const items = (data.items || []).map(it => ({ ...it, qty_picked: normalizeQtyPicked(it) }));
+    currentHistoryList = list;
+    currentHistoryItems = items;
+    document.getElementById('historyCrumb').textContent = list.list_name;
+    document.getElementById('historyTitle').textContent = list.list_name;
+
+    const meta = [];
+    if(list.created_by) meta.push('<span>Made by <strong>' + escapeHtml(list.created_by) + '</strong></span>');
+    if(list.picked_by) meta.push('<span>Picked by <strong>' + escapeHtml(list.picked_by) + '</strong></span>');
+    if(list.started_at) meta.push('<span>Started ' + new Date(list.started_at).toLocaleString() + '</span>');
+    if(list.finalized_at) meta.push('<span>Finalised ' + new Date(list.finalized_at).toLocaleString() + '</span>');
+    if(list.closed_at) meta.push('<span>Closed ' + new Date(list.closed_at).toLocaleString() + '</span>');
+    if(list.making_seconds) meta.push('<span>Making time <strong>' + formatElapsed(list.making_seconds) + '</strong></span>');
+    if(list.picking_seconds) meta.push('<span>Picking time <strong>' + formatElapsed(list.picking_seconds) + '</strong></span>');
+    document.getElementById('historyMetaRow').innerHTML = meta.join('');
+
+    const content = document.getElementById('historyContent');
+    if(items.length === 0){
+      content.innerHTML = '<div class="empty-hint">This list had no items.</div>';
+      return;
+    }
+    const rows = items.map(it => {
+      const short = it.qty_picked < it.qty_added;
+      return `
+        <tr>
+          <td>${escapeHtml(it.item_name)}</td>
+          <td class="mono" style="font-size:11px;color:var(--text-dim);">${it.barcode ? escapeHtml(it.barcode) : '—'}</td>
+          <td class="qtycell">${it.qty_added}</td>
+          <td class="qtycell">${it.qty_picked}</td>
+          <td>${short ? `<span class="reasonbadge low">${it.qty_added - it.qty_picked} short</span>` : `<span class="val ok">Complete</span>`}</td>
+        </tr>`;
+    }).join('');
+    content.innerHTML = `
+      <table class="finaltable">
+        <thead><tr><th>Item</th><th>Barcode</th><th class="qtycell">Requested</th><th class="qtycell">Picked</th><th>Result</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  }catch(e){
+    document.getElementById('historyContent').innerHTML = '<div class="loading" style="color:var(--danger)">Could not load this list.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+
 /* ============ EMPTY LIST ============ */
 async function confirmEmptyList(){
   if(!confirm('Empty the entire picking list? This sets every item\'s quantity back to 0 (blocks stay — remove one with its ✕ if you want it gone for good).')) return;
@@ -834,7 +1887,7 @@ async function showFinal(){
       content.appendChild(block);
     });
   }catch(e){
-    content.innerHTML = '<div class="loading" style="color:var(--danger)">Could not build the picking list.</div>';
+    content.innerHTML = '<div class="loading" style="color:var(--danger)">Could not build the picking list.</div>' + errDetailHtml(e);
     console.error(e);
   }
 }
@@ -883,16 +1936,83 @@ async function downloadPDF(){
   }
 }
 
+/* ============ RETAIL PICKING SHEET PDF (shared by Picking List + History) ============ */
+function buildRetailPickingSheetPDF(title, metaLines, items, filenamePrefix){
+  try{
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text(title, 14, 18);
+    doc.setFontSize(10);
+    doc.setTextColor(120);
+    let y = 25;
+    metaLines.forEach(line=>{ doc.text(line, 14, y); y += 5; });
+    y += 3;
+    const rows = items.map(it => [
+      it.item_name,
+      it.barcode || '—',
+      String(it.qty_added),
+      String(it.qty_picked),
+      it.qty_picked >= it.qty_added ? 'Complete' : (it.qty_added - it.qty_picked) + ' short'
+    ]);
+    doc.autoTable({
+      startY: y,
+      head: [['Item', 'Barcode', 'Requested', 'Picked', 'Result']],
+      body: rows,
+      theme: 'grid',
+      headStyles: { fillColor: [30,34,42] },
+      styles: { fontSize: 9 },
+      margin: { left: 14, right: 14 }
+    });
+    doc.save(filenamePrefix + '-' + new Date().toISOString().slice(0,10) + '.pdf');
+  }catch(e){
+    toast('Could not generate PDF');
+    console.error(e);
+  }
+}
+function pickingSheetMeta(list){
+  const meta = [];
+  if(list.created_by) meta.push('Made by: ' + list.created_by);
+  if(list.picked_by) meta.push('Picked by: ' + list.picked_by);
+  meta.push('Generated ' + new Date().toLocaleString());
+  return meta;
+}
+function downloadPickingListPDF(){
+  if(!currentPickingList) return;
+  buildRetailPickingSheetPDF(
+    'Picking Sheet — ' + currentPickingList.list_name,
+    pickingSheetMeta(currentPickingList),
+    currentPickingItems,
+    'picking-sheet-' + currentPickingList.list_id
+  );
+}
+function downloadHistoryPDF(){
+  if(!currentHistoryList) return;
+  buildRetailPickingSheetPDF(
+    'Picking Sheet — ' + currentHistoryList.list_name,
+    pickingSheetMeta(currentHistoryList),
+    currentHistoryItems || [],
+    'picking-sheet-' + currentHistoryList.list_id
+  );
+}
+
 /* ============ UTIL ============ */
 function escapeHtml(str){
   const d = document.createElement('div');
   d.textContent = str ?? '';
   return d.innerHTML;
 }
+function errDetailHtml(e){
+  const msg = (e && e.message) ? e.message : String(e);
+  return '<div class="errdetail">' + escapeHtml(msg) + '</div>';
+}
 
 /* close modals on backdrop click */
 document.querySelectorAll('.modal-backdrop').forEach(b=>{
-  b.addEventListener('click', e=>{ if(e.target === b) b.classList.remove('active'); });
+  b.addEventListener('click', e=>{
+    if(e.target !== b) return;
+    if(b.id === 'modalScanner'){ closeScanner(); } else { b.classList.remove('active'); }
+  });
 });
 </script>
 </body>
