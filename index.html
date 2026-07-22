@@ -290,12 +290,13 @@
   .reasonbadge.out{background:rgba(220,38,38,.15);color:var(--danger);}
   .reasonbadge.low{background:rgba(184,134,11,.15);color:var(--accent-dim);}
   .errdetail{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);margin-top:6px;word-break:break-word;}
-  .newpriceinput{
+  .newpriceinput,.newmargininput{
     width:90px;text-align:right;padding:7px 9px;border-radius:6px;border:1px solid var(--line);
     background:var(--panel2);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:13px;
   }
-  .newpriceinput:focus{outline:2px solid var(--accent);outline-offset:-1px;}
+  .newpriceinput:focus,.newmargininput:focus{outline:2px solid var(--accent);outline-offset:-1px;}
   .wsprintprice{display:none;}
+  .wsprintmargin{display:none;}
 
   /* ---- final list ---- */
   .catblock{margin-bottom:26px;}
@@ -323,6 +324,8 @@
     z-index:200;display:none;
   }
 
+  .pickprinttable{display:none;}
+
   @media print{
     header.topbar,.crumbrow,.actionbar,.no-print{display:none !important;}
     body{background:#fff;color:#111;}
@@ -331,14 +334,28 @@
     table.finaltable th{color:#555;}
     .hero .eyebrow{color:#555;}
     .hero h2{color:#111;}
-    .pickrow{border-color:#999;break-inside:avoid;}
-    .pickrow .pname{color:#111;}
-    .pickrow .pbarcode,.pickrow .preq{color:#555;}
-    .pickrow .stepper,.pickrow .pickall{display:none !important;}
-    .pickrow .printqty{display:inline-block !important;font-family:'JetBrains Mono',monospace;font-weight:700;color:#111;}
     .historymeta-row{color:#555;}
-    .newpriceinput{display:none !important;}
-    .wsprintprice{display:inline-block !important;font-family:'JetBrains Mono',monospace;font-weight:700;color:#111;}
+    .newpriceinput,.newmargininput{display:none !important;}
+    .wsprintprice,.wsprintmargin{display:inline-block !important;font-family:'JetBrains Mono',monospace;font-weight:700;color:#111;}
+
+    /* Picking List: hide the interactive checklist and show a plain tick-sheet instead */
+    #pickingItemList{display:none !important;}
+    .pickprinttable{
+      display:table !important;width:100%;border-collapse:collapse;
+    }
+    .pickprinttable th, .pickprinttable td{
+      border:1px solid #999;padding:7px 9px;font-size:12px;color:#111;text-align:left;
+    }
+    .pickprinttable th{
+      background:#eee;font-size:10px;text-transform:uppercase;letter-spacing:.5px;
+    }
+    .pickprinttable td.qtycell, .pickprinttable th.qtycell{
+      text-align:right;font-family:'JetBrains Mono',monospace;font-weight:700;
+    }
+    .pickprinttable td.checkcell{width:44px;text-align:center;}
+    .pickprinttable .tickbox{
+      display:inline-block;width:16px;height:16px;border:1.5px solid #111;
+    }
   }
 </style>
 </head>
@@ -416,6 +433,7 @@
         <button class="btn-ghost" onclick="window.print()">Print</button>
         <button class="btn-ghost" onclick="downloadWholesaleExcel()">Download Excel</button>
         <button class="btn-amber" onclick="downloadWholesalePDF()">Download PDF</button>
+        <button class="btn-danger-ghost" onclick="openWholesalePasswordModal()">Change Password</button>
       </div>
     </div>
     <div id="wholesaleContent"></div>
@@ -531,6 +549,7 @@
       </div>
     </div>
     <div id="pickingItemList"></div>
+    <table class="pickprinttable" id="pickingPrintTable"></table>
     <div style="margin-top:24px;" class="no-print">
       <button class="btn-danger-ghost" onclick="endPickingList()">End List</button>
     </div>
@@ -698,11 +717,28 @@
   </div>
 </div>
 
+<!-- CHANGE WHOLESALE PASSWORD MODAL -->
+<div class="modal-backdrop" id="modalWholesalePassword">
+  <div class="modal" style="width:380px;">
+    <h3>Change Wholesale Pricing password</h3>
+    <p class="modal-sub">Enter the current password, then choose a new one.</p>
+    <input type="password" id="wsOldPassword" placeholder="Current password" autocomplete="off">
+    <input type="password" id="wsNewPassword" placeholder="New password" autocomplete="off">
+    <input type="password" id="wsNewPassword2" placeholder="Confirm new password" autocomplete="off">
+    <div class="errdetail" id="wsPasswordErr" style="display:none;"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeWholesalePasswordModal()">Cancel</button>
+      <button class="btn-amber" onclick="submitWholesalePasswordChange()">Update password</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ============ CONFIG ============ */
 const API_BASE = "https://hallan-picking-backend.onrender.com/api/";
 const SITE_PASSWORD = "hallan2026"; // change this, then tell your team the new code
-const WHOLESALE_PASSWORD = "hallan2026"; // asked EVERY time this list is opened — never remembered/stored, unlike SITE_PASSWORD
+// Wholesale Pricing password now lives server-side (APP_SETTINGS table) so it can be
+// changed from the portal and stays in sync across every device — see openWholesalePricing().
 
 /* ============ STATE ============ */
 let categories = [];
@@ -721,7 +757,7 @@ let lastScannedAt = 0;
 let scannerTarget = 'retail'; // 'retail' (Making List) or 'warehouse' (Warehouse category)
 let historyLists = [];
 let wholesaleRows = [];
-let wholesaleNewPrices = {}; // keyed by stock_name — session-only, not saved to the database
+let wholesaleAdjust = {}; // keyed by stock_name -> { margin, price } — session-only, not saved to the database
 let currentHistoryList = null;
 let currentHistoryItems = null;
 
@@ -824,22 +860,58 @@ function openListType(type){
   if(type==='WAREHOUSE'){ showView('view-warehouse'); loadCategories(); return; }
   if(type==='RETAIL'){ showView('view-retail-home'); return; }
 }
-function openWholesalePricing(){
+async function openWholesalePricing(){
   const pw = prompt('This list is confidential.\nEnter the Wholesale Pricing password:');
   if(pw === null) return; // cancelled — stay where we are
-  if(pw !== WHOLESALE_PASSWORD){
-    toast('Incorrect password');
+  try{
+    const data = await apiPost('wholesale/auth/verify', { password: pw });
+    if(!data.ok){
+      toast('Incorrect password');
+      return;
+    }
+  }catch(e){
+    toast('Could not check password');
+    console.error(e);
     return;
   }
   showView('view-wholesale');
   loadWholesalePricing();
+}
+function openWholesalePasswordModal(){
+  document.getElementById('wsOldPassword').value = '';
+  document.getElementById('wsNewPassword').value = '';
+  document.getElementById('wsNewPassword2').value = '';
+  const err = document.getElementById('wsPasswordErr');
+  err.style.display = 'none';
+  err.textContent = '';
+  openModal('modalWholesalePassword');
+}
+function closeWholesalePasswordModal(){ closeModal('modalWholesalePassword'); }
+async function submitWholesalePasswordChange(){
+  const oldPw = document.getElementById('wsOldPassword').value;
+  const newPw = document.getElementById('wsNewPassword').value;
+  const newPw2 = document.getElementById('wsNewPassword2').value;
+  const err = document.getElementById('wsPasswordErr');
+  const showErr = (msg) => { err.textContent = msg; err.style.display = 'block'; err.style.color = 'var(--danger)'; };
+  if(!oldPw || !newPw){ showErr('Enter the current password and a new password.'); return; }
+  if(newPw !== newPw2){ showErr('New password and confirmation do not match.'); return; }
+  if(newPw.length < 4){ showErr('New password should be at least 4 characters.'); return; }
+  try{
+    await apiPost('wholesale/auth/change', { old_password: oldPw, new_password: newPw });
+    toast('Password updated');
+    closeWholesalePasswordModal();
+  }catch(e){
+    console.error(e);
+    const msg = /incorrect/i.test(e.message) ? 'Current password is incorrect.' : 'Could not update password.';
+    showErr(msg);
+  }
 }
 
 /* ============ WHOLESALE PRICING LIST (read-only reference) ============ */
 async function loadWholesalePricing(){
   const content = document.getElementById('wholesaleContent');
   document.getElementById('wholesaleSearch').value = '';
-  wholesaleNewPrices = {};
+  wholesaleAdjust = {};
   content.innerHTML = '<div class="loading">Loading pricing list…</div>';
   try{
     const data = await apiGet('wholesale/pricing/');
@@ -868,6 +940,18 @@ function filteredWholesaleRows(){
     (r.department_name || '').toLowerCase().includes(q)
   );
 }
+function wholesalePriceFromMargin(suppCost, marginPct){
+  if(suppCost === null || suppCost === undefined) return null;
+  const m = Number(marginPct);
+  if(isNaN(m) || m >= 100) return null;
+  return Number(suppCost) / (1 - m / 100);
+}
+function wholesaleMarginFromPrice(suppCost, price){
+  if(suppCost === null || suppCost === undefined) return null;
+  const p = Number(price);
+  if(isNaN(p) || p <= 0) return null;
+  return ((p - Number(suppCost)) / p) * 100;
+}
 function renderWholesaleTable(){
   const content = document.getElementById('wholesaleContent');
   const filtered = filteredWholesaleRows();
@@ -885,11 +969,12 @@ function renderWholesaleTable(){
   thead.innerHTML = `<tr>
     <th>Item</th><th>Department</th>
     <th class="qtycell">Supplier Cost</th><th class="qtycell">Trade 3 Price</th><th class="qtycell">Margin</th>
-    <th class="qtycell">New Price</th>
+    <th class="qtycell">New Margin %</th><th class="qtycell">New Price</th>
   </tr>`;
   const tbody = document.createElement('tbody');
   filtered.forEach(r=>{
     const margin = wholesaleMarginPct(r);
+    const adj = wholesaleAdjust[r.stock_name] || {};
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${escapeHtml(r.stock_name)}</td>
@@ -898,17 +983,51 @@ function renderWholesaleTable(){
       <td class="qtycell">${r.price_net === null || r.price_net === undefined ? '—' : Number(r.price_net).toFixed(2)}</td>
       <td class="qtycell"><span class="val ${wholesaleMarginClass(margin)}">${margin === null ? '—' : margin.toFixed(1) + '%'}</span></td>
       <td class="qtycell">
+        <input type="number" step="0.1" class="newmargininput" placeholder="—"
+               value="${adj.margin !== undefined ? adj.margin : ''}">
+        <span class="wsprintmargin">${adj.margin !== undefined && adj.margin !== '' ? Number(adj.margin).toFixed(1) + '%' : '—'}</span>
+      </td>
+      <td class="qtycell">
         <input type="number" step="0.01" min="0" class="newpriceinput" placeholder="—"
-               value="${wholesaleNewPrices[r.stock_name] !== undefined ? wholesaleNewPrices[r.stock_name] : ''}">
-        <span class="wsprintprice">${wholesaleNewPrices[r.stock_name] !== undefined && wholesaleNewPrices[r.stock_name] !== '' ? Number(wholesaleNewPrices[r.stock_name]).toFixed(2) : '—'}</span>
+               value="${adj.price !== undefined ? adj.price : ''}">
+        <span class="wsprintprice">${adj.price !== undefined && adj.price !== '' ? Number(adj.price).toFixed(2) : '—'}</span>
       </td>
     `;
-    const input = tr.querySelector('.newpriceinput');
-    input.addEventListener('change', () => {
-      const v = input.value.trim();
-      if(v === ''){ delete wholesaleNewPrices[r.stock_name]; }
-      else { wholesaleNewPrices[r.stock_name] = v; }
-      tr.querySelector('.wsprintprice').textContent = v === '' ? '—' : Number(v).toFixed(2);
+    const marginInput = tr.querySelector('.newmargininput');
+    const priceInput = tr.querySelector('.newpriceinput');
+    const marginPrint = tr.querySelector('.wsprintmargin');
+    const pricePrint = tr.querySelector('.wsprintprice');
+    marginInput.addEventListener('change', () => {
+      const v = marginInput.value.trim();
+      if(v === ''){
+        delete adj.margin;
+      } else {
+        adj.margin = v;
+        const newPrice = wholesalePriceFromMargin(r.suppcost_net, v);
+        if(newPrice !== null){
+          adj.price = newPrice.toFixed(2);
+          priceInput.value = adj.price;
+          pricePrint.textContent = Number(adj.price).toFixed(2);
+        }
+      }
+      marginPrint.textContent = adj.margin !== undefined && adj.margin !== '' ? Number(adj.margin).toFixed(1) + '%' : '—';
+      if(Object.keys(adj).length === 0){ delete wholesaleAdjust[r.stock_name]; } else { wholesaleAdjust[r.stock_name] = adj; }
+    });
+    priceInput.addEventListener('change', () => {
+      const v = priceInput.value.trim();
+      if(v === ''){
+        delete adj.price;
+      } else {
+        adj.price = v;
+        const newMargin = wholesaleMarginFromPrice(r.suppcost_net, v);
+        if(newMargin !== null){
+          adj.margin = newMargin.toFixed(1);
+          marginInput.value = adj.margin;
+          marginPrint.textContent = Number(adj.margin).toFixed(1) + '%';
+        }
+      }
+      pricePrint.textContent = adj.price !== undefined && adj.price !== '' ? Number(adj.price).toFixed(2) : '—';
+      if(Object.keys(adj).length === 0){ delete wholesaleAdjust[r.stock_name]; } else { wholesaleAdjust[r.stock_name] = adj; }
     });
     tbody.appendChild(tr);
   });
@@ -920,14 +1039,15 @@ function renderWholesaleTable(){
 function wholesaleExportRows(){
   return filteredWholesaleRows().map(r=>{
     const margin = wholesaleMarginPct(r);
-    const newPrice = wholesaleNewPrices[r.stock_name];
+    const adj = wholesaleAdjust[r.stock_name] || {};
     return {
       item: r.stock_name,
       department: r.department_name,
       suppCost: r.suppcost_net === null || r.suppcost_net === undefined ? null : Number(r.suppcost_net),
       tradePrice: r.price_net === null || r.price_net === undefined ? null : Number(r.price_net),
       margin: margin === null ? null : Number(margin.toFixed(1)),
-      newPrice: newPrice !== undefined && newPrice !== '' ? Number(newPrice) : null
+      newMargin: adj.margin !== undefined && adj.margin !== '' ? Number(adj.margin) : null,
+      newPrice: adj.price !== undefined && adj.price !== '' ? Number(adj.price) : null
     };
   });
 }
@@ -948,11 +1068,12 @@ function downloadWholesalePDF(){
       r.suppCost === null ? '—' : r.suppCost.toFixed(2),
       r.tradePrice === null ? '—' : r.tradePrice.toFixed(2),
       r.margin === null ? '—' : r.margin.toFixed(1) + '%',
+      r.newMargin === null ? '' : r.newMargin.toFixed(1) + '%',
       r.newPrice === null ? '' : r.newPrice.toFixed(2)
     ]);
     doc.autoTable({
       startY: 30,
-      head: [['Item', 'Department', 'Supplier Cost', 'Trade 3 Price', 'Margin', 'New Price']],
+      head: [['Item', 'Department', 'Supplier Cost', 'Trade 3 Price', 'Margin', 'New Margin', 'New Price']],
       body,
       theme: 'grid',
       headStyles: { fillColor: [30,34,42] },
@@ -975,10 +1096,11 @@ function downloadWholesaleExcel(){
       'Supplier Cost': r.suppCost,
       'Trade 3 Price': r.tradePrice,
       'Margin %': r.margin,
+      'New Margin %': r.newMargin === null ? '' : r.newMargin,
       'New Price': r.newPrice === null ? '' : r.newPrice
     }));
     const ws = XLSX.utils.json_to_sheet(sheetData);
-    ws['!cols'] = [{ wch: 36 }, { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 12 }];
+    ws['!cols'] = [{ wch: 36 }, { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 12 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Wholesale Pricing');
     XLSX.writeFile(wb, 'wholesale-pricing-' + new Date().toISOString().slice(0,10) + '.xlsx');
@@ -1409,24 +1531,44 @@ function renderMakingListCard(l){
     <div class="count">${l.item_count} item${l.item_count===1?'':'s'} &middot; ${isOpen ? 'In progress' : 'Finalised — ready for picking'}</div>
     ${l.created_by ? `<div class="staffline">Made by ${escapeHtml(l.created_by)}</div>` : ''}
   `;
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;';
   if(isOpen){
     div.onclick = () => openMakingListDetail(l.list_id);
     const finBtn = document.createElement('button');
     finBtn.className = 'btn-amber';
-    finBtn.style.cssText = 'margin-top:10px;padding:8px 14px;font-size:12px;';
+    finBtn.style.cssText = 'padding:8px 14px;font-size:12px;';
     finBtn.textContent = 'Finalise';
     finBtn.onclick = (e) => { e.stopPropagation(); finaliseList(l.list_id); };
-    div.appendChild(finBtn);
+    btnRow.appendChild(finBtn);
   } else {
     div.style.opacity = '.8';
     const reopenBtn = document.createElement('button');
     reopenBtn.className = 'btn-ghost';
-    reopenBtn.style.cssText = 'margin-top:10px;padding:8px 14px;font-size:12px;';
+    reopenBtn.style.cssText = 'padding:8px 14px;font-size:12px;';
     reopenBtn.textContent = 'Reopen for editing';
     reopenBtn.onclick = (e) => { e.stopPropagation(); reopenList(l.list_id); };
-    div.appendChild(reopenBtn);
+    btnRow.appendChild(reopenBtn);
   }
+  const removeBtn = document.createElement('button');
+  removeBtn.className = 'btn-danger-ghost';
+  removeBtn.style.cssText = 'padding:8px 14px;font-size:12px;';
+  removeBtn.textContent = 'Close';
+  removeBtn.onclick = (e) => { e.stopPropagation(); removeMakingList(l.list_id, l.list_name); };
+  btnRow.appendChild(removeBtn);
+  div.appendChild(btnRow);
   return div;
+}
+async function removeMakingList(id, name){
+  if(!confirm('Close "' + name + '"? It will be removed from Making List (and Picking List if finalised).')) return;
+  try{
+    await apiPost('retail/lists/' + id + '/close', {});
+    toast('List closed');
+    loadMakingLists();
+  }catch(e){
+    toast('Could not close list');
+    console.error(e);
+  }
 }
 async function reopenList(id){
   if(!confirm('Reopen this list for editing? It will move back to "In progress" and out of Picking List until you finalise it again.')) return;
@@ -1827,7 +1969,9 @@ async function openPickingListDetail(id){
     await apiPost('retail/lists/' + id + '/start-picking', { picked_by: pickedBy || undefined });
     const data = await apiGet('retail/lists/' + id);
     currentPickingList = data.list;
-    currentPickingItems = (data.items || []).map(it => ({ ...it, qty_picked: normalizeQtyPicked(it) }));
+    currentPickingItems = (data.items || [])
+      .map(it => ({ ...it, qty_picked: normalizeQtyPicked(it) }))
+      .sort((a, b) => a.item_name.localeCompare(b.item_name, undefined, { sensitivity: 'base' }));
     document.getElementById('pickingCrumb').textContent = currentPickingList.list_name;
     document.getElementById('pickingTitle').textContent = currentPickingList.list_name;
     const pickedByEl = document.getElementById('pickingPickedBy');
@@ -1849,6 +1993,28 @@ function renderPickingItems(){
   list.innerHTML = '';
   currentPickingItems.forEach(it => list.appendChild(renderPickingRow(it)));
   updatePickingProgress();
+  renderPickingPrintTable();
+}
+function renderPickingPrintTable(){
+  const table = document.getElementById('pickingPrintTable');
+  if(!table) return;
+  const rows = currentPickingItems.map(it => `
+    <tr>
+      <td>${escapeHtml(it.item_name)}</td>
+      <td>${it.barcode ? escapeHtml(it.barcode) : '—'}</td>
+      <td class="qtycell">${it.stock_available === null || it.stock_available === undefined ? '—' : it.stock_available}</td>
+      <td class="qtycell">${it.qty_added}</td>
+      <td class="checkcell"><span class="tickbox"></span></td>
+    </tr>
+  `).join('');
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>Item</th><th>Barcode</th><th class="qtycell">In Stock</th><th class="qtycell">Requested</th><th class="checkcell">✓</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  `;
 }
 function normalizeQtyPicked(it){
   if(typeof it.qty_picked === 'number') return it.qty_picked;
@@ -2282,9 +2448,53 @@ function pickingSheetMeta(list){
   meta.push('Generated ' + new Date().toLocaleString());
   return meta;
 }
+/* Blank tick-sheet for picking off the shelf: Item, Barcode, In Stock, Requested, pen-tick box */
+function buildBlankPickingSheetPDF(title, metaLines, items, filenamePrefix){
+  try{
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text(title, 14, 18);
+    doc.setFontSize(10);
+    doc.setTextColor(120);
+    let y = 25;
+    metaLines.forEach(line=>{ doc.text(line, 14, y); y += 5; });
+    y += 3;
+    const sorted = [...items].sort((a, b) => a.item_name.localeCompare(b.item_name, undefined, { sensitivity: 'base' }));
+    const rows = sorted.map(it => [
+      it.item_name,
+      it.barcode || '—',
+      (it.stock_available === null || it.stock_available === undefined) ? '—' : String(it.stock_available),
+      String(it.qty_added),
+      ''
+    ]);
+    doc.autoTable({
+      startY: y,
+      head: [['Item', 'Barcode', 'In Stock', 'Requested', 'Picked']],
+      body: rows,
+      theme: 'grid',
+      headStyles: { fillColor: [30,34,42] },
+      styles: { fontSize: 9 },
+      columnStyles: { 4: { cellWidth: 20 } },
+      margin: { left: 14, right: 14 },
+      didDrawCell: (data) => {
+        if(data.section === 'body' && data.column.index === 4){
+          const size = 10;
+          const bx = data.cell.x + (data.cell.width - size) / 2;
+          const by = data.cell.y + (data.cell.height - size) / 2;
+          doc.rect(bx, by, size, size);
+        }
+      }
+    });
+    doc.save(filenamePrefix + '-' + new Date().toISOString().slice(0,10) + '.pdf');
+  }catch(e){
+    toast('Could not generate PDF');
+    console.error(e);
+  }
+}
 function downloadPickingListPDF(){
   if(!currentPickingList) return;
-  buildRetailPickingSheetPDF(
+  buildBlankPickingSheetPDF(
     'Picking Sheet — ' + currentPickingList.list_name,
     pickingSheetMeta(currentPickingList),
     currentPickingItems,
