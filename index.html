@@ -9,6 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
     --bg:#ffffff; --panel:#f4f6f9; --panel2:#eceff3; --panel3:#e4e8ee;
@@ -107,7 +108,15 @@
     content:'';position:absolute;top:0;left:16px;width:34px;height:8px;background:var(--panel3);
     border-radius:0 0 4px 4px;
   }
-  .bincard h4{margin:10px 0 4px;font-size:15px;}
+  .bincard h4{margin:10px 0 4px;font-size:15px;padding-right:56px;}
+  .bincard-actions{position:absolute;top:14px;right:14px;display:flex;gap:6px;z-index:2;}
+  .cardicon{
+    background:var(--panel2);border:1px solid var(--line);border-radius:5px;width:26px;height:26px;
+    font-size:12px;color:var(--text-dim);cursor:pointer;display:flex;align-items:center;justify-content:center;
+    line-height:1;padding:0;
+  }
+  .cardicon:hover{border-color:var(--accent);color:var(--accent);}
+  .cardicon.delete:hover{border-color:var(--danger);color:var(--danger);}
   .bincard .staffline{font-family:'JetBrains Mono',monospace;color:var(--text-dim);font-size:11px;margin-top:2px;}
   .hero .staffline{color:var(--accent);font-weight:600;}
   .historysearch{
@@ -229,9 +238,9 @@
 
   /* ---- barcode scanner ---- */
   #scannerBox{
-    width:100%;max-width:260px;height:190px;margin:0 auto 12px;border-radius:8px;overflow:hidden;background:#000;
+    width:100%;max-width:320px;margin:0 auto 12px;border-radius:8px;overflow:hidden;background:#000;
   }
-  #scannerBox video{width:100% !important;height:100% !important;object-fit:cover;}
+  #scannerBox video{width:100% !important;height:auto !important;display:block !important;object-fit:contain !important;}
   .scanmanual{display:flex;gap:8px;margin:4px 0 6px;}
   .scanmanual input{flex:1;margin-bottom:0 !important;}
   .scanresult-card{
@@ -281,6 +290,12 @@
   .reasonbadge.out{background:rgba(220,38,38,.15);color:var(--danger);}
   .reasonbadge.low{background:rgba(184,134,11,.15);color:var(--accent-dim);}
   .errdetail{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);margin-top:6px;word-break:break-word;}
+  .newpriceinput{
+    width:90px;text-align:right;padding:7px 9px;border-radius:6px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:13px;
+  }
+  .newpriceinput:focus{outline:2px solid var(--accent);outline-offset:-1px;}
+  .wsprintprice{display:none;}
 
   /* ---- final list ---- */
   .catblock{margin-bottom:26px;}
@@ -322,6 +337,8 @@
     .pickrow .stepper,.pickrow .pickall{display:none !important;}
     .pickrow .printqty{display:inline-block !important;font-family:'JetBrains Mono',monospace;font-weight:700;color:#111;}
     .historymeta-row{color:#555;}
+    .newpriceinput{display:none !important;}
+    .wsprintprice{display:inline-block !important;font-family:'JetBrains Mono',monospace;font-weight:700;color:#111;}
   }
 </style>
 </head>
@@ -374,13 +391,34 @@
         <h3>Retail List</h3>
         <p>Scan stock to build a shop-floor list, then pick it off the shelf.</p>
       </div>
-      <div class="tile disabled">
-        <div class="stub">Coming soon</div>
-        <div class="num">03 &middot; ADHOC</div>
-        <h3>Manual List</h3>
-        <p>One-off custom picking lists. Not set up yet.</p>
+      <div class="tile" onclick="openWholesalePricing()">
+        <div class="num">03 &middot; PRICE</div>
+        <h3>Wholesale Pricing List</h3>
+        <p>Trade 3 pricing and supplier cost for Wholesale department stock.</p>
       </div>
     </div>
+  </div>
+
+  <!-- WHOLESALE PRICING LIST -->
+  <div id="view-wholesale" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <span class="current">Wholesale Pricing List</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Reference &middot; Trade 3</div>
+      <h2>Wholesale Pricing List</h2>
+      <p>Supplier cost vs. Trade 3 price for every Wholesale department item, synced from Vector.</p>
+    </div>
+    <div class="actionbar no-print">
+      <input type="text" id="wholesaleSearch" class="historysearch" placeholder="Search item or department…" oninput="renderWholesaleTable()">
+      <div style="display:flex;gap:10px;">
+        <button class="btn-ghost" onclick="window.print()">Print</button>
+        <button class="btn-ghost" onclick="downloadWholesaleExcel()">Download Excel</button>
+        <button class="btn-amber" onclick="downloadWholesalePDF()">Download PDF</button>
+      </div>
+    </div>
+    <div id="wholesaleContent"></div>
   </div>
 
   <!-- RETAIL HOME (choose Making List / Picking List) -->
@@ -587,7 +625,10 @@
     </div>
     <div class="actionbar">
       <span class="mono" id="catItemCount" style="color:var(--text-dim);font-size:12px;"></span>
-      <button class="btn-amber" onclick="openAddItemModal()">+ Add Item</button>
+      <div style="display:flex;gap:10px;">
+        <button class="btn-ghost" onclick="openScanner('warehouse')">Scan Barcode</button>
+        <button class="btn-amber" onclick="openAddItemModal()">+ Add Item</button>
+      </div>
     </div>
     <div id="itemlist"></div>
   </div>
@@ -644,7 +685,7 @@
 <div class="modal-backdrop" id="modalScanner">
   <div class="modal" style="width:440px;">
     <h3>Scan barcode</h3>
-    <p class="modal-sub">Point the camera at a barcode, or type it in below</p>
+    <p class="modal-sub" id="scannerSubtitle">Point the camera at a barcode, or type it in below</p>
     <div id="scannerBox"></div>
     <div id="scanFeedback"></div>
     <div class="scanmanual">
@@ -661,6 +702,7 @@
 /* ============ CONFIG ============ */
 const API_BASE = "https://hallan-picking-backend.onrender.com/api/";
 const SITE_PASSWORD = "hallan2026"; // change this, then tell your team the new code
+const WHOLESALE_PASSWORD = "hallan2026"; // asked EVERY time this list is opened — never remembered/stored, unlike SITE_PASSWORD
 
 /* ============ STATE ============ */
 let categories = [];
@@ -676,7 +718,10 @@ let scannerRunning = false;
 let scannerListEl = null;
 let lastScannedCode = null;
 let lastScannedAt = 0;
+let scannerTarget = 'retail'; // 'retail' (Making List) or 'warehouse' (Warehouse category)
 let historyLists = [];
+let wholesaleRows = [];
+let wholesaleNewPrices = {}; // keyed by stock_name — session-only, not saved to the database
 let currentHistoryList = null;
 let currentHistoryItems = null;
 
@@ -779,6 +824,169 @@ function openListType(type){
   if(type==='WAREHOUSE'){ showView('view-warehouse'); loadCategories(); return; }
   if(type==='RETAIL'){ showView('view-retail-home'); return; }
 }
+function openWholesalePricing(){
+  const pw = prompt('This list is confidential.\nEnter the Wholesale Pricing password:');
+  if(pw === null) return; // cancelled — stay where we are
+  if(pw !== WHOLESALE_PASSWORD){
+    toast('Incorrect password');
+    return;
+  }
+  showView('view-wholesale');
+  loadWholesalePricing();
+}
+
+/* ============ WHOLESALE PRICING LIST (read-only reference) ============ */
+async function loadWholesalePricing(){
+  const content = document.getElementById('wholesaleContent');
+  document.getElementById('wholesaleSearch').value = '';
+  wholesaleNewPrices = {};
+  content.innerHTML = '<div class="loading">Loading pricing list…</div>';
+  try{
+    const data = await apiGet('wholesale/pricing/');
+    wholesaleRows = data.items || [];
+    renderWholesaleTable();
+  }catch(e){
+    content.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load the pricing list.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+function wholesaleMarginPct(r){
+  if(!r.price_net || r.price_net <= 0 || r.suppcost_net === null || r.suppcost_net === undefined) return null;
+  return ((r.price_net - r.suppcost_net) / r.price_net) * 100;
+}
+function wholesaleMarginClass(pct){
+  if(pct === null) return '';
+  if(pct < 0) return 'out';
+  if(pct < 15) return 'low';
+  return 'ok';
+}
+function filteredWholesaleRows(){
+  const q = (document.getElementById('wholesaleSearch').value || '').toLowerCase().trim();
+  if(!q) return wholesaleRows;
+  return wholesaleRows.filter(r =>
+    (r.stock_name || '').toLowerCase().includes(q) ||
+    (r.department_name || '').toLowerCase().includes(q)
+  );
+}
+function renderWholesaleTable(){
+  const content = document.getElementById('wholesaleContent');
+  const filtered = filteredWholesaleRows();
+  if(wholesaleRows.length === 0){
+    content.innerHTML = '<div class="empty-hint">No wholesale pricing data yet — run the Firebird sync (test_oracle.py) first.</div>';
+    return;
+  }
+  if(filtered.length === 0){
+    content.innerHTML = '<div class="empty-hint">No matches for that search.</div>';
+    return;
+  }
+  const table = document.createElement('table');
+  table.className = 'finaltable';
+  const thead = document.createElement('thead');
+  thead.innerHTML = `<tr>
+    <th>Item</th><th>Department</th>
+    <th class="qtycell">Supplier Cost</th><th class="qtycell">Trade 3 Price</th><th class="qtycell">Margin</th>
+    <th class="qtycell">New Price</th>
+  </tr>`;
+  const tbody = document.createElement('tbody');
+  filtered.forEach(r=>{
+    const margin = wholesaleMarginPct(r);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${escapeHtml(r.stock_name)}</td>
+      <td>${escapeHtml(r.department_name)}</td>
+      <td class="qtycell">${r.suppcost_net === null || r.suppcost_net === undefined ? '—' : Number(r.suppcost_net).toFixed(2)}</td>
+      <td class="qtycell">${r.price_net === null || r.price_net === undefined ? '—' : Number(r.price_net).toFixed(2)}</td>
+      <td class="qtycell"><span class="val ${wholesaleMarginClass(margin)}">${margin === null ? '—' : margin.toFixed(1) + '%'}</span></td>
+      <td class="qtycell">
+        <input type="number" step="0.01" min="0" class="newpriceinput" placeholder="—"
+               value="${wholesaleNewPrices[r.stock_name] !== undefined ? wholesaleNewPrices[r.stock_name] : ''}">
+        <span class="wsprintprice">${wholesaleNewPrices[r.stock_name] !== undefined && wholesaleNewPrices[r.stock_name] !== '' ? Number(wholesaleNewPrices[r.stock_name]).toFixed(2) : '—'}</span>
+      </td>
+    `;
+    const input = tr.querySelector('.newpriceinput');
+    input.addEventListener('change', () => {
+      const v = input.value.trim();
+      if(v === ''){ delete wholesaleNewPrices[r.stock_name]; }
+      else { wholesaleNewPrices[r.stock_name] = v; }
+      tr.querySelector('.wsprintprice').textContent = v === '' ? '—' : Number(v).toFixed(2);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(thead);
+  table.appendChild(tbody);
+  content.innerHTML = '';
+  content.appendChild(table);
+}
+function wholesaleExportRows(){
+  return filteredWholesaleRows().map(r=>{
+    const margin = wholesaleMarginPct(r);
+    const newPrice = wholesaleNewPrices[r.stock_name];
+    return {
+      item: r.stock_name,
+      department: r.department_name,
+      suppCost: r.suppcost_net === null || r.suppcost_net === undefined ? null : Number(r.suppcost_net),
+      tradePrice: r.price_net === null || r.price_net === undefined ? null : Number(r.price_net),
+      margin: margin === null ? null : Number(margin.toFixed(1)),
+      newPrice: newPrice !== undefined && newPrice !== '' ? Number(newPrice) : null
+    };
+  });
+}
+function downloadWholesalePDF(){
+  if(wholesaleRows.length === 0) return;
+  try{
+    const rows = wholesaleExportRows();
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text('Wholesale Pricing List — Trade 3', 14, 18);
+    doc.setFontSize(9);
+    doc.setTextColor(120);
+    doc.text('Generated ' + new Date().toLocaleString() + ' — CONFIDENTIAL', 14, 24);
+    const body = rows.map(r => [
+      r.item,
+      r.department,
+      r.suppCost === null ? '—' : r.suppCost.toFixed(2),
+      r.tradePrice === null ? '—' : r.tradePrice.toFixed(2),
+      r.margin === null ? '—' : r.margin.toFixed(1) + '%',
+      r.newPrice === null ? '' : r.newPrice.toFixed(2)
+    ]);
+    doc.autoTable({
+      startY: 30,
+      head: [['Item', 'Department', 'Supplier Cost', 'Trade 3 Price', 'Margin', 'New Price']],
+      body,
+      theme: 'grid',
+      headStyles: { fillColor: [30,34,42] },
+      styles: { fontSize: 9 },
+      margin: { left: 14, right: 14 }
+    });
+    doc.save('wholesale-pricing-' + new Date().toISOString().slice(0,10) + '.pdf');
+  }catch(e){
+    toast('Could not generate PDF');
+    console.error(e);
+  }
+}
+function downloadWholesaleExcel(){
+  if(wholesaleRows.length === 0) return;
+  try{
+    const rows = wholesaleExportRows();
+    const sheetData = rows.map(r => ({
+      'Item': r.item,
+      'Department': r.department,
+      'Supplier Cost': r.suppCost,
+      'Trade 3 Price': r.tradePrice,
+      'Margin %': r.margin,
+      'New Price': r.newPrice === null ? '' : r.newPrice
+    }));
+    const ws = XLSX.utils.json_to_sheet(sheetData);
+    ws['!cols'] = [{ wch: 36 }, { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 12 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Wholesale Pricing');
+    XLSX.writeFile(wb, 'wholesale-pricing-' + new Date().toISOString().slice(0,10) + '.xlsx');
+  }catch(e){
+    toast('Could not generate Excel file');
+    console.error(e);
+  }
+}
 
 /* ============ TOAST ============ */
 function toast(msg){
@@ -873,7 +1081,16 @@ function renderCategoryGrid(){
     div.draggable = true;
     div.dataset.catId = c.category_id;
     div.onclick = () => openCategory(c);
-    div.innerHTML = `<h4>${escapeHtml(c.category_name)}</h4><div class="count">BIN-${String(c.category_id).padStart(3,'0')}</div>`;
+    div.innerHTML = `
+      <div class="bincard-actions">
+        <button class="cardicon rename" type="button" title="Rename category">&#9998;</button>
+        <button class="cardicon delete" type="button" title="Delete category">&#10005;</button>
+      </div>
+      <h4>${escapeHtml(c.category_name)}</h4>
+      <div class="count">BIN-${String(c.category_id).padStart(3,'0')}</div>
+    `;
+    div.querySelector('.cardicon.rename').onclick = (e) => { e.stopPropagation(); renameCategory(c); };
+    div.querySelector('.cardicon.delete').onclick = (e) => { e.stopPropagation(); deleteCategoryConfirm(c); };
     attachDragHandlers(div, saveCatOrder);
     grid.appendChild(div);
   });
@@ -882,6 +1099,32 @@ function renderCategoryGrid(){
   addTile.onclick = () => openModal('modalAddCategory');
   addTile.innerHTML = `<div class="plus">+</div><div>Add category</div>`;
   grid.appendChild(addTile);
+}
+async function renameCategory(cat){
+  const newName = prompt('Rename category:', cat.category_name);
+  if(newName === null) return;
+  const trimmed = newName.trim();
+  if(!trimmed || trimmed === cat.category_name) return;
+  try{
+    await apiPut('categories/' + cat.category_id, { category_name: trimmed });
+    toast('Category renamed');
+    loadCategories();
+  }catch(e){
+    toast('Could not rename category');
+    console.error(e);
+  }
+}
+async function deleteCategoryConfirm(cat){
+  if(!confirm('Delete "' + cat.category_name + '"? This removes the category and every item filed under it. This cannot be undone.')) return;
+  try{
+    await apiDelete('categories/' + cat.category_id);
+    localStorage.removeItem('hallan_item_order_' + cat.category_id);
+    toast('Category deleted');
+    loadCategories();
+  }catch(e){
+    toast('Could not delete category');
+    console.error(e);
+  }
 }
 async function submitAddCategory(){
   const name = document.getElementById('newCatName').value.trim();
@@ -1311,12 +1554,21 @@ function closeMakingList(){
 }
 
 /* ============ RETAIL: BARCODE SCANNER ============ */
-function openScanner(){
+function openScanner(target){
+  scannerTarget = target || 'retail';
   scannerListEl = document.getElementById('scanFeedback');
   scannerListEl.innerHTML = '';
   document.getElementById('manualBarcodeInput').value = '';
   lastScannedCode = null;
   lastScannedAt = 0;
+  const sub = document.getElementById('scannerSubtitle');
+  if(scannerTarget === 'warehouse' && currentCategory){
+    sub.textContent = 'Adding to "' + currentCategory.category_name + '" — point the camera at a barcode, or type it in below';
+  } else if(scannerTarget === 'retail' && currentMakingList){
+    sub.textContent = 'Adding to "' + currentMakingList.list_name + '" — point the camera at a barcode, or type it in below';
+  } else {
+    sub.textContent = 'Point the camera at a barcode, or type it in below';
+  }
   openModal('modalScanner');
   startCameraScanner();
 }
@@ -1335,7 +1587,7 @@ function startCameraScanner(){
   scannerRunning = true;
   html5QrInstance.start(
     { facingMode: 'environment' },
-    { fps: 10, qrbox: { width: 190, height: 100 } },
+    { fps: 10, qrbox: { width: 260, height: 130 } },
     (decodedText) => {
       const now = Date.now();
       if(decodedText === lastScannedCode && (now - lastScannedAt) < SCAN_COOLDOWN_MS){
@@ -1428,7 +1680,8 @@ function renderScanResultCard(stock, scannedCode){
     resumeCameraScanner();
   };
   card.querySelector('.btn-amber').onclick = () => {
-    addScannedItemToMakingList(stock, qty);
+    if(scannerTarget === 'warehouse'){ addScannedItemToWarehouseCategory(stock, qty); }
+    else { addScannedItemToMakingList(stock, qty); }
     card.remove();
     resumeCameraScanner();
   };
@@ -1473,6 +1726,58 @@ function addScannedItemToMakingList(stock, qty){
     }).catch(e=>{
       toast('Could not save ' + stock.name);
       console.error(e);
+    });
+  toast(stock.name + ' added');
+}
+function addScannedItemToWarehouseCategory(stock, qty){
+  if(!currentCategory) return;
+  const existing = currentItems.find(it => (it.item_name || '').toLowerCase().trim() === (stock.name || '').toLowerCase().trim());
+  if(existing){
+    const block = document.querySelector('#itemlist .itemblock[data-row-id="' + CSS.escape(String(existing.item_row_id)) + '"]');
+    if(block){
+      changeQtyBlock(existing, block, qty);
+    } else {
+      existing.qty_required += qty;
+      apiPut('items/' + existing.item_row_id, { qty_required: existing.qty_required }).catch(e=>console.error(e));
+    }
+    toast(stock.name + ' quantity increased');
+    return;
+  }
+  const tempItem = {
+    item_row_id: 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2),
+    item_name: stock.name, qty_required: qty,
+    stock_available: stock.quantity === undefined ? null : stock.quantity,
+    category_id: currentCategory.category_id
+  };
+  currentItems.push(tempItem);
+  updateToggleBtnLabel();
+  const list = document.getElementById('itemlist');
+  list.className = 'itemblocks';
+  if(list.querySelector('.loading')) list.innerHTML = '';
+  const tile = list.querySelector('.add-block-tile');
+  const block = renderItemBlock(tempItem);
+  if(tile) list.insertBefore(block, tile); else { list.appendChild(block); list.appendChild(renderAddBlockTile()); }
+  saveItemOrder();
+
+  apiPost('items/', { category_id: currentCategory.category_id, item_name: stock.name, qty_required: qty })
+    .then(()=> apiGet('items/'))
+    .then(data=>{
+      const items = (data.items || []).filter(i => i.category_id === currentCategory.category_id);
+      const match = items.find(i => (i.item_name || '').toLowerCase().trim() === stock.name.toLowerCase().trim());
+      if(match){
+        tempItem.item_row_id = match.item_row_id;
+        tempItem.stock_available = match.stock_available;
+        block.dataset.rowId = match.item_row_id;
+        setStockDisplay(block, match.stock_available);
+        saveItemOrder();
+      }
+    })
+    .catch(e=>{
+      toast('Could not add ' + stock.name);
+      console.error(e);
+      block.remove();
+      currentItems = currentItems.filter(i => i !== tempItem);
+      updateToggleBtnLabel();
     });
   toast(stock.name + ' added');
 }
