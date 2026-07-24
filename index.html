@@ -12,10 +12,14 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
-    --bg:#ffffff; --panel:#f4f6f9; --panel2:#eceff3; --panel3:#e4e8ee;
-    --accent:#b8860b; --accent-dim:#8a6c1f; --danger:#dc2626; --green:#16a34a;
+    --bg:#f7f8fb; --panel:#ffffff; --panel2:#eef1f6; --panel3:#e4e8ee;
+    --accent:#c9962f; --accent-dim:#8a6c1f; --danger:#dc2626; --green:#16a34a;
     --text:#1a2233; --text-dim:#667085; --line:#dde1e7;
-    --header-bg:#0e1e33; --header-text:#f2f1ec; --header-text-dim:#93a8c4; --header-line:#28466b;
+    --header-bg:#0e1e33; --header-text:#f6f4ec; --header-text-dim:#a9c0de; --header-line:#28466b;
+    --blue:#1d5fd6; --blue-dim:#e8f0fe;
+    --teal:#0f8a7c; --teal-dim:#e4f5f2;
+    --plum:#9a3fc9; --plum-dim:#f4e9fb;
+    --crimson:#c0324a; --crimson-dim:#fbe9ed;
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
@@ -27,9 +31,11 @@
   #app{max-width:1100px;margin:0 auto;padding:0 20px 60px;}
   header.topbar{
     display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
-    padding:14px 20px;border-bottom:1px solid var(--header-line);margin:0 0 24px;
-    position:sticky;top:0;background:var(--header-bg);z-index:20;
-    border-radius:0 0 10px 10px;
+    padding:14px 20px;margin:0 0 24px;
+    position:sticky;top:0;
+    background:linear-gradient(120deg,#0e1e33 0%,#123566 55%,#1d5fd6 130%);
+    z-index:20;border-radius:0 0 10px 10px;
+    box-shadow:0 3px 0 var(--accent),0 10px 24px -12px rgba(14,30,51,.55);
   }
   .brand{display:flex;align-items:center;gap:12px;}
   .brand .tag{
@@ -58,7 +64,7 @@
 
   /* ---- login ---- */
   #view-login{display:flex;min-height:80vh;align-items:center;justify-content:center;}
-  .login-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:40px 36px;width:340px;max-width:88vw;text-align:center;}
+  .login-card{background:var(--panel);border:1px solid var(--line);border-top:4px solid var(--blue);border-radius:10px;padding:40px 36px;width:340px;max-width:88vw;text-align:center;box-shadow:0 14px 30px -18px rgba(14,30,51,.4);}
   .login-card .tag{width:48px;height:48px;margin:0 auto 18px;}
   .login-card h2{margin:0 0 6px;font-size:19px;}
   .login-card p{color:var(--text-dim);font-size:13px;margin:0 0 22px;}
@@ -75,19 +81,34 @@
   .login-err{color:var(--danger);font-size:12px;margin-top:10px;min-height:14px;}
 
   /* ---- home tiles ---- */
-  .hero{margin-bottom:34px;}
-  .hero .eyebrow{color:var(--accent);font-size:11px;letter-spacing:2px;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:8px;}
-  .hero h2{font-size:30px;margin:0 0 6px;}
-  .hero p{color:var(--text-dim);margin:0;font-size:14px;}
+  .hero{
+    margin-bottom:30px;padding:26px 28px;border-radius:14px;position:relative;overflow:hidden;
+    background:linear-gradient(115deg,#0e1e33 0%,#1d5fd6 85%);
+    box-shadow:0 12px 30px -14px rgba(14,30,51,.5);
+  }
+  .hero::after{
+    content:'';position:absolute;right:-40px;top:-60px;width:220px;height:220px;border-radius:50%;
+    background:radial-gradient(circle,rgba(201,150,47,.35),transparent 70%);
+  }
+  .hero .eyebrow{color:#ffd98a;font-size:11px;letter-spacing:2px;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:8px;}
+  .hero h2{font-size:30px;margin:0 0 6px;color:#fff;}
+  .hero p{color:#c7d6ee;margin:0;font-size:14px;position:relative;z-index:1;}
 
   .tilegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px;}
   @media(max-width:760px){.tilegrid{grid-template-columns:1fr;}}
   .tile{
-    background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:26px 22px;
+    background:var(--panel);border:1px solid var(--line);border-top:4px solid var(--tile-c,var(--accent));
+    border-radius:10px;padding:24px 22px 26px;
     cursor:pointer;transition:.18s;position:relative;overflow:hidden;
+    box-shadow:0 2px 10px -6px rgba(14,30,51,.15);
   }
-  .tile:hover{border-color:var(--accent);transform:translateY(-2px);}
-  .tile .num{font-family:'JetBrains Mono',monospace;color:var(--accent-dim);font-size:12px;letter-spacing:1px;}
+  .tile:hover{border-color:var(--tile-c,var(--accent));border-top-color:var(--tile-c,var(--accent));transform:translateY(-3px);box-shadow:0 10px 22px -10px rgba(14,30,51,.35);}
+  .tile:nth-of-type(1){--tile-c:var(--blue);} .tile:nth-of-type(1) .num{color:var(--blue);}
+  .tile:nth-of-type(2){--tile-c:var(--teal);} .tile:nth-of-type(2) .num{color:var(--teal);}
+  .tile:nth-of-type(3){--tile-c:var(--accent);} .tile:nth-of-type(3) .num{color:var(--accent-dim);}
+  .tile:nth-of-type(4){--tile-c:var(--plum);} .tile:nth-of-type(4) .num{color:var(--plum);}
+  .tile:nth-of-type(5){--tile-c:var(--crimson);} .tile:nth-of-type(5) .num{color:var(--crimson);}
+  .tile .num{font-family:'JetBrains Mono',monospace;color:var(--accent-dim);font-size:12px;letter-spacing:1px;font-weight:700;}
   .tile h3{margin:10px 0 6px;font-size:19px;}
   .tile p{color:var(--text-dim);font-size:13px;margin:0;line-height:1.5;}
   .tile.disabled{opacity:.45;cursor:not-allowed;}
@@ -2320,11 +2341,32 @@ function startCameraScanner(){
     return;
   }
   document.getElementById('scannerBox').innerHTML = '<div id="scannerVideoBox"></div>';
-  html5QrInstance = new Html5Qrcode('scannerVideoBox');
+  html5QrInstance = new Html5Qrcode('scannerVideoBox', {
+    // Only decode retail barcode formats — skipping QR/other formats cuts per-frame
+    // work substantially, which is most of the "slow scan" problem on phone cameras.
+    formatsToSupport: [
+      Html5QrcodeSupportedFormats.EAN_13,
+      Html5QrcodeSupportedFormats.EAN_8,
+      Html5QrcodeSupportedFormats.UPC_A,
+      Html5QrcodeSupportedFormats.UPC_E,
+      Html5QrcodeSupportedFormats.CODE_128,
+      Html5QrcodeSupportedFormats.CODE_39
+    ],
+    // Uses the phone's native fast barcode detector where the browser supports it
+    // (falls back to the JS decoder automatically where it doesn't, e.g. iOS Safari).
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+    verbose: false
+  });
   scannerRunning = true;
   html5QrInstance.start(
-    { facingMode: 'environment' },
-    { fps: 10, qrbox: { width: 260, height: 130 } },
+    {
+      facingMode: 'environment',
+      // Ask for a higher-resolution, continuously-focused stream so barcodes
+      // resolve sharply instead of staying slightly out of focus/blurry.
+      width: { ideal: 1280 }, height: { ideal: 720 },
+      advanced: [{ focusMode: 'continuous' }]
+    },
+    { fps: 15, qrbox: { width: 280, height: 150 }, aspectRatio: 1.6, disableFlip: true },
     (decodedText) => {
       const now = Date.now();
       if(decodedText === lastScannedCode && (now - lastScannedAt) < SCAN_COOLDOWN_MS){
