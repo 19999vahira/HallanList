@@ -356,6 +356,16 @@
     .historymeta-row{color:#555;}
     .newpriceinput,.newmargininput{display:none !important;}
     .wsprintprice,.wsprintmargin{display:inline-block !important;font-family:'JetBrains Mono',monospace;font-weight:700;color:#111;}
+    body.printing-replen .view{display:none !important;}
+    body.printing-replen .modal-backdrop{display:none !important;}
+    body.printing-replen .modal-backdrop.active{
+      display:block !important;position:static !important;background:none !important;padding:0;
+    }
+    body.printing-replen .modal-backdrop.active .modal{
+      box-shadow:none !important;border:none !important;width:100% !important;max-width:100% !important;
+      color:#111;
+    }
+    body.printing-replen .modal-close-row{display:none !important;}
 
     /* Picking List: hide the interactive checklist and show a plain tick-sheet instead */
     #pickingItemList{display:none !important;}
@@ -447,6 +457,12 @@
         <div class="num">05 &middot; FIND</div>
         <h3>Stock Info</h3>
         <p>Search any product by barcode or name — see its location and live stock.</p>
+      </div>
+      <div class="tile" style="--tile-color:#dc2626;" onclick="openReplenishment()">
+        <div class="tile-icon">🔁</div>
+        <div class="num">06 &middot; RESTOCK</div>
+        <h3>Shelf Replenishment</h3>
+        <p>Start a shelf, then print what's sold since you started — resets each time you print.</p>
       </div>
     </div>
   </div>
@@ -798,6 +814,67 @@
     </div>
     <div id="stockInfoResults">
       <div class="empty-hint">Start typing a barcode or item name.</div>
+    </div>
+  </div>
+
+  <!-- SHELF REPLENISHMENT: ZONES -->
+  <div id="view-replen-zones" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span><span class="current">Shelf Replenishment</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Restock</div>
+      <h2>Shelf Replenishment</h2>
+      <p>Pick a zone, then a shelf, to start or print a replenishment list.</p>
+    </div>
+    <div class="catgrid" id="replenZoneGrid">
+      <div class="loading">Loading zones…</div>
+    </div>
+  </div>
+
+  <!-- SHELF REPLENISHMENT: SHELVES -->
+  <div id="view-replen-shelves" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openReplenishment()">Shelf Replenishment</button><span class="sep">/</span>
+      <span class="current" id="replenZoneCrumb">Zone</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Zone</div>
+      <h2 id="replenZoneTitle">Zone</h2>
+      <p>Pick a shelf to start or print its replenishment list.</p>
+    </div>
+    <div class="catgrid" id="replenShelfGrid">
+      <div class="loading">Loading shelves…</div>
+    </div>
+  </div>
+
+  <!-- SHELF REPLENISHMENT: DETAIL -->
+  <div id="view-replen-detail" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openReplenishment()">Shelf Replenishment</button><span class="sep">/</span>
+      <button onclick="openReplenZone(currentReplenZone)" id="replenShelfCrumbBtn">Zone</button><span class="sep">/</span>
+      <span class="current" id="replenShelfCrumb">Shelf</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow" id="replenDetailEyebrow">Shelf</div>
+      <h2 id="replenDetailTitle">Shelf</h2>
+      <p id="replenDetailSub">Track what's sold from this shelf's rows since you last checked.</p>
+    </div>
+    <div id="replenStatusBox"></div>
+  </div>
+</div>
+
+<!-- REPLENISHMENT PRINT LIST -->
+<div class="modal-backdrop" id="modalReplenPrint">
+  <div class="modal" style="width:480px;">
+    <h3 id="replenPrintTitle">Sold since last check</h3>
+    <p class="modal-sub" id="replenPrintSub"></p>
+    <div id="replenPrintResults" style="max-height:50vh;overflow:auto;"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalReplenPrint')">Close</button>
+      <button class="btn-amber" onclick="printReplenResults()">Print</button>
     </div>
   </div>
 </div>
@@ -1726,6 +1803,173 @@ function renderStockInfoResults(items){
   table.appendChild(tbody);
   results.innerHTML = '';
   results.appendChild(table);
+}
+
+/* ============ SHELF REPLENISHMENT ============ */
+let replenZones = [];
+let currentReplenZone = null;
+let replenShelves = [];
+let currentReplenShelf = null;
+let replenPrintData = null;
+
+function openReplenishment(){ showView('view-replen-zones'); loadReplenZones(); }
+
+async function loadReplenZones(){
+  const grid = document.getElementById('replenZoneGrid');
+  grid.innerHTML = '<div class="loading">Loading zones…</div>';
+  try{
+    const data = await apiGet('location/zones/');
+    replenZones = data.items || [];
+    renderReplenZoneGrid();
+  }catch(e){
+    grid.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load zones.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+function renderReplenZoneGrid(){
+  const grid = document.getElementById('replenZoneGrid');
+  if(replenZones.length === 0){
+    grid.innerHTML = '<div class="empty-hint">No zones set up yet — add one from Location List first.</div>';
+    return;
+  }
+  grid.innerHTML = '';
+  replenZones.forEach(z=>{
+    const div = document.createElement('div');
+    div.className = 'bincard';
+    div.onclick = () => openReplenZone(z);
+    div.innerHTML = `
+      <h4>${escapeHtml(z.zone_name)}</h4>
+      <div class="count">${z.shelf_count} shelf${z.shelf_count === 1 ? '' : 'ves'}</div>
+    `;
+    grid.appendChild(div);
+  });
+}
+async function openReplenZone(z){
+  if(!z) return;
+  currentReplenZone = z;
+  document.getElementById('replenZoneCrumb').textContent = z.zone_name;
+  document.getElementById('replenZoneTitle').textContent = z.zone_name;
+  showView('view-replen-shelves');
+  await loadReplenShelves();
+}
+async function loadReplenShelves(){
+  const grid = document.getElementById('replenShelfGrid');
+  grid.innerHTML = '<div class="loading">Loading shelves…</div>';
+  try{
+    const data = await apiGet('location/zones/' + currentReplenZone.zone_id + '/shelves/');
+    replenShelves = data.items || [];
+    renderReplenShelfGrid();
+  }catch(e){
+    grid.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load shelves.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+function renderReplenShelfGrid(){
+  const grid = document.getElementById('replenShelfGrid');
+  if(replenShelves.length === 0){
+    grid.innerHTML = '<div class="empty-hint">No shelves in this zone yet — add one from Location List first.</div>';
+    return;
+  }
+  grid.innerHTML = '';
+  replenShelves.forEach(s=>{
+    const div = document.createElement('div');
+    div.className = 'bincard';
+    div.onclick = () => openReplenShelf(s);
+    div.innerHTML = `
+      <h4>${escapeHtml(s.shelf_name)}</h4>
+      <div class="count">${s.row_count} row${s.row_count === 1 ? '' : 's'}</div>
+    `;
+    grid.appendChild(div);
+  });
+}
+async function openReplenShelf(s){
+  if(!s) return;
+  currentReplenShelf = s;
+  document.getElementById('replenShelfCrumbBtn').textContent = currentReplenZone.zone_name;
+  document.getElementById('replenShelfCrumb').textContent = s.shelf_name;
+  document.getElementById('replenDetailEyebrow').textContent = currentReplenZone.zone_name;
+  document.getElementById('replenDetailTitle').textContent = s.shelf_name;
+  showView('view-replen-detail');
+  await loadReplenStatus();
+}
+async function loadReplenStatus(){
+  const box = document.getElementById('replenStatusBox');
+  box.innerHTML = '<div class="loading">Checking status…</div>';
+  try{
+    const data = await apiGet('location/shelves/' + currentReplenShelf.shelf_id + '/replenishment/');
+    renderReplenStatus(data.started_at);
+  }catch(e){
+    box.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load status.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+function renderReplenStatus(startedAt){
+  const box = document.getElementById('replenStatusBox');
+  if(!startedAt){
+    box.innerHTML = `
+      <div class="empty-hint" style="margin-bottom:16px;">Not started yet. Hit Begin to start tracking sales for this shelf.</div>
+      <button class="btn-amber" onclick="beginReplenishment()">Begin</button>
+    `;
+    return;
+  }
+  const since = new Date(startedAt);
+  box.innerHTML = `
+    <div class="empty-hint" style="margin-bottom:16px;">Tracking since ${since.toLocaleString()}.</div>
+    <div style="display:flex;gap:10px;">
+      <button class="btn-ghost" onclick="beginReplenishment()">Restart</button>
+      <button class="btn-amber" onclick="printReplenishment()">Print List</button>
+    </div>
+  `;
+}
+async function beginReplenishment(){
+  if(!currentReplenShelf) return;
+  try{
+    await apiPost('location/shelves/' + currentReplenShelf.shelf_id + '/replenishment/begin', {});
+    toast('Tracking started for ' + currentReplenShelf.shelf_name);
+    await loadReplenStatus();
+  }catch(e){
+    toast('Could not start tracking');
+    console.error(e);
+  }
+}
+async function printReplenishment(){
+  if(!currentReplenShelf) return;
+  try{
+    const data = await apiPost('location/shelves/' + currentReplenShelf.shelf_id + '/replenishment/print', {});
+    replenPrintData = data.items || [];
+    document.getElementById('replenPrintTitle').textContent = 'Sold — ' + currentReplenShelf.shelf_name;
+    document.getElementById('replenPrintSub').textContent =
+      'The clock has now reset — next print will only show sales from this moment on.';
+    const results = document.getElementById('replenPrintResults');
+    if(replenPrintData.length === 0){
+      results.innerHTML = '<div class="empty-hint">Nothing sold from this shelf since tracking started.</div>';
+    }else{
+      const table = document.createElement('table');
+      table.className = 'finaltable';
+      table.innerHTML = `<thead><tr><th>Item</th><th class="qtycell">Qty Sold</th></tr></thead>`;
+      const tbody = document.createElement('tbody');
+      replenPrintData.forEach(it=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${escapeHtml(it.item_name)}</td><td class="qtycell">${it.qty_sold}</td>`;
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      results.innerHTML = '';
+      results.appendChild(table);
+    }
+    openModal('modalReplenPrint');
+    await loadReplenStatus();
+  }catch(e){
+    toast('Could not print — ' + (e.message || 'try again'));
+    console.error(e);
+  }
+}
+function printReplenResults(){
+  document.body.classList.add('printing-replen');
+  const cleanup = () => document.body.classList.remove('printing-replen');
+  window.addEventListener('afterprint', cleanup, { once: true });
+  window.print();
+  setTimeout(cleanup, 2000); // fallback for browsers that don't fire afterprint reliably
 }
 
 /* ============ TOAST ============ */
