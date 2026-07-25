@@ -1,0 +1,3184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hallan Picking Sheets</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#ffffff; --panel:#f4f6f9; --panel2:#eceff3; --panel3:#e4e8ee;
+    --accent:#b8860b; --accent-dim:#8a6c1f; --danger:#dc2626; --green:#16a34a;
+    --text:#1a2233; --text-dim:#667085; --line:#dde1e7;
+    --header-bg:#0e1e33; --header-text:#f2f1ec; --header-text-dim:#93a8c4; --header-line:#28466b;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
+  h1,h2,h3,.display{font-family:'Space Grotesk',sans-serif;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  ::selection{background:var(--accent);color:#0e1e33;}
+
+  /* ---- layout shell ---- */
+  #app{max-width:1100px;margin:0 auto;padding:0 20px 60px;}
+  header.topbar{
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
+    padding:14px 20px;border-bottom:1px solid var(--header-line);margin:0 0 24px;
+    position:sticky;top:0;background:var(--header-bg);z-index:20;
+    border-radius:0 0 10px 10px;
+  }
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand .tag{
+    width:38px;height:38px;display:flex;align-items:center;justify-content:center;
+  }
+  .brand .tag img{width:100%;height:100%;object-fit:contain;}
+  .brand h1{font-size:18px;margin:0;letter-spacing:.3px;color:var(--header-text);}
+  .brand .sub{font-size:11px;color:var(--header-text-dim);text-transform:uppercase;letter-spacing:1.5px;margin-top:1px;}
+  nav.topnav{display:flex;gap:10px;}
+  .navbtn{
+    background:transparent;border:1px solid var(--header-line);color:var(--header-text-dim);
+    padding:8px 14px;border-radius:6px;font-size:13px;cursor:pointer;font-family:'Inter',sans-serif;
+    transition:.15s;
+  }
+  .navbtn:hover{border-color:var(--accent);color:var(--accent);}
+
+  .crumbrow{display:flex;align-items:center;gap:8px;margin-bottom:22px;color:var(--text-dim);font-size:13px;}
+  .crumbrow button{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:13px;font-family:'Inter',sans-serif;padding:0;}
+  .crumbrow button:hover{color:var(--accent);}
+  .crumbrow .sep{opacity:.4;}
+  .crumbrow .current{color:var(--text);}
+
+  .view{display:none;animation:fadein .25s ease;}
+  .view.active{display:block;}
+  @keyframes fadein{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+
+  /* ---- login ---- */
+  #view-login{display:flex;min-height:80vh;align-items:center;justify-content:center;}
+  .login-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:40px 36px;width:340px;max-width:88vw;text-align:center;}
+  .login-card .tag{width:48px;height:48px;margin:0 auto 18px;}
+  .login-card h2{margin:0 0 6px;font-size:19px;}
+  .login-card p{color:var(--text-dim);font-size:13px;margin:0 0 22px;}
+  .login-card input{
+    width:100%;padding:12px 14px;border-radius:6px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--text);font-size:14px;margin-bottom:12px;font-family:'JetBrains Mono',monospace;
+  }
+  .login-card input:focus{outline:none;border-color:var(--accent);}
+  .btn-primary{
+    width:100%;padding:12px;border-radius:6px;border:none;background:var(--accent);
+    color:#0e1e33;font-weight:600;font-size:14px;cursor:pointer;font-family:'Inter',sans-serif;
+  }
+  .btn-primary:hover{background:#ddb752;}
+  .login-err{color:var(--danger);font-size:12px;margin-top:10px;min-height:14px;}
+
+  /* ---- home tiles ---- */
+  .hero{margin-bottom:34px;}
+  .hero .eyebrow{color:var(--accent);font-size:11px;letter-spacing:2px;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:8px;}
+  .hero h2{font-size:30px;margin:0 0 6px;}
+  .hero p{color:var(--text-dim);margin:0;font-size:14px;}
+
+  .hero-home{
+    background:linear-gradient(120deg,#0e1e33 0%,#173763 55%,#1d4b8f 100%);
+    border-radius:14px;padding:32px 30px;margin-bottom:30px;position:relative;overflow:hidden;
+  }
+  .hero-home::after{
+    content:'';position:absolute;inset:0;
+    background:radial-gradient(circle at 88% 15%,rgba(184,134,11,.35),transparent 55%);
+    pointer-events:none;
+  }
+  .hero-home .eyebrow{color:#f2c85b;}
+  .hero-home h2{color:#fff;}
+  .hero-home p{color:#c7d4e8;}
+
+  .tilegrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px;}
+  @media(max-width:760px){.tilegrid{grid-template-columns:1fr;}}
+  .tile{
+    background:var(--panel);border:1px solid var(--line);border-top:4px solid var(--tile-color,var(--line));
+    border-radius:10px;padding:26px 22px;
+    cursor:pointer;transition:.18s;position:relative;overflow:hidden;
+  }
+  .tile:hover{border-color:var(--tile-color,var(--accent));border-top-color:var(--tile-color,var(--accent));transform:translateY(-3px);box-shadow:0 10px 24px -12px rgba(0,0,0,.25);}
+  .tile .tile-icon{
+    width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+    font-size:20px;background:rgba(184,134,11,.16);background:color-mix(in srgb, var(--tile-color, var(--accent)) 16%, transparent);
+    margin-bottom:14px;
+  }
+  .tile .num{font-family:'JetBrains Mono',monospace;color:var(--tile-color,var(--accent-dim));font-size:12px;letter-spacing:1px;font-weight:700;}
+  .tile h3{margin:10px 0 6px;font-size:19px;}
+  .tile p{color:var(--text-dim);font-size:13px;margin:0;line-height:1.5;}
+  .tile.disabled{opacity:.45;cursor:not-allowed;}
+  .tile.disabled:hover{border-color:var(--line);transform:none;box-shadow:none;}
+  .tile .stub{
+    position:absolute;top:16px;right:16px;font-size:10px;text-transform:uppercase;
+    letter-spacing:1px;color:var(--text-dim);border:1px solid var(--line);padding:3px 7px;border-radius:4px;
+  }
+
+  /* ---- category grid ---- */
+  .catgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:20px;}
+  .bincard{
+    background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:18px;cursor:pointer;
+    position:relative;transition:.15s;
+  }
+  .bincard:hover{border-color:var(--accent);}
+  .bincard::before{
+    content:'';position:absolute;top:0;left:16px;width:34px;height:8px;background:var(--panel3);
+    border-radius:0 0 4px 4px;
+  }
+  .bincard h4{margin:10px 0 4px;font-size:15px;padding-right:56px;}
+  .bincard-actions{position:absolute;top:14px;right:14px;display:flex;gap:6px;z-index:2;}
+  .cardicon{
+    background:var(--panel2);border:1px solid var(--line);border-radius:5px;width:26px;height:26px;
+    font-size:12px;color:var(--text-dim);cursor:pointer;display:flex;align-items:center;justify-content:center;
+    line-height:1;padding:0;
+  }
+  .cardicon:hover{border-color:var(--accent);color:var(--accent);}
+  .cardicon.delete:hover{border-color:var(--danger);color:var(--danger);}
+  .bincard .staffline{font-family:'JetBrains Mono',monospace;color:var(--text-dim);font-size:11px;margin-top:2px;}
+  .hero .staffline{color:var(--accent);font-weight:600;}
+  .historysearch{
+    max-width:320px;padding:10px 14px;border-radius:6px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--text);font-size:13px;font-family:'Inter',sans-serif;
+  }
+  .historymeta-row{display:flex;flex-wrap:wrap;gap:8px 20px;color:var(--text-dim);font-size:12px;font-family:'JetBrains Mono',monospace;margin:6px 0 18px;}
+  .historymeta-row strong{color:var(--text);font-family:'Inter',sans-serif;}
+  .bincard .count{font-family:'JetBrains Mono',monospace;color:var(--text-dim);font-size:12px;}
+  .add-tile{
+    background:transparent;border:1px dashed var(--line);border-radius:8px;padding:18px;
+    display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;cursor:pointer;
+    color:var(--text-dim);min-height:78px;transition:.15s;
+  }
+  .add-tile:hover{border-color:var(--accent);color:var(--accent);}
+  .add-tile .plus{font-size:22px;line-height:1;}
+
+  /* ---- item rows (legacy, kept for final-list styling reuse) ---- */
+  .val.ok{color:var(--green);} .val.low{color:var(--accent);} .val.out{color:var(--danger);}
+  .rmbtn{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:13px;padding:6px;}
+  .rmbtn:hover{color:var(--danger);}
+
+  /* ---- item blocks (small, movable tiles) ---- */
+  .listtogglerow{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+  .itemblocks{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:20px;
+  }
+  .itemblock{
+    background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    padding:10px 10px 8px;display:flex;flex-direction:column;gap:6px;
+    position:relative;cursor:grab;transition:.15s;
+  }
+  .itemblock:active{cursor:grabbing;}
+  .itemblock:hover{border-color:var(--accent);}
+  .itemblock.dragging,.bincard.dragging{opacity:.35;border-style:dashed;}
+  .bincard{cursor:grab;}
+  .bincard:active{cursor:grabbing;}
+  .itemblock .ibdel{
+    position:absolute;top:2px;right:2px;background:none;border:none;color:var(--text-dim);
+    font-size:15px;cursor:pointer;padding:6px;line-height:1;
+  }
+  .itemblock .ibdel:hover{color:var(--danger);}
+  .itemblock .ibname{
+    font-size:12.5px;font-weight:600;line-height:1.35;padding-right:16px;
+    height:34px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  }
+  .itemblock .ibstock{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);height:15px;}
+  .itemblock .ibstock .val{font-weight:700;}
+  .stepper{
+    display:flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:6px;overflow:hidden;
+  }
+  .stepper button{
+    background:var(--panel2);border:none;color:var(--text);width:34px;height:34px;font-size:16px;cursor:pointer;flex:none;
+    touch-action:manipulation;
+  }
+  .stepper button:hover{background:var(--accent);color:#fff;}
+  .stepper button:active{background:var(--accent-dim);color:#fff;}
+  .stepper .qty{
+    flex:1;text-align:center;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:14px;
+    background:var(--panel3);height:34px;display:flex;align-items:center;justify-content:center;
+  }
+  .add-block-tile{
+    background:transparent;border:1px dashed var(--line);border-radius:8px;
+    min-height:112px;display:flex;align-items:center;justify-content:center;
+    flex-direction:column;gap:4px;color:var(--text-dim);cursor:pointer;transition:.15s;
+  }
+  .add-block-tile:hover{border-color:var(--accent);color:var(--accent);}
+  .add-block-tile .plus{font-size:20px;line-height:1;}
+
+  @media(max-width:520px){
+    #app{padding:0 12px 40px;}
+    .itemblocks{grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;}
+    .actionbar{flex-wrap:wrap;gap:10px;}
+    .hero h2{font-size:24px;}
+    .catgrid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;}
+  }
+
+  /* ---- quick add suggestions ---- */
+  .btn-danger-ghost{
+    background:transparent;border:1px solid var(--danger);color:var(--danger);padding:10px 16px;
+    border-radius:6px;cursor:pointer;font-size:13px;font-family:'Inter',sans-serif;
+  }
+  .btn-danger-ghost:hover{background:var(--danger);color:#fff;}
+
+  .actionbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;}
+  .btn-ghost{
+    background:var(--panel);border:1px solid var(--line);color:var(--text);padding:10px 16px;
+    border-radius:6px;cursor:pointer;font-size:13px;font-family:'Inter',sans-serif;
+  }
+  .btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
+  .btn-amber{
+    background:var(--accent);border:none;color:#0e1e33;padding:10px 16px;font-weight:600;
+    border-radius:6px;cursor:pointer;font-size:13px;font-family:'Inter',sans-serif;
+  }
+  .btn-amber:hover{background:#ddb752;}
+
+  /* ---- modal ---- */
+  .modal-backdrop{
+    position:fixed;inset:0;background:rgba(10,12,15,.7);display:none;align-items:flex-start;justify-content:center;
+    padding-top:8vh;z-index:100;
+  }
+  .modal-backdrop.active{display:flex;}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:26px;width:420px;max-width:92vw;}
+  .modal h3{margin:0 0 4px;font-size:17px;}
+  .modal .modal-sub{color:var(--text-dim);font-size:12px;margin:0 0 18px;}
+  .modal input[type=text]{
+    width:100%;padding:11px 13px;border-radius:6px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--text);font-size:14px;margin-bottom:10px;font-family:'Inter',sans-serif;
+  }
+  .modal input:focus{outline:none;border-color:var(--accent);}
+  .searchresults{max-height:280px;overflow-y:auto;margin-top:4px;}
+  .searchresult{
+    display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-radius:6px;
+    cursor:pointer;font-size:13px;
+  }
+  .searchresult:hover{background:var(--panel2);}
+  .searchresult .sname{flex:1;padding-right:10px;}
+  .searchresult .sstock{font-family:'JetBrains Mono',monospace;color:var(--text-dim);font-size:12px;white-space:nowrap;}
+
+  /* ---- barcode scanner ---- */
+  #scannerBox{
+    width:100%;max-width:320px;margin:0 auto 12px;border-radius:8px;overflow:hidden;background:#000;
+  }
+  #scannerBox video{width:100% !important;height:auto !important;display:block !important;object-fit:contain !important;}
+  .scanmanual{display:flex;gap:8px;margin:4px 0 6px;}
+  .scanmanual input{flex:1;margin-bottom:0 !important;}
+  .scanresult-card{
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:12px;
+  }
+  .scanresult-card .srname{font-weight:600;font-size:14px;margin-bottom:4px;}
+  .scanresult-card .srbarcode{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);margin-bottom:4px;}
+  .scanresult-card .srstock{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-dim);margin-bottom:10px;}
+  .scanresult-card .srrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .scanresult-card .srrow .stepper{flex:none;}
+  .scanresult-card .srrow .btn-amber{padding:9px 16px;font-size:13px;}
+  .scanresult-card .srrow .btn-ghost{padding:9px 14px;font-size:13px;}
+  .scanfail{color:var(--danger);font-size:13px;padding:8px 0;}
+  .ibbarcode{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-dim);opacity:.75;margin-top:-2px;}
+
+  /* ---- picking checklist (partial pick) ---- */
+  .pickrow{
+    display:flex;align-items:center;justify-content:space-between;gap:14px;background:var(--panel);
+    border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin-bottom:8px;transition:.15s;
+  }
+  .pickrow.partial{border-color:var(--accent);}
+  .pickrow.done{border-color:var(--green);}
+  .pickrow .pickinfo{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0;}
+  .pickrow .pname{font-size:14px;}
+  .pickrow .pname.done{color:var(--text-dim);}
+  .pickrow .pbarcode{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);}
+  .pickrow .pickqty{display:flex;align-items:center;gap:10px;flex:none;}
+  .pickrow .preq{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-dim);white-space:nowrap;}
+  .pickrow .stepper .qtyinput{
+    flex:1;width:54px;text-align:center;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:14px;
+    background:var(--panel3);height:34px;border:none;color:var(--text);-moz-appearance:textfield;
+  }
+  .pickrow .stepper .qtyinput::-webkit-outer-spin-button,
+  .pickrow .stepper .qtyinput::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+  .pickrow .stepper .qtyinput:focus{outline:2px solid var(--accent);outline-offset:-2px;}
+  .pickrow .pickall{padding:9px 12px;font-size:12px;white-space:nowrap;}
+  .pickrow .printqty{display:none;}
+  .modal-close-row{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}
+  .empty-hint{color:var(--text-dim);font-size:12px;text-align:center;padding:18px 0;}
+
+  /* ---- unpicked / shortfall report ---- */
+  .unpicked-select{
+    background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:10px 14px;
+    border-radius:6px;font-size:13px;font-family:'Inter',sans-serif;
+  }
+  .reasonbadge{font-size:11px;padding:3px 8px;border-radius:20px;background:var(--panel3);color:var(--text-dim);white-space:nowrap;}
+  .reasonbadge.out{background:rgba(220,38,38,.15);color:var(--danger);}
+  .reasonbadge.low{background:rgba(184,134,11,.15);color:var(--accent-dim);}
+  .errdetail{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);margin-top:6px;word-break:break-word;}
+  .newpriceinput,.newmargininput{
+    width:90px;text-align:right;padding:7px 9px;border-radius:6px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:13px;
+  }
+  .newpriceinput:focus,.newmargininput:focus{outline:2px solid var(--accent);outline-offset:-1px;}
+  .wsprintprice{display:none;}
+  .wsprintmargin{display:none;}
+
+  /* ---- final list ---- */
+  .catblock{margin-bottom:26px;}
+
+  .catblock h3{
+    font-size:15px;margin:0 0 10px;padding-bottom:8px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:8px;
+  }
+  .catblock h3 .tagchip{
+    background:var(--accent);color:#0e1e33;font-size:10px;padding:2px 8px;border-radius:20px;
+    font-family:'JetBrains Mono',monospace;font-weight:700;
+  }
+  table.finaltable{width:100%;border-collapse:collapse;}
+  table.finaltable th{
+    text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);
+    padding:6px 10px;font-weight:600;
+  }
+  table.finaltable td{padding:10px;border-top:1px solid var(--line);font-size:13px;}
+  table.finaltable td.qtycell,table.finaltable th.qtycell{text-align:right;font-family:'JetBrains Mono',monospace;font-weight:700;}
+
+  .loading{color:var(--text-dim);font-size:13px;padding:20px 0;font-family:'JetBrains Mono',monospace;}
+  .toast{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--panel3);
+    border:1px solid var(--accent);color:var(--text);padding:10px 18px;border-radius:6px;font-size:13px;
+    z-index:200;display:none;
+  }
+
+  .pickprinttable{display:none;}
+
+  @media print{
+    header.topbar,.crumbrow,.actionbar,.no-print{display:none !important;}
+    body{background:#fff;color:#111;}
+    .catblock h3{color:#111;border-bottom-color:#999;}
+    table.finaltable td{border-top-color:#ccc;color:#111;}
+    table.finaltable th{color:#555;}
+    .hero .eyebrow{color:#555;}
+    .hero h2{color:#111;}
+    .historymeta-row{color:#555;}
+    .newpriceinput,.newmargininput{display:none !important;}
+    .wsprintprice,.wsprintmargin{display:inline-block !important;font-family:'JetBrains Mono',monospace;font-weight:700;color:#111;}
+
+    /* Picking List: hide the interactive checklist and show a plain tick-sheet instead */
+    #pickingItemList{display:none !important;}
+    .pickprinttable{
+      display:table !important;width:100%;border-collapse:collapse;
+    }
+    .pickprinttable th, .pickprinttable td{
+      border:1px solid #999;padding:7px 9px;font-size:12px;color:#111;text-align:left;
+    }
+    .pickprinttable th{
+      background:#eee;font-size:10px;text-transform:uppercase;letter-spacing:.5px;
+    }
+    .pickprinttable td.qtycell, .pickprinttable th.qtycell{
+      text-align:right;font-family:'JetBrains Mono',monospace;font-weight:700;
+    }
+    .pickprinttable td.checkcell{width:44px;text-align:center;}
+    .pickprinttable .tickbox{
+      display:inline-block;width:16px;height:16px;border:1.5px solid #111;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div id="toast" class="toast"></div>
+
+<!-- LOGIN -->
+<div id="view-login" class="view active">
+  <div class="login-card">
+    <img src="../assets/hallan-logo.png" alt="Hallan Cash & Carry" style="width:180px;max-width:70%;margin:0 auto 18px;display:block;">
+    <h2>Hallan Picking Sheets</h2>
+    <p>Enter the access code to continue</p>
+    <input type="password" id="loginPass" placeholder="Access code" autocomplete="off">
+    <button class="btn-primary" onclick="doLogin()">Enter</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none;">
+  <header class="topbar">
+    <div class="brand">
+      <div class="tag"><img src="../assets/hallan-logo.png" alt="Hallan"></div>
+      <div>
+        <h1>Hallan Picking Sheets</h1>
+        <div class="sub">Cash &amp; Carry &middot; Live Stock</div>
+      </div>
+    </div>
+    <nav class="topnav">
+      <a class="navbtn" href="../" style="text-decoration:none;display:inline-flex;align-items:center;">← Hallan Portal</a>
+      <button class="navbtn" onclick="goHome()">Home</button>
+      <button class="navbtn" onclick="showFinal()">Final List</button>
+    </nav>
+  </header>
+
+  <!-- HOME -->
+  <div id="view-home" class="view">
+    <div class="hero hero-home">
+      <div class="eyebrow">Manifest Builder</div>
+      <h2>What are you picking today?</h2>
+      <p>Choose a list type to start building a picking sheet against live stock.</p>
+    </div>
+    <div class="tilegrid">
+      <div class="tile" style="--tile-color:#2563eb;" onclick="openListType('WAREHOUSE')">
+        <div class="tile-icon">📦</div>
+        <div class="num">01 &middot; BULK</div>
+        <h3>Warehouse List</h3>
+        <p>Bulk categories like 20kg, 10kg, 5kg rice. Organised by bin.</p>
+      </div>
+      <div class="tile" style="--tile-color:#059669;" onclick="openListType('RETAIL')">
+        <div class="tile-icon">🛒</div>
+        <div class="num">02 &middot; SHOP</div>
+        <h3>Retail List</h3>
+        <p>Scan stock to build a shop-floor list, then pick it off the shelf.</p>
+      </div>
+      <div class="tile" style="--tile-color:#b8860b;" onclick="openWholesalePricing()">
+        <div class="tile-icon">💷</div>
+        <div class="num">03 &middot; PRICE</div>
+        <h3>Wholesale Pricing List</h3>
+        <p>Trade 3 pricing and supplier cost for Wholesale department stock.</p>
+      </div>
+      <div class="tile" style="--tile-color:#7c3aed;" onclick="openLocation()">
+        <div class="tile-icon">🗺️</div>
+        <div class="num">04 &middot; MAP</div>
+        <h3>Location List</h3>
+        <p>Zones, shelves and rows — know exactly where every product sits.</p>
+      </div>
+      <div class="tile" style="--tile-color:#0891b2;" onclick="openStockInfo()">
+        <div class="tile-icon">🔍</div>
+        <div class="num">05 &middot; FIND</div>
+        <h3>Stock Info</h3>
+        <p>Search any product by barcode or name — see its location and live stock.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- WHOLESALE PRICING LIST -->
+  <div id="view-wholesale" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <span class="current">Wholesale Pricing List</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Reference &middot; Trade 3</div>
+      <h2>Wholesale Pricing List</h2>
+      <p>Supplier cost vs. Trade 3 price for every Wholesale department item, synced from Vector.</p>
+    </div>
+    <div class="actionbar no-print">
+      <input type="text" id="wholesaleSearch" class="historysearch" placeholder="Search item or department…" oninput="renderWholesaleTable()">
+      <div style="display:flex;gap:10px;">
+        <button class="btn-ghost" onclick="window.print()">Print</button>
+        <button class="btn-ghost" onclick="downloadWholesaleExcel()">Download Excel</button>
+        <button class="btn-amber" onclick="downloadWholesalePDF()">Download PDF</button>
+        <button class="btn-danger-ghost" onclick="openWholesalePasswordModal()">Change Password</button>
+      </div>
+    </div>
+    <div id="wholesaleContent"></div>
+  </div>
+
+  <!-- RETAIL HOME (choose Making List / Picking List) -->
+  <div id="view-retail-home" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span><span class="current">Retail List</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Shop Floor</div>
+      <h2>Retail List</h2>
+      <p>Build a list by scanning stock, then pick it off the shelf.</p>
+    </div>
+    <div class="tilegrid">
+      <div class="tile" onclick="openRetailMaking()">
+        <div class="num">01 &middot; BUILD</div>
+        <h3>Making List</h3>
+        <p>Scan items and set quantities to build a new retail list.</p>
+      </div>
+      <div class="tile" onclick="openRetailPicking()">
+        <div class="num">02 &middot; PICK</div>
+        <h3>Picking List</h3>
+        <p>Work through finalised lists and pick off exact quantities.</p>
+      </div>
+      <div class="tile" onclick="openUnpickedReport()">
+        <div class="num">03 &middot; REVIEW</div>
+        <h3>Unpicked Items</h3>
+        <p>See what's still outstanding across lists, checked against live stock.</p>
+      </div>
+      <div class="tile" onclick="openHistory()">
+        <div class="num">04 &middot; ARCHIVE</div>
+        <h3>History</h3>
+        <p>Completed picking sheets — who made them, who picked them, and what was picked.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAKING LIST INDEX -->
+  <div id="view-making-index" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="showView('view-retail-home')">Retail List</button><span class="sep">/</span>
+      <span class="current">Making List</span>
+    </div>
+    <div class="hero">
+      <h2>Making List</h2>
+      <p>Start a new list, or keep building one that's already in progress.</p>
+    </div>
+    <div class="actionbar">
+      <span></span>
+      <button class="btn-amber" onclick="startCreatingList()">+ Start Creating List</button>
+    </div>
+    <div class="catgrid" id="makingListsGrid"></div>
+  </div>
+
+  <!-- MAKING LIST DETAIL -->
+  <div id="view-making-detail" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="showView('view-retail-home')">Retail List</button><span class="sep">/</span>
+      <button onclick="backToMakingIndex()">Making List</button><span class="sep">/</span>
+      <span class="current" id="makingCrumb"></span>
+    </div>
+    <div class="hero">
+      <h2 id="makingTitle"></h2>
+      <p>Elapsed time: <span class="mono" id="makingTimer">00:00:00</span></p>
+      <p class="staffline" id="makingMadeBy" style="display:none;"></p>
+    </div>
+    <div class="actionbar">
+      <span class="mono" id="makingItemCount" style="color:var(--text-dim);font-size:12px;"></span>
+      <button class="btn-amber" onclick="openScanner()">+ Add Item (Scan)</button>
+    </div>
+    <div id="makingItemList" class="itemblocks"></div>
+    <div style="margin-top:24px;">
+      <button class="btn-danger-ghost" onclick="closeMakingList()">Close List</button>
+    </div>
+  </div>
+
+  <!-- PICKING LIST INDEX -->
+  <div id="view-picking-index" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="showView('view-retail-home')">Retail List</button><span class="sep">/</span>
+      <span class="current">Picking List</span>
+    </div>
+    <div class="hero">
+      <h2>Picking List</h2>
+      <p>Finalised lists, ready to pick off the shelf.</p>
+    </div>
+    <div class="catgrid" id="pickingListsGrid"></div>
+  </div>
+
+  <!-- PICKING LIST DETAIL -->
+  <div id="view-picking-detail" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="showView('view-retail-home')">Retail List</button><span class="sep">/</span>
+      <button onclick="backToPickingIndex()">Picking List</button><span class="sep">/</span>
+      <span class="current" id="pickingCrumb"></span>
+    </div>
+    <div class="hero">
+      <h2 id="pickingTitle"></h2>
+      <p>Picking time: <span class="mono" id="pickingTimer">00:00:00</span> &middot; <span id="pickingProgress"></span></p>
+      <p class="staffline" id="pickingPickedBy" style="display:none;"></p>
+    </div>
+    <div class="actionbar no-print">
+      <span></span>
+      <div style="display:flex;gap:10px;">
+        <button class="btn-ghost" onclick="window.print()">Print</button>
+        <button class="btn-amber" onclick="downloadPickingListPDF()">Download PDF</button>
+      </div>
+    </div>
+    <div id="pickingItemList"></div>
+    <table class="pickprinttable" id="pickingPrintTable"></table>
+    <div style="margin-top:24px;" class="no-print">
+      <button class="btn-danger-ghost" onclick="endPickingList()">End List</button>
+    </div>
+  </div>
+
+  <!-- UNPICKED / SHORTFALL REPORT -->
+  <div id="view-unpicked" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="showView('view-retail-home')">Retail List</button><span class="sep">/</span>
+      <span class="current">Unpicked Items</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Shortfall Review</div>
+      <h2>Unpicked &amp; partially picked items</h2>
+      <p>Requested quantity vs. what's been picked, checked against live stock, so you can see why.</p>
+    </div>
+    <div class="actionbar">
+      <select id="unpickedListSelect" class="unpicked-select" onchange="loadUnpickedReport()"></select>
+      <button class="btn-ghost" onclick="loadUnpickedReport()">Refresh</button>
+    </div>
+    <div id="unpickedContent"></div>
+  </div>
+
+  <!-- HISTORY INDEX -->
+  <div id="view-history-index" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="showView('view-retail-home')">Retail List</button><span class="sep">/</span>
+      <span class="current">History</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Archive</div>
+      <h2>Picking sheet history</h2>
+      <p>Completed lists — who made them, who picked them, and the final result.</p>
+    </div>
+    <div class="actionbar">
+      <input type="text" id="historySearch" class="historysearch" placeholder="Search by list or staff name…" oninput="renderHistoryList()">
+      <button class="btn-ghost" onclick="loadHistory()">Refresh</button>
+    </div>
+    <div id="historyListGrid" class="catgrid"></div>
+  </div>
+
+  <!-- HISTORY DETAIL -->
+  <div id="view-history-detail" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="showView('view-retail-home')">Retail List</button><span class="sep">/</span>
+      <button onclick="backToHistoryIndex()">History</button><span class="sep">/</span>
+      <span class="current" id="historyCrumb"></span>
+    </div>
+    <div class="hero">
+      <h2 id="historyTitle"></h2>
+    </div>
+    <div class="historymeta-row" id="historyMetaRow"></div>
+    <div class="actionbar no-print">
+      <span></span>
+      <div style="display:flex;gap:10px;">
+        <button class="btn-ghost" onclick="window.print()">Print</button>
+        <button class="btn-amber" onclick="downloadHistoryPDF()">Download PDF</button>
+      </div>
+    </div>
+    <div id="historyContent"></div>
+  </div>
+
+  <!-- WAREHOUSE (category grid) -->
+  <div id="view-warehouse" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span><span class="current">Warehouse List</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Bulk Storage</div>
+      <h2>Warehouse categories</h2>
+      <p>Pick a category to add items, or create a new one.</p>
+    </div>
+    <div class="catgrid" id="catgrid">
+      <div class="loading">Loading categories…</div>
+    </div>
+  </div>
+
+  <!-- CATEGORY DETAIL -->
+  <div id="view-category" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openListType('WAREHOUSE')">Warehouse List</button><span class="sep">/</span>
+      <span class="current" id="catCrumb">Category</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow" id="catEyebrow">Bin</div>
+      <h2 id="catTitle">Category</h2>
+      <p>Search stock and set the quantity required for this list.</p>
+    </div>
+    <div class="actionbar">
+      <span class="mono" id="catItemCount" style="color:var(--text-dim);font-size:12px;"></span>
+      <div style="display:flex;gap:10px;">
+        <button class="btn-ghost" onclick="openScanner('warehouse')">Scan Barcode</button>
+        <button class="btn-amber" onclick="openAddItemModal()">+ Add Item</button>
+      </div>
+    </div>
+    <div id="itemlist"></div>
+  </div>
+
+  <!-- FINAL LIST -->
+  <div id="view-final" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span><span class="current">Final Picking List</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Ready to Pick</div>
+      <h2>Final picking list</h2>
+      <p>Category-wise breakdown of everything added so far.</p>
+    </div>
+    <div class="actionbar no-print">
+      <span class="mono" id="finalMeta" style="color:var(--text-dim);font-size:12px;"></span>
+      <div style="display:flex;gap:10px;">
+        <button class="btn-danger-ghost" onclick="confirmEmptyList()">Empty List</button>
+        <button class="btn-ghost" onclick="window.print()">Print</button>
+        <button class="btn-amber" onclick="downloadPDF()">Download PDF</button>
+      </div>
+    </div>
+    <div id="finalContent"></div>
+  </div>
+
+  <!-- LOCATION: ZONES -->
+  <div id="view-location" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span><span class="current">Location List</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Store Map</div>
+      <h2>Zones</h2>
+      <p>Pick a zone to see its shelves, or create a new one.</p>
+    </div>
+    <div class="catgrid" id="zoneGrid">
+      <div class="loading">Loading zones…</div>
+    </div>
+  </div>
+
+  <!-- LOCATION: SHELVES -->
+  <div id="view-location-shelves" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openLocation()">Location List</button><span class="sep">/</span>
+      <span class="current" id="shelfZoneCrumb">Zone</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Zone</div>
+      <h2 id="shelfZoneTitle">Zone</h2>
+      <p>Pick a shelf to see its rows, or create a new one.</p>
+    </div>
+    <div class="catgrid" id="shelfGrid">
+      <div class="loading">Loading shelves…</div>
+    </div>
+  </div>
+
+  <!-- LOCATION: ROWS -->
+  <div id="view-location-rows" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openLocation()">Location List</button><span class="sep">/</span>
+      <button onclick="openZone(currentZone)" id="rowZoneCrumbBtn">Zone</button><span class="sep">/</span>
+      <span class="current" id="rowShelfCrumb">Shelf</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Shelf</div>
+      <h2 id="rowShelfTitle">Shelf</h2>
+      <p>Pick a row to see its products, or create a new one.</p>
+    </div>
+    <div class="catgrid" id="rowGrid">
+      <div class="loading">Loading rows…</div>
+    </div>
+  </div>
+
+  <!-- LOCATION: PRODUCTS IN ROW -->
+  <div id="view-location-products" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openLocation()">Location List</button><span class="sep">/</span>
+      <button onclick="openZone(currentZone)" id="productZoneCrumbBtn">Zone</button><span class="sep">/</span>
+      <button onclick="openShelf(currentShelf)" id="productShelfCrumbBtn">Shelf</button><span class="sep">/</span>
+      <span class="current" id="productRowCrumb">Row</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow" id="productEyebrow">Row</div>
+      <h2 id="productRowTitle">Row</h2>
+      <p>Products stored in this row. Scan a barcode or search to add one.</p>
+    </div>
+    <div class="actionbar">
+      <span class="mono" id="rowItemCount" style="color:var(--text-dim);font-size:12px;"></span>
+      <div style="display:flex;gap:10px;">
+        <button class="btn-ghost" onclick="openScanner('location')">Scan Barcode</button>
+        <button class="btn-amber" onclick="openAddRowProductModal()">+ Add Product</button>
+      </div>
+    </div>
+    <div id="rowItemList"></div>
+  </div>
+
+  <!-- STOCK INFO -->
+  <div id="view-stock-info" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span><span class="current">Stock Info</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Lookup</div>
+      <h2>Stock Info</h2>
+      <p>Search by barcode or item name to see where it's stocked and how much is on hand.</p>
+    </div>
+    <div class="actionbar">
+      <input type="text" id="stockInfoSearchInput" class="historysearch" style="max-width:420px;"
+             placeholder="Search by barcode or name…" oninput="onStockInfoSearch()" autocomplete="off">
+    </div>
+    <div id="stockInfoResults">
+      <div class="empty-hint">Start typing a barcode or item name.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD CATEGORY MODAL -->
+<div class="modal-backdrop" id="modalAddCategory">
+  <div class="modal">
+    <h3>New category</h3>
+    <p class="modal-sub">e.g. 20kg Rice, 10kg Rice, 5kg Rice</p>
+    <input type="text" id="newCatName" placeholder="Category name" onkeydown="if(event.key==='Enter')submitAddCategory()">
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalAddCategory')">Cancel</button>
+      <button class="btn-amber" onclick="submitAddCategory()">Add category</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD ITEM MODAL -->
+<div class="modal-backdrop" id="modalAddItem">
+  <div class="modal">
+    <h3>Add item</h3>
+    <p class="modal-sub">Start typing to search live stock</p>
+    <input type="text" id="itemSearchInput" placeholder="Search item name…" oninput="onItemSearch()">
+    <div class="searchresults" id="searchResults"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalAddItem')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD ZONE MODAL -->
+<div class="modal-backdrop" id="modalAddZone">
+  <div class="modal">
+    <h3>New zone</h3>
+    <p class="modal-sub">e.g. Zone 1, Zone 2, Zone 3</p>
+    <input type="text" id="newZoneName" placeholder="Zone name" onkeydown="if(event.key==='Enter')submitAddZone()">
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalAddZone')">Cancel</button>
+      <button class="btn-amber" onclick="submitAddZone()">Add zone</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD SHELF MODAL -->
+<div class="modal-backdrop" id="modalAddShelf">
+  <div class="modal">
+    <h3>New shelf</h3>
+    <p class="modal-sub">e.g. Shelf 1, Shelf 2, Shelf 3</p>
+    <input type="text" id="newShelfName" placeholder="Shelf name" onkeydown="if(event.key==='Enter')submitAddShelf()">
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalAddShelf')">Cancel</button>
+      <button class="btn-amber" onclick="submitAddShelf()">Add shelf</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD ROW MODAL -->
+<div class="modal-backdrop" id="modalAddRow">
+  <div class="modal">
+    <h3>New row</h3>
+    <p class="modal-sub">e.g. A, B, C — one letter per row</p>
+    <input type="text" id="newRowName" placeholder="Row name" onkeydown="if(event.key==='Enter')submitAddRow()">
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalAddRow')">Cancel</button>
+      <button class="btn-amber" onclick="submitAddRow()">Add row</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD ROW PRODUCT MODAL -->
+<div class="modal-backdrop" id="modalAddRowProduct">
+  <div class="modal">
+    <h3>Add product to row</h3>
+    <p class="modal-sub">Start typing to search live stock</p>
+    <input type="text" id="rowProductSearchInput" placeholder="Search item name…" oninput="onRowProductSearch()">
+    <div class="searchresults" id="rowProductSearchResults"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalAddRowProduct')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- BARCODE SCANNER MODAL -->
+<div class="modal-backdrop" id="modalScanner">
+  <div class="modal" style="width:440px;">
+    <h3>Scan barcode</h3>
+    <p class="modal-sub" id="scannerSubtitle">Point the camera at a barcode, or type it in below</p>
+    <div id="scannerBox"></div>
+    <div id="scanFeedback"></div>
+    <div class="scanmanual">
+      <input type="text" id="manualBarcodeInput" placeholder="Type barcode…" onkeydown="if(event.key==='Enter')submitManualBarcode()">
+      <button class="btn-ghost" onclick="submitManualBarcode()">Look up</button>
+    </div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeScanner()">Done adding</button>
+    </div>
+  </div>
+</div>
+
+<!-- CHANGE WHOLESALE PASSWORD MODAL -->
+<div class="modal-backdrop" id="modalWholesalePassword">
+  <div class="modal" style="width:380px;">
+    <h3>Change Wholesale Pricing password</h3>
+    <p class="modal-sub">Enter the current password, then choose a new one.</p>
+    <input type="password" id="wsOldPassword" placeholder="Current password" autocomplete="off">
+    <input type="password" id="wsNewPassword" placeholder="New password" autocomplete="off">
+    <input type="password" id="wsNewPassword2" placeholder="Confirm new password" autocomplete="off">
+    <div class="errdetail" id="wsPasswordErr" style="display:none;"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeWholesalePasswordModal()">Cancel</button>
+      <button class="btn-amber" onclick="submitWholesalePasswordChange()">Update password</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============ CONFIG ============ */
+const API_BASE = "https://hallan-picking-backend.onrender.com/api/";
+const SITE_PASSWORD = "hallan2026"; // change this, then tell your team the new code
+// Wholesale Pricing password now lives server-side (APP_SETTINGS table) so it can be
+// changed from the portal and stays in sync across every device — see openWholesalePricing().
+
+/* ============ STATE ============ */
+let categories = [];
+let currentCategory = null;
+let currentItems = [];
+let searchDebounce = null;
+let dragSrcBlock = null;
+let currentMakingList = null;
+let currentMakingItems = [];
+let currentPickingList = null;
+let currentPickingItems = [];
+let scannerRunning = false;
+let scannerListEl = null;
+let lastScannedCode = null;
+let lastScannedAt = 0;
+let scannerTarget = 'retail'; // 'retail' (Making List), 'warehouse' (Warehouse category), or 'location' (Row products)
+let historyLists = [];
+let wholesaleRows = [];
+let wholesaleAdjust = {}; // keyed by stock_name -> { margin, price } — session-only, not saved to the database
+let currentHistoryList = null;
+let currentHistoryItems = null;
+
+/* Shared active-time tracker for Making List / Picking List.
+   Counts only time actually spent with the list open on screen — pauses when the
+   tab is hidden/backgrounded and resumes on return, instead of running off wall-clock
+   time since the list was first created. Persists to the backend every ~20s so
+   closing/reopening (or losing the tab) doesn't lose more than a few seconds. */
+const activeTimer = {
+  phase: null,        // 'making' | 'picking' | null when idle
+  listId: null,
+  baseSeconds: 0,
+  sessionStart: 0,
+  displayEl: null,
+  displayInterval: null,
+  heartbeatInterval: null
+};
+function startActiveTimer(phase, listId, baseSeconds, displayElId){
+  stopActiveTimer();
+  activeTimer.phase = phase;
+  activeTimer.listId = listId;
+  activeTimer.baseSeconds = baseSeconds || 0;
+  activeTimer.sessionStart = Date.now();
+  activeTimer.displayEl = displayElId;
+  const tick = () => {
+    const el = document.getElementById(activeTimer.displayEl);
+    if(!el) return;
+    const live = activeTimer.baseSeconds + Math.floor((Date.now() - activeTimer.sessionStart) / 1000);
+    el.textContent = formatElapsed(live);
+  };
+  tick();
+  activeTimer.displayInterval = setInterval(tick, 1000);
+  activeTimer.heartbeatInterval = setInterval(() => flushActiveTimer(false), 20000);
+}
+function flushActiveTimer(useBeacon){
+  if(!activeTimer.phase || !activeTimer.listId) return;
+  const elapsed = Math.floor((Date.now() - activeTimer.sessionStart) / 1000);
+  if(elapsed <= 0) return;
+  activeTimer.baseSeconds += elapsed;
+  activeTimer.sessionStart = Date.now();
+  const url = API_BASE + 'retail/lists/' + activeTimer.listId + '/track-time';
+  const payload = JSON.stringify({ phase: activeTimer.phase, seconds: elapsed });
+  if(useBeacon && navigator.sendBeacon){
+    navigator.sendBeacon(url, new Blob([payload], { type: 'application/json' }));
+  } else {
+    fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: payload, keepalive: !!useBeacon })
+      .catch(e => console.error('time flush failed', e));
+  }
+}
+function stopActiveTimer(){
+  if(activeTimer.phase) flushActiveTimer(false);
+  clearInterval(activeTimer.displayInterval);
+  clearInterval(activeTimer.heartbeatInterval);
+  activeTimer.phase = null;
+  activeTimer.listId = null;
+  activeTimer.displayEl = null;
+  activeTimer.displayInterval = null;
+  activeTimer.heartbeatInterval = null;
+}
+document.addEventListener('visibilitychange', () => {
+  if(!activeTimer.phase) return;
+  if(document.hidden){
+    flushActiveTimer(true); // save before the tab backgrounds/closes
+  } else {
+    activeTimer.sessionStart = Date.now(); // resume counting from now, skip the hidden gap
+  }
+});
+window.addEventListener('beforeunload', () => { if(activeTimer.phase) flushActiveTimer(true); });
+const SCAN_COOLDOWN_MS = 2500;
+
+/* ============ AUTH ============ */
+function doLogin(){
+  const val = document.getElementById('loginPass').value;
+  if(val === SITE_PASSWORD){
+    localStorage.setItem('hallan_auth','1');
+    showApp();
+  } else {
+    document.getElementById('loginErr').textContent = 'Incorrect code, try again.';
+  }
+}
+function showApp(){
+  document.getElementById('view-login').classList.remove('active');
+  document.getElementById('view-login').style.display='none';
+  document.getElementById('app').style.display='block';
+  goHome();
+}
+if(localStorage.getItem('hallan_auth')==='1'){ showApp(); }
+document.getElementById('loginPass').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+
+/* ============ NAV ============ */
+function showView(id){
+  if(activeTimer.phase === 'making' && id !== 'view-making-detail') stopActiveTimer();
+  if(activeTimer.phase === 'picking' && id !== 'view-picking-detail') stopActiveTimer();
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0,0);
+}
+function goHome(){ showView('view-home'); }
+function openListType(type){
+  if(type==='WAREHOUSE'){ showView('view-warehouse'); loadCategories(); return; }
+  if(type==='RETAIL'){ showView('view-retail-home'); return; }
+}
+async function openWholesalePricing(){
+  const pw = prompt('This list is confidential.\nEnter the Wholesale Pricing password:');
+  if(pw === null) return; // cancelled — stay where we are
+  try{
+    const data = await apiPost('wholesale/auth/verify', { password: pw });
+    if(!data.ok){
+      toast('Incorrect password');
+      return;
+    }
+  }catch(e){
+    toast('Could not check password');
+    console.error(e);
+    return;
+  }
+  showView('view-wholesale');
+  loadWholesalePricing();
+}
+function openWholesalePasswordModal(){
+  document.getElementById('wsOldPassword').value = '';
+  document.getElementById('wsNewPassword').value = '';
+  document.getElementById('wsNewPassword2').value = '';
+  const err = document.getElementById('wsPasswordErr');
+  err.style.display = 'none';
+  err.textContent = '';
+  openModal('modalWholesalePassword');
+}
+function closeWholesalePasswordModal(){ closeModal('modalWholesalePassword'); }
+async function submitWholesalePasswordChange(){
+  const oldPw = document.getElementById('wsOldPassword').value;
+  const newPw = document.getElementById('wsNewPassword').value;
+  const newPw2 = document.getElementById('wsNewPassword2').value;
+  const err = document.getElementById('wsPasswordErr');
+  const showErr = (msg) => { err.textContent = msg; err.style.display = 'block'; err.style.color = 'var(--danger)'; };
+  if(!oldPw || !newPw){ showErr('Enter the current password and a new password.'); return; }
+  if(newPw !== newPw2){ showErr('New password and confirmation do not match.'); return; }
+  if(newPw.length < 4){ showErr('New password should be at least 4 characters.'); return; }
+  try{
+    await apiPost('wholesale/auth/change', { old_password: oldPw, new_password: newPw });
+    toast('Password updated');
+    closeWholesalePasswordModal();
+  }catch(e){
+    console.error(e);
+    const msg = /incorrect/i.test(e.message) ? 'Current password is incorrect.' : 'Could not update password.';
+    showErr(msg);
+  }
+}
+
+/* ============ WHOLESALE PRICING LIST (read-only reference) ============ */
+async function loadWholesalePricing(){
+  const content = document.getElementById('wholesaleContent');
+  document.getElementById('wholesaleSearch').value = '';
+  wholesaleAdjust = {};
+  content.innerHTML = '<div class="loading">Loading pricing list…</div>';
+  try{
+    const data = await apiGet('wholesale/pricing/');
+    wholesaleRows = data.items || [];
+    renderWholesaleTable();
+  }catch(e){
+    content.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load the pricing list.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+function wholesaleMarginPct(r){
+  if(!r.price_net || r.price_net <= 0 || r.suppcost_net === null || r.suppcost_net === undefined) return null;
+  return ((r.price_net - r.suppcost_net) / r.price_net) * 100;
+}
+function wholesaleMarginClass(pct){
+  if(pct === null) return '';
+  if(pct < 0) return 'out';
+  if(pct < 15) return 'low';
+  return 'ok';
+}
+function filteredWholesaleRows(){
+  const q = (document.getElementById('wholesaleSearch').value || '').toLowerCase().trim();
+  if(!q) return wholesaleRows;
+  return wholesaleRows.filter(r =>
+    (r.stock_name || '').toLowerCase().includes(q) ||
+    (r.department_name || '').toLowerCase().includes(q)
+  );
+}
+function wholesalePriceFromMargin(suppCost, marginPct){
+  if(suppCost === null || suppCost === undefined) return null;
+  const m = Number(marginPct);
+  if(isNaN(m) || m >= 100) return null;
+  return Number(suppCost) / (1 - m / 100);
+}
+function wholesaleMarginFromPrice(suppCost, price){
+  if(suppCost === null || suppCost === undefined) return null;
+  const p = Number(price);
+  if(isNaN(p) || p <= 0) return null;
+  return ((p - Number(suppCost)) / p) * 100;
+}
+function renderWholesaleTable(){
+  const content = document.getElementById('wholesaleContent');
+  const filtered = filteredWholesaleRows();
+  if(wholesaleRows.length === 0){
+    content.innerHTML = '<div class="empty-hint">No wholesale pricing data yet — run the Firebird sync (test_oracle.py) first.</div>';
+    return;
+  }
+  if(filtered.length === 0){
+    content.innerHTML = '<div class="empty-hint">No matches for that search.</div>';
+    return;
+  }
+  const table = document.createElement('table');
+  table.className = 'finaltable';
+  const thead = document.createElement('thead');
+  thead.innerHTML = `<tr>
+    <th>Item</th><th>Department</th>
+    <th class="qtycell">Supplier Cost</th><th class="qtycell">Trade 3 Price</th><th class="qtycell">Margin</th>
+    <th class="qtycell">New Margin %</th><th class="qtycell">New Price</th>
+  </tr>`;
+  const tbody = document.createElement('tbody');
+  filtered.forEach(r=>{
+    const margin = wholesaleMarginPct(r);
+    const adj = wholesaleAdjust[r.stock_name] || {};
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${escapeHtml(r.stock_name)}</td>
+      <td>${escapeHtml(r.department_name)}</td>
+      <td class="qtycell">${r.suppcost_net === null || r.suppcost_net === undefined ? '—' : Number(r.suppcost_net).toFixed(2)}</td>
+      <td class="qtycell">${r.price_net === null || r.price_net === undefined ? '—' : Number(r.price_net).toFixed(2)}</td>
+      <td class="qtycell"><span class="val ${wholesaleMarginClass(margin)}">${margin === null ? '—' : margin.toFixed(1) + '%'}</span></td>
+      <td class="qtycell">
+        <input type="number" step="0.1" class="newmargininput" placeholder="—"
+               value="${adj.margin !== undefined ? adj.margin : ''}">
+        <span class="wsprintmargin">${adj.margin !== undefined && adj.margin !== '' ? Number(adj.margin).toFixed(1) + '%' : '—'}</span>
+      </td>
+      <td class="qtycell">
+        <input type="number" step="0.01" min="0" class="newpriceinput" placeholder="—"
+               value="${adj.price !== undefined ? adj.price : ''}">
+        <span class="wsprintprice">${adj.price !== undefined && adj.price !== '' ? Number(adj.price).toFixed(2) : '—'}</span>
+      </td>
+    `;
+    const marginInput = tr.querySelector('.newmargininput');
+    const priceInput = tr.querySelector('.newpriceinput');
+    const marginPrint = tr.querySelector('.wsprintmargin');
+    const pricePrint = tr.querySelector('.wsprintprice');
+    marginInput.addEventListener('change', () => {
+      const v = marginInput.value.trim();
+      if(v === ''){
+        delete adj.margin;
+      } else {
+        adj.margin = v;
+        const newPrice = wholesalePriceFromMargin(r.suppcost_net, v);
+        if(newPrice !== null){
+          adj.price = newPrice.toFixed(2);
+          priceInput.value = adj.price;
+          pricePrint.textContent = Number(adj.price).toFixed(2);
+        }
+      }
+      marginPrint.textContent = adj.margin !== undefined && adj.margin !== '' ? Number(adj.margin).toFixed(1) + '%' : '—';
+      if(Object.keys(adj).length === 0){ delete wholesaleAdjust[r.stock_name]; } else { wholesaleAdjust[r.stock_name] = adj; }
+    });
+    priceInput.addEventListener('change', () => {
+      const v = priceInput.value.trim();
+      if(v === ''){
+        delete adj.price;
+      } else {
+        adj.price = v;
+        const newMargin = wholesaleMarginFromPrice(r.suppcost_net, v);
+        if(newMargin !== null){
+          adj.margin = newMargin.toFixed(1);
+          marginInput.value = adj.margin;
+          marginPrint.textContent = Number(adj.margin).toFixed(1) + '%';
+        }
+      }
+      pricePrint.textContent = adj.price !== undefined && adj.price !== '' ? Number(adj.price).toFixed(2) : '—';
+      if(Object.keys(adj).length === 0){ delete wholesaleAdjust[r.stock_name]; } else { wholesaleAdjust[r.stock_name] = adj; }
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(thead);
+  table.appendChild(tbody);
+  content.innerHTML = '';
+  content.appendChild(table);
+}
+function wholesaleExportRows(){
+  return filteredWholesaleRows().map(r=>{
+    const margin = wholesaleMarginPct(r);
+    const adj = wholesaleAdjust[r.stock_name] || {};
+    return {
+      item: r.stock_name,
+      department: r.department_name,
+      suppCost: r.suppcost_net === null || r.suppcost_net === undefined ? null : Number(r.suppcost_net),
+      tradePrice: r.price_net === null || r.price_net === undefined ? null : Number(r.price_net),
+      margin: margin === null ? null : Number(margin.toFixed(1)),
+      newMargin: adj.margin !== undefined && adj.margin !== '' ? Number(adj.margin) : null,
+      newPrice: adj.price !== undefined && adj.price !== '' ? Number(adj.price) : null
+    };
+  });
+}
+function downloadWholesalePDF(){
+  if(wholesaleRows.length === 0) return;
+  try{
+    const rows = wholesaleExportRows();
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text('Wholesale Pricing List — Trade 3', 14, 18);
+    doc.setFontSize(9);
+    doc.setTextColor(120);
+    doc.text('Generated ' + new Date().toLocaleString() + ' — CONFIDENTIAL', 14, 24);
+    const body = rows.map(r => [
+      r.item,
+      r.department,
+      r.suppCost === null ? '—' : r.suppCost.toFixed(2),
+      r.tradePrice === null ? '—' : r.tradePrice.toFixed(2),
+      r.margin === null ? '—' : r.margin.toFixed(1) + '%',
+      r.newMargin === null ? '' : r.newMargin.toFixed(1) + '%',
+      r.newPrice === null ? '' : r.newPrice.toFixed(2)
+    ]);
+    doc.autoTable({
+      startY: 30,
+      head: [['Item', 'Department', 'Supplier Cost', 'Trade 3 Price', 'Margin', 'New Margin', 'New Price']],
+      body,
+      theme: 'grid',
+      headStyles: { fillColor: [30,34,42] },
+      styles: { fontSize: 9 },
+      margin: { left: 14, right: 14 }
+    });
+    doc.save('wholesale-pricing-' + new Date().toISOString().slice(0,10) + '.pdf');
+  }catch(e){
+    toast('Could not generate PDF');
+    console.error(e);
+  }
+}
+function downloadWholesaleExcel(){
+  if(wholesaleRows.length === 0) return;
+  try{
+    const rows = wholesaleExportRows();
+    const sheetData = rows.map(r => ({
+      'Item': r.item,
+      'Department': r.department,
+      'Supplier Cost': r.suppCost,
+      'Trade 3 Price': r.tradePrice,
+      'Margin %': r.margin,
+      'New Margin %': r.newMargin === null ? '' : r.newMargin,
+      'New Price': r.newPrice === null ? '' : r.newPrice
+    }));
+    const ws = XLSX.utils.json_to_sheet(sheetData);
+    ws['!cols'] = [{ wch: 36 }, { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 12 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Wholesale Pricing');
+    XLSX.writeFile(wb, 'wholesale-pricing-' + new Date().toISOString().slice(0,10) + '.xlsx');
+  }catch(e){
+    toast('Could not generate Excel file');
+    console.error(e);
+  }
+}
+
+/* ============ LOCATION: ZONES > SHELVES > ROWS > PRODUCTS ============ */
+let locationZones = [];
+let currentZone = null;
+let locationShelves = [];
+let currentShelf = null;
+let locationRows = [];
+let currentRow = null;
+let currentRowItems = [];
+
+function openLocation(){ showView('view-location'); loadZones(); }
+
+/* ---- Zones ---- */
+async function loadZones(){
+  const grid = document.getElementById('zoneGrid');
+  grid.innerHTML = '<div class="loading">Loading zones…</div>';
+  try{
+    const data = await apiGet('location/zones/');
+    locationZones = data.items || [];
+    renderZoneGrid();
+  }catch(e){
+    grid.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load zones.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+function renderZoneGrid(){
+  const grid = document.getElementById('zoneGrid');
+  grid.innerHTML = '';
+  locationZones.forEach(z=>{
+    const div = document.createElement('div');
+    div.className = 'bincard';
+    div.onclick = () => openZone(z);
+    div.innerHTML = `
+      <div class="bincard-actions">
+        <button class="cardicon rename" type="button" title="Rename zone">&#9998;</button>
+        <button class="cardicon delete" type="button" title="Delete zone">&#10005;</button>
+      </div>
+      <h4>${escapeHtml(z.zone_name)}</h4>
+      <div class="count">${z.shelf_count} shelf${z.shelf_count === 1 ? '' : 'ves'}</div>
+    `;
+    div.querySelector('.cardicon.rename').onclick = (e) => { e.stopPropagation(); renameZone(z); };
+    div.querySelector('.cardicon.delete').onclick = (e) => { e.stopPropagation(); deleteZoneConfirm(z); };
+    grid.appendChild(div);
+  });
+  const addTile = document.createElement('div');
+  addTile.className = 'add-tile';
+  addTile.onclick = () => { document.getElementById('newZoneName').value=''; openModal('modalAddZone'); };
+  addTile.innerHTML = `<div class="plus">+</div><div>Add zone</div>`;
+  grid.appendChild(addTile);
+}
+async function submitAddZone(){
+  const name = document.getElementById('newZoneName').value.trim();
+  if(!name) return;
+  try{
+    await apiPost('location/zones/', { zone_name: name });
+    closeModal('modalAddZone');
+    toast('Zone added');
+    loadZones();
+  }catch(e){
+    toast('Could not add zone');
+    console.error(e);
+  }
+}
+async function renameZone(z){
+  const newName = prompt('Rename zone:', z.zone_name);
+  if(newName === null) return;
+  const trimmed = newName.trim();
+  if(!trimmed || trimmed === z.zone_name) return;
+  try{
+    await apiPut('location/zones/' + z.zone_id, { zone_name: trimmed });
+    toast('Zone renamed');
+    loadZones();
+  }catch(e){
+    toast('Could not rename zone');
+    console.error(e);
+  }
+}
+async function deleteZoneConfirm(z){
+  if(!confirm('Delete "' + z.zone_name + '"? This also deletes every shelf, row and product filed under it. This cannot be undone.')) return;
+  try{
+    await apiDelete('location/zones/' + z.zone_id);
+    toast('Zone deleted');
+    loadZones();
+  }catch(e){
+    toast('Could not delete zone');
+    console.error(e);
+  }
+}
+
+/* ---- Shelves ---- */
+async function openZone(z){
+  if(!z) return;
+  currentZone = z;
+  document.getElementById('shelfZoneCrumb').textContent = z.zone_name;
+  document.getElementById('shelfZoneTitle').textContent = z.zone_name;
+  showView('view-location-shelves');
+  await loadShelves();
+}
+async function loadShelves(){
+  const grid = document.getElementById('shelfGrid');
+  grid.innerHTML = '<div class="loading">Loading shelves…</div>';
+  try{
+    const data = await apiGet('location/zones/' + currentZone.zone_id + '/shelves/');
+    locationShelves = data.items || [];
+    renderShelfGrid();
+  }catch(e){
+    grid.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load shelves.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+function renderShelfGrid(){
+  const grid = document.getElementById('shelfGrid');
+  grid.innerHTML = '';
+  locationShelves.forEach(s=>{
+    const div = document.createElement('div');
+    div.className = 'bincard';
+    div.onclick = () => openShelf(s);
+    div.innerHTML = `
+      <div class="bincard-actions">
+        <button class="cardicon rename" type="button" title="Rename shelf">&#9998;</button>
+        <button class="cardicon delete" type="button" title="Delete shelf">&#10005;</button>
+      </div>
+      <h4>${escapeHtml(s.shelf_name)}</h4>
+      <div class="count">${s.row_count} row${s.row_count === 1 ? '' : 's'}</div>
+    `;
+    div.querySelector('.cardicon.rename').onclick = (e) => { e.stopPropagation(); renameShelf(s); };
+    div.querySelector('.cardicon.delete').onclick = (e) => { e.stopPropagation(); deleteShelfConfirm(s); };
+    grid.appendChild(div);
+  });
+  const addTile = document.createElement('div');
+  addTile.className = 'add-tile';
+  addTile.onclick = () => { document.getElementById('newShelfName').value=''; openModal('modalAddShelf'); };
+  addTile.innerHTML = `<div class="plus">+</div><div>Add shelf</div>`;
+  grid.appendChild(addTile);
+}
+async function submitAddShelf(){
+  const name = document.getElementById('newShelfName').value.trim();
+  if(!name || !currentZone) return;
+  try{
+    await apiPost('location/zones/' + currentZone.zone_id + '/shelves/', { shelf_name: name });
+    closeModal('modalAddShelf');
+    toast('Shelf added');
+    loadShelves();
+  }catch(e){
+    toast('Could not add shelf');
+    console.error(e);
+  }
+}
+async function renameShelf(s){
+  const newName = prompt('Rename shelf:', s.shelf_name);
+  if(newName === null) return;
+  const trimmed = newName.trim();
+  if(!trimmed || trimmed === s.shelf_name) return;
+  try{
+    await apiPut('location/shelves/' + s.shelf_id, { shelf_name: trimmed });
+    toast('Shelf renamed');
+    loadShelves();
+  }catch(e){
+    toast('Could not rename shelf');
+    console.error(e);
+  }
+}
+async function deleteShelfConfirm(s){
+  if(!confirm('Delete "' + s.shelf_name + '"? This also deletes every row and product filed under it. This cannot be undone.')) return;
+  try{
+    await apiDelete('location/shelves/' + s.shelf_id);
+    toast('Shelf deleted');
+    loadShelves();
+  }catch(e){
+    toast('Could not delete shelf');
+    console.error(e);
+  }
+}
+
+/* ---- Rows ---- */
+async function openShelf(s){
+  if(!s) return;
+  currentShelf = s;
+  document.getElementById('rowZoneCrumbBtn').textContent = currentZone.zone_name;
+  document.getElementById('rowShelfCrumb').textContent = s.shelf_name;
+  document.getElementById('rowShelfTitle').textContent = s.shelf_name;
+  showView('view-location-rows');
+  await loadRows();
+}
+async function loadRows(){
+  const grid = document.getElementById('rowGrid');
+  grid.innerHTML = '<div class="loading">Loading rows…</div>';
+  try{
+    const data = await apiGet('location/shelves/' + currentShelf.shelf_id + '/rows/');
+    locationRows = data.items || [];
+    renderRowGrid();
+  }catch(e){
+    grid.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load rows.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+function renderRowGrid(){
+  const grid = document.getElementById('rowGrid');
+  grid.innerHTML = '';
+  locationRows.forEach(a=>{
+    const div = document.createElement('div');
+    div.className = 'bincard';
+    div.onclick = () => openRow(a);
+    div.innerHTML = `
+      <div class="bincard-actions">
+        <button class="cardicon rename" type="button" title="Rename row">&#9998;</button>
+        <button class="cardicon delete" type="button" title="Delete row">&#10005;</button>
+      </div>
+      <h4>Row ${escapeHtml(a.row_name)}</h4>
+      <div class="count">${a.item_count} product${a.item_count === 1 ? '' : 's'}</div>
+    `;
+    div.querySelector('.cardicon.rename').onclick = (e) => { e.stopPropagation(); renameRow(a); };
+    div.querySelector('.cardicon.delete').onclick = (e) => { e.stopPropagation(); deleteRowConfirm(a); };
+    grid.appendChild(div);
+  });
+  const addTile = document.createElement('div');
+  addTile.className = 'add-tile';
+  addTile.onclick = () => { document.getElementById('newRowName').value=''; openModal('modalAddRow'); };
+  addTile.innerHTML = `<div class="plus">+</div><div>Add row</div>`;
+  grid.appendChild(addTile);
+}
+async function submitAddRow(){
+  const name = document.getElementById('newRowName').value.trim();
+  if(!name || !currentShelf) return;
+  try{
+    await apiPost('location/shelves/' + currentShelf.shelf_id + '/rows/', { row_name: name });
+    closeModal('modalAddRow');
+    toast('Row added');
+    loadRows();
+  }catch(e){
+    toast('Could not add row');
+    console.error(e);
+  }
+}
+async function renameRow(a){
+  const newName = prompt('Rename row:', a.row_name);
+  if(newName === null) return;
+  const trimmed = newName.trim();
+  if(!trimmed || trimmed === a.row_name) return;
+  try{
+    await apiPut('location/rows/' + a.row_id, { row_name: trimmed });
+    toast('Row renamed');
+    loadRows();
+  }catch(e){
+    toast('Could not rename row');
+    console.error(e);
+  }
+}
+async function deleteRowConfirm(a){
+  if(!confirm('Delete Row "' + a.row_name + '"? This also removes every product filed under it. This cannot be undone.')) return;
+  try{
+    await apiDelete('location/rows/' + a.row_id);
+    toast('Row deleted');
+    loadRows();
+  }catch(e){
+    toast('Could not delete row');
+    console.error(e);
+  }
+}
+
+/* ---- Products filed in a row ---- */
+async function openRow(a){
+  if(!a) return;
+  currentRow = a;
+  document.getElementById('productZoneCrumbBtn').textContent = currentZone.zone_name;
+  document.getElementById('productShelfCrumbBtn').textContent = currentShelf.shelf_name;
+  document.getElementById('productRowCrumb').textContent = 'Row ' + a.row_name;
+  document.getElementById('productEyebrow').textContent = currentZone.zone_name + ' / ' + currentShelf.shelf_name;
+  document.getElementById('productRowTitle').textContent = 'Row ' + a.row_name;
+  showView('view-location-products');
+  await loadRowItems();
+}
+async function loadRowItems(){
+  const list = document.getElementById('rowItemList');
+  list.innerHTML = '<div class="loading">Loading products…</div>';
+  try{
+    const data = await apiGet('location/rows/' + currentRow.row_id + '/items/');
+    currentRowItems = data.items || [];
+    renderRowItemList();
+  }catch(e){
+    list.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load products.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+function updateRowItemCount(){
+  const n = currentRowItems.length;
+  const el = document.getElementById('rowItemCount');
+  if(el) el.textContent = n + ' product' + (n === 1 ? '' : 's') + ' in this row';
+}
+function renderRowItemList(){
+  const list = document.getElementById('rowItemList');
+  updateRowItemCount();
+  if(currentRowItems.length === 0){
+    list.className = '';
+    list.innerHTML = '<div class="empty-hint">No products filed here yet. Scan a barcode or tap "+ Add Product".</div>';
+    return;
+  }
+  list.className = 'itemblocks';
+  list.innerHTML = '';
+  currentRowItems.forEach(it => list.appendChild(renderRowItemBlock(it)));
+}
+function renderRowItemBlock(it){
+  const block = document.createElement('div');
+  block.className = 'itemblock';
+  block.dataset.rowId = it.item_row_id;
+  block.title = it.item_name;
+  block.innerHTML = `
+    <button class="ibdel" title="Remove">✕</button>
+    <div class="ibname"></div>
+    <div class="ibbarcode"></div>
+    <div class="ibstock">Avail: <span class="val"></span></div>
+  `;
+  block.querySelector('.ibname').textContent = it.item_name;
+  block.querySelector('.ibbarcode').textContent = it.barcode ? ('#' + it.barcode) : '';
+  setStockDisplay(block, it.stock_available);
+  block.querySelector('.ibdel').onclick = () => removeRowItem(it, block);
+  return block;
+}
+async function removeRowItem(it, block){
+  block.style.opacity = '.4';
+  try{
+    await apiDelete('location/items/' + it.item_row_id);
+    currentRowItems = currentRowItems.filter(i => i !== it);
+    block.remove();
+    updateRowItemCount();
+    if(currentRowItems.length === 0) renderRowItemList();
+  }catch(e){
+    block.style.opacity = '1';
+    toast('Could not remove product');
+    console.error(e);
+  }
+}
+function openAddRowProductModal(){
+  document.getElementById('rowProductSearchInput').value = '';
+  document.getElementById('rowProductSearchResults').innerHTML = '';
+  openModal('modalAddRowProduct');
+  setTimeout(()=>document.getElementById('rowProductSearchInput').focus(), 80);
+}
+function onRowProductSearch(){
+  clearTimeout(searchDebounce);
+  const q = document.getElementById('rowProductSearchInput').value.trim();
+  const results = document.getElementById('rowProductSearchResults');
+  if(q.length < 2){ results.innerHTML = ''; return; }
+  results.innerHTML = '<div class="empty-hint">Searching…</div>';
+  searchDebounce = setTimeout(async ()=>{
+    try{
+      const data = await apiGet('stock/search/?q=' + encodeURIComponent(q));
+      const items = data.items || [];
+      if(items.length === 0){
+        results.innerHTML = '<div class="empty-hint">No matches in vestock</div>';
+        return;
+      }
+      results.innerHTML = '';
+      items.forEach(it=>{
+        const div = document.createElement('div');
+        div.className = 'searchresult';
+        div.innerHTML = `<div class="sname">${escapeHtml(it.name)}</div><div class="sstock">${it.quantity} in stock</div>`;
+        div.onclick = () => addRowProductFromSearch(it.name);
+        results.appendChild(div);
+      });
+    }catch(e){
+      results.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Search failed</div>';
+      console.error(e);
+    }
+  }, 300);
+}
+function addRowProductFromSearch(name){
+  closeModal('modalAddRowProduct');
+  addProductToRow({ item_name: name });
+}
+async function addProductToRow(payload){
+  if(!currentRow) return;
+  try{
+    await apiPost('location/rows/' + currentRow.row_id + '/items/', payload);
+    toast(payload.item_name + ' added to row');
+    await loadRowItems();
+  }catch(e){
+    toast('Could not add ' + payload.item_name);
+    console.error(e);
+  }
+}
+function addScannedItemToRow(stock){
+  addProductToRow({ item_name: stock.name, stockid: stock.stockid || null, barcode: stock.barcode || null });
+}
+
+/* ============ STOCK INFO: search by barcode or name ============ */
+let stockInfoDebounce = null;
+function openStockInfo(){
+  showView('view-stock-info');
+  document.getElementById('stockInfoSearchInput').value = '';
+  document.getElementById('stockInfoResults').innerHTML = '<div class="empty-hint">Start typing a barcode or item name.</div>';
+  setTimeout(()=>document.getElementById('stockInfoSearchInput').focus(), 80);
+}
+function onStockInfoSearch(){
+  clearTimeout(stockInfoDebounce);
+  const q = document.getElementById('stockInfoSearchInput').value.trim();
+  const results = document.getElementById('stockInfoResults');
+  if(q.length < 2){
+    results.innerHTML = '<div class="empty-hint">Start typing a barcode or item name.</div>';
+    return;
+  }
+  results.innerHTML = '<div class="loading">Searching…</div>';
+  stockInfoDebounce = setTimeout(async () => {
+    try{
+      const data = await apiGet('stock/info/?q=' + encodeURIComponent(q));
+      renderStockInfoResults(data.items || []);
+    }catch(e){
+      results.innerHTML = '<div class="loading" style="color:var(--danger)">Search failed.</div>' + errDetailHtml(e);
+      console.error(e);
+    }
+  }, 300);
+}
+function renderStockInfoResults(items){
+  const results = document.getElementById('stockInfoResults');
+  if(items.length === 0){
+    results.innerHTML = '<div class="empty-hint">No matches for that search.</div>';
+    return;
+  }
+  const table = document.createElement('table');
+  table.className = 'finaltable';
+  const thead = document.createElement('thead');
+  thead.innerHTML = `<tr><th>Stock Name</th><th>Barcode</th><th>Location</th><th class="qtycell">In Stock</th></tr>`;
+  const tbody = document.createElement('tbody');
+  items.forEach(it=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${escapeHtml(it.name)}</td>
+      <td class="mono">${it.barcodes ? escapeHtml(it.barcodes) : '—'}</td>
+      <td>${it.locations ? escapeHtml(it.locations) : 'Not filed yet'}</td>
+      <td class="qtycell"><span class="val ${stockClass(it.quantity)}">${it.quantity ?? '—'}</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  table.appendChild(thead);
+  table.appendChild(tbody);
+  results.innerHTML = '';
+  results.appendChild(table);
+}
+
+/* ============ TOAST ============ */
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display='block';
+  clearTimeout(t._h);
+  t._h = setTimeout(()=>t.style.display='none', 2200);
+}
+
+/* ============ MODALS ============ */
+function openModal(id){ document.getElementById(id).classList.add('active'); }
+function closeModal(id){ document.getElementById(id).classList.remove('active'); }
+
+/* ============ API HELPERS ============ */
+async function apiErrorText(res, verb, path){
+  let detail = '';
+  try{
+    const body = await res.clone().json();
+    if(body && body.error) detail = body.error;
+  }catch(e){ /* body wasn't JSON — ignore, we'll just show the status */ }
+  return verb + ' ' + path + ' failed: ' + res.status + (detail ? ' — ' + detail : '');
+}
+async function apiGet(path){
+  const res = await fetch(API_BASE + path);
+  if(!res.ok) throw new Error(await apiErrorText(res, 'GET', path));
+  return res.json();
+}
+async function apiPost(path, body){
+  const res = await fetch(API_BASE + path, {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+  });
+  if(!res.ok) throw new Error(await apiErrorText(res, 'POST', path));
+  return res.json().catch(()=>({}));
+}
+async function apiPut(path, body){
+  const res = await fetch(API_BASE + path, {
+    method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+  });
+  if(!res.ok) throw new Error(await apiErrorText(res, 'PUT', path));
+  return res.json().catch(()=>({}));
+}
+async function apiDelete(path){
+  const res = await fetch(API_BASE + path, { method:'DELETE' });
+  if(!res.ok) throw new Error(await apiErrorText(res, 'DELETE', path));
+  return res.json().catch(()=>({}));
+}
+
+/* ============ CATEGORIES ============ */
+/* ============ ORDER PERSISTENCE (localStorage) ============ */
+function getStoredOrder(key){
+  try{ return JSON.parse(localStorage.getItem(key) || '[]'); }catch(e){ return []; }
+}
+function sortByStoredOrder(arr, order, idFn){
+  if(!order || order.length === 0) return arr;
+  const idx = new Map(order.map((id,i)=>[String(id), i]));
+  return [...arr].sort((a,b)=>{
+    const ai = idx.has(String(idFn(a))) ? idx.get(String(idFn(a))) : Infinity;
+    const bi = idx.has(String(idFn(b))) ? idx.get(String(idFn(b))) : Infinity;
+    return ai - bi;
+  });
+}
+function saveCatOrder(){
+  const order = [...document.querySelectorAll('#catgrid .bincard')].map(el => el.dataset.catId);
+  localStorage.setItem('hallan_cat_order', JSON.stringify(order));
+}
+function saveItemOrder(){
+  if(!currentCategory) return;
+  const order = [...document.querySelectorAll('#itemlist .itemblock')].map(el => el.dataset.rowId);
+  localStorage.setItem('hallan_item_order_' + currentCategory.category_id, JSON.stringify(order));
+}
+
+async function loadCategories(){
+  const grid = document.getElementById('catgrid');
+  grid.innerHTML = '<div class="loading">Loading categories…</div>';
+  try{
+    const data = await apiGet('categories/');
+    let cats = (data.items || []).filter(c => c.list_type === 'WAREHOUSE');
+    cats = sortByStoredOrder(cats, getStoredOrder('hallan_cat_order'), c => c.category_id);
+    categories = cats;
+    renderCategoryGrid();
+  }catch(e){
+    grid.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load categories.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+function renderCategoryGrid(){
+  const grid = document.getElementById('catgrid');
+  grid.innerHTML = '';
+  categories.forEach(c=>{
+    const div = document.createElement('div');
+    div.className = 'bincard';
+    div.draggable = true;
+    div.dataset.catId = c.category_id;
+    div.onclick = () => openCategory(c);
+    div.innerHTML = `
+      <div class="bincard-actions">
+        <button class="cardicon rename" type="button" title="Rename category">&#9998;</button>
+        <button class="cardicon delete" type="button" title="Delete category">&#10005;</button>
+      </div>
+      <h4>${escapeHtml(c.category_name)}</h4>
+      <div class="count">BIN-${String(c.category_id).padStart(3,'0')}</div>
+    `;
+    div.querySelector('.cardicon.rename').onclick = (e) => { e.stopPropagation(); renameCategory(c); };
+    div.querySelector('.cardicon.delete').onclick = (e) => { e.stopPropagation(); deleteCategoryConfirm(c); };
+    attachDragHandlers(div, saveCatOrder);
+    grid.appendChild(div);
+  });
+  const addTile = document.createElement('div');
+  addTile.className = 'add-tile';
+  addTile.onclick = () => openModal('modalAddCategory');
+  addTile.innerHTML = `<div class="plus">+</div><div>Add category</div>`;
+  grid.appendChild(addTile);
+}
+async function renameCategory(cat){
+  const newName = prompt('Rename category:', cat.category_name);
+  if(newName === null) return;
+  const trimmed = newName.trim();
+  if(!trimmed || trimmed === cat.category_name) return;
+  try{
+    await apiPut('categories/' + cat.category_id, { category_name: trimmed });
+    toast('Category renamed');
+    loadCategories();
+  }catch(e){
+    toast('Could not rename category');
+    console.error(e);
+  }
+}
+async function deleteCategoryConfirm(cat){
+  if(!confirm('Delete "' + cat.category_name + '"? This removes the category and every item filed under it. This cannot be undone.')) return;
+  try{
+    await apiDelete('categories/' + cat.category_id);
+    localStorage.removeItem('hallan_item_order_' + cat.category_id);
+    toast('Category deleted');
+    loadCategories();
+  }catch(e){
+    toast('Could not delete category');
+    console.error(e);
+  }
+}
+async function submitAddCategory(){
+  const name = document.getElementById('newCatName').value.trim();
+  if(!name){ return; }
+  try{
+    await apiPost('categories/', { category_name: name, list_type: 'WAREHOUSE' });
+    document.getElementById('newCatName').value = '';
+    closeModal('modalAddCategory');
+    toast('Category added');
+    loadCategories();
+  }catch(e){
+    toast('Could not add category');
+    console.error(e);
+  }
+}
+
+/* ============ CATEGORY DETAIL / ITEMS ============ */
+async function openCategory(cat){
+  currentCategory = cat;
+  document.getElementById('catCrumb').textContent = cat.category_name;
+  document.getElementById('catTitle').textContent = cat.category_name;
+  document.getElementById('catEyebrow').textContent = 'BIN-' + String(cat.category_id).padStart(3,'0');
+  showView('view-category');
+  await loadItemsForCategory();
+}
+function updateToggleBtnLabel(){
+  const n = currentItems.length;
+  const el = document.getElementById('catItemCount');
+  if(el) el.textContent = n + ' item' + (n === 1 ? '' : 's') + ' in this list';
+}
+async function loadItemsForCategory(){
+  // Full reload — only used the first time a category is opened.
+  const list = document.getElementById('itemlist');
+  list.className = 'itemblocks';
+  list.innerHTML = '<div class="loading">Loading items…</div>';
+  try{
+    const data = await apiGet('items/');
+    let items = (data.items || []).filter(i => i.category_id === currentCategory.category_id);
+    items = sortByStoredOrder(items, getStoredOrder('hallan_item_order_' + currentCategory.category_id), it => it.item_row_id);
+    currentItems = items;
+    updateToggleBtnLabel();
+    list.innerHTML = '';
+    items.forEach(it => list.appendChild(renderItemBlock(it)));
+    list.appendChild(renderAddBlockTile());
+  }catch(e){
+    list.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load items.</div>' + errDetailHtml(e);
+    console.error(e);
+    currentItems = [];
+    updateToggleBtnLabel();
+  }
+}
+function stockClass(stock){
+  if(stock === null || stock === undefined) return 'low';
+  if(stock <= 0) return 'out';
+  if(stock < 10) return 'low';
+  return 'ok';
+}
+function renderItemBlock(it){
+  const block = document.createElement('div');
+  block.className = 'itemblock';
+  block.draggable = true;
+  block.dataset.rowId = it.item_row_id;
+  block.title = it.item_name;
+  block.innerHTML = `
+    <button class="ibdel" title="Remove">✕</button>
+    <div class="ibname"></div>
+    <div class="ibstock">Avail: <span class="val"></span></div>
+    <div class="stepper">
+      <button class="ibminus" type="button">−</button>
+      <div class="qty"></div>
+      <button class="ibplus" type="button">+</button>
+    </div>
+  `;
+  block.querySelector('.ibname').textContent = it.item_name;
+  block.querySelector('.qty').textContent = it.qty_required;
+  setStockDisplay(block, it.stock_available);
+  block.querySelector('.ibdel').onclick = () => removeItemBlock(it, block);
+  block.querySelector('.ibminus').onclick = () => changeQtyBlock(it, block, -1);
+  block.querySelector('.ibplus').onclick = () => changeQtyBlock(it, block, 1);
+  attachDragHandlers(block, saveItemOrder);
+  return block;
+}
+function setStockDisplay(block, stock){
+  const val = block.querySelector('.ibstock .val');
+  val.textContent = (stock === null || stock === undefined) ? '—' : stock;
+  val.className = 'val ' + stockClass(stock);
+}
+function renderAddBlockTile(){
+  const tile = document.createElement('div');
+  tile.className = 'add-block-tile';
+  tile.onclick = () => openAddItemModal();
+  tile.innerHTML = `<div class="plus">+</div><div>Add block</div>`;
+  return tile;
+}
+
+/* ============ DRAG TO REORDER BLOCKS (order is saved) ============ */
+function attachDragHandlers(block, onReorder){
+  block.addEventListener('dragstart', e=>{
+    dragSrcBlock = block;
+    block.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  block.addEventListener('dragend', ()=>{
+    block.classList.remove('dragging');
+    dragSrcBlock = null;
+    if(onReorder) onReorder();
+  });
+  block.addEventListener('dragover', e=>{
+    e.preventDefault();
+    if(!dragSrcBlock || dragSrcBlock === block) return;
+    const container = block.parentNode;
+    const rect = block.getBoundingClientRect();
+    const before = (e.clientX - rect.left) < rect.width / 2;
+    container.insertBefore(dragSrcBlock, before ? block : block.nextSibling);
+  });
+}
+
+/* ============ QTY / REMOVE — instant, no reload/blink ============ */
+function changeQtyBlock(item, block, delta){
+  const newQty = Math.max(0, item.qty_required + delta);
+  if(newQty === item.qty_required) return;
+  item.qty_required = newQty;
+  block.querySelector('.qty').textContent = newQty;
+  apiPut('items/' + item.item_row_id, { qty_required: newQty }).catch(e=>{
+    toast('Could not save quantity — will retry');
+    console.error(e);
+  });
+}
+function removeItemBlock(item, block){
+  block.remove();
+  currentItems = currentItems.filter(i => i !== item);
+  updateToggleBtnLabel();
+  saveItemOrder();
+  apiDelete('items/' + item.item_row_id).catch(e=>{
+    toast('Could not remove item, restoring');
+    console.error(e);
+    currentItems.push(item);
+    updateToggleBtnLabel();
+    const list = document.getElementById('itemlist');
+    const tile = list.querySelector('.add-block-tile');
+    const restored = renderItemBlock(item);
+    if(tile) list.insertBefore(restored, tile); else list.appendChild(restored);
+    saveItemOrder();
+  });
+}
+
+/* ============ ADD ITEM (optimistic — block appears instantly) ============ */
+function addItemOptimistic(name, stockGuess){
+  const existing = currentItems.find(it => (it.item_name || '').toLowerCase().trim() === name.toLowerCase().trim());
+  if(existing){
+    const block = document.querySelector('#itemlist .itemblock[data-row-id="' + CSS.escape(String(existing.item_row_id)) + '"]');
+    if(block){
+      changeQtyBlock(existing, block, 1);
+    } else {
+      existing.qty_required += 1;
+      apiPut('items/' + existing.item_row_id, { qty_required: existing.qty_required }).catch(e=>console.error(e));
+    }
+    toast(name + ' already in this list — quantity increased');
+    return;
+  }
+  const tempItem = {
+    item_row_id: 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2),
+    item_name: name, qty_required: 1,
+    stock_available: (stockGuess === undefined ? null : stockGuess),
+    category_id: currentCategory.category_id
+  };
+  currentItems.push(tempItem);
+  updateToggleBtnLabel();
+  const list = document.getElementById('itemlist');
+  list.className = 'itemblocks';
+  if(list.querySelector('.loading')) list.innerHTML = '';
+  const tile = list.querySelector('.add-block-tile');
+  const block = renderItemBlock(tempItem);
+  if(tile) list.insertBefore(block, tile); else { list.appendChild(block); list.appendChild(renderAddBlockTile()); }
+  saveItemOrder();
+
+  apiPost('items/', { category_id: currentCategory.category_id, item_name: name, qty_required: 1 })
+    .then(()=> apiGet('items/'))
+    .then(data=>{
+      const items = (data.items || []).filter(i => i.category_id === currentCategory.category_id);
+      const match = items.find(i => (i.item_name || '').toLowerCase().trim() === name.toLowerCase().trim());
+      if(match){
+        tempItem.item_row_id = match.item_row_id;
+        tempItem.stock_available = match.stock_available;
+        block.dataset.rowId = match.item_row_id;
+        setStockDisplay(block, match.stock_available);
+        saveItemOrder();
+      }
+    })
+    .catch(e=>{
+      toast('Could not add ' + name);
+      console.error(e);
+      block.remove();
+      currentItems = currentItems.filter(i => i !== tempItem);
+      updateToggleBtnLabel();
+    });
+}
+
+/* ============ ADD ITEM SEARCH ============ */
+function openAddItemModal(){
+  document.getElementById('itemSearchInput').value = '';
+  document.getElementById('searchResults').innerHTML = '';
+  openModal('modalAddItem');
+  setTimeout(()=>document.getElementById('itemSearchInput').focus(), 80);
+}
+function onItemSearch(){
+  clearTimeout(searchDebounce);
+  const q = document.getElementById('itemSearchInput').value.trim();
+  const results = document.getElementById('searchResults');
+  if(q.length < 2){ results.innerHTML = ''; return; }
+  results.innerHTML = '<div class="empty-hint">Searching…</div>';
+  searchDebounce = setTimeout(async ()=>{
+    try{
+      const data = await apiGet('stock/search/?q=' + encodeURIComponent(q));
+      const items = data.items || [];
+      if(items.length === 0){
+        results.innerHTML = '<div class="empty-hint">No matches in vestock</div>';
+        return;
+      }
+      results.innerHTML = '';
+      items.forEach(it=>{
+        const div = document.createElement('div');
+        div.className = 'searchresult';
+        div.innerHTML = `<div class="sname">${escapeHtml(it.name)}</div><div class="sstock">${it.quantity} in stock</div>`;
+        div.onclick = () => addItemFromSearch(it.name, it.quantity);
+        results.appendChild(div);
+      });
+    }catch(e){
+      results.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Search failed</div>';
+      console.error(e);
+    }
+  }, 300);
+}
+function addItemFromSearch(name, stock){
+  closeModal('modalAddItem');
+  addItemOptimistic(name, stock);
+}
+
+/* ============ RETAIL: MAKING LIST ============ */
+function openRetailMaking(){ showView('view-making-index'); loadMakingLists(); }
+function openRetailPicking(){ showView('view-picking-index'); loadPickingLists(); }
+function openHistory(){ showView('view-history-index'); loadHistory(); }
+
+/* Remembers the last name typed in this browser so staff don't retype it every time */
+function promptStaffName(label){
+  const last = localStorage.getItem('hallan_staff_name') || '';
+  const name = (prompt(label, last) || '').trim();
+  if(name) localStorage.setItem('hallan_staff_name', name);
+  return name;
+}
+
+function formatElapsed(totalSeconds){
+  const h = String(Math.floor(totalSeconds/3600)).padStart(2,'0');
+  const m = String(Math.floor((totalSeconds%3600)/60)).padStart(2,'0');
+  const s = String(totalSeconds%60).padStart(2,'0');
+  return h+':'+m+':'+s;
+}
+
+async function loadMakingLists(){
+  const grid = document.getElementById('makingListsGrid');
+  grid.innerHTML = '<div class="loading">Loading lists…</div>';
+  try{
+    const data = await apiGet('retail/lists/');
+    const lists = (data.items || []).filter(l => l.status !== 'CLOSED');
+    if(lists.length === 0){
+      grid.innerHTML = '<div class="empty-hint">No lists yet. Tap "+ Start Creating List" to begin.</div>';
+      return;
+    }
+    grid.innerHTML = '';
+    lists.forEach(l => grid.appendChild(renderMakingListCard(l)));
+  }catch(e){
+    grid.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load lists.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+function renderMakingListCard(l){
+  const div = document.createElement('div');
+  div.className = 'bincard';
+  const isOpen = l.status === 'OPEN';
+  div.innerHTML = `
+    <h4>${escapeHtml(l.list_name)}</h4>
+    <div class="count">${l.item_count} item${l.item_count===1?'':'s'} &middot; ${isOpen ? 'In progress' : 'Finalised — ready for picking'}</div>
+    ${l.created_by ? `<div class="staffline">Made by ${escapeHtml(l.created_by)}</div>` : ''}
+  `;
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;';
+  if(isOpen){
+    div.onclick = () => openMakingListDetail(l.list_id);
+    const finBtn = document.createElement('button');
+    finBtn.className = 'btn-amber';
+    finBtn.style.cssText = 'padding:8px 14px;font-size:12px;';
+    finBtn.textContent = 'Finalise';
+    finBtn.onclick = (e) => { e.stopPropagation(); finaliseList(l.list_id); };
+    btnRow.appendChild(finBtn);
+  } else {
+    div.style.opacity = '.8';
+    const reopenBtn = document.createElement('button');
+    reopenBtn.className = 'btn-ghost';
+    reopenBtn.style.cssText = 'padding:8px 14px;font-size:12px;';
+    reopenBtn.textContent = 'Reopen for editing';
+    reopenBtn.onclick = (e) => { e.stopPropagation(); reopenList(l.list_id); };
+    btnRow.appendChild(reopenBtn);
+  }
+  const removeBtn = document.createElement('button');
+  removeBtn.className = 'btn-danger-ghost';
+  removeBtn.style.cssText = 'padding:8px 14px;font-size:12px;';
+  removeBtn.textContent = 'Close';
+  removeBtn.onclick = (e) => { e.stopPropagation(); removeMakingList(l.list_id, l.list_name); };
+  btnRow.appendChild(removeBtn);
+  div.appendChild(btnRow);
+  return div;
+}
+async function removeMakingList(id, name){
+  if(!confirm('Close "' + name + '"? It will be removed from Making List (and Picking List if finalised).')) return;
+  try{
+    await apiPost('retail/lists/' + id + '/close', {});
+    toast('List closed');
+    loadMakingLists();
+  }catch(e){
+    toast('Could not close list');
+    console.error(e);
+  }
+}
+async function reopenList(id){
+  if(!confirm('Reopen this list for editing? It will move back to "In progress" and out of Picking List until you finalise it again.')) return;
+  try{
+    await apiPost('retail/lists/' + id + '/reopen', {});
+    toast('List reopened');
+    loadMakingLists();
+  }catch(e){
+    toast('Could not reopen list');
+    console.error(e);
+  }
+}
+async function startCreatingList(){
+  try{
+    const data = await apiGet('retail/lists/');
+    const openList = (data.items || []).find(l => l.status === 'OPEN');
+    if(openList){
+      const editExisting = confirm('"' + openList.list_name + '" is already in progress.\n\nOK = keep editing that list\nCancel = start a brand new list');
+      if(editExisting){ openMakingListDetail(openList.list_id); return; }
+    }
+    const name = (prompt('Name this list (optional):', '') || '').trim();
+    const createdBy = promptStaffName('Your name (making this list):');
+    const res = await apiPost('retail/lists/', { list_name: name || undefined, created_by: createdBy || undefined });
+    openMakingListDetail(res.new_id);
+  }catch(e){
+    toast('Could not start a new list');
+    console.error(e);
+  }
+}
+async function finaliseList(id){
+  if(!confirm('Finalise this list? It will move to Picking List and stop being editable here.')) return;
+  try{
+    await apiPost('retail/lists/' + id + '/finalize', {});
+    toast('List finalised');
+    loadMakingLists();
+  }catch(e){
+    toast('Could not finalise list');
+    console.error(e);
+  }
+}
+function backToMakingIndex(){
+  stopActiveTimer();
+  showView('view-making-index');
+  loadMakingLists();
+}
+async function openMakingListDetail(id){
+  showView('view-making-detail');
+  document.getElementById('makingItemList').innerHTML = '<div class="loading">Loading…</div>';
+  try{
+    const data = await apiGet('retail/lists/' + id);
+    currentMakingList = data.list;
+    currentMakingItems = data.items || [];
+    document.getElementById('makingCrumb').textContent = currentMakingList.list_name;
+    document.getElementById('makingTitle').textContent = currentMakingList.list_name;
+    const madeByEl = document.getElementById('makingMadeBy');
+    if(currentMakingList.created_by){
+      madeByEl.textContent = 'Made by ' + currentMakingList.created_by;
+      madeByEl.style.display = 'block';
+    } else {
+      madeByEl.style.display = 'none';
+    }
+    renderMakingItems();
+    startActiveTimer('making', currentMakingList.list_id, currentMakingList.making_seconds || 0, 'makingTimer');
+  }catch(e){
+    toast('Could not open list');
+    console.error(e);
+  }
+}
+function renderMakingItems(){
+  const list = document.getElementById('makingItemList');
+  document.getElementById('makingItemCount').textContent = currentMakingItems.length + ' item' + (currentMakingItems.length===1?'':'s');
+  if(currentMakingItems.length === 0){
+    list.className = '';
+    list.innerHTML = '<div class="empty-hint">No items yet. Tap "+ Add Item (Scan)" to scan a barcode.</div>';
+    return;
+  }
+  list.className = 'itemblocks';
+  list.innerHTML = '';
+  currentMakingItems.forEach(it => list.appendChild(renderMakingItemBlock(it)));
+}
+function renderMakingItemBlock(it){
+  const block = document.createElement('div');
+  block.className = 'itemblock';
+  block.dataset.rowId = it.item_row_id;
+  block.title = it.item_name;
+  block.innerHTML = `
+    <button class="ibdel" title="Remove">✕</button>
+    <div class="ibname"></div>
+    <div class="ibbarcode"></div>
+    <div class="ibstock">Qty added: <span class="val ok"></span></div>
+    <div class="stepper">
+      <button class="ibminus" type="button">−</button>
+      <div class="qty"></div>
+      <button class="ibplus" type="button">+</button>
+    </div>
+  `;
+  block.querySelector('.ibname').textContent = it.item_name;
+  block.querySelector('.ibbarcode').textContent = it.barcode ? ('#' + it.barcode) : '';
+  block.querySelector('.qty').textContent = it.qty_added;
+  block.querySelector('.ibstock .val').textContent = it.qty_added;
+  block.querySelector('.ibdel').onclick = () => removeMakingItem(it, block);
+  block.querySelector('.ibminus').onclick = () => changeMakingQty(it, block, -1);
+  block.querySelector('.ibplus').onclick = () => changeMakingQty(it, block, 1);
+  return block;
+}
+function changeMakingQty(item, block, delta){
+  const newQty = Math.max(0, item.qty_added + delta);
+  if(newQty === item.qty_added) return;
+  item.qty_added = newQty;
+  block.querySelector('.qty').textContent = newQty;
+  block.querySelector('.ibstock .val').textContent = newQty;
+  apiPut('retail/lists/' + currentMakingList.list_id + '/items/' + item.item_row_id, { qty_added: newQty }).catch(e=>console.error(e));
+}
+function removeMakingItem(item, block){
+  block.remove();
+  currentMakingItems = currentMakingItems.filter(i => i !== item);
+  if(currentMakingItems.length === 0) renderMakingItems();
+  else document.getElementById('makingItemCount').textContent = currentMakingItems.length + ' item' + (currentMakingItems.length===1?'':'s');
+  apiDelete('retail/lists/' + currentMakingList.list_id + '/items/' + item.item_row_id).catch(e=>console.error(e));
+}
+function closeMakingList(){
+  stopActiveTimer();
+  showView('view-making-index');
+  loadMakingLists();
+}
+
+/* ============ RETAIL: BARCODE SCANNER ============ */
+function openScanner(target){
+  scannerTarget = target || 'retail';
+  scannerListEl = document.getElementById('scanFeedback');
+  scannerListEl.innerHTML = '';
+  document.getElementById('manualBarcodeInput').value = '';
+  lastScannedCode = null;
+  lastScannedAt = 0;
+  const sub = document.getElementById('scannerSubtitle');
+  if(scannerTarget === 'warehouse' && currentCategory){
+    sub.textContent = 'Adding to "' + currentCategory.category_name + '" — point the camera at a barcode, or type it in below';
+  } else if(scannerTarget === 'retail' && currentMakingList){
+    sub.textContent = 'Adding to "' + currentMakingList.list_name + '" — point the camera at a barcode, or type it in below';
+  } else if(scannerTarget === 'location' && currentRow){
+    sub.textContent = 'Adding to Row ' + currentRow.row_name + ' — point the camera at a barcode, or type it in below';
+  } else {
+    sub.textContent = 'Point the camera at a barcode, or type it in below';
+  }
+  openModal('modalScanner');
+  startCameraScanner();
+}
+function closeScanner(){
+  stopCameraScanner();
+  closeModal('modalScanner');
+}
+let html5QrInstance = null;
+// Limit decoding to the barcode formats we actually use (skips QR/PDF417/etc checks each frame — faster)
+const SCAN_FORMATS = (typeof Html5QrcodeSupportedFormats !== 'undefined') ? [
+  Html5QrcodeSupportedFormats.EAN_13,
+  Html5QrcodeSupportedFormats.EAN_8,
+  Html5QrcodeSupportedFormats.UPC_A,
+  Html5QrcodeSupportedFormats.UPC_E,
+  Html5QrcodeSupportedFormats.CODE_128,
+  Html5QrcodeSupportedFormats.CODE_39,
+  Html5QrcodeSupportedFormats.CODABAR,
+  Html5QrcodeSupportedFormats.ITF
+] : undefined;
+function startCameraScanner(){
+  if(typeof Html5Qrcode === 'undefined'){
+    document.getElementById('scannerBox').innerHTML = '<div class="scanfail" style="padding:14px;">Camera scanner failed to load — use the barcode field below instead.</div>';
+    return;
+  }
+  document.getElementById('scannerBox').innerHTML = '<div id="scannerVideoBox"></div>';
+  html5QrInstance = new Html5Qrcode('scannerVideoBox', {
+    formatsToSupport: SCAN_FORMATS,
+    // Uses the phone's native barcode decoder when the browser supports it (fast path on
+    // recent iOS Safari / Chrome) instead of the slower pure-JS decoder every frame.
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+    verbose: false
+  });
+  scannerRunning = true;
+  html5QrInstance.start(
+    { facingMode: 'environment' },
+    {
+      fps: 15,
+      // Wide, short box matches a barcode's shape and adapts to the phone's screen width —
+      // easier to line up a barcode into, which is most of what was "slow" before.
+      qrbox: (viewfinderWidth, viewfinderHeight) => ({
+        width: Math.floor(Math.min(viewfinderWidth * 0.85, 380)),
+        height: Math.floor(Math.min(viewfinderHeight * 0.45, 160))
+      })
+    },
+    (decodedText) => {
+      const now = Date.now();
+      if(decodedText === lastScannedCode && (now - lastScannedAt) < SCAN_COOLDOWN_MS){
+        return; // same code decoded again within cooldown — ignore, don't re-lookup
+      }
+      lastScannedCode = decodedText;
+      lastScannedAt = now;
+      handleScannedCode(decodedText);
+    },
+    () => {}
+  ).catch(()=>{
+    document.getElementById('scannerBox').innerHTML = '<div class="scanfail" style="padding:14px;">Could not access camera — allow camera permission, or use the barcode field below.</div>';
+  });
+}
+function pauseCameraScanner(){
+  if(html5QrInstance && scannerRunning){
+    try{ html5QrInstance.pause(true); }catch(e){}
+  }
+}
+function resumeCameraScanner(){
+  if(html5QrInstance && scannerRunning){
+    try{ html5QrInstance.resume(); }catch(e){}
+  }
+}
+function stopCameraScanner(){
+  if(html5QrInstance && scannerRunning){
+    scannerRunning = false;
+    html5QrInstance.stop().then(()=>html5QrInstance.clear()).catch(()=>{});
+  }
+}
+function submitManualBarcode(){
+  const code = document.getElementById('manualBarcodeInput').value.trim();
+  if(!code) return;
+  handleScannedCode(code);
+}
+async function handleScannedCode(code){
+  document.getElementById('manualBarcodeInput').value = '';
+  pauseCameraScanner();
+  const box = document.getElementById('scanFeedback');
+  const loadingEl = document.createElement('div');
+  loadingEl.className = 'loading';
+  loadingEl.textContent = 'Looking up ' + code + '…';
+  box.prepend(loadingEl);
+  try{
+    const data = await apiGet('stock/barcode/' + encodeURIComponent(code));
+    loadingEl.remove();
+    if(!data.item){
+      const fail = document.createElement('div');
+      fail.className = 'scanfail';
+      fail.textContent = 'No stock item found for barcode ' + code;
+      box.prepend(fail);
+      resumeCameraScanner();
+      return;
+    }
+    box.prepend(renderScanResultCard(data.item, code));
+  }catch(e){
+    loadingEl.remove();
+    const fail = document.createElement('div');
+    fail.className = 'scanfail';
+    fail.textContent = 'Lookup failed for ' + code;
+    box.prepend(fail);
+    console.error(e);
+    resumeCameraScanner();
+  }
+}
+function renderScanResultCard(stock, scannedCode){
+  const card = document.createElement('div');
+  card.className = 'scanresult-card';
+  let qty = 1;
+  const barcodeText = stock.barcode || scannedCode || '—';
+  const showStepper = scannerTarget !== 'location';
+  card.innerHTML = `
+    <div class="srname">${escapeHtml(stock.name)}</div>
+    <div class="srbarcode">Barcode: ${escapeHtml(barcodeText)}</div>
+    <div class="srstock">In stock: <span class="val ${stockClass(stock.quantity)}">${stock.quantity ?? '—'}</span></div>
+    <div class="srrow">
+      ${showStepper ? `
+      <div class="stepper">
+        <button class="ibminus" type="button">−</button>
+        <div class="qty">1</div>
+        <button class="ibplus" type="button">+</button>
+      </div>` : ''}
+      <button class="btn-ghost srskip">Skip</button>
+      <button class="btn-amber">${scannerTarget === 'location' ? 'Add to row' : 'Add to list'}</button>
+    </div>
+  `;
+  if(showStepper){
+    const qtyEl = card.querySelector('.qty');
+    card.querySelector('.ibminus').onclick = () => { qty = Math.max(1, qty-1); qtyEl.textContent = qty; };
+    card.querySelector('.ibplus').onclick = () => { qty = qty+1; qtyEl.textContent = qty; };
+  }
+  card.querySelector('.srskip').onclick = () => {
+    card.remove();
+    resumeCameraScanner();
+  };
+  card.querySelector('.btn-amber').onclick = () => {
+    if(scannerTarget === 'warehouse'){ addScannedItemToWarehouseCategory(stock, qty); }
+    else if(scannerTarget === 'location'){ addScannedItemToRow(stock); }
+    else { addScannedItemToMakingList(stock, qty); }
+    card.remove();
+    resumeCameraScanner();
+  };
+  return card;
+}
+function addScannedItemToMakingList(stock, qty){
+  if(!currentMakingList) return;
+  const existing = currentMakingItems.find(it => it.stockid === stock.stockid || it.item_name.toLowerCase().trim() === (stock.name||'').toLowerCase().trim());
+  if(existing){
+    existing.qty_added += qty;
+    const block = document.querySelector('#makingItemList .itemblock[data-row-id="' + CSS.escape(String(existing.item_row_id)) + '"]');
+    if(block){
+      block.querySelector('.qty').textContent = existing.qty_added;
+      block.querySelector('.ibstock .val').textContent = existing.qty_added;
+    }
+    apiPut('retail/lists/' + currentMakingList.list_id + '/items/' + existing.item_row_id, { qty_added: existing.qty_added }).catch(e=>console.error(e));
+    toast(stock.name + ' quantity increased');
+    return;
+  }
+  const tempItem = {
+    item_row_id: 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2),
+    item_name: stock.name, qty_added: qty, stockid: stock.stockid || null, barcode: stock.barcode || null
+  };
+  currentMakingItems.push(tempItem);
+  const list = document.getElementById('makingItemList');
+  if(currentMakingItems.length === 1) renderMakingItems();
+  else{
+    list.appendChild(renderMakingItemBlock(tempItem));
+    document.getElementById('makingItemCount').textContent = currentMakingItems.length + ' items';
+  }
+  apiPost('retail/lists/' + currentMakingList.list_id + '/items', {
+    item_name: stock.name, stockid: stock.stockid || null, barcode: stock.barcode || null, qty_added: qty
+  }).then(()=> apiGet('retail/lists/' + currentMakingList.list_id))
+    .then(data=>{
+      const match = (data.items||[]).find(i => (i.item_name||'').toLowerCase().trim() === stock.name.toLowerCase().trim());
+      if(match){
+        const oldId = tempItem.item_row_id;
+        tempItem.item_row_id = match.item_row_id;
+        const block = document.querySelector('#makingItemList .itemblock[data-row-id="' + CSS.escape(String(oldId)) + '"]');
+        if(block) block.dataset.rowId = match.item_row_id;
+      }
+    }).catch(e=>{
+      toast('Could not save ' + stock.name);
+      console.error(e);
+    });
+  toast(stock.name + ' added');
+}
+function addScannedItemToWarehouseCategory(stock, qty){
+  if(!currentCategory) return;
+  const existing = currentItems.find(it => (it.item_name || '').toLowerCase().trim() === (stock.name || '').toLowerCase().trim());
+  if(existing){
+    const block = document.querySelector('#itemlist .itemblock[data-row-id="' + CSS.escape(String(existing.item_row_id)) + '"]');
+    if(block){
+      changeQtyBlock(existing, block, qty);
+    } else {
+      existing.qty_required += qty;
+      apiPut('items/' + existing.item_row_id, { qty_required: existing.qty_required }).catch(e=>console.error(e));
+    }
+    toast(stock.name + ' quantity increased');
+    return;
+  }
+  const tempItem = {
+    item_row_id: 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2),
+    item_name: stock.name, qty_required: qty,
+    stock_available: stock.quantity === undefined ? null : stock.quantity,
+    category_id: currentCategory.category_id
+  };
+  currentItems.push(tempItem);
+  updateToggleBtnLabel();
+  const list = document.getElementById('itemlist');
+  list.className = 'itemblocks';
+  if(list.querySelector('.loading')) list.innerHTML = '';
+  const tile = list.querySelector('.add-block-tile');
+  const block = renderItemBlock(tempItem);
+  if(tile) list.insertBefore(block, tile); else { list.appendChild(block); list.appendChild(renderAddBlockTile()); }
+  saveItemOrder();
+
+  apiPost('items/', { category_id: currentCategory.category_id, item_name: stock.name, qty_required: qty })
+    .then(()=> apiGet('items/'))
+    .then(data=>{
+      const items = (data.items || []).filter(i => i.category_id === currentCategory.category_id);
+      const match = items.find(i => (i.item_name || '').toLowerCase().trim() === stock.name.toLowerCase().trim());
+      if(match){
+        tempItem.item_row_id = match.item_row_id;
+        tempItem.stock_available = match.stock_available;
+        block.dataset.rowId = match.item_row_id;
+        setStockDisplay(block, match.stock_available);
+        saveItemOrder();
+      }
+    })
+    .catch(e=>{
+      toast('Could not add ' + stock.name);
+      console.error(e);
+      block.remove();
+      currentItems = currentItems.filter(i => i !== tempItem);
+      updateToggleBtnLabel();
+    });
+  toast(stock.name + ' added');
+}
+
+/* ============ RETAIL: PICKING LIST ============ */
+async function loadPickingLists(){
+  const grid = document.getElementById('pickingListsGrid');
+  grid.innerHTML = '<div class="loading">Loading lists…</div>';
+  try{
+    const data = await apiGet('retail/lists/');
+    const lists = (data.items || []).filter(l => l.status === 'FINALIZED');
+    if(lists.length === 0){
+      grid.innerHTML = '<div class="empty-hint">No finalised lists yet — finalise one from Making List first.</div>';
+      return;
+    }
+    grid.innerHTML = '';
+    lists.forEach(l => grid.appendChild(renderPickingListCard(l)));
+  }catch(e){
+    grid.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load lists.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+function renderPickingListCard(l){
+  const div = document.createElement('div');
+  div.className = 'bincard';
+  div.onclick = () => openPickingListDetail(l.list_id);
+  const staffBits = [];
+  if(l.created_by) staffBits.push('Made by ' + escapeHtml(l.created_by));
+  if(l.picked_by) staffBits.push('Picking: ' + escapeHtml(l.picked_by));
+  div.innerHTML = `
+    <h4>${escapeHtml(l.list_name)}</h4>
+    <div class="count">${l.picked_count}/${l.item_count} picked</div>
+    ${staffBits.length ? `<div class="staffline">${staffBits.join(' &middot; ')}</div>` : ''}
+  `;
+  return div;
+}
+function backToPickingIndex(){
+  stopActiveTimer();
+  showView('view-picking-index');
+  loadPickingLists();
+}
+async function openPickingListDetail(id){
+  showView('view-picking-detail');
+  document.getElementById('pickingItemList').innerHTML = '<div class="loading">Loading…</div>';
+  const pickedBy = promptStaffName('Your name (picking this list):');
+  try{
+    await apiPost('retail/lists/' + id + '/start-picking', { picked_by: pickedBy || undefined });
+    const data = await apiGet('retail/lists/' + id);
+    currentPickingList = data.list;
+    currentPickingItems = (data.items || [])
+      .map(it => ({ ...it, qty_picked: normalizeQtyPicked(it) }))
+      .sort((a, b) => a.item_name.localeCompare(b.item_name, undefined, { sensitivity: 'base' }));
+    document.getElementById('pickingCrumb').textContent = currentPickingList.list_name;
+    document.getElementById('pickingTitle').textContent = currentPickingList.list_name;
+    const pickedByEl = document.getElementById('pickingPickedBy');
+    if(currentPickingList.picked_by){
+      pickedByEl.textContent = 'Picked by ' + currentPickingList.picked_by;
+      pickedByEl.style.display = 'block';
+    } else {
+      pickedByEl.style.display = 'none';
+    }
+    renderPickingItems();
+    startActiveTimer('picking', currentPickingList.list_id, currentPickingList.picking_seconds || 0, 'pickingTimer');
+  }catch(e){
+    toast('Could not open list');
+    console.error(e);
+  }
+}
+function renderPickingItems(){
+  const list = document.getElementById('pickingItemList');
+  list.innerHTML = '';
+  currentPickingItems.forEach(it => list.appendChild(renderPickingRow(it)));
+  updatePickingProgress();
+  renderPickingPrintTable();
+}
+function renderPickingPrintTable(){
+  const table = document.getElementById('pickingPrintTable');
+  if(!table) return;
+  const rows = currentPickingItems.map(it => `
+    <tr>
+      <td>${escapeHtml(it.item_name)}</td>
+      <td>${it.barcode ? escapeHtml(it.barcode) : '—'}</td>
+      <td class="qtycell">${it.stock_available === null || it.stock_available === undefined ? '—' : it.stock_available}</td>
+      <td class="qtycell">${it.qty_added}</td>
+      <td class="checkcell"><span class="tickbox"></span></td>
+    </tr>
+  `).join('');
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>Item</th><th>Barcode</th><th class="qtycell">In Stock</th><th class="qtycell">Requested</th><th class="checkcell">✓</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  `;
+}
+function normalizeQtyPicked(it){
+  if(typeof it.qty_picked === 'number') return it.qty_picked;
+  return it.picked ? it.qty_added : 0;
+}
+function pickRowStateClass(it){
+  if(it.qty_added > 0 && it.qty_picked >= it.qty_added) return ' done';
+  if(it.qty_picked > 0) return ' partial';
+  return '';
+}
+function renderPickingRow(it){
+  const row = document.createElement('div');
+  row.className = 'pickrow' + pickRowStateClass(it);
+  row.innerHTML = `
+    <div class="pickinfo">
+      <span class="pname${it.qty_added > 0 && it.qty_picked >= it.qty_added ? ' done' : ''}">${escapeHtml(it.item_name)}</span>
+      ${it.barcode ? `<span class="pbarcode">#${escapeHtml(it.barcode)}</span>` : ''}
+    </div>
+    <div class="pickqty">
+      <span class="preq">Req: ${it.qty_added}</span>
+      <div class="stepper">
+        <button class="ibminus" type="button">−</button>
+        <input class="qtyinput" type="number" min="0" max="${it.qty_added}" value="${it.qty_picked}">
+        <button class="ibplus" type="button">+</button>
+      </div>
+      <button class="btn-ghost pickall" type="button">All</button>
+      <span class="printqty">Picked: ${it.qty_picked}</span>
+    </div>
+  `;
+  row.querySelector('.ibminus').onclick = () => setPickedQty(it, row, Math.max(0, it.qty_picked - 1));
+  row.querySelector('.ibplus').onclick = () => setPickedQty(it, row, Math.min(it.qty_added, it.qty_picked + 1));
+  row.querySelector('.pickall').onclick = () => setPickedQty(it, row, it.qty_added);
+  const input = row.querySelector('.qtyinput');
+  input.addEventListener('change', () => {
+    let v = parseInt(input.value, 10);
+    if(isNaN(v) || v < 0) v = 0;
+    if(v > it.qty_added) v = it.qty_added;
+    setPickedQty(it, row, v);
+  });
+  return row;
+}
+function setPickedQty(item, row, newQty){
+  item.qty_picked = newQty;
+  item.picked = newQty >= item.qty_added && item.qty_added > 0;
+  row.className = 'pickrow' + pickRowStateClass(item);
+  row.querySelector('.qtyinput').value = newQty;
+  row.querySelector('.printqty').textContent = 'Picked: ' + newQty;
+  row.querySelector('.pname').classList.toggle('done', item.qty_added > 0 && newQty >= item.qty_added);
+  updatePickingProgress();
+  apiPut('retail/lists/' + currentPickingList.list_id + '/items/' + item.item_row_id, {
+    qty_picked: newQty, picked: item.picked
+  }).catch(e=>{
+    toast('Could not save pick for ' + item.item_name);
+    console.error(e);
+  });
+}
+function updatePickingProgress(){
+  const done = currentPickingItems.filter(i => i.qty_added > 0 && i.qty_picked >= i.qty_added).length;
+  const partial = currentPickingItems.filter(i => i.qty_picked > 0 && i.qty_picked < i.qty_added).length;
+  let txt = done + '/' + currentPickingItems.length + ' picked';
+  if(partial > 0) txt += ' · ' + partial + ' partial';
+  document.getElementById('pickingProgress').textContent = txt;
+}
+async function endPickingList(){
+  if(!confirm('End this picking list? It will be marked closed.')) return;
+  stopActiveTimer();
+  try{
+    await apiPost('retail/lists/' + currentPickingList.list_id + '/close', {});
+    toast('List closed');
+    showView('view-picking-index');
+    loadPickingLists();
+  }catch(e){
+    toast('Could not close list');
+    console.error(e);
+  }
+}
+
+/* ============ UNPICKED / SHORTFALL REPORT ============ */
+async function openUnpickedReport(){
+  showView('view-unpicked');
+  const sel = document.getElementById('unpickedListSelect');
+  sel.innerHTML = '<option value="">Loading lists…</option>';
+  document.getElementById('unpickedContent').innerHTML = '';
+  try{
+    const data = await apiGet('retail/lists/');
+    const lists = (data.items || []).filter(l => l.status === 'FINALIZED' || l.status === 'CLOSED');
+    if(lists.length === 0){
+      sel.innerHTML = '<option value="">No finalised or closed lists yet</option>';
+      document.getElementById('unpickedContent').innerHTML = '<div class="empty-hint">Finalise a Making List or close a Picking List first.</div>';
+      return;
+    }
+    sel.innerHTML = '<option value="ALL">All lists</option>' +
+      lists.map(l => `<option value="${l.list_id}">${escapeHtml(l.list_name)} (${l.status === 'CLOSED' ? 'closed' : 'picking in progress'})</option>`).join('');
+    loadUnpickedReport();
+  }catch(e){
+    sel.innerHTML = '<option value="">Could not load lists</option>';
+    document.getElementById('unpickedContent').innerHTML = errDetailHtml(e);
+    console.error(e);
+  }
+}
+async function loadUnpickedReport(){
+  const sel = document.getElementById('unpickedListSelect');
+  const content = document.getElementById('unpickedContent');
+  const chosen = sel.value;
+  if(!chosen) return;
+  content.innerHTML = '<div class="loading">Checking outstanding items against live stock…</div>';
+  try{
+    let listRefs;
+    if(chosen === 'ALL'){
+      const data = await apiGet('retail/lists/');
+      listRefs = (data.items || []).filter(l => l.status === 'FINALIZED' || l.status === 'CLOSED').map(l => l.list_id);
+    } else {
+      listRefs = [chosen];
+    }
+    let rows = [];
+    for(const listId of listRefs){
+      const detail = await apiGet('retail/lists/' + listId);
+      if(!detail.list) continue;
+      const items = (detail.items || [])
+        .map(it => ({ ...it, qty_picked: normalizeQtyPicked(it) }))
+        .filter(it => it.qty_picked < it.qty_added);
+      items.forEach(it => rows.push({ ...it, list_name: detail.list.list_name, list_status: detail.list.status }));
+    }
+    if(rows.length === 0){
+      content.innerHTML = '<div class="empty-hint">Nothing outstanding — everything requested has been picked.</div>';
+      return;
+    }
+    const uniqueNames = [...new Set(rows.map(r => r.item_name))];
+    const stockMap = {};
+    await Promise.all(uniqueNames.map(async name => {
+      try{
+        const s = await apiGet('stock/item/?name=' + encodeURIComponent(name));
+        stockMap[name] = (s.items && s.items[0]) ? s.items[0].quantity : null;
+      }catch(e){ stockMap[name] = null; }
+    }));
+    rows.sort((a,b) => (a.list_name||'').localeCompare(b.list_name||'') || a.item_name.localeCompare(b.item_name));
+
+    content.innerHTML = '';
+    const table = document.createElement('table');
+    table.className = 'finaltable';
+    const thead = document.createElement('thead');
+    thead.innerHTML = `<tr>
+      <th>List</th><th>Item</th><th>Barcode</th>
+      <th class="qtycell">Requested</th><th class="qtycell">Picked</th><th class="qtycell">Remaining</th>
+      <th class="qtycell">In stock now</th><th>Likely reason</th>
+    </tr>`;
+    const tbody = document.createElement('tbody');
+    rows.forEach(r=>{
+      const remaining = r.qty_added - r.qty_picked;
+      const stock = stockMap[r.item_name];
+      let reason = 'Not yet picked', reasonClass = '';
+      if(stock === null || stock === undefined){ reason = 'Stock unknown'; }
+      else if(stock <= 0){ reason = 'Out of stock'; reasonClass = 'out'; }
+      else if(stock < remaining){ reason = 'Short — only ' + stock + ' available'; reasonClass = 'low'; }
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${escapeHtml(r.list_name)}${r.list_status === 'CLOSED' ? ' <span class="tagchip" style="font-size:9px;">closed</span>' : ''}</td>
+        <td>${escapeHtml(r.item_name)}</td>
+        <td class="mono" style="font-size:11px;color:var(--text-dim);">${r.barcode ? escapeHtml(r.barcode) : '—'}</td>
+        <td class="qtycell">${r.qty_added}</td>
+        <td class="qtycell">${r.qty_picked}</td>
+        <td class="qtycell" style="font-weight:700;">${remaining}</td>
+        <td class="qtycell"><span class="val ${stockClass(stock)}">${stock===null||stock===undefined?'—':stock}</span></td>
+        <td><span class="reasonbadge ${reasonClass}">${reason}</span></td>
+      `;
+      tbody.appendChild(tr);
+    });
+    table.appendChild(thead);
+    table.appendChild(tbody);
+    content.appendChild(table);
+  }catch(e){
+    content.innerHTML = '<div class="loading" style="color:var(--danger)">Could not build the report.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+
+/* ============ HISTORY (ARCHIVE OF CLOSED LISTS) ============ */
+async function loadHistory(){
+  const grid = document.getElementById('historyListGrid');
+  grid.innerHTML = '<div class="loading">Loading history…</div>';
+  const searchBox = document.getElementById('historySearch');
+  if(searchBox) searchBox.value = '';
+  try{
+    const data = await apiGet('retail/lists/');
+    historyLists = (data.items || []).filter(l => l.status === 'CLOSED')
+      .sort((a,b) => new Date(b.closed_at || b.started_at) - new Date(a.closed_at || a.started_at));
+    renderHistoryList();
+  }catch(e){
+    grid.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load history.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+function renderHistoryList(){
+  const grid = document.getElementById('historyListGrid');
+  const q = (document.getElementById('historySearch').value || '').toLowerCase().trim();
+  const filtered = !q ? historyLists : historyLists.filter(l =>
+    (l.list_name || '').toLowerCase().includes(q) ||
+    (l.created_by || '').toLowerCase().includes(q) ||
+    (l.picked_by || '').toLowerCase().includes(q)
+  );
+  if(filtered.length === 0){
+    grid.innerHTML = '<div class="empty-hint">' +
+      (historyLists.length === 0
+        ? 'No completed lists yet — a list appears here once it\'s picked and closed.'
+        : 'No matches for that search.') +
+      '</div>';
+    return;
+  }
+  grid.innerHTML = '';
+  filtered.forEach(l => grid.appendChild(renderHistoryCard(l)));
+}
+function renderHistoryCard(l){
+  const div = document.createElement('div');
+  div.className = 'bincard';
+  div.onclick = () => openHistoryDetail(l.list_id);
+  const closedDate = l.closed_at ? new Date(l.closed_at).toLocaleDateString() : '';
+  const staffBits = [];
+  if(l.created_by) staffBits.push('Made by ' + escapeHtml(l.created_by));
+  if(l.picked_by) staffBits.push('Picked by ' + escapeHtml(l.picked_by));
+  div.innerHTML = `
+    <h4>${escapeHtml(l.list_name)}</h4>
+    <div class="count">${l.item_count} item${l.item_count===1?'':'s'} &middot; closed ${closedDate}</div>
+    ${staffBits.length ? `<div class="staffline">${staffBits.join(' &middot; ')}</div>` : ''}
+  `;
+  return div;
+}
+function backToHistoryIndex(){
+  showView('view-history-index');
+}
+async function openHistoryDetail(id){
+  showView('view-history-detail');
+  document.getElementById('historyMetaRow').innerHTML = '';
+  document.getElementById('historyContent').innerHTML = '<div class="loading">Loading…</div>';
+  try{
+    const data = await apiGet('retail/lists/' + id);
+    const list = data.list;
+    const items = (data.items || []).map(it => ({ ...it, qty_picked: normalizeQtyPicked(it) }));
+    currentHistoryList = list;
+    currentHistoryItems = items;
+    document.getElementById('historyCrumb').textContent = list.list_name;
+    document.getElementById('historyTitle').textContent = list.list_name;
+
+    const meta = [];
+    if(list.created_by) meta.push('<span>Made by <strong>' + escapeHtml(list.created_by) + '</strong></span>');
+    if(list.picked_by) meta.push('<span>Picked by <strong>' + escapeHtml(list.picked_by) + '</strong></span>');
+    if(list.started_at) meta.push('<span>Started ' + new Date(list.started_at).toLocaleString() + '</span>');
+    if(list.finalized_at) meta.push('<span>Finalised ' + new Date(list.finalized_at).toLocaleString() + '</span>');
+    if(list.closed_at) meta.push('<span>Closed ' + new Date(list.closed_at).toLocaleString() + '</span>');
+    if(list.making_seconds) meta.push('<span>Making time <strong>' + formatElapsed(list.making_seconds) + '</strong></span>');
+    if(list.picking_seconds) meta.push('<span>Picking time <strong>' + formatElapsed(list.picking_seconds) + '</strong></span>');
+    document.getElementById('historyMetaRow').innerHTML = meta.join('');
+
+    const content = document.getElementById('historyContent');
+    if(items.length === 0){
+      content.innerHTML = '<div class="empty-hint">This list had no items.</div>';
+      return;
+    }
+    const rows = items.map(it => {
+      const short = it.qty_picked < it.qty_added;
+      return `
+        <tr>
+          <td>${escapeHtml(it.item_name)}</td>
+          <td class="mono" style="font-size:11px;color:var(--text-dim);">${it.barcode ? escapeHtml(it.barcode) : '—'}</td>
+          <td class="qtycell">${it.qty_added}</td>
+          <td class="qtycell">${it.qty_picked}</td>
+          <td>${short ? `<span class="reasonbadge low">${it.qty_added - it.qty_picked} short</span>` : `<span class="val ok">Complete</span>`}</td>
+        </tr>`;
+    }).join('');
+    content.innerHTML = `
+      <table class="finaltable">
+        <thead><tr><th>Item</th><th>Barcode</th><th class="qtycell">Requested</th><th class="qtycell">Picked</th><th>Result</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  }catch(e){
+    document.getElementById('historyContent').innerHTML = '<div class="loading" style="color:var(--danger)">Could not load this list.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+
+/* ============ EMPTY LIST ============ */
+async function confirmEmptyList(){
+  if(!confirm('Empty the entire picking list? This sets every item\'s quantity back to 0 (blocks stay — remove one with its ✕ if you want it gone for good).')) return;
+  try{
+    const data = await apiGet('items/');
+    const items = data.items || [];
+    if(items.length === 0){ toast('List is already empty'); return; }
+    await Promise.all(items.map(it => apiPut('items/' + it.item_row_id, { qty_required: 0 })));
+    toast('Quantities reset to 0');
+    showFinal();
+  }catch(e){
+    toast('Could not empty the list');
+    console.error(e);
+  }
+}
+
+/* ============ FINAL LIST ============ */
+async function showFinal(){
+  showView('view-final');
+  const content = document.getElementById('finalContent');
+  content.innerHTML = '<div class="loading">Building picking list…</div>';
+  try{
+    const [catData, itemData] = await Promise.all([apiGet('categories/'), apiGet('items/')]);
+    const cats = catData.items || [];
+    const items = (itemData.items || []).filter(it => it.qty_required > 0);
+    const grouped = {};
+    items.forEach(it=>{
+      if(!grouped[it.category_id]) grouped[it.category_id] = [];
+      grouped[it.category_id].push(it);
+    });
+    const catMap = {};
+    cats.forEach(c => catMap[c.category_id] = c);
+
+    const nonEmptyCatIds = Object.keys(grouped).filter(id => grouped[id].length > 0);
+    document.getElementById('finalMeta').textContent =
+      nonEmptyCatIds.length + ' categories · ' + items.length + ' line items';
+
+    if(items.length === 0){
+      content.innerHTML = '<div class="empty-hint">Nothing added yet. Go to Warehouse List and add items to categories first.</div>';
+      return;
+    }
+    content.innerHTML = '';
+    nonEmptyCatIds.forEach(catId=>{
+      const cat = catMap[catId];
+      const catItems = grouped[catId];
+      const block = document.createElement('div');
+      block.className = 'catblock';
+      let rows = catItems.map(it => `
+        <tr>
+          <td>${escapeHtml(it.item_name)}</td>
+          <td class="qtycell">${it.qty_required}</td>
+          <td class="qtycell">${it.stock_available === null || it.stock_available === undefined ? '—' : it.stock_available}</td>
+        </tr>`).join('');
+      block.innerHTML = `
+        <h3>${cat ? escapeHtml(cat.category_name) : 'Category'} <span class="tagchip">BIN-${String(catId).padStart(3,'0')}</span></h3>
+        <table class="finaltable">
+          <thead><tr><th>Item</th><th class="qtycell">Qty required</th><th class="qtycell">Stock available</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+      content.appendChild(block);
+    });
+  }catch(e){
+    content.innerHTML = '<div class="loading" style="color:var(--danger)">Could not build the picking list.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+async function downloadPDF(){
+  try{
+    const [catData, itemData] = await Promise.all([apiGet('categories/'), apiGet('items/')]);
+    const cats = catData.items || [];
+    const items = (itemData.items || []).filter(it => it.qty_required > 0);
+    const catMap = {}; cats.forEach(c => catMap[c.category_id] = c);
+    const grouped = {};
+    items.forEach(it=>{ if(!grouped[it.category_id]) grouped[it.category_id]=[]; grouped[it.category_id].push(it); });
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text('Hallan Cash & Carry — Picking List', 14, 18);
+    doc.setFontSize(10);
+    doc.setTextColor(120);
+    doc.text('Generated ' + new Date().toLocaleString(), 14, 24);
+    let y = 32;
+    Object.keys(grouped).forEach(catId=>{
+      const cat = catMap[catId];
+      const rows = grouped[catId].map(it => [
+        it.item_name, String(it.qty_required),
+        it.stock_available === null || it.stock_available === undefined ? '—' : String(it.stock_available)
+      ]);
+      doc.setFontSize(12);
+      doc.setTextColor(20);
+      doc.text(cat ? cat.category_name : 'Category', 14, y);
+      doc.autoTable({
+        startY: y + 3,
+        head: [['Item', 'Qty required', 'Stock available']],
+        body: rows,
+        theme: 'grid',
+        headStyles: { fillColor: [30,34,42] },
+        styles: { fontSize: 9 },
+        margin: { left: 14, right: 14 }
+      });
+      y = doc.lastAutoTable.finalY + 12;
+      if(y > 260){ doc.addPage(); y = 20; }
+    });
+    doc.save('hallan-picking-list-' + new Date().toISOString().slice(0,10) + '.pdf');
+  }catch(e){
+    toast('Could not generate PDF');
+    console.error(e);
+  }
+}
+
+/* ============ RETAIL PICKING SHEET PDF (shared by Picking List + History) ============ */
+function buildRetailPickingSheetPDF(title, metaLines, items, filenamePrefix){
+  try{
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text(title, 14, 18);
+    doc.setFontSize(10);
+    doc.setTextColor(120);
+    let y = 25;
+    metaLines.forEach(line=>{ doc.text(line, 14, y); y += 5; });
+    y += 3;
+    const rows = items.map(it => [
+      it.item_name,
+      it.barcode || '—',
+      String(it.qty_added),
+      String(it.qty_picked),
+      it.qty_picked >= it.qty_added ? 'Complete' : (it.qty_added - it.qty_picked) + ' short'
+    ]);
+    doc.autoTable({
+      startY: y,
+      head: [['Item', 'Barcode', 'Requested', 'Picked', 'Result']],
+      body: rows,
+      theme: 'grid',
+      headStyles: { fillColor: [30,34,42] },
+      styles: { fontSize: 9 },
+      margin: { left: 14, right: 14 }
+    });
+    doc.save(filenamePrefix + '-' + new Date().toISOString().slice(0,10) + '.pdf');
+  }catch(e){
+    toast('Could not generate PDF');
+    console.error(e);
+  }
+}
+function pickingSheetMeta(list){
+  const meta = [];
+  if(list.created_by) meta.push('Made by: ' + list.created_by);
+  if(list.picked_by) meta.push('Picked by: ' + list.picked_by);
+  meta.push('Generated ' + new Date().toLocaleString());
+  return meta;
+}
+/* Blank tick-sheet for picking off the shelf: Item, Barcode, In Stock, Requested, pen-tick box */
+function buildBlankPickingSheetPDF(title, metaLines, items, filenamePrefix){
+  try{
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text(title, 14, 18);
+    doc.setFontSize(10);
+    doc.setTextColor(120);
+    let y = 25;
+    metaLines.forEach(line=>{ doc.text(line, 14, y); y += 5; });
+    y += 3;
+    const sorted = [...items].sort((a, b) => a.item_name.localeCompare(b.item_name, undefined, { sensitivity: 'base' }));
+    const rows = sorted.map(it => [
+      it.item_name,
+      it.barcode || '—',
+      (it.stock_available === null || it.stock_available === undefined) ? '—' : String(it.stock_available),
+      String(it.qty_added),
+      ''
+    ]);
+    doc.autoTable({
+      startY: y,
+      head: [['Item', 'Barcode', 'In Stock', 'Requested', 'Picked']],
+      body: rows,
+      theme: 'grid',
+      headStyles: { fillColor: [30,34,42] },
+      styles: { fontSize: 9 },
+      columnStyles: { 4: { cellWidth: 20 } },
+      margin: { left: 14, right: 14 },
+      didDrawCell: (data) => {
+        if(data.section === 'body' && data.column.index === 4){
+          const size = 10;
+          const bx = data.cell.x + (data.cell.width - size) / 2;
+          const by = data.cell.y + (data.cell.height - size) / 2;
+          doc.rect(bx, by, size, size);
+        }
+      }
+    });
+    doc.save(filenamePrefix + '-' + new Date().toISOString().slice(0,10) + '.pdf');
+  }catch(e){
+    toast('Could not generate PDF');
+    console.error(e);
+  }
+}
+function downloadPickingListPDF(){
+  if(!currentPickingList) return;
+  buildBlankPickingSheetPDF(
+    'Picking Sheet — ' + currentPickingList.list_name,
+    pickingSheetMeta(currentPickingList),
+    currentPickingItems,
+    'picking-sheet-' + currentPickingList.list_id
+  );
+}
+function downloadHistoryPDF(){
+  if(!currentHistoryList) return;
+  buildRetailPickingSheetPDF(
+    'Picking Sheet — ' + currentHistoryList.list_name,
+    pickingSheetMeta(currentHistoryList),
+    currentHistoryItems || [],
+    'picking-sheet-' + currentHistoryList.list_id
+  );
+}
+
+/* ============ UTIL ============ */
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str ?? '';
+  return d.innerHTML;
+}
+function errDetailHtml(e){
+  const msg = (e && e.message) ? e.message : String(e);
+  return '<div class="errdetail">' + escapeHtml(msg) + '</div>';
+}
+
+/* close modals on backdrop click */
+document.querySelectorAll('.modal-backdrop').forEach(b=>{
+  b.addEventListener('click', e=>{
+    if(e.target !== b) return;
+    if(b.id === 'modalScanner'){ closeScanner(); } else { b.classList.remove('active'); }
+  });
+});
+</script>
+</body>
+</html>
