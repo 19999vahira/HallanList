@@ -869,8 +869,11 @@
 <!-- REPLENISHMENT PRINT LIST -->
 <div class="modal-backdrop" id="modalReplenPrint">
   <div class="modal" style="width:480px;">
-    <h3 id="replenPrintTitle">Sold since last check</h3>
-    <p class="modal-sub" id="replenPrintSub"></p>
+    <div class="hero" style="margin-bottom:18px;">
+      <div class="eyebrow">Shelf Replenishment</div>
+      <h2 id="replenPrintTitle">Sold since last check</h2>
+      <p id="replenPrintSub"></p>
+    </div>
     <div id="replenPrintResults" style="max-height:50vh;overflow:auto;"></div>
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalReplenPrint')">Close</button>
@@ -1971,11 +1974,12 @@ function renderReplenPrintTable(items){
   }
   const table = document.createElement('table');
   table.className = 'finaltable';
-  table.innerHTML = `<thead><tr><th>Item</th><th class="qtycell">Qty Sold</th></tr></thead>`;
+  table.innerHTML = `<thead><tr><th>Item</th><th class="qtycell">Qty Sold</th><th class="qtycell">Stock</th></tr></thead>`;
   const tbody = document.createElement('tbody');
   items.forEach(it=>{
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${escapeHtml(it.item_name)}</td><td class="qtycell">${it.qty_sold}</td>`;
+    const stockDisplay = (it.stock_available === null || it.stock_available === undefined) ? '—' : it.stock_available;
+    tr.innerHTML = `<td>${escapeHtml(it.item_name)}</td><td class="qtycell">${it.qty_sold}</td><td class="qtycell">${stockDisplay}</td>`;
     tbody.appendChild(tr);
   });
   table.appendChild(tbody);
