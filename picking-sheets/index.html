@@ -356,16 +356,6 @@
     .historymeta-row{color:#555;}
     .newpriceinput,.newmargininput{display:none !important;}
     .wsprintprice,.wsprintmargin{display:inline-block !important;font-family:'JetBrains Mono',monospace;font-weight:700;color:#111;}
-    body.printing-replen .view{display:none !important;}
-    body.printing-replen .modal-backdrop{display:none !important;}
-    body.printing-replen .modal-backdrop.active{
-      display:block !important;position:static !important;background:none !important;padding:0;
-    }
-    body.printing-replen .modal-backdrop.active .modal{
-      box-shadow:none !important;border:none !important;width:100% !important;max-width:100% !important;
-      color:#111;
-    }
-    body.printing-replen .modal-close-row{display:none !important;}
 
     /* Picking List: hide the interactive checklist and show a plain tick-sheet instead */
     #pickingItemList{display:none !important;}
@@ -877,7 +867,7 @@
     <div id="replenPrintResults" style="max-height:50vh;overflow:auto;"></div>
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalReplenPrint')">Close</button>
-      <button class="btn-amber" onclick="printReplenResults()">Print</button>
+      <button class="btn-amber" onclick="downloadReplenPDF()">Download PDF</button>
     </div>
   </div>
 </div>
@@ -2022,12 +2012,46 @@ async function reprintReplenishment(){
     console.error(e);
   }
 }
-function printReplenResults(){
-  document.body.classList.add('printing-replen');
-  const cleanup = () => document.body.classList.remove('printing-replen');
-  window.addEventListener('afterprint', cleanup, { once: true });
-  window.print();
-  setTimeout(cleanup, 2000); // fallback for browsers that don't fire afterprint reliably
+function downloadReplenPDF(){
+  if(!replenPrintData || !replenPrintData.length){
+    toast('Nothing to include in the PDF');
+    return;
+  }
+  const title = document.getElementById('replenPrintTitle').textContent;
+  const sub = document.getElementById('replenPrintSub').textContent;
+  try{
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text(title, 14, 18);
+    doc.setFontSize(10);
+    doc.setTextColor(120);
+    let y = 25;
+    if(sub){
+      const wrapped = doc.splitTextToSize(sub, 180);
+      doc.text(wrapped, 14, y);
+      y += 5 * wrapped.length;
+    }
+    y += 3;
+    const rows = replenPrintData.map(it => [
+      it.item_name,
+      String(it.qty_sold),
+      it.stock_available === null || it.stock_available === undefined ? '—' : String(it.stock_available)
+    ]);
+    doc.autoTable({
+      startY: y,
+      head: [['Item', 'Qty Sold', 'Stock']],
+      body: rows,
+      theme: 'grid',
+      headStyles: { fillColor: [30,34,42] },
+      styles: { fontSize: 9 },
+      margin: { left: 14, right: 14 }
+    });
+    doc.save('shelf-replenishment-' + new Date().toISOString().slice(0,10) + '.pdf');
+  }catch(e){
+    toast('Could not generate PDF');
+    console.error(e);
+  }
 }
 
 /* ============ TOAST ============ */
