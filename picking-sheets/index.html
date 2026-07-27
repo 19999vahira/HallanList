@@ -314,8 +314,19 @@
     background:var(--panel2);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:13px;
   }
   .newpriceinput:focus,.newmargininput:focus{outline:2px solid var(--accent);outline-offset:-1px;}
+  .newmargininput.ok{color:var(--green);border-color:var(--green);}
+  .newmargininput.low{color:var(--accent);border-color:var(--accent);}
+  .newmargininput.out{color:var(--danger);border-color:var(--danger);}
   .wsprintprice{display:none;}
   .wsprintmargin{display:none;}
+
+  /* ---- export column picker ---- */
+  .exportcollist{display:flex;flex-direction:column;gap:2px;margin:4px 0 6px;}
+  .exportcolrow{
+    display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:6px;font-size:13px;cursor:pointer;
+  }
+  .exportcolrow:hover{background:var(--panel2);}
+  .exportcolrow input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:pointer;}
 
   /* ---- final list ---- */
   .catblock{margin-bottom:26px;}
@@ -356,6 +367,7 @@
     .historymeta-row{color:#555;}
     .newpriceinput,.newmargininput{display:none !important;}
     .wsprintprice,.wsprintmargin{display:inline-block !important;font-family:'JetBrains Mono',monospace;font-weight:700;color:#111;}
+    .wsprintmargin.ok{color:#0a7a2f;} .wsprintmargin.low{color:#b8860b;} .wsprintmargin.out{color:#c0392b;}
 
     /* Picking List: hide the interactive checklist and show a plain tick-sheet instead */
     #pickingItemList{display:none !important;}
@@ -1002,6 +1014,19 @@
   </div>
 </div>
 
+<!-- WHOLESALE EXPORT COLUMN PICKER MODAL -->
+<div class="modal-backdrop" id="modalWholesaleColumns">
+  <div class="modal" style="width:360px;">
+    <h3>Choose columns to export</h3>
+    <p class="modal-sub">Pick which columns to include, then continue.</p>
+    <div class="exportcollist" id="wsExportColList"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeWholesaleColumnModal()">Cancel</button>
+      <button class="btn-amber" onclick="confirmWholesaleColumnExport()">Continue</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ============ CONFIG ============ */
 const API_BASE = "https://hallan-picking-backend.onrender.com/api/";
@@ -1192,10 +1217,9 @@ async function loadWholesalePricing(){
   }
 }
 function wholesaleVatLabel(r){
-  // VATID from Vector's VESTOCK: 1 = VAT item, 2 = non-VAT item
-  if(r.vatid === 1) return 'VAT';
-  if(r.vatid === 2) return 'Non-VAT';
-  return '—';
+  // VATID from Vector's VESTOCK: 1 = VAT item, 2/anything else = non-VAT.
+  // Only VAT items get a marker; non-VAT items show nothing at all.
+  return r.vatid === 1 ? '+VAT' : '';
 }
 function wholesaleMarginPct(r){
   if(!r.price_net || r.price_net <= 0 || r.suppcost_net === null || r.suppcost_net === undefined) return null;
@@ -1227,6 +1251,17 @@ function wholesaleMarginFromPrice(suppCost, price){
   if(isNaN(p) || p <= 0) return null;
   return ((p - Number(suppCost)) / p) * 100;
 }
+// Effective (possibly edited) price/margin for a row — falls back to the synced Vector values.
+function wholesaleCurrentPrice(r){
+  const adj = wholesaleAdjust[r.stock_name] || {};
+  if(adj.price !== undefined && adj.price !== '') return Number(adj.price);
+  return (r.price_net === null || r.price_net === undefined) ? null : Number(r.price_net);
+}
+function wholesaleCurrentMargin(r){
+  const adj = wholesaleAdjust[r.stock_name] || {};
+  if(adj.margin !== undefined && adj.margin !== '') return Number(adj.margin);
+  return wholesaleMarginPct(r);
+}
 function renderWholesaleTable(){
   const content = document.getElementById('wholesaleContent');
   const filtered = filteredWholesaleRows();
@@ -1242,41 +1277,43 @@ function renderWholesaleTable(){
   table.className = 'finaltable';
   const thead = document.createElement('thead');
   thead.innerHTML = `<tr>
-    <th>Item</th><th>Department</th><th>VAT</th>
-    <th class="qtycell">Supplier Cost</th><th class="qtycell">Trade 3 Price</th><th class="qtycell">Margin</th>
-    <th class="qtycell">New Margin %</th><th class="qtycell">New Price</th>
+    <th>Item</th><th>Department</th>
+    <th class="qtycell">Supplier Cost</th><th class="qtycell">Price</th><th class="qtycell">Margin</th>
+    <th>VAT</th>
   </tr>`;
   const tbody = document.createElement('tbody');
   filtered.forEach(r=>{
-    const margin = wholesaleMarginPct(r);
     const adj = wholesaleAdjust[r.stock_name] || {};
+    const priceVal = adj.price !== undefined ? adj.price
+      : (r.price_net === null || r.price_net === undefined ? '' : Number(r.price_net).toFixed(2));
+    const marginNum = wholesaleCurrentMargin(r);
+    const marginVal = adj.margin !== undefined ? adj.margin
+      : (marginNum === null ? '' : marginNum.toFixed(1));
+    const marginCls = wholesaleMarginClass(marginNum);
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${escapeHtml(r.stock_name)}</td>
       <td>${escapeHtml(r.department_name)}</td>
-      <td>${wholesaleVatLabel(r)}</td>
       <td class="qtycell">${r.suppcost_net === null || r.suppcost_net === undefined ? '—' : Number(r.suppcost_net).toFixed(2)}</td>
-      <td class="qtycell">${r.price_net === null || r.price_net === undefined ? '—' : Number(r.price_net).toFixed(2)}</td>
-      <td class="qtycell"><span class="val ${wholesaleMarginClass(margin)}">${margin === null ? '—' : margin.toFixed(1) + '%'}</span></td>
       <td class="qtycell">
-        <input type="number" step="0.1" class="newmargininput" placeholder="—"
-               value="${adj.margin !== undefined ? adj.margin : ''}">
-        <span class="wsprintmargin">${adj.margin !== undefined && adj.margin !== '' ? Number(adj.margin).toFixed(1) + '%' : '—'}</span>
+        <input type="number" step="0.01" min="0" class="newpriceinput" placeholder="—" value="${priceVal}">
+        <span class="wsprintprice">${priceVal === '' ? '—' : Number(priceVal).toFixed(2)}</span>
       </td>
       <td class="qtycell">
-        <input type="number" step="0.01" min="0" class="newpriceinput" placeholder="—"
-               value="${adj.price !== undefined ? adj.price : ''}">
-        <span class="wsprintprice">${adj.price !== undefined && adj.price !== '' ? Number(adj.price).toFixed(2) : '—'}</span>
+        <input type="number" step="0.1" class="newmargininput ${marginCls}" placeholder="—" value="${marginVal}">
+        <span class="wsprintmargin ${marginCls}">${marginVal === '' ? '—' : Number(marginVal).toFixed(1) + '%'}</span>
       </td>
+      <td>${wholesaleVatLabel(r)}</td>
     `;
-    const marginInput = tr.querySelector('.newmargininput');
     const priceInput = tr.querySelector('.newpriceinput');
-    const marginPrint = tr.querySelector('.wsprintmargin');
+    const marginInput = tr.querySelector('.newmargininput');
     const pricePrint = tr.querySelector('.wsprintprice');
+    const marginPrint = tr.querySelector('.wsprintmargin');
     marginInput.addEventListener('change', () => {
       const v = marginInput.value.trim();
       if(v === ''){
         delete adj.margin;
+        delete adj.price;
       } else {
         adj.margin = v;
         const newPrice = wholesalePriceFromMargin(r.suppcost_net, v);
@@ -1286,23 +1323,42 @@ function renderWholesaleTable(){
           pricePrint.textContent = Number(adj.price).toFixed(2);
         }
       }
-      marginPrint.textContent = adj.margin !== undefined && adj.margin !== '' ? Number(adj.margin).toFixed(1) + '%' : '—';
+      const cls = wholesaleMarginClass(v === '' ? wholesaleMarginPct(r) : Number(v));
+      marginInput.className = 'newmargininput ' + cls;
+      marginPrint.className = 'wsprintmargin ' + cls;
+      marginPrint.textContent = v === '' ? (wholesaleMarginPct(r) === null ? '—' : wholesaleMarginPct(r).toFixed(1) + '%') : Number(v).toFixed(1) + '%';
+      if(v === ''){
+        pricePrint.textContent = r.price_net === null || r.price_net === undefined ? '—' : Number(r.price_net).toFixed(2);
+        priceInput.value = r.price_net === null || r.price_net === undefined ? '' : Number(r.price_net).toFixed(2);
+      }
       if(Object.keys(adj).length === 0){ delete wholesaleAdjust[r.stock_name]; } else { wholesaleAdjust[r.stock_name] = adj; }
     });
     priceInput.addEventListener('change', () => {
       const v = priceInput.value.trim();
       if(v === ''){
         delete adj.price;
+        delete adj.margin;
       } else {
         adj.price = v;
         const newMargin = wholesaleMarginFromPrice(r.suppcost_net, v);
         if(newMargin !== null){
           adj.margin = newMargin.toFixed(1);
           marginInput.value = adj.margin;
-          marginPrint.textContent = Number(adj.margin).toFixed(1) + '%';
+          const cls = wholesaleMarginClass(newMargin);
+          marginInput.className = 'newmargininput ' + cls;
+          marginPrint.className = 'wsprintmargin ' + cls;
+          marginPrint.textContent = newMargin.toFixed(1) + '%';
         }
       }
-      pricePrint.textContent = adj.price !== undefined && adj.price !== '' ? Number(adj.price).toFixed(2) : '—';
+      pricePrint.textContent = v === '' ? (r.price_net === null || r.price_net === undefined ? '—' : Number(r.price_net).toFixed(2)) : Number(v).toFixed(2);
+      if(v === ''){
+        const origMargin = wholesaleMarginPct(r);
+        marginInput.value = origMargin === null ? '' : origMargin.toFixed(1);
+        const cls = wholesaleMarginClass(origMargin);
+        marginInput.className = 'newmargininput ' + cls;
+        marginPrint.className = 'wsprintmargin ' + cls;
+        marginPrint.textContent = origMargin === null ? '—' : origMargin.toFixed(1) + '%';
+      }
       if(Object.keys(adj).length === 0){ delete wholesaleAdjust[r.stock_name]; } else { wholesaleAdjust[r.stock_name] = adj; }
     });
     tbody.appendChild(tr);
@@ -1314,22 +1370,65 @@ function renderWholesaleTable(){
 }
 function wholesaleExportRows(){
   return filteredWholesaleRows().map(r=>{
-    const margin = wholesaleMarginPct(r);
-    const adj = wholesaleAdjust[r.stock_name] || {};
+    const price = wholesaleCurrentPrice(r);
+    const margin = wholesaleCurrentMargin(r);
     return {
       item: r.stock_name,
       department: r.department_name,
-      vat: wholesaleVatLabel(r),
       suppCost: r.suppcost_net === null || r.suppcost_net === undefined ? null : Number(r.suppcost_net),
-      tradePrice: r.price_net === null || r.price_net === undefined ? null : Number(r.price_net),
+      price: price === null ? null : Number(price),
       margin: margin === null ? null : Number(margin.toFixed(1)),
-      newMargin: adj.margin !== undefined && adj.margin !== '' ? Number(adj.margin) : null,
-      newPrice: adj.price !== undefined && adj.price !== '' ? Number(adj.price) : null
+      vat: wholesaleVatLabel(r)
     };
   });
 }
+
+/* ---- export column picker (used by PDF, Email, Excel) ---- */
+const WHOLESALE_EXPORT_COLUMNS = [
+  { key: 'item', label: 'Item' },
+  { key: 'department', label: 'Department' },
+  { key: 'suppCost', label: 'Supplier Cost' },
+  { key: 'price', label: 'Price' },
+  { key: 'margin', label: 'Margin' },
+  { key: 'vat', label: 'VAT' }
+];
+let wholesaleExportSelection = null; // null = not yet chosen this session -> default to all
+let wholesalePendingExportAction = null;
+function wholesaleSelectedColumns(){
+  const sel = wholesaleExportSelection || WHOLESALE_EXPORT_COLUMNS.reduce((o,c)=>{ o[c.key]=true; return o; }, {});
+  return WHOLESALE_EXPORT_COLUMNS.filter(c => sel[c.key] !== false);
+}
+function openWholesaleColumnModal(action){
+  if(wholesaleRows.length === 0){ toast('Nothing to export yet'); return; }
+  wholesalePendingExportAction = action;
+  const sel = wholesaleExportSelection || WHOLESALE_EXPORT_COLUMNS.reduce((o,c)=>{ o[c.key]=true; return o; }, {});
+  const list = document.getElementById('wsExportColList');
+  list.innerHTML = WHOLESALE_EXPORT_COLUMNS.map(c => `
+    <label class="exportcolrow">
+      <input type="checkbox" data-col="${c.key}" ${sel[c.key] !== false ? 'checked' : ''}>
+      ${escapeHtml(c.label)}
+    </label>
+  `).join('');
+  openModal('modalWholesaleColumns');
+}
+function closeWholesaleColumnModal(){ closeModal('modalWholesaleColumns'); }
+function confirmWholesaleColumnExport(){
+  const boxes = document.querySelectorAll('#wsExportColList input[type=checkbox]');
+  const sel = {};
+  let anyChecked = false;
+  boxes.forEach(b => { sel[b.dataset.col] = b.checked; if(b.checked) anyChecked = true; });
+  if(!anyChecked){ toast('Choose at least one column'); return; }
+  wholesaleExportSelection = sel;
+  closeWholesaleColumnModal();
+  const action = wholesalePendingExportAction;
+  wholesalePendingExportAction = null;
+  if(action === 'pdf') runDownloadWholesalePDF();
+  else if(action === 'email') runEmailWholesalePDF();
+  else if(action === 'excel') runDownloadWholesaleExcel();
+}
 function buildWholesalePDFDoc(){
   if(wholesaleRows.length === 0) return null;
+  const cols = wholesaleSelectedColumns();
   const rows = wholesaleExportRows();
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
@@ -1338,19 +1437,21 @@ function buildWholesalePDFDoc(){
   doc.setFontSize(9);
   doc.setTextColor(120);
   doc.text('Generated ' + new Date().toLocaleString() + ' — CONFIDENTIAL', 14, 24);
-  const body = rows.map(r => [
-    r.item,
-    r.department,
-    r.vat,
-    r.suppCost === null ? '—' : r.suppCost.toFixed(2),
-    r.tradePrice === null ? '—' : r.tradePrice.toFixed(2),
-    r.margin === null ? '—' : r.margin.toFixed(1) + '%',
-    r.newMargin === null ? '' : r.newMargin.toFixed(1) + '%',
-    r.newPrice === null ? '' : r.newPrice.toFixed(2)
-  ]);
+  const fmt = (r, key) => {
+    switch(key){
+      case 'item': return r.item;
+      case 'department': return r.department;
+      case 'suppCost': return r.suppCost === null ? '—' : r.suppCost.toFixed(2);
+      case 'price': return r.price === null ? '—' : r.price.toFixed(2);
+      case 'margin': return r.margin === null ? '—' : r.margin.toFixed(1) + '%';
+      case 'vat': return r.vat;
+      default: return '';
+    }
+  };
+  const body = rows.map(r => cols.map(c => fmt(r, c.key)));
   doc.autoTable({
     startY: 30,
-    head: [['Item', 'Department', 'VAT', 'Supplier Cost', 'Trade 3 Price', 'Margin', 'New Margin', 'New Price']],
+    head: [cols.map(c => c.label)],
     body,
     theme: 'grid',
     headStyles: { fillColor: [30,34,42] },
@@ -1359,7 +1460,8 @@ function buildWholesalePDFDoc(){
   });
   return doc;
 }
-function downloadWholesalePDF(){
+function downloadWholesalePDF(){ openWholesaleColumnModal('pdf'); }
+function runDownloadWholesalePDF(){
   try{
     const doc = buildWholesalePDFDoc();
     if(!doc) return;
@@ -1369,7 +1471,8 @@ function downloadWholesalePDF(){
     console.error(e);
   }
 }
-function emailWholesalePDF(){
+function emailWholesalePDF(){ openWholesaleColumnModal('email'); }
+function runEmailWholesalePDF(){
   try{
     const doc = buildWholesalePDFDoc();
     if(!doc){ toast('Nothing to email yet'); return; }
@@ -1379,22 +1482,28 @@ function emailWholesalePDF(){
     console.error(e);
   }
 }
-function downloadWholesaleExcel(){
+function downloadWholesaleExcel(){ openWholesaleColumnModal('excel'); }
+function runDownloadWholesaleExcel(){
   if(wholesaleRows.length === 0) return;
   try{
+    const cols = wholesaleSelectedColumns();
     const rows = wholesaleExportRows();
-    const sheetData = rows.map(r => ({
-      'Item': r.item,
-      'Department': r.department,
-      'VAT': r.vat,
-      'Supplier Cost': r.suppCost,
-      'Trade 3 Price': r.tradePrice,
-      'Margin %': r.margin,
-      'New Margin %': r.newMargin === null ? '' : r.newMargin,
-      'New Price': r.newPrice === null ? '' : r.newPrice
-    }));
+    const fieldMap = {
+      item: 'Item', department: 'Department', suppCost: 'Supplier Cost',
+      price: 'Price', margin: 'Margin %', vat: 'VAT'
+    };
+    const widthMap = { item: 36, department: 20, suppCost: 14, price: 12, margin: 10, vat: 8 };
+    const sheetData = rows.map(r => {
+      const row = {};
+      cols.forEach(c => {
+        let v = r[c.key];
+        if(c.key === 'suppCost' || c.key === 'price' || c.key === 'margin'){ v = v === null ? '' : v; }
+        row[fieldMap[c.key]] = v;
+      });
+      return row;
+    });
     const ws = XLSX.utils.json_to_sheet(sheetData);
-    ws['!cols'] = [{ wch: 36 }, { wch: 20 }, { wch: 8 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 12 }];
+    ws['!cols'] = cols.map(c => ({ wch: widthMap[c.key] }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Wholesale Pricing');
     XLSX.writeFile(wb, 'wholesale-pricing-' + new Date().toISOString().slice(0,10) + '.xlsx');
