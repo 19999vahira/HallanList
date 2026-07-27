@@ -241,7 +241,7 @@
   .modal{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:26px;width:420px;max-width:92vw;}
   .modal h3{margin:0 0 4px;font-size:17px;}
   .modal .modal-sub{color:var(--text-dim);font-size:12px;margin:0 0 18px;}
-  .modal input[type=text],.modal input[type=password],.modal input[type=datetime-local]{
+  .modal input[type=text],.modal input[type=password],.modal input[type=datetime-local],.modal input[type=email]{
     width:100%;padding:11px 13px;border-radius:6px;border:1px solid var(--line);
     background:var(--panel2);color:var(--text);font-size:14px;margin-bottom:10px;font-family:'Inter',sans-serif;
   }
@@ -356,16 +356,6 @@
     .historymeta-row{color:#555;}
     .newpriceinput,.newmargininput{display:none !important;}
     .wsprintprice,.wsprintmargin{display:inline-block !important;font-family:'JetBrains Mono',monospace;font-weight:700;color:#111;}
-    body.printing-replen .view{display:none !important;}
-    body.printing-replen .modal-backdrop{display:none !important;}
-    body.printing-replen .modal-backdrop.active{
-      display:block !important;position:static !important;background:none !important;padding:0;
-    }
-    body.printing-replen .modal-backdrop.active .modal{
-      box-shadow:none !important;border:none !important;width:100% !important;max-width:100% !important;
-      color:#111;
-    }
-    body.printing-replen .modal-close-row{display:none !important;}
 
     /* Picking List: hide the interactive checklist and show a plain tick-sheet instead */
     #pickingItemList{display:none !important;}
@@ -484,6 +474,7 @@
         <button class="btn-ghost" onclick="window.print()">Print</button>
         <button class="btn-ghost" onclick="downloadWholesaleExcel()">Download Excel</button>
         <button class="btn-amber" onclick="downloadWholesalePDF()">Download PDF</button>
+        <button class="btn-ghost" onclick="emailWholesalePDF()">Email</button>
         <button class="btn-danger-ghost" onclick="openWholesalePasswordModal()">Change Password</button>
       </div>
     </div>
@@ -597,6 +588,7 @@
       <div style="display:flex;gap:10px;">
         <button class="btn-ghost" onclick="window.print()">Print</button>
         <button class="btn-amber" onclick="downloadPickingListPDF()">Download PDF</button>
+        <button class="btn-ghost" onclick="emailPickingListPDF()">Email</button>
       </div>
     </div>
     <div id="pickingItemList"></div>
@@ -661,6 +653,7 @@
       <div style="display:flex;gap:10px;">
         <button class="btn-ghost" onclick="window.print()">Print</button>
         <button class="btn-amber" onclick="downloadHistoryPDF()">Download PDF</button>
+        <button class="btn-ghost" onclick="emailHistoryPDF()">Email</button>
       </div>
     </div>
     <div id="historyContent"></div>
@@ -719,6 +712,7 @@
         <button class="btn-danger-ghost" onclick="confirmEmptyList()">Empty List</button>
         <button class="btn-ghost" onclick="window.print()">Print</button>
         <button class="btn-amber" onclick="downloadPDF()">Download PDF</button>
+        <button class="btn-ghost" onclick="emailFinalListPDF()">Email</button>
       </div>
     </div>
     <div id="finalContent"></div>
@@ -869,12 +863,17 @@
 <!-- REPLENISHMENT PRINT LIST -->
 <div class="modal-backdrop" id="modalReplenPrint">
   <div class="modal" style="width:480px;">
-    <h3 id="replenPrintTitle">Sold since last check</h3>
-    <p class="modal-sub" id="replenPrintSub"></p>
+    <div class="hero" style="margin-bottom:18px;">
+      <div class="eyebrow">Shelf Replenishment</div>
+      <h2 id="replenPrintTitle">Sold since last check</h2>
+      <p id="replenPrintSub"></p>
+    </div>
     <div id="replenPrintResults" style="max-height:50vh;overflow:auto;"></div>
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalReplenPrint')">Close</button>
-      <button class="btn-amber" onclick="printReplenResults()">Print</button>
+      <button class="btn-ghost" onclick="downloadReplenPDF()">Download PDF</button>
+      <button class="btn-ghost" onclick="emailReplenPDF()">Email</button>
+      <button class="btn-amber" onclick="printReplenPDF()">Print</button>
     </div>
   </div>
 </div>
@@ -1192,6 +1191,12 @@ async function loadWholesalePricing(){
     console.error(e);
   }
 }
+function wholesaleVatLabel(r){
+  // VATID from Vector's VESTOCK: 1 = VAT item, 2 = non-VAT item
+  if(r.vatid === 1) return 'VAT';
+  if(r.vatid === 2) return 'Non-VAT';
+  return '—';
+}
 function wholesaleMarginPct(r){
   if(!r.price_net || r.price_net <= 0 || r.suppcost_net === null || r.suppcost_net === undefined) return null;
   return ((r.price_net - r.suppcost_net) / r.price_net) * 100;
@@ -1237,7 +1242,7 @@ function renderWholesaleTable(){
   table.className = 'finaltable';
   const thead = document.createElement('thead');
   thead.innerHTML = `<tr>
-    <th>Item</th><th>Department</th>
+    <th>Item</th><th>Department</th><th>VAT</th>
     <th class="qtycell">Supplier Cost</th><th class="qtycell">Trade 3 Price</th><th class="qtycell">Margin</th>
     <th class="qtycell">New Margin %</th><th class="qtycell">New Price</th>
   </tr>`;
@@ -1249,6 +1254,7 @@ function renderWholesaleTable(){
     tr.innerHTML = `
       <td>${escapeHtml(r.stock_name)}</td>
       <td>${escapeHtml(r.department_name)}</td>
+      <td>${wholesaleVatLabel(r)}</td>
       <td class="qtycell">${r.suppcost_net === null || r.suppcost_net === undefined ? '—' : Number(r.suppcost_net).toFixed(2)}</td>
       <td class="qtycell">${r.price_net === null || r.price_net === undefined ? '—' : Number(r.price_net).toFixed(2)}</td>
       <td class="qtycell"><span class="val ${wholesaleMarginClass(margin)}">${margin === null ? '—' : margin.toFixed(1) + '%'}</span></td>
@@ -1313,6 +1319,7 @@ function wholesaleExportRows(){
     return {
       item: r.stock_name,
       department: r.department_name,
+      vat: wholesaleVatLabel(r),
       suppCost: r.suppcost_net === null || r.suppcost_net === undefined ? null : Number(r.suppcost_net),
       tradePrice: r.price_net === null || r.price_net === undefined ? null : Number(r.price_net),
       margin: margin === null ? null : Number(margin.toFixed(1)),
@@ -1321,38 +1328,54 @@ function wholesaleExportRows(){
     };
   });
 }
+function buildWholesalePDFDoc(){
+  if(wholesaleRows.length === 0) return null;
+  const rows = wholesaleExportRows();
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.setFontSize(16);
+  doc.text('Wholesale Pricing List — Trade 3', 14, 18);
+  doc.setFontSize(9);
+  doc.setTextColor(120);
+  doc.text('Generated ' + new Date().toLocaleString() + ' — CONFIDENTIAL', 14, 24);
+  const body = rows.map(r => [
+    r.item,
+    r.department,
+    r.vat,
+    r.suppCost === null ? '—' : r.suppCost.toFixed(2),
+    r.tradePrice === null ? '—' : r.tradePrice.toFixed(2),
+    r.margin === null ? '—' : r.margin.toFixed(1) + '%',
+    r.newMargin === null ? '' : r.newMargin.toFixed(1) + '%',
+    r.newPrice === null ? '' : r.newPrice.toFixed(2)
+  ]);
+  doc.autoTable({
+    startY: 30,
+    head: [['Item', 'Department', 'VAT', 'Supplier Cost', 'Trade 3 Price', 'Margin', 'New Margin', 'New Price']],
+    body,
+    theme: 'grid',
+    headStyles: { fillColor: [30,34,42] },
+    styles: { fontSize: 9 },
+    margin: { left: 14, right: 14 }
+  });
+  return doc;
+}
 function downloadWholesalePDF(){
-  if(wholesaleRows.length === 0) return;
   try{
-    const rows = wholesaleExportRows();
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text('Wholesale Pricing List — Trade 3', 14, 18);
-    doc.setFontSize(9);
-    doc.setTextColor(120);
-    doc.text('Generated ' + new Date().toLocaleString() + ' — CONFIDENTIAL', 14, 24);
-    const body = rows.map(r => [
-      r.item,
-      r.department,
-      r.suppCost === null ? '—' : r.suppCost.toFixed(2),
-      r.tradePrice === null ? '—' : r.tradePrice.toFixed(2),
-      r.margin === null ? '—' : r.margin.toFixed(1) + '%',
-      r.newMargin === null ? '' : r.newMargin.toFixed(1) + '%',
-      r.newPrice === null ? '' : r.newPrice.toFixed(2)
-    ]);
-    doc.autoTable({
-      startY: 30,
-      head: [['Item', 'Department', 'Supplier Cost', 'Trade 3 Price', 'Margin', 'New Margin', 'New Price']],
-      body,
-      theme: 'grid',
-      headStyles: { fillColor: [30,34,42] },
-      styles: { fontSize: 9 },
-      margin: { left: 14, right: 14 }
-    });
+    const doc = buildWholesalePDFDoc();
+    if(!doc) return;
     doc.save('wholesale-pricing-' + new Date().toISOString().slice(0,10) + '.pdf');
   }catch(e){
     toast('Could not generate PDF');
+    console.error(e);
+  }
+}
+function emailWholesalePDF(){
+  try{
+    const doc = buildWholesalePDFDoc();
+    if(!doc){ toast('Nothing to email yet'); return; }
+    shareOrEmailPDF(doc, 'wholesale-pricing-' + new Date().toISOString().slice(0,10) + '.pdf', 'Wholesale Pricing List — Trade 3');
+  }catch(e){
+    toast('Could not prepare email');
     console.error(e);
   }
 }
@@ -1363,6 +1386,7 @@ function downloadWholesaleExcel(){
     const sheetData = rows.map(r => ({
       'Item': r.item,
       'Department': r.department,
+      'VAT': r.vat,
       'Supplier Cost': r.suppCost,
       'Trade 3 Price': r.tradePrice,
       'Margin %': r.margin,
@@ -1370,7 +1394,7 @@ function downloadWholesaleExcel(){
       'New Price': r.newPrice === null ? '' : r.newPrice
     }));
     const ws = XLSX.utils.json_to_sheet(sheetData);
-    ws['!cols'] = [{ wch: 36 }, { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 12 }];
+    ws['!cols'] = [{ wch: 36 }, { wch: 20 }, { wch: 8 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 12 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Wholesale Pricing');
     XLSX.writeFile(wb, 'wholesale-pricing-' + new Date().toISOString().slice(0,10) + '.xlsx');
@@ -1971,11 +1995,12 @@ function renderReplenPrintTable(items){
   }
   const table = document.createElement('table');
   table.className = 'finaltable';
-  table.innerHTML = `<thead><tr><th>Item</th><th class="qtycell">Qty Sold</th></tr></thead>`;
+  table.innerHTML = `<thead><tr><th>Item</th><th class="qtycell">Qty Sold</th><th class="qtycell">Stock</th></tr></thead>`;
   const tbody = document.createElement('tbody');
   items.forEach(it=>{
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${escapeHtml(it.item_name)}</td><td class="qtycell">${it.qty_sold}</td>`;
+    const stockDisplay = (it.stock_available === null || it.stock_available === undefined) ? '—' : it.stock_available;
+    tr.innerHTML = `<td>${escapeHtml(it.item_name)}</td><td class="qtycell">${it.qty_sold}</td><td class="qtycell">${stockDisplay}</td>`;
     tbody.appendChild(tr);
   });
   table.appendChild(tbody);
@@ -2018,12 +2043,84 @@ async function reprintReplenishment(){
     console.error(e);
   }
 }
-function printReplenResults(){
-  document.body.classList.add('printing-replen');
-  const cleanup = () => document.body.classList.remove('printing-replen');
-  window.addEventListener('afterprint', cleanup, { once: true });
-  window.print();
-  setTimeout(cleanup, 2000); // fallback for browsers that don't fire afterprint reliably
+function buildReplenPDFDoc(){
+  if(!replenPrintData || !replenPrintData.length){
+    toast('Nothing to include');
+    return null;
+  }
+  const title = document.getElementById('replenPrintTitle').textContent;
+  const sub = document.getElementById('replenPrintSub').textContent;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.setFontSize(16);
+  doc.text(title, 14, 18);
+  doc.setFontSize(10);
+  doc.setTextColor(120);
+  let y = 25;
+  if(sub){
+    const wrapped = doc.splitTextToSize(sub, 180);
+    doc.text(wrapped, 14, y);
+    y += 5 * wrapped.length;
+  }
+  y += 3;
+  const rows = replenPrintData.map(it => [
+    it.item_name,
+    String(it.qty_sold),
+    it.stock_available === null || it.stock_available === undefined ? '—' : String(it.stock_available)
+  ]);
+  doc.autoTable({
+    startY: y,
+    head: [['Item', 'Qty Sold', 'Stock']],
+    body: rows,
+    theme: 'grid',
+    headStyles: { fillColor: [30,34,42] },
+    styles: { fontSize: 9 },
+    margin: { left: 14, right: 14 }
+  });
+  return doc;
+}
+function downloadReplenPDF(){
+  try{
+    const doc = buildReplenPDFDoc();
+    if(!doc) return;
+    doc.save('shelf-replenishment-' + new Date().toISOString().slice(0,10) + '.pdf');
+  }catch(e){
+    toast('Could not generate PDF');
+    console.error(e);
+  }
+}
+function emailReplenPDF(){
+  try{
+    const doc = buildReplenPDFDoc();
+    if(!doc) return;
+    const title = document.getElementById('replenPrintTitle').textContent;
+    shareOrEmailPDF(doc, 'shelf-replenishment-' + new Date().toISOString().slice(0,10) + '.pdf', title);
+  }catch(e){
+    toast('Could not prepare email');
+    console.error(e);
+  }
+}
+function printReplenPDF(){
+  try{
+    const doc = buildReplenPDFDoc();
+    if(!doc) return;
+    const blobUrl = doc.output('bloburl');
+    const iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = blobUrl;
+    document.body.appendChild(iframe);
+    iframe.onload = function(){
+      setTimeout(()=>{
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      }, 250);
+    };
+    // clean up the iframe a while after printing, once the print dialog has had time to open/close
+    setTimeout(()=>{ if(iframe.parentNode) iframe.parentNode.removeChild(iframe); }, 60000);
+  }catch(e){
+    toast('Could not open print dialog');
+    console.error(e);
+  }
 }
 
 /* ============ TOAST ============ */
@@ -3310,84 +3407,92 @@ async function showFinal(){
     console.error(e);
   }
 }
-async function downloadPDF(){
-  try{
-    const [catData, itemData] = await Promise.all([apiGet('categories/'), apiGet('items/')]);
-    const cats = catData.items || [];
-    const items = (itemData.items || []).filter(it => it.qty_required > 0);
-    const catMap = {}; cats.forEach(c => catMap[c.category_id] = c);
-    const grouped = {};
-    items.forEach(it=>{ if(!grouped[it.category_id]) grouped[it.category_id]=[]; grouped[it.category_id].push(it); });
+async function buildFinalListPDFDoc(){
+  const [catData, itemData] = await Promise.all([apiGet('categories/'), apiGet('items/')]);
+  const cats = catData.items || [];
+  const items = (itemData.items || []).filter(it => it.qty_required > 0);
+  const catMap = {}; cats.forEach(c => catMap[c.category_id] = c);
+  const grouped = {};
+  items.forEach(it=>{ if(!grouped[it.category_id]) grouped[it.category_id]=[]; grouped[it.category_id].push(it); });
 
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text('Hallan Cash & Carry — Picking List', 14, 18);
-    doc.setFontSize(10);
-    doc.setTextColor(120);
-    doc.text('Generated ' + new Date().toLocaleString(), 14, 24);
-    let y = 32;
-    Object.keys(grouped).forEach(catId=>{
-      const cat = catMap[catId];
-      const rows = grouped[catId].map(it => [
-        it.item_name, String(it.qty_required),
-        it.stock_available === null || it.stock_available === undefined ? '—' : String(it.stock_available)
-      ]);
-      doc.setFontSize(12);
-      doc.setTextColor(20);
-      doc.text(cat ? cat.category_name : 'Category', 14, y);
-      doc.autoTable({
-        startY: y + 3,
-        head: [['Item', 'Qty required', 'Stock available']],
-        body: rows,
-        theme: 'grid',
-        headStyles: { fillColor: [30,34,42] },
-        styles: { fontSize: 9 },
-        margin: { left: 14, right: 14 }
-      });
-      y = doc.lastAutoTable.finalY + 12;
-      if(y > 260){ doc.addPage(); y = 20; }
-    });
-    doc.save('hallan-picking-list-' + new Date().toISOString().slice(0,10) + '.pdf');
-  }catch(e){
-    toast('Could not generate PDF');
-    console.error(e);
-  }
-}
-
-/* ============ RETAIL PICKING SHEET PDF (shared by Picking List + History) ============ */
-function buildRetailPickingSheetPDF(title, metaLines, items, filenamePrefix){
-  try{
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text(title, 14, 18);
-    doc.setFontSize(10);
-    doc.setTextColor(120);
-    let y = 25;
-    metaLines.forEach(line=>{ doc.text(line, 14, y); y += 5; });
-    y += 3;
-    const rows = items.map(it => [
-      it.item_name,
-      it.barcode || '—',
-      String(it.qty_added),
-      String(it.qty_picked),
-      it.qty_picked >= it.qty_added ? 'Complete' : (it.qty_added - it.qty_picked) + ' short'
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.setFontSize(16);
+  doc.text('Hallan Cash & Carry — Picking List', 14, 18);
+  doc.setFontSize(10);
+  doc.setTextColor(120);
+  doc.text('Generated ' + new Date().toLocaleString(), 14, 24);
+  let y = 32;
+  Object.keys(grouped).forEach(catId=>{
+    const cat = catMap[catId];
+    const rows = grouped[catId].map(it => [
+      it.item_name, String(it.qty_required),
+      it.stock_available === null || it.stock_available === undefined ? '—' : String(it.stock_available)
     ]);
+    doc.setFontSize(12);
+    doc.setTextColor(20);
+    doc.text(cat ? cat.category_name : 'Category', 14, y);
     doc.autoTable({
-      startY: y,
-      head: [['Item', 'Barcode', 'Requested', 'Picked', 'Result']],
+      startY: y + 3,
+      head: [['Item', 'Qty required', 'Stock available']],
       body: rows,
       theme: 'grid',
       headStyles: { fillColor: [30,34,42] },
       styles: { fontSize: 9 },
       margin: { left: 14, right: 14 }
     });
-    doc.save(filenamePrefix + '-' + new Date().toISOString().slice(0,10) + '.pdf');
+    y = doc.lastAutoTable.finalY + 12;
+    if(y > 260){ doc.addPage(); y = 20; }
+  });
+  return doc;
+}
+async function downloadPDF(){
+  try{
+    const doc = await buildFinalListPDFDoc();
+    doc.save('hallan-picking-list-' + new Date().toISOString().slice(0,10) + '.pdf');
   }catch(e){
     toast('Could not generate PDF');
     console.error(e);
   }
+}
+async function emailFinalListPDF(){
+  try{
+    const doc = await buildFinalListPDFDoc();
+    shareOrEmailPDF(doc, 'hallan-picking-list-' + new Date().toISOString().slice(0,10) + '.pdf', 'Hallan Cash & Carry — Picking List');
+  }catch(e){
+    toast('Could not prepare email');
+    console.error(e);
+  }
+}
+
+/* ============ RETAIL PICKING SHEET PDF (shared by Picking List + History) ============ */
+function buildRetailPickingSheetPDF(title, metaLines, items, filenamePrefix){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.setFontSize(16);
+  doc.text(title, 14, 18);
+  doc.setFontSize(10);
+  doc.setTextColor(120);
+  let y = 25;
+  metaLines.forEach(line=>{ doc.text(line, 14, y); y += 5; });
+  y += 3;
+  const rows = items.map(it => [
+    it.item_name,
+    it.barcode || '—',
+    String(it.qty_added),
+    String(it.qty_picked),
+    it.qty_picked >= it.qty_added ? 'Complete' : (it.qty_added - it.qty_picked) + ' short'
+  ]);
+  doc.autoTable({
+    startY: y,
+    head: [['Item', 'Barcode', 'Requested', 'Picked', 'Result']],
+    body: rows,
+    theme: 'grid',
+    headStyles: { fillColor: [30,34,42] },
+    styles: { fontSize: 9 },
+    margin: { left: 14, right: 14 }
+  });
+  return doc;
 }
 function pickingSheetMeta(list){
   const meta = [];
@@ -3398,65 +3503,129 @@ function pickingSheetMeta(list){
 }
 /* Blank tick-sheet for picking off the shelf: Item, Barcode, In Stock, Requested, pen-tick box */
 function buildBlankPickingSheetPDF(title, metaLines, items, filenamePrefix){
-  try{
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text(title, 14, 18);
-    doc.setFontSize(10);
-    doc.setTextColor(120);
-    let y = 25;
-    metaLines.forEach(line=>{ doc.text(line, 14, y); y += 5; });
-    y += 3;
-    const sorted = [...items].sort((a, b) => a.item_name.localeCompare(b.item_name, undefined, { sensitivity: 'base' }));
-    const rows = sorted.map(it => [
-      it.item_name,
-      it.barcode || '—',
-      (it.stock_available === null || it.stock_available === undefined) ? '—' : String(it.stock_available),
-      String(it.qty_added),
-      ''
-    ]);
-    doc.autoTable({
-      startY: y,
-      head: [['Item', 'Barcode', 'In Stock', 'Requested', 'Picked']],
-      body: rows,
-      theme: 'grid',
-      headStyles: { fillColor: [30,34,42] },
-      styles: { fontSize: 9 },
-      columnStyles: { 4: { cellWidth: 20 } },
-      margin: { left: 14, right: 14 },
-      didDrawCell: (data) => {
-        if(data.section === 'body' && data.column.index === 4){
-          const size = 10;
-          const bx = data.cell.x + (data.cell.width - size) / 2;
-          const by = data.cell.y + (data.cell.height - size) / 2;
-          doc.rect(bx, by, size, size);
-        }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.setFontSize(16);
+  doc.text(title, 14, 18);
+  doc.setFontSize(10);
+  doc.setTextColor(120);
+  let y = 25;
+  metaLines.forEach(line=>{ doc.text(line, 14, y); y += 5; });
+  y += 3;
+  const sorted = [...items].sort((a, b) => a.item_name.localeCompare(b.item_name, undefined, { sensitivity: 'base' }));
+  const rows = sorted.map(it => [
+    it.item_name,
+    it.barcode || '—',
+    (it.stock_available === null || it.stock_available === undefined) ? '—' : String(it.stock_available),
+    String(it.qty_added),
+    ''
+  ]);
+  doc.autoTable({
+    startY: y,
+    head: [['Item', 'Barcode', 'In Stock', 'Requested', 'Picked']],
+    body: rows,
+    theme: 'grid',
+    headStyles: { fillColor: [30,34,42] },
+    styles: { fontSize: 9 },
+    columnStyles: { 4: { cellWidth: 20 } },
+    margin: { left: 14, right: 14 },
+    didDrawCell: (data) => {
+      if(data.section === 'body' && data.column.index === 4){
+        const size = 10;
+        const bx = data.cell.x + (data.cell.width - size) / 2;
+        const by = data.cell.y + (data.cell.height - size) / 2;
+        doc.rect(bx, by, size, size);
       }
-    });
-    doc.save(filenamePrefix + '-' + new Date().toISOString().slice(0,10) + '.pdf');
+    }
+  });
+  return doc;
+}
+function downloadPickingListPDF(){
+  if(!currentPickingList) return;
+  try{
+    const doc = buildBlankPickingSheetPDF(
+      'Picking Sheet — ' + currentPickingList.list_name,
+      pickingSheetMeta(currentPickingList),
+      currentPickingItems,
+      'picking-sheet-' + currentPickingList.list_id
+    );
+    doc.save('picking-sheet-' + currentPickingList.list_id + '-' + new Date().toISOString().slice(0,10) + '.pdf');
   }catch(e){
     toast('Could not generate PDF');
     console.error(e);
   }
 }
-function downloadPickingListPDF(){
+function emailPickingListPDF(){
   if(!currentPickingList) return;
-  buildBlankPickingSheetPDF(
-    'Picking Sheet — ' + currentPickingList.list_name,
-    pickingSheetMeta(currentPickingList),
-    currentPickingItems,
-    'picking-sheet-' + currentPickingList.list_id
-  );
+  try{
+    const doc = buildBlankPickingSheetPDF(
+      'Picking Sheet — ' + currentPickingList.list_name,
+      pickingSheetMeta(currentPickingList),
+      currentPickingItems,
+      'picking-sheet-' + currentPickingList.list_id
+    );
+    shareOrEmailPDF(doc, 'picking-sheet-' + currentPickingList.list_id + '-' + new Date().toISOString().slice(0,10) + '.pdf', 'Picking Sheet — ' + currentPickingList.list_name);
+  }catch(e){
+    toast('Could not prepare email');
+    console.error(e);
+  }
 }
 function downloadHistoryPDF(){
   if(!currentHistoryList) return;
-  buildRetailPickingSheetPDF(
-    'Picking Sheet — ' + currentHistoryList.list_name,
-    pickingSheetMeta(currentHistoryList),
-    currentHistoryItems || [],
-    'picking-sheet-' + currentHistoryList.list_id
-  );
+  try{
+    const doc = buildRetailPickingSheetPDF(
+      'Picking Sheet — ' + currentHistoryList.list_name,
+      pickingSheetMeta(currentHistoryList),
+      currentHistoryItems || [],
+      'picking-sheet-' + currentHistoryList.list_id
+    );
+    doc.save('picking-sheet-' + currentHistoryList.list_id + '-' + new Date().toISOString().slice(0,10) + '.pdf');
+  }catch(e){
+    toast('Could not generate PDF');
+    console.error(e);
+  }
+}
+function emailHistoryPDF(){
+  if(!currentHistoryList) return;
+  try{
+    const doc = buildRetailPickingSheetPDF(
+      'Picking Sheet — ' + currentHistoryList.list_name,
+      pickingSheetMeta(currentHistoryList),
+      currentHistoryItems || [],
+      'picking-sheet-' + currentHistoryList.list_id
+    );
+    shareOrEmailPDF(doc, 'picking-sheet-' + currentHistoryList.list_id + '-' + new Date().toISOString().slice(0,10) + '.pdf', 'Picking Sheet — ' + currentHistoryList.list_name);
+  }catch(e){
+    toast('Could not prepare email');
+    console.error(e);
+  }
+}
+
+/* ============ SHARE/EMAIL A GENERATED PDF (shared) ============
+   Uses the browser's native Share sheet when available, so the person
+   can pick Outlook (or Mail, WhatsApp, Teams, etc.) and the PDF goes
+   straight in as an attachment — same as sharing a photo from a phone.
+   No server, no email credentials involved.
+   Where Share isn't available (older browsers, some desktop setups),
+   it falls back to downloading the PDF and opening a blank email so
+   the file just needs dragging in. */
+async function shareOrEmailPDF(doc, filename, subject){
+  try{
+    const blob = doc.output('blob');
+    const file = new File([blob], filename, { type: 'application/pdf' });
+    if(navigator.canShare && navigator.canShare({ files: [file] })){
+      await navigator.share({ files: [file], title: subject, text: subject });
+      return;
+    }
+  }catch(e){
+    if(e.name === 'AbortError') return; // person cancelled the share sheet — do nothing further
+    console.error(e);
+  }
+  // Fallback: download the PDF, then open a blank email with the file ready to attach.
+  doc.save(filename);
+  toast('PDF downloaded — attach it from your Downloads folder');
+  window.location.href = 'mailto:?subject=' + encodeURIComponent(subject) +
+    '&body=' + encodeURIComponent('Please attach "' + filename + '" from your Downloads folder.');
 }
 
 /* ============ UTIL ============ */
