@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Staff Portal — Hallan Cash &amp; Carry</title>
+<link rel="icon" href="../assets/hallan-logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy-deep:#0e1e33; --navy-mid:#173763; --blue-accent:#1d4b8f;
+    --gold:#b8860b; --gold-light:#f2c85b;
+    --paper:#f7f8fa; --panel:#ffffff; --line:#e2e6ec;
+    --ink:#1a2233; --slate:#667085; --danger:#dc2626; --green:#16a34a;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--paper);color:var(--ink);
+    font-family:'Inter',sans-serif;min-height:100vh;
+  }
+  h1,h2,h3,.display{font-family:'Space Grotesk',sans-serif;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  a{color:inherit;}
+
+  header.topbar{
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
+    padding:16px 28px;background:var(--navy-deep);
+    position:sticky;top:0;z-index:20;border-bottom:1px solid rgba(255,255,255,.08);
+  }
+  .brand{display:flex;align-items:center;gap:14px;}
+  .brand .tag{width:42px;height:42px;display:flex;align-items:center;justify-content:center;}
+  .brand .tag img{width:100%;height:100%;object-fit:contain;}
+  .brand h1{font-size:19px;margin:0;letter-spacing:.2px;color:#f2f1ec;}
+  .brand .sub{font-size:11px;color:#93a8c4;text-transform:uppercase;letter-spacing:1.6px;margin-top:2px;}
+  .backlink{color:#dbe4f2;font-size:13px;text-decoration:none;}
+  .backlink:hover{color:var(--gold-light);}
+
+  .wrap{max-width:460px;margin:0 auto;padding:60px 24px;}
+  .wrap.wide{max-width:720px;}
+
+  .view{display:none;}
+  .view.active{display:block;}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:32px 28px;}
+  .card + .card{margin-top:20px;}
+  .eyebrow{
+    color:var(--gold);font-size:11px;letter-spacing:2.5px;text-transform:uppercase;
+    font-family:'JetBrains Mono',monospace;margin-bottom:10px;
+  }
+  .card h2{font-size:24px;margin:0 0 8px;}
+  .card > p.sub{color:var(--slate);margin:0 0 26px;font-size:14px;line-height:1.5;}
+
+  label{display:block;font-size:12.5px;color:var(--slate);margin-bottom:6px;font-weight:500;}
+  input[type=text],input[type=password],input[type=date],select,textarea{
+    width:100%;padding:12px 14px;border-radius:8px;border:1px solid var(--line);
+    background:var(--paper);color:var(--ink);font-size:14px;margin-bottom:18px;
+    font-family:'Inter',sans-serif;
+  }
+  textarea{resize:vertical;min-height:70px;}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);}
+
+  .btn-primary{
+    padding:13px 22px;border-radius:8px;border:none;background:var(--navy-deep);color:#fff;
+    font-size:14.5px;font-weight:600;cursor:pointer;transition:.15s;font-family:'Inter',sans-serif;
+  }
+  .btn-primary:hover{background:var(--navy-mid);}
+  .btn-primary:disabled{opacity:.6;cursor:not-allowed;}
+  .btn-primary.full{width:100%;}
+
+  .errbox{
+    background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.25);color:var(--danger);
+    padding:11px 14px;border-radius:8px;font-size:13px;margin-bottom:18px;display:none;
+  }
+  .okbox{
+    background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.25);color:var(--green);
+    padding:11px 14px;border-radius:8px;font-size:13px;margin-bottom:18px;display:none;
+  }
+
+  .welcome-name{font-size:26px;margin:0 0 4px;}
+  .welcome-dept{color:var(--slate);font-size:13.5px;margin:0 0 28px;}
+
+  .statgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:10px;}
+  .stat{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:16px 10px;text-align:center;}
+  .stat .num{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;color:var(--navy-deep);}
+  .stat .lbl{font-size:10.5px;color:var(--slate);text-transform:uppercase;letter-spacing:.5px;margin-top:4px;}
+
+  .btn-ghost-full{
+    width:100%;padding:13px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--ink);
+    font-size:14px;font-weight:500;cursor:pointer;margin-top:18px;font-family:'Inter',sans-serif;
+    display:flex;align-items:center;justify-content:center;gap:8px;transition:.15s;
+  }
+  .btn-ghost-full:hover{border-color:var(--gold);}
+  .logout{color:var(--slate);font-size:13px;background:none;border:none;cursor:pointer;padding:0;margin-top:18px;font-family:'Inter',sans-serif;}
+  .logout:hover{color:var(--ink);}
+
+  .reqrow{
+    display:flex;justify-content:space-between;align-items:center;gap:12px;
+    padding:12px 0;border-top:1px solid var(--line);font-size:13.5px;
+  }
+  .reqrow:first-child{border-top:none;}
+  .reqdates{font-weight:500;}
+  .reqreason{color:var(--slate);font-size:12.5px;margin-top:2px;}
+  .badge{
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.5px;text-transform:uppercase;
+    padding:4px 10px;border-radius:20px;white-space:nowrap;
+  }
+  .badge.pending{background:#eef0f3;color:var(--slate);}
+  .badge.approved{background:rgba(22,163,74,.12);color:#0e7a3b;}
+  .badge.declined{background:rgba(220,38,38,.1);color:var(--danger);}
+  .empty-hint{color:var(--slate);font-size:13px;padding:8px 0;}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="tag"><img src="../assets/hallan-logo.png" alt="Hallan"></div>
+    <div>
+      <h1>Hallan Cash &amp; Carry</h1>
+      <div class="sub">Staff Portal</div>
+    </div>
+  </div>
+  <a class="backlink" href="../">← Hallan Portal</a>
+</header>
+
+<!-- LOGIN -->
+<div id="view-login" class="view active">
+  <div class="wrap">
+    <div class="card">
+      <div class="eyebrow">Sign In</div>
+      <h2>Staff Portal</h2>
+      <p class="sub">Enter your Staff ID, password, and role to continue.</p>
+      <div class="errbox" id="loginErr"></div>
+      <label for="staffId">Staff ID</label>
+      <input type="text" id="staffId" autocomplete="username">
+      <label for="staffPassword">Password</label>
+      <input type="password" id="staffPassword" autocomplete="current-password" onkeydown="if(event.key==='Enter')submitLogin()">
+      <label for="staffRole">Role</label>
+      <select id="staffRole">
+        <option value="staff">Staff</option>
+        <option value="manager">Manager</option>
+        <option value="hr">HR</option>
+      </select>
+      <button class="btn-primary full" id="loginBtn" onclick="submitLogin()">Sign In</button>
+    </div>
+  </div>
+</div>
+
+<!-- HOLIDAY PORTAL -->
+<div id="view-holiday" class="view">
+  <div class="wrap wide">
+    <div class="card">
+      <div class="eyebrow">Holiday Portal</div>
+      <h2 class="welcome-name" id="welcomeName">Welcome</h2>
+      <p class="welcome-dept" id="welcomeDept"></p>
+      <div class="statgrid">
+        <div class="stat"><div class="num" id="statAllocation">—</div><div class="lbl">Allocation</div></div>
+        <div class="stat"><div class="num" id="statTaken">—</div><div class="lbl">Taken</div></div>
+        <div class="stat"><div class="num" id="statBalance">—</div><div class="lbl">Balance</div></div>
+      </div>
+      <button class="btn-ghost-full" onclick="openHolidayForm()">📝 Request Holiday</button>
+      <button class="logout" onclick="logout()">Sign out</button>
+    </div>
+
+    <div class="card">
+      <div class="eyebrow">Your Requests</div>
+      <h2 style="font-size:18px;">Holiday Requests</h2>
+      <div id="requestsList"><div class="empty-hint">Loading…</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- REQUEST HOLIDAY FORM -->
+<div id="view-holiday-form" class="view">
+  <div class="wrap">
+    <div class="card">
+      <div class="eyebrow">Holidays Form</div>
+      <h2>Request Holiday</h2>
+      <p class="sub">Submit your dates for approval.</p>
+      <div class="errbox" id="reqErr"></div>
+      <div class="okbox" id="reqOk">Request submitted — check back here for approval status.</div>
+      <label for="reqStart">Start date</label>
+      <input type="date" id="reqStart">
+      <label for="reqEnd">End date</label>
+      <input type="date" id="reqEnd">
+      <label for="reqDays">Days requested</label>
+      <input type="text" id="reqDays" placeholder="e.g. 5">
+      <label for="reqReason">Reason (optional)</label>
+      <textarea id="reqReason" placeholder="Anything you'd like to add"></textarea>
+      <button class="btn-primary full" id="reqSubmitBtn" onclick="submitHolidayRequest()">Submit Request</button>
+      <button class="logout" onclick="showView('view-holiday')">← Back to Holiday Portal</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_BASE = "https://hallan-picking-backend.onrender.com/api/";
+let authToken = sessionStorage.getItem('hallanStaffToken') || null;
+let currentEmp = null;
+
+function showView(id){
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function showLoginError(msg){
+  const box = document.getElementById('loginErr');
+  box.textContent = msg;
+  box.style.display = 'block';
+}
+function hideLoginError(){
+  document.getElementById('loginErr').style.display = 'none';
+}
+
+async function submitLogin(){
+  const employeeId = document.getElementById('staffId').value.trim();
+  const password = document.getElementById('staffPassword').value;
+  const role = document.getElementById('staffRole').value;
+  hideLoginError();
+
+  if(!employeeId || !password){
+    showLoginError('Enter your Staff ID and password.');
+    return;
+  }
+
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true;
+  btn.textContent = 'Signing in…';
+
+  try{
+    const res = await fetch(API_BASE + 'staff/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employeeId, password, role })
+    });
+    const data = await res.json();
+    if(!res.ok || !data.ok){
+      showLoginError(data.error || 'Could not sign in — check your details and try again.');
+      return;
+    }
+    authToken = data.token;
+    sessionStorage.setItem('hallanStaffToken', authToken);
+    currentEmp = data.emp;
+    renderHolidayPortal(currentEmp);
+    showView('view-holiday');
+    loadMyRequests();
+  }catch(e){
+    showLoginError('Could not reach the server — check your connection and try again.');
+    console.error(e);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = 'Sign In';
+  }
+}
+
+function authHeaders(){
+  return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken };
+}
+
+function renderHolidayPortal(emp){
+  document.getElementById('welcomeName').textContent = 'Welcome, ' + emp.name;
+  document.getElementById('welcomeDept').textContent = emp.department || '';
+  document.getElementById('statAllocation').textContent = emp.holidayAllocation ?? '—';
+  document.getElementById('statTaken').textContent = emp.holidayTaken ?? '—';
+  document.getElementById('statBalance').textContent = emp.holidayBalance ?? '—';
+}
+
+async function loadMyRequests(){
+  const list = document.getElementById('requestsList');
+  list.innerHTML = '<div class="empty-hint">Loading…</div>';
+  try{
+    const res = await fetch(API_BASE + 'staff/leave-requests', { headers: authHeaders() });
+    const data = await res.json();
+    if(!res.ok || !data.ok){
+      list.innerHTML = '<div class="empty-hint">Could not load your requests.</div>';
+      return;
+    }
+    if(!data.requests || data.requests.length === 0){
+      list.innerHTML = '<div class="empty-hint">No holiday requests yet.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    data.requests.forEach(r => {
+      const row = document.createElement('div');
+      row.className = 'reqrow';
+      const start = r.start_date ? new Date(r.start_date).toLocaleDateString() : '—';
+      const end = r.end_date ? new Date(r.end_date).toLocaleDateString() : '—';
+      row.innerHTML = `
+        <div>
+          <div class="reqdates">${start} → ${end}${r.days_requested ? ' (' + r.days_requested + ' days)' : ''}</div>
+          ${r.reason ? `<div class="reqreason">${escapeHtml(r.reason)}</div>` : ''}
+        </div>
+        <span class="badge ${r.status}">${r.status}</span>
+      `;
+      list.appendChild(row);
+    });
+  }catch(e){
+    list.innerHTML = '<div class="empty-hint">Could not load your requests.</div>';
+    console.error(e);
+  }
+}
+
+function escapeHtml(s){
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function openHolidayForm(){
+  document.getElementById('reqStart').value = '';
+  document.getElementById('reqEnd').value = '';
+  document.getElementById('reqDays').value = '';
+  document.getElementById('reqReason').value = '';
+  document.getElementById('reqErr').style.display = 'none';
+  document.getElementById('reqOk').style.display = 'none';
+  showView('view-holiday-form');
+}
+
+async function submitHolidayRequest(){
+  const startDate = document.getElementById('reqStart').value;
+  const endDate = document.getElementById('reqEnd').value;
+  const daysRequested = document.getElementById('reqDays').value.trim();
+  const reason = document.getElementById('reqReason').value.trim();
+  const errBox = document.getElementById('reqErr');
+  const okBox = document.getElementById('reqOk');
+  errBox.style.display = 'none';
+  okBox.style.display = 'none';
+
+  if(!startDate || !endDate){
+    errBox.textContent = 'Pick a start and end date.';
+    errBox.style.display = 'block';
+    return;
+  }
+
+  const btn = document.getElementById('reqSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Submitting…';
+
+  try{
+    const res = await fetch(API_BASE + 'staff/leave-requests', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ startDate, endDate, daysRequested: daysRequested || null, reason: reason || null })
+    });
+    const data = await res.json();
+    if(!res.ok || !data.ok){
+      errBox.textContent = data.error || 'Could not submit the request.';
+      errBox.style.display = 'block';
+      return;
+    }
+    okBox.style.display = 'block';
+    loadMyRequests();
+  }catch(e){
+    errBox.textContent = 'Could not reach the server — check your connection and try again.';
+    errBox.style.display = 'block';
+    console.error(e);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = 'Submit Request';
+  }
+}
+
+function logout(){
+  authToken = null;
+  currentEmp = null;
+  sessionStorage.removeItem('hallanStaffToken');
+  document.getElementById('staffId').value = '';
+  document.getElementById('staffPassword').value = '';
+  hideLoginError();
+  showView('view-login');
+}
+
+// If a token's already saved for this browser tab, try to resume the session
+(async function tryResumeSession(){
+  if(!authToken) return;
+  try{
+    const res = await fetch(API_BASE + 'staff/me', { headers: authHeaders() });
+    const data = await res.json();
+    if(res.ok && data.ok && data.emp){
+      currentEmp = {
+        name: data.emp.full_name,
+        department: data.emp.department,
+        holidayAllocation: data.emp.holiday_allocation,
+        holidayTaken: data.emp.holiday_taken,
+        holidayBalance: data.emp.holiday_balance
+      };
+      renderHolidayPortal(currentEmp);
+      showView('view-holiday');
+      loadMyRequests();
+    }else{
+      sessionStorage.removeItem('hallanStaffToken');
+      authToken = null;
+    }
+  }catch(e){
+    console.error(e);
+  }
+})();
+</script>
+</body>
+</html>
