@@ -454,6 +454,12 @@
         <h3>Shelf Replenishment</h3>
         <p>Start a shelf, then print what's sold since you started — resets each time you print.</p>
       </div>
+      <div class="tile" style="--tile-color:#0f766e;" onclick="openSupplierOrders()">
+        <div class="tile-icon">🚚</div>
+        <div class="num">07 &middot; ORDER</div>
+        <h3>Supplier Orders</h3>
+        <p>Search a supplier — see sales history and a reorder suggestion per item.</p>
+      </div>
     </div>
   </div>
 
@@ -861,6 +867,167 @@
     </div>
     <div id="replenStatusBox"></div>
   </div>
+
+  <!-- SUPPLIER ORDERS: SEARCH -->
+  <div id="view-supplier-search" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span><span class="current">Supplier Orders</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Order</div>
+      <h2>Supplier Orders</h2>
+      <p>Search a supplier to see sales history and reorder suggestions.</p>
+    </div>
+    <div class="actionbar">
+      <input type="text" id="supplierSearchInput" class="historysearch" style="max-width:420px;"
+             placeholder="Search supplier name…" oninput="onSupplierSearch()" autocomplete="off">
+      <button class="btn-danger-ghost" onclick="openSupplierPasswordModal()">Change Password</button>
+    </div>
+    <div id="supplierSearchResults">
+      <div class="empty-hint">Start typing a supplier name.</div>
+    </div>
+  </div>
+
+  <!-- SUPPLIER ORDERS: HUB -->
+  <div id="view-supplier-hub" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openSupplierOrders()">Supplier Orders</button><span class="sep">/</span>
+      <span class="current" id="supplierHubCrumb">Supplier</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Supplier</div>
+      <h2 id="supplierHubTitle">Supplier</h2>
+      <p>Pick a view for this supplier.</p>
+    </div>
+    <div class="catgrid">
+      <div class="bincard" onclick="openSupplierBasicList()">
+        <h4>📋 Basic List</h4>
+        <div class="count">Items sold, by chosen number of weeks</div>
+      </div>
+      <div class="bincard" onclick="openSupplierAdvancedList()">
+        <h4>📈 Advanced List</h4>
+        <div class="count">Reorder suggestion, last delivery, current stock</div>
+      </div>
+      <div class="bincard" onclick="openSupplierCompare()">
+        <h4>⚖️ Compare</h4>
+        <div class="count">Predicted vs previous vs current period</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUPPLIER ORDERS: BASIC LIST -->
+  <div id="view-supplier-basic" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openSupplierOrders()">Supplier Orders</button><span class="sep">/</span>
+      <button onclick="openSupplierHub(currentSupplier)" id="supplierBasicCrumbBtn">Supplier</button><span class="sep">/</span>
+      <span class="current">Basic List</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow" id="supplierBasicEyebrow">Supplier</div>
+      <h2>Basic List</h2>
+      <p>Items this supplier supplies, ranked by units sold.</p>
+    </div>
+    <div class="actionbar">
+      <div style="display:flex;gap:10px;align-items:center;">
+        <label class="mono" style="font-size:12px;color:var(--text-dim);">Weeks:</label>
+        <select id="supplierBasicWeeks" onchange="loadSupplierBasicList()">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="4" selected>4</option>
+          <option value="8">8</option>
+          <option value="12">12</option>
+        </select>
+      </div>
+    </div>
+    <div id="supplierBasicResults"></div>
+  </div>
+
+  <!-- SUPPLIER ORDERS: ADVANCED LIST -->
+  <div id="view-supplier-advanced" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openSupplierOrders()">Supplier Orders</button><span class="sep">/</span>
+      <button onclick="openSupplierHub(currentSupplier)" id="supplierAdvCrumbBtn">Supplier</button><span class="sep">/</span>
+      <span class="current">Advanced List</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow" id="supplierAdvEyebrow">Supplier</div>
+      <h2>Advanced List</h2>
+      <p>Reorder suggestion is a recency-weighted average of past sales, not real machine learning — worth double-checking against your own judgement.</p>
+    </div>
+    <div class="actionbar">
+      <span class="mono" id="supplierLastDeliveryLabel" style="color:var(--text-dim);font-size:12px;"></span>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <button class="btn-ghost" onclick="openSupplierDeliveryModal()">Set Last Delivery</button>
+        <label class="mono" style="font-size:12px;color:var(--text-dim);">Lookback:</label>
+        <select id="supplierAdvMonths" onchange="loadSupplierAdvancedList()">
+          <option value="6" selected>6 months</option>
+          <option value="12">12 months</option>
+          <option value="24">2 years</option>
+        </select>
+      </div>
+    </div>
+    <div id="supplierAdvResults"></div>
+  </div>
+
+  <!-- SUPPLIER ORDERS: COMPARE -->
+  <div id="view-supplier-compare" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openSupplierOrders()">Supplier Orders</button><span class="sep">/</span>
+      <button onclick="openSupplierHub(currentSupplier)" id="supplierCmpCrumbBtn">Supplier</button><span class="sep">/</span>
+      <span class="current">Compare</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow" id="supplierCmpEyebrow">Supplier</div>
+      <h2>Compare</h2>
+      <p>Predicted vs the previous period vs the current period, for the window you choose.</p>
+    </div>
+    <div class="actionbar">
+      <div style="display:flex;gap:10px;align-items:center;">
+        <label class="mono" style="font-size:12px;color:var(--text-dim);">Weeks:</label>
+        <select id="supplierCmpWeeks" onchange="loadSupplierCompare()">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="4" selected>4</option>
+          <option value="8">8</option>
+          <option value="12">12</option>
+        </select>
+      </div>
+    </div>
+    <div id="supplierCmpResults"></div>
+  </div>
+</div>
+
+<!-- SUPPLIER ORDERS: CHANGE PASSWORD -->
+<div class="modal-backdrop" id="modalSupplierPassword">
+  <div class="modal" style="width:380px;">
+    <h3>Change Supplier Orders password</h3>
+    <p class="modal-sub">Enter the current password, then choose a new one.</p>
+    <input type="password" id="soOldPassword" placeholder="Current password" autocomplete="off">
+    <input type="password" id="soNewPassword" placeholder="New password" autocomplete="off">
+    <input type="password" id="soNewPassword2" placeholder="Confirm new password" autocomplete="off">
+    <div class="errdetail" id="soPasswordErr" style="display:none;"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalSupplierPassword')">Cancel</button>
+      <button class="btn-amber" onclick="submitSupplierPasswordChange()">Update password</button>
+    </div>
+  </div>
+</div>
+
+<!-- SUPPLIER ORDERS: SET LAST DELIVERY -->
+<div class="modal-backdrop" id="modalSupplierDelivery">
+  <div class="modal">
+    <h3>Set last delivery</h3>
+    <p class="modal-sub">Used to calculate the order cycle length and actual demand since delivery.</p>
+    <input type="datetime-local" id="supplierDeliveryInput">
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalSupplierDelivery')">Cancel</button>
+      <button class="btn-amber" onclick="submitSupplierDelivery()">Set Date</button>
+    </div>
+  </div>
 </div>
 
 <!-- REPLENISHMENT PRINT LIST -->
@@ -870,6 +1037,7 @@
       <div class="eyebrow">Shelf Replenishment</div>
       <h2 id="replenPrintTitle">Sold since last check</h2>
       <p id="replenPrintSub"></p>
+      <p id="replenPrintTimestamp" style="font-size:12px;color:var(--text-dim);margin:4px 0 0;"></p>
     </div>
     <div id="replenPrintResults" style="max-height:50vh;overflow:auto;"></div>
     <div class="modal-close-row">
@@ -2119,6 +2287,7 @@ async function printSelectedReplenZones(){
   document.getElementById('replenPrintSub').textContent =
     'Each shelf\'s clock has reset to now. Anything below the print threshold has been quietly saved and will carry forward into the next print.' +
     (failedShelfCount ? ' ' + failedShelfCount + ' shelf' + (failedShelfCount === 1 ? '' : 'ves') + ' failed to print.' : '');
+  document.getElementById('replenPrintTimestamp').textContent = 'Printed: ' + new Date().toLocaleString();
   renderReplenPrintTable(replenPrintData);
   openModal('modalReplenPrint');
   // If the shelf currently open in the detail view was part of this batch, refresh its status
@@ -2127,30 +2296,56 @@ async function printSelectedReplenZones(){
   }
 }
 
+function groupReplenPrintData(items){
+  // items are pre-sorted by zone_name, shelf_name, item_name — so we can just
+  // walk through and start a new group whenever the zone/shelf pair changes.
+  const groups = [];
+  let current = null;
+  items.forEach(it => {
+    const key = (it.zone_name || '') + '||' + (it.shelf_name || '');
+    if(!current || current.key !== key){
+      current = { key, zone_name: it.zone_name, shelf_name: it.shelf_name, items: [] };
+      groups.push(current);
+    }
+    current.items.push(it);
+  });
+  return groups;
+}
+function buildReplenItemsTable(items){
+  const table = document.createElement('table');
+  table.className = 'finaltable';
+  table.innerHTML = `<thead><tr><th>Item</th><th class="qtycell">Qty Sold</th><th class="qtycell">Stock</th></tr></thead>`;
+  const tbody = document.createElement('tbody');
+  items.forEach(it=>{
+    const tr = document.createElement('tr');
+    const stockDisplay = (it.stock_available === null || it.stock_available === undefined) ? '—' : it.stock_available;
+    tr.innerHTML = `<td>${escapeHtml(it.item_name)}</td><td class="qtycell">${it.qty_sold}</td><td class="qtycell">${stockDisplay}</td>`;
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  return table;
+}
 function renderReplenPrintTable(items){
   const results = document.getElementById('replenPrintResults');
   if(!items || items.length === 0){
     results.innerHTML = '<div class="empty-hint">Nothing hit the print threshold this time — anything sold is quietly saved and will show up once there\'s enough of it.</div>';
     return;
   }
-  const hasZone = items[0].zone_name !== undefined;
-  const table = document.createElement('table');
-  table.className = 'finaltable';
-  table.innerHTML = hasZone
-    ? `<thead><tr><th>Zone</th><th>Shelf</th><th>Item</th><th class="qtycell">Qty Sold</th><th class="qtycell">Stock</th></tr></thead>`
-    : `<thead><tr><th>Item</th><th class="qtycell">Qty Sold</th><th class="qtycell">Stock</th></tr></thead>`;
-  const tbody = document.createElement('tbody');
-  items.forEach(it=>{
-    const tr = document.createElement('tr');
-    const stockDisplay = (it.stock_available === null || it.stock_available === undefined) ? '—' : it.stock_available;
-    tr.innerHTML = hasZone
-      ? `<td>${escapeHtml(it.zone_name)}</td><td>${escapeHtml(it.shelf_name)}</td><td>${escapeHtml(it.item_name)}</td><td class="qtycell">${it.qty_sold}</td><td class="qtycell">${stockDisplay}</td>`
-      : `<td>${escapeHtml(it.item_name)}</td><td class="qtycell">${it.qty_sold}</td><td class="qtycell">${stockDisplay}</td>`;
-    tbody.appendChild(tr);
-  });
-  table.appendChild(tbody);
   results.innerHTML = '';
-  results.appendChild(table);
+  const hasZone = items[0].zone_name !== undefined;
+  if(!hasZone){
+    results.appendChild(buildReplenItemsTable(items));
+    return;
+  }
+  // Combined multi-zone print: a clear heading per shelf, each block visually
+  // separated, so the picker can tell at a glance where one shelf ends and the next begins.
+  groupReplenPrintData(items).forEach(g => {
+    const heading = document.createElement('div');
+    heading.style.cssText = 'font-weight:700;font-size:14px;margin:16px 0 6px;padding-bottom:5px;border-bottom:2px solid var(--line);';
+    heading.textContent = (g.zone_name ? g.zone_name + ' — ' : '') + g.shelf_name;
+    results.appendChild(heading);
+    results.appendChild(buildReplenItemsTable(g.items));
+  });
 }
 async function printReplenishment(){
   if(!currentReplenShelf) return;
@@ -2160,6 +2355,7 @@ async function printReplenishment(){
     document.getElementById('replenPrintTitle').textContent = 'Sold — ' + currentReplenShelf.shelf_name;
     document.getElementById('replenPrintSub').textContent =
       'The clock has now reset. Anything below the print threshold has been quietly saved and will carry forward into the next print.';
+    document.getElementById('replenPrintTimestamp').textContent = 'Printed: ' + new Date().toLocaleString();
     renderReplenPrintTable(replenPrintData);
     openModal('modalReplenPrint');
     await loadReplenStatus();
@@ -2181,6 +2377,7 @@ async function reprintReplenishment(){
     const to = data.to ? new Date(data.to).toLocaleString() : '—';
     document.getElementById('replenPrintTitle').textContent = 'Sold — ' + currentReplenShelf.shelf_name + ' (reprint)';
     document.getElementById('replenPrintSub').textContent = `Same list as last printed — covers ${from} to ${to}. Reprinting does not reset the clock.`;
+    document.getElementById('replenPrintTimestamp').textContent = 'Printed: ' + new Date().toLocaleString();
     renderReplenPrintTable(replenPrintData);
     openModal('modalReplenPrint');
   }catch(e){
@@ -2195,34 +2392,75 @@ function buildReplenPDFDoc(){
   }
   const title = document.getElementById('replenPrintTitle').textContent;
   const sub = document.getElementById('replenPrintSub').textContent;
+  const printedAt = document.getElementById('replenPrintTimestamp').textContent || ('Printed: ' + new Date().toLocaleString());
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
+  const marginLeft = 14;
+  const pageHeight = doc.internal.pageSize.getHeight();
+
   doc.setFontSize(16);
-  doc.text(title, 14, 18);
-  doc.setFontSize(10);
+  doc.setTextColor(20);
+  doc.text(title, marginLeft, 18);
+  doc.setFontSize(9);
   doc.setTextColor(120);
-  let y = 25;
+  doc.text(printedAt, marginLeft, 24);
+  doc.setFontSize(10);
+  let y = 31;
   if(sub){
     const wrapped = doc.splitTextToSize(sub, 180);
-    doc.text(wrapped, 14, y);
+    doc.text(wrapped, marginLeft, y);
     y += 5 * wrapped.length;
   }
-  y += 3;
+  y += 4;
+
   const hasZone = replenPrintData[0].zone_name !== undefined;
-  const rows = replenPrintData.map(it => {
-    const stockCell = it.stock_available === null || it.stock_available === undefined ? '—' : String(it.stock_available);
-    return hasZone
-      ? [it.zone_name, it.shelf_name, it.item_name, String(it.qty_sold), stockCell]
-      : [it.item_name, String(it.qty_sold), stockCell];
-  });
-  doc.autoTable({
-    startY: y,
-    head: hasZone ? [['Zone', 'Shelf', 'Item', 'Qty Sold', 'Stock']] : [['Item', 'Qty Sold', 'Stock']],
-    body: rows,
-    theme: 'grid',
-    headStyles: { fillColor: [30,34,42] },
-    styles: { fontSize: 9 },
-    margin: { left: 14, right: 14 }
+
+  if(!hasZone){
+    const rows = replenPrintData.map(it => [
+      it.item_name,
+      String(it.qty_sold),
+      it.stock_available === null || it.stock_available === undefined ? '—' : String(it.stock_available)
+    ]);
+    doc.autoTable({
+      startY: y,
+      head: [['Item', 'Qty Sold', 'Stock']],
+      body: rows,
+      theme: 'grid',
+      headStyles: { fillColor: [30,34,42] },
+      styles: { fontSize: 9 },
+      margin: { left: marginLeft, right: marginLeft }
+    });
+    return doc;
+  }
+
+  // Combined multi-zone print: give every shelf its own heading and its own
+  // table, clearly separated, so the printed sheet is unambiguous for the picker.
+  groupReplenPrintData(replenPrintData).forEach(g => {
+    if(y + 20 > pageHeight - 16){
+      doc.addPage();
+      y = 20;
+    }
+    doc.setFontSize(12);
+    doc.setTextColor(20);
+    doc.setFont(undefined, 'bold');
+    doc.text((g.zone_name ? g.zone_name + ' — ' : '') + g.shelf_name, marginLeft, y);
+    doc.setFont(undefined, 'normal');
+    y += 5;
+    const rows = g.items.map(it => [
+      it.item_name,
+      String(it.qty_sold),
+      it.stock_available === null || it.stock_available === undefined ? '—' : String(it.stock_available)
+    ]);
+    doc.autoTable({
+      startY: y,
+      head: [['Item', 'Qty Sold', 'Stock']],
+      body: rows,
+      theme: 'grid',
+      headStyles: { fillColor: [30,34,42] },
+      styles: { fontSize: 9 },
+      margin: { left: marginLeft, right: marginLeft }
+    });
+    y = doc.lastAutoTable.finalY + 10;
   });
   return doc;
 }
@@ -2266,6 +2504,243 @@ function printReplenPDF(){
     setTimeout(()=>{ if(iframe.parentNode) iframe.parentNode.removeChild(iframe); }, 60000);
   }catch(e){
     toast('Could not open print dialog');
+    console.error(e);
+  }
+}
+
+/* ============ SUPPLIER ORDERS ============ */
+let currentSupplier = null; // { suppid, name }
+let supplierSearchDebounce = null;
+
+async function openSupplierOrders(){
+  const pw = prompt('This list is confidential.\nEnter the Supplier Orders password:');
+  if(pw === null) return;
+  try{
+    const data = await apiPost('supplier-orders/auth/verify', { password: pw });
+    if(!data.ok){
+      toast('Incorrect password');
+      return;
+    }
+  }catch(e){
+    toast('Could not check password');
+    console.error(e);
+    return;
+  }
+  document.getElementById('supplierSearchInput').value = '';
+  document.getElementById('supplierSearchResults').innerHTML = '<div class="empty-hint">Start typing a supplier name.</div>';
+  showView('view-supplier-search');
+}
+function openSupplierPasswordModal(){
+  document.getElementById('soOldPassword').value = '';
+  document.getElementById('soNewPassword').value = '';
+  document.getElementById('soNewPassword2').value = '';
+  const err = document.getElementById('soPasswordErr');
+  err.style.display = 'none';
+  err.textContent = '';
+  openModal('modalSupplierPassword');
+}
+async function submitSupplierPasswordChange(){
+  const oldPw = document.getElementById('soOldPassword').value;
+  const newPw = document.getElementById('soNewPassword').value;
+  const newPw2 = document.getElementById('soNewPassword2').value;
+  const err = document.getElementById('soPasswordErr');
+  const showErr = (msg) => { err.textContent = msg; err.style.display = 'block'; err.style.color = 'var(--danger)'; };
+  if(!oldPw || !newPw){ showErr('Enter the current password and a new password.'); return; }
+  if(newPw !== newPw2){ showErr('New password and confirmation do not match.'); return; }
+  if(newPw.length < 4){ showErr('New password should be at least 4 characters.'); return; }
+  try{
+    await apiPost('supplier-orders/auth/change', { old_password: oldPw, new_password: newPw });
+    toast('Password updated');
+    closeModal('modalSupplierPassword');
+  }catch(e){
+    console.error(e);
+    const msg = /incorrect/i.test(e.message) ? 'Current password is incorrect.' : 'Could not update password.';
+    showErr(msg);
+  }
+}
+
+function onSupplierSearch(){
+  clearTimeout(supplierSearchDebounce);
+  const q = document.getElementById('supplierSearchInput').value.trim();
+  const results = document.getElementById('supplierSearchResults');
+  if(q.length < 2){
+    results.innerHTML = '<div class="empty-hint">Start typing a supplier name.</div>';
+    return;
+  }
+  results.innerHTML = '<div class="loading">Searching…</div>';
+  supplierSearchDebounce = setTimeout(async () => {
+    try{
+      const data = await apiGet('suppliers/search/?q=' + encodeURIComponent(q));
+      const items = data.items || [];
+      if(items.length === 0){
+        results.innerHTML = '<div class="empty-hint">No matching suppliers.</div>';
+        return;
+      }
+      results.innerHTML = '';
+      items.forEach(s=>{
+        const div = document.createElement('div');
+        div.className = 'searchresult';
+        div.innerHTML = `<div class="sname">${escapeHtml(s.name)}</div>`;
+        div.onclick = () => openSupplierHub({ suppid: s.suppid, name: s.name });
+        results.appendChild(div);
+      });
+    }catch(e){
+      results.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Search failed</div>';
+      console.error(e);
+    }
+  }, 300);
+}
+
+function openSupplierHub(supplier){
+  currentSupplier = supplier;
+  document.getElementById('supplierHubCrumb').textContent = supplier.name;
+  document.getElementById('supplierHubTitle').textContent = supplier.name;
+  showView('view-supplier-hub');
+}
+
+/* ---- Basic List ---- */
+function openSupplierBasicList(){
+  if(!currentSupplier) return;
+  document.getElementById('supplierBasicCrumbBtn').textContent = currentSupplier.name;
+  document.getElementById('supplierBasicEyebrow').textContent = currentSupplier.name;
+  showView('view-supplier-basic');
+  loadSupplierBasicList();
+}
+async function loadSupplierBasicList(){
+  const weeks = document.getElementById('supplierBasicWeeks').value;
+  const results = document.getElementById('supplierBasicResults');
+  results.innerHTML = '<div class="loading">Loading…</div>';
+  try{
+    const data = await apiGet('suppliers/' + currentSupplier.suppid + '/basic-list/?weeks=' + weeks);
+    const items = data.items || [];
+    if(items.length === 0){
+      results.innerHTML = '<div class="empty-hint">No items on file for this supplier.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.className = 'finaltable';
+    table.innerHTML = `<thead><tr><th>Item</th><th class="qtycell">Qty Sold (${weeks}wk)</th></tr></thead>`;
+    const tbody = document.createElement('tbody');
+    items.forEach(it=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${escapeHtml(it.name)}</td><td class="qtycell">${it.qty_sold}</td>`;
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    results.innerHTML = '';
+    results.appendChild(table);
+  }catch(e){
+    results.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load list.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+
+/* ---- Advanced List ---- */
+function openSupplierAdvancedList(){
+  if(!currentSupplier) return;
+  document.getElementById('supplierAdvCrumbBtn').textContent = currentSupplier.name;
+  document.getElementById('supplierAdvEyebrow').textContent = currentSupplier.name;
+  showView('view-supplier-advanced');
+  loadSupplierAdvancedList();
+}
+async function loadSupplierAdvancedList(){
+  const months = document.getElementById('supplierAdvMonths').value;
+  const results = document.getElementById('supplierAdvResults');
+  results.innerHTML = '<div class="loading">Loading…</div>';
+  try{
+    const data = await apiGet('suppliers/' + currentSupplier.suppid + '/advanced-list/?months=' + months);
+    const label = document.getElementById('supplierLastDeliveryLabel');
+    if(data.last_delivery_at){
+      label.textContent = 'Last delivery: ' + new Date(data.last_delivery_at).toLocaleString() + ' (order cycle: ' + data.order_cycle_weeks + ' wks)';
+    }else{
+      label.textContent = 'Last delivery not set — using a default 4-week order cycle';
+    }
+    const items = data.items || [];
+    if(items.length === 0){
+      results.innerHTML = '<div class="empty-hint">No items on file for this supplier.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.className = 'finaltable';
+    table.innerHTML = `<thead><tr><th>Item</th><th class="qtycell">Current Stock</th><th class="qtycell">Basic Avg Est.</th><th class="qtycell">Predicted Reorder</th><th class="qtycell">Actual Since Delivery</th></tr></thead>`;
+    const tbody = document.createElement('tbody');
+    items.forEach(it=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${escapeHtml(it.item_name)}</td>
+        <td class="qtycell">${it.current_stock ?? '—'}</td>
+        <td class="qtycell">${it.basic_avg_estimate}</td>
+        <td class="qtycell"><strong>${it.predicted_reorder_qty}</strong></td>
+        <td class="qtycell">${it.actual_since_last_delivery === null ? '—' : it.actual_since_last_delivery}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    results.innerHTML = '';
+    results.appendChild(table);
+  }catch(e){
+    results.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load list.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+function openSupplierDeliveryModal(){
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  document.getElementById('supplierDeliveryInput').value = now.toISOString().slice(0,16);
+  openModal('modalSupplierDelivery');
+}
+async function submitSupplierDelivery(){
+  const val = document.getElementById('supplierDeliveryInput').value;
+  if(!val){ toast('Pick a date and time first'); return; }
+  try{
+    await apiPost('suppliers/' + currentSupplier.suppid + '/last-delivery', { last_delivery_at: val });
+    closeModal('modalSupplierDelivery');
+    toast('Last delivery date set');
+    loadSupplierAdvancedList();
+  }catch(e){
+    toast('Could not set last delivery date');
+    console.error(e);
+  }
+}
+
+/* ---- Compare ---- */
+function openSupplierCompare(){
+  if(!currentSupplier) return;
+  document.getElementById('supplierCmpCrumbBtn').textContent = currentSupplier.name;
+  document.getElementById('supplierCmpEyebrow').textContent = currentSupplier.name;
+  showView('view-supplier-compare');
+  loadSupplierCompare();
+}
+async function loadSupplierCompare(){
+  const weeks = document.getElementById('supplierCmpWeeks').value;
+  const results = document.getElementById('supplierCmpResults');
+  results.innerHTML = '<div class="loading">Loading…</div>';
+  try{
+    const data = await apiGet('suppliers/' + currentSupplier.suppid + '/compare/?weeks=' + weeks);
+    const items = data.items || [];
+    if(items.length === 0){
+      results.innerHTML = '<div class="empty-hint">No items on file for this supplier.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.className = 'finaltable';
+    table.innerHTML = `<thead><tr><th>Item</th><th class="qtycell">Predicted</th><th class="qtycell">Previous Period</th><th class="qtycell">Current Period</th></tr></thead>`;
+    const tbody = document.createElement('tbody');
+    items.forEach(it=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${escapeHtml(it.item_name)}</td>
+        <td class="qtycell">${it.predicted_qty}</td>
+        <td class="qtycell">${it.previous_period_qty}</td>
+        <td class="qtycell">${it.current_period_qty}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    results.innerHTML = '';
+    results.appendChild(table);
+  }catch(e){
+    results.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load comparison.</div>' + errDetailHtml(e);
     console.error(e);
   }
 }
