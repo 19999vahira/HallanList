@@ -309,11 +309,15 @@
   .reasonbadge.out{background:rgba(220,38,38,.15);color:var(--danger);}
   .reasonbadge.low{background:rgba(184,134,11,.15);color:var(--accent-dim);}
   .errdetail{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);margin-top:6px;word-break:break-word;}
-  .newpriceinput,.newmargininput{
+  .priceinput,.margininput{
     width:90px;text-align:right;padding:7px 9px;border-radius:6px;border:1px solid var(--line);
     background:var(--panel2);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:13px;
   }
-  .newpriceinput:focus,.newmargininput:focus{outline:2px solid var(--accent);outline-offset:-1px;}
+  .priceinput:focus,.margininput:focus{outline:2px solid var(--accent);outline-offset:-1px;}
+  .vattag{
+    display:inline-block;margin-left:6px;font-family:'JetBrains Mono',monospace;font-size:10.5px;
+    font-weight:700;color:var(--accent-dim);letter-spacing:.3px;
+  }
   .wsprintprice{display:none;}
   .wsprintmargin{display:none;}
 
@@ -354,8 +358,9 @@
     .hero .eyebrow{color:#555;}
     .hero h2{color:#111;}
     .historymeta-row{color:#555;}
-    .newpriceinput,.newmargininput{display:none !important;}
+    .priceinput,.margininput{display:none !important;}
     .wsprintprice,.wsprintmargin{display:inline-block !important;font-family:'JetBrains Mono',monospace;font-weight:700;color:#111;}
+    .vattag{color:#555;}
 
     /* Picking List: hide the interactive checklist and show a plain tick-sheet instead */
     #pickingItemList{display:none !important;}
@@ -478,8 +483,8 @@
       <input type="text" id="wholesaleSearch" class="historysearch" placeholder="Search item or department…" oninput="renderWholesaleTable()">
       <div style="display:flex;gap:10px;">
         <button class="btn-ghost" onclick="window.print()">Print</button>
-        <button class="btn-ghost" onclick="downloadWholesaleExcel()">Download Excel</button>
-        <button class="btn-amber" onclick="downloadWholesalePDF()">Download PDF</button>
+        <button class="btn-ghost" onclick="openWholesaleExportModal('excel')">Download Excel</button>
+        <button class="btn-amber" onclick="openWholesaleExportModal('pdf')">Download PDF</button>
         <button class="btn-ghost" onclick="emailWholesalePDF()">Email</button>
         <button class="btn-danger-ghost" onclick="openWholesalePasswordModal()">Change Password</button>
       </div>
@@ -1195,6 +1200,33 @@
   </div>
 </div>
 
+<!-- WHOLESALE EXPORT: CHOOSE COLUMNS -->
+<div class="modal-backdrop" id="modalWholesaleExport">
+  <div class="modal" style="width:360px;">
+    <h3>Choose columns</h3>
+    <p class="modal-sub">Pick which columns to include in the file.</p>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;">
+      <input type="checkbox" checked disabled> Item
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;">
+      <input type="checkbox" id="wsColDept" checked> Department
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;">
+      <input type="checkbox" id="wsColCost" checked> Supplier Cost
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;">
+      <input type="checkbox" id="wsColPrice" checked> Trade 3 Price
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;font-size:14px;">
+      <input type="checkbox" id="wsColMargin" checked> Margin
+    </label>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalWholesaleExport')">Cancel</button>
+      <button class="btn-amber" onclick="confirmWholesaleExport()">Export</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ============ CONFIG ============ */
 const API_BASE = "https://hallan-picking-backend.onrender.com/api/";
@@ -1384,21 +1416,9 @@ async function loadWholesalePricing(){
     console.error(e);
   }
 }
-function wholesaleVatLabel(r){
-  // VATID from Vector's VESTOCK: 1 = VAT item, 2 = non-VAT item
-  if(r.vatid === 1) return 'VAT';
-  if(r.vatid === 2) return 'Non-VAT';
-  return '—';
-}
 function wholesaleMarginPct(r){
   if(!r.price_net || r.price_net <= 0 || r.suppcost_net === null || r.suppcost_net === undefined) return null;
   return ((r.price_net - r.suppcost_net) / r.price_net) * 100;
-}
-function wholesaleMarginClass(pct){
-  if(pct === null) return '';
-  if(pct < 0) return 'out';
-  if(pct < 15) return 'low';
-  return 'ok';
 }
 function filteredWholesaleRows(){
   const q = (document.getElementById('wholesaleSearch').value || '').toLowerCase().trim();
@@ -1435,68 +1455,61 @@ function renderWholesaleTable(){
   table.className = 'finaltable';
   const thead = document.createElement('thead');
   thead.innerHTML = `<tr>
-    <th>Item</th><th>Department</th><th>VAT</th>
+    <th>Item</th><th>Department</th>
     <th class="qtycell">Supplier Cost</th><th class="qtycell">Trade 3 Price</th><th class="qtycell">Margin</th>
-    <th class="qtycell">New Margin %</th><th class="qtycell">New Price</th>
   </tr>`;
   const tbody = document.createElement('tbody');
   filtered.forEach(r=>{
-    const margin = wholesaleMarginPct(r);
-    const adj = wholesaleAdjust[r.stock_name] || {};
+    // Live-edited state per row, seeded from the actual synced values the first time it's rendered
+    let adj = wholesaleAdjust[r.stock_name];
+    if(!adj){
+      const initialMargin = wholesaleMarginPct(r);
+      adj = {
+        margin: initialMargin === null ? '' : initialMargin.toFixed(1),
+        price: (r.price_net === null || r.price_net === undefined) ? '' : Number(r.price_net).toFixed(2)
+      };
+      wholesaleAdjust[r.stock_name] = adj;
+    }
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${escapeHtml(r.stock_name)}</td>
       <td>${escapeHtml(r.department_name)}</td>
-      <td>${wholesaleVatLabel(r)}</td>
       <td class="qtycell">${r.suppcost_net === null || r.suppcost_net === undefined ? '—' : Number(r.suppcost_net).toFixed(2)}</td>
-      <td class="qtycell">${r.price_net === null || r.price_net === undefined ? '—' : Number(r.price_net).toFixed(2)}</td>
-      <td class="qtycell"><span class="val ${wholesaleMarginClass(margin)}">${margin === null ? '—' : margin.toFixed(1) + '%'}</span></td>
       <td class="qtycell">
-        <input type="number" step="0.1" class="newmargininput" placeholder="—"
-               value="${adj.margin !== undefined ? adj.margin : ''}">
-        <span class="wsprintmargin">${adj.margin !== undefined && adj.margin !== '' ? Number(adj.margin).toFixed(1) + '%' : '—'}</span>
+        <input type="number" step="0.01" min="0" class="priceinput" value="${adj.price}">
+        <span class="wsprintprice">${adj.price !== '' ? Number(adj.price).toFixed(2) : '—'}</span>
+        ${r.vatid === 1 ? '<span class="vattag">+VAT</span>' : ''}
       </td>
       <td class="qtycell">
-        <input type="number" step="0.01" min="0" class="newpriceinput" placeholder="—"
-               value="${adj.price !== undefined ? adj.price : ''}">
-        <span class="wsprintprice">${adj.price !== undefined && adj.price !== '' ? Number(adj.price).toFixed(2) : '—'}</span>
+        <input type="number" step="0.1" class="margininput" value="${adj.margin}">
+        <span class="wsprintmargin">${adj.margin !== '' ? Number(adj.margin).toFixed(1) + '%' : '—'}</span>
       </td>
     `;
-    const marginInput = tr.querySelector('.newmargininput');
-    const priceInput = tr.querySelector('.newpriceinput');
-    const marginPrint = tr.querySelector('.wsprintmargin');
+    const priceInput = tr.querySelector('.priceinput');
+    const marginInput = tr.querySelector('.margininput');
     const pricePrint = tr.querySelector('.wsprintprice');
-    marginInput.addEventListener('change', () => {
-      const v = marginInput.value.trim();
-      if(v === ''){
-        delete adj.margin;
-      } else {
-        adj.margin = v;
-        const newPrice = wholesalePriceFromMargin(r.suppcost_net, v);
-        if(newPrice !== null){
-          adj.price = newPrice.toFixed(2);
-          priceInput.value = adj.price;
-          pricePrint.textContent = Number(adj.price).toFixed(2);
-        }
-      }
-      marginPrint.textContent = adj.margin !== undefined && adj.margin !== '' ? Number(adj.margin).toFixed(1) + '%' : '—';
-      if(Object.keys(adj).length === 0){ delete wholesaleAdjust[r.stock_name]; } else { wholesaleAdjust[r.stock_name] = adj; }
-    });
+    const marginPrint = tr.querySelector('.wsprintmargin');
     priceInput.addEventListener('change', () => {
       const v = priceInput.value.trim();
-      if(v === ''){
-        delete adj.price;
-      } else {
-        adj.price = v;
-        const newMargin = wholesaleMarginFromPrice(r.suppcost_net, v);
-        if(newMargin !== null){
-          adj.margin = newMargin.toFixed(1);
-          marginInput.value = adj.margin;
-          marginPrint.textContent = Number(adj.margin).toFixed(1) + '%';
-        }
+      adj.price = v;
+      pricePrint.textContent = v !== '' ? Number(v).toFixed(2) : '—';
+      const newMargin = wholesaleMarginFromPrice(r.suppcost_net, v);
+      if(newMargin !== null){
+        adj.margin = newMargin.toFixed(1);
+        marginInput.value = adj.margin;
+        marginPrint.textContent = Number(adj.margin).toFixed(1) + '%';
       }
-      pricePrint.textContent = adj.price !== undefined && adj.price !== '' ? Number(adj.price).toFixed(2) : '—';
-      if(Object.keys(adj).length === 0){ delete wholesaleAdjust[r.stock_name]; } else { wholesaleAdjust[r.stock_name] = adj; }
+    });
+    marginInput.addEventListener('change', () => {
+      const v = marginInput.value.trim();
+      adj.margin = v;
+      marginPrint.textContent = v !== '' ? Number(v).toFixed(1) + '%' : '—';
+      const newPrice = wholesalePriceFromMargin(r.suppcost_net, v);
+      if(newPrice !== null){
+        adj.price = newPrice.toFixed(2);
+        priceInput.value = adj.price;
+        pricePrint.textContent = Number(adj.price).toFixed(2);
+      }
     });
     tbody.appendChild(tr);
   });
@@ -1507,21 +1520,38 @@ function renderWholesaleTable(){
 }
 function wholesaleExportRows(){
   return filteredWholesaleRows().map(r=>{
-    const margin = wholesaleMarginPct(r);
     const adj = wholesaleAdjust[r.stock_name] || {};
+    const priceVal = adj.price !== undefined && adj.price !== '' ? Number(adj.price) : null;
+    const marginVal = adj.margin !== undefined && adj.margin !== '' ? Number(adj.margin) : null;
     return {
-      item: r.stock_name,
+      item: r.stock_name + (r.vatid === 1 ? ' +VAT' : ''),
       department: r.department_name,
-      vat: wholesaleVatLabel(r),
       suppCost: r.suppcost_net === null || r.suppcost_net === undefined ? null : Number(r.suppcost_net),
-      tradePrice: r.price_net === null || r.price_net === undefined ? null : Number(r.price_net),
-      margin: margin === null ? null : Number(margin.toFixed(1)),
-      newMargin: adj.margin !== undefined && adj.margin !== '' ? Number(adj.margin) : null,
-      newPrice: adj.price !== undefined && adj.price !== '' ? Number(adj.price) : null
+      tradePrice: priceVal,
+      margin: marginVal
     };
   });
 }
-function buildWholesalePDFDoc(){
+
+/* ---- Export: choose columns, then PDF or Excel ---- */
+let wholesaleExportTarget = null; // 'pdf' | 'excel'
+function openWholesaleExportModal(target){
+  if(wholesaleRows.length === 0){ toast('Nothing to export yet'); return; }
+  wholesaleExportTarget = target;
+  openModal('modalWholesaleExport');
+}
+function confirmWholesaleExport(){
+  const columns = {
+    department: document.getElementById('wsColDept').checked,
+    suppCost: document.getElementById('wsColCost').checked,
+    tradePrice: document.getElementById('wsColPrice').checked,
+    margin: document.getElementById('wsColMargin').checked
+  };
+  closeModal('modalWholesaleExport');
+  if(wholesaleExportTarget === 'excel') downloadWholesaleExcel(columns);
+  else downloadWholesalePDF(columns);
+}
+function buildWholesalePDFDoc(columns){
   if(wholesaleRows.length === 0) return null;
   const rows = wholesaleExportRows();
   const { jsPDF } = window.jspdf;
@@ -1531,19 +1561,24 @@ function buildWholesalePDFDoc(){
   doc.setFontSize(9);
   doc.setTextColor(120);
   doc.text('Generated ' + new Date().toLocaleString() + ' — CONFIDENTIAL', 14, 24);
-  const body = rows.map(r => [
-    r.item,
-    r.department,
-    r.vat,
-    r.suppCost === null ? '—' : r.suppCost.toFixed(2),
-    r.tradePrice === null ? '—' : r.tradePrice.toFixed(2),
-    r.margin === null ? '—' : r.margin.toFixed(1) + '%',
-    r.newMargin === null ? '' : r.newMargin.toFixed(1) + '%',
-    r.newPrice === null ? '' : r.newPrice.toFixed(2)
-  ]);
+
+  const head = ['Item'];
+  if(columns.department) head.push('Department');
+  if(columns.suppCost) head.push('Supplier Cost');
+  if(columns.tradePrice) head.push('Trade 3 Price');
+  if(columns.margin) head.push('Margin');
+
+  const body = rows.map(r => {
+    const line = [r.item];
+    if(columns.department) line.push(r.department);
+    if(columns.suppCost) line.push(r.suppCost === null ? '—' : r.suppCost.toFixed(2));
+    if(columns.tradePrice) line.push(r.tradePrice === null ? '—' : r.tradePrice.toFixed(2));
+    if(columns.margin) line.push(r.margin === null ? '—' : r.margin.toFixed(1) + '%');
+    return line;
+  });
   doc.autoTable({
     startY: 30,
-    head: [['Item', 'Department', 'VAT', 'Supplier Cost', 'Trade 3 Price', 'Margin', 'New Margin', 'New Price']],
+    head: [head],
     body,
     theme: 'grid',
     headStyles: { fillColor: [30,34,42] },
@@ -1552,9 +1587,9 @@ function buildWholesalePDFDoc(){
   });
   return doc;
 }
-function downloadWholesalePDF(){
+function downloadWholesalePDF(columns){
   try{
-    const doc = buildWholesalePDFDoc();
+    const doc = buildWholesalePDFDoc(columns);
     if(!doc) return;
     doc.save('wholesale-pricing-' + new Date().toISOString().slice(0,10) + '.pdf');
   }catch(e){
@@ -1564,7 +1599,8 @@ function downloadWholesalePDF(){
 }
 function emailWholesalePDF(){
   try{
-    const doc = buildWholesalePDFDoc();
+    // Email uses every column — the compact filter is really only for what's printed/downloaded to share
+    const doc = buildWholesalePDFDoc({ department: true, suppCost: true, tradePrice: true, margin: true });
     if(!doc){ toast('Nothing to email yet'); return; }
     shareOrEmailPDF(doc, 'wholesale-pricing-' + new Date().toISOString().slice(0,10) + '.pdf', 'Wholesale Pricing List — Trade 3');
   }catch(e){
@@ -1572,22 +1608,25 @@ function emailWholesalePDF(){
     console.error(e);
   }
 }
-function downloadWholesaleExcel(){
+function downloadWholesaleExcel(columns){
   if(wholesaleRows.length === 0) return;
   try{
     const rows = wholesaleExportRows();
-    const sheetData = rows.map(r => ({
-      'Item': r.item,
-      'Department': r.department,
-      'VAT': r.vat,
-      'Supplier Cost': r.suppCost,
-      'Trade 3 Price': r.tradePrice,
-      'Margin %': r.margin,
-      'New Margin %': r.newMargin === null ? '' : r.newMargin,
-      'New Price': r.newPrice === null ? '' : r.newPrice
-    }));
+    const sheetData = rows.map(r => {
+      const line = { 'Item': r.item };
+      if(columns.department) line['Department'] = r.department;
+      if(columns.suppCost) line['Supplier Cost'] = r.suppCost;
+      if(columns.tradePrice) line['Trade 3 Price'] = r.tradePrice;
+      if(columns.margin) line['Margin %'] = r.margin;
+      return line;
+    });
     const ws = XLSX.utils.json_to_sheet(sheetData);
-    ws['!cols'] = [{ wch: 36 }, { wch: 20 }, { wch: 8 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 12 }];
+    const widths = [{ wch: 40 }];
+    if(columns.department) widths.push({ wch: 20 });
+    if(columns.suppCost) widths.push({ wch: 14 });
+    if(columns.tradePrice) widths.push({ wch: 14 });
+    if(columns.margin) widths.push({ wch: 10 });
+    ws['!cols'] = widths;
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Wholesale Pricing');
     XLSX.writeFile(wb, 'wholesale-pricing-' + new Date().toISOString().slice(0,10) + '.xlsx');
