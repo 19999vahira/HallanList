@@ -10,6 +10,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/tesseract.js@5.0.4/dist/tesseract.min.js"></script>
 <style>
   :root{
     --bg:#ffffff; --panel:#f4f6f9; --panel2:#eceff3; --panel3:#e4e8ee;
@@ -1049,8 +1050,9 @@
       <input type="text" id="invoicesSearchInput" class="historysearch" style="max-width:420px;"
              placeholder="Search supplier or reference…" oninput="renderInvoicesList()">
       <div style="display:flex;gap:10px;">
-        <button class="btn-ghost" onclick="downloadInvoicesListCSV()">Download CSV</button>
-        <button class="btn-amber" onclick="downloadInvoicesListPDF()">Download PDF</button>
+        <button class="btn-ghost" onclick="openInvoiceExportModal('csv', 'list')">Download CSV</button>
+        <button class="btn-ghost" onclick="openInvoiceExportModal('excel', 'list')">Download Excel</button>
+        <button class="btn-amber" onclick="openInvoiceExportModal('pdf', 'list')">Download PDF</button>
       </div>
     </div>
     <div id="invoicesListResults"></div>
@@ -1072,8 +1074,10 @@
     <div class="actionbar">
       <span class="mono" id="invoiceDetailCount" style="color:var(--text-dim);font-size:12px;"></span>
       <div style="display:flex;gap:10px;">
-        <button class="btn-ghost" onclick="downloadInvoiceDetailCSV()">Download CSV</button>
-        <button class="btn-amber" onclick="downloadInvoiceDetailPDF()">Download PDF</button>
+        <button class="btn-ghost" onclick="openInvoiceAutomatedModal()">🤖 Automated Check</button>
+        <button class="btn-ghost" onclick="openInvoiceExportModal('csv', 'detail')">Download CSV</button>
+        <button class="btn-ghost" onclick="openInvoiceExportModal('excel', 'detail')">Download Excel</button>
+        <button class="btn-amber" onclick="openInvoiceExportModal('pdf', 'detail')">Download PDF</button>
       </div>
     </div>
     <div id="invoiceDetailResults"></div>
@@ -1109,7 +1113,38 @@
   </div>
 </div>
 
-<!-- REPLENISHMENT PRINT LIST -->
+<!-- INVOICES: EXPORT COLUMN PICKER -->
+<div class="modal-backdrop" id="modalInvoiceExport">
+  <div class="modal" style="width:360px;">
+    <h3>Choose columns</h3>
+    <p class="modal-sub">Pick which columns to include in the file.</p>
+    <div id="invoiceExportColumns"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalInvoiceExport')">Cancel</button>
+      <button class="btn-amber" onclick="confirmInvoiceExport()">Export</button>
+    </div>
+  </div>
+</div>
+
+<!-- INVOICES: AUTOMATED CHECK (OCR) -->
+<div class="modal-backdrop" id="modalInvoiceAutomated">
+  <div class="modal" style="width:520px;">
+    <h3>Automated Check</h3>
+    <p class="modal-sub">
+      Upload a photo or scan of the physical invoice. This reads it with free, in-browser OCR
+      (Tesseract) and compares it line-by-line against what's in the system — it's a best-effort
+      text match, not true AI understanding, so please review the results rather than trusting them blindly.
+    </p>
+    <input type="file" id="invoiceOcrFile" accept="image/*">
+    <div id="invoiceOcrProgress" class="empty-hint" style="display:none;margin-top:10px;"></div>
+    <div id="invoiceOcrResults" style="margin-top:14px;max-height:45vh;overflow:auto;"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalInvoiceAutomated')">Close</button>
+      <button class="btn-amber" id="invoiceOcrRunBtn" onclick="runInvoiceOcrCheck()">Run Check</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modalReplenPrint">
   <div class="modal" style="width:480px;">
     <div class="hero" style="margin-bottom:18px;">
@@ -2869,6 +2904,7 @@ let invoicesData = [];
 let invoicesSort = { col: 'recdate', dir: 'desc' };
 let currentInvoiceNote = null;
 let currentInvoiceItems = [];
+let invoiceItemAdjust = []; // live-edited copy, keyed by row index (not stockid — same product can appear twice on a note)
 
 function openInvoices(){ showView('view-invoices-hub'); }
 
@@ -2989,6 +3025,17 @@ async function loadInvoiceDetailItems(){
   results.innerHTML = '<div class="loading">Loading…</div>';
   try{
     const data = await apiGet('invoices/notes/' + currentInvoiceNote.suppid + '/' + encodeURIComponent(currentInvoiceNote.recnoteref) + '/items/');
+    // Keyed by row index, not stockid — the same product can appear as more
+    // than one line on a note (separate batches), so stockid isn't unique here.
+    invoiceItemAdjust = (data.items || []).map(it => ({
+      stock_name: it.stock_name,
+      cost_price: it.cost_price !== null && it.cost_price !== undefined ? Number(it.cost_price).toFixed(2) : '',
+      selling_price: it.selling_price !== null && it.selling_price !== undefined ? Number(it.selling_price).toFixed(2) : '',
+      pack_size: it.pack_size !== null && it.pack_size !== undefined ? String(it.pack_size) : '',
+      qty: it.qty !== null && it.qty !== undefined ? String(it.qty) : '',
+      net_value: it.net_value !== null && it.net_value !== undefined ? Number(it.net_value).toFixed(2) : '',
+      vat_value: it.vat_value !== null && it.vat_value !== undefined ? Number(it.vat_value).toFixed(2) : ''
+    }));
     currentInvoiceItems = data.items || [];
     document.getElementById('invoiceDetailCount').textContent = currentInvoiceItems.length + ' item' + (currentInvoiceItems.length === 1 ? '' : 's');
     renderInvoiceDetailItems();
@@ -2997,9 +3044,22 @@ async function loadInvoiceDetailItems(){
     console.error(e);
   }
 }
+function invoiceRecalcTotals(){
+  let netSum = 0, vatSum = 0;
+  invoiceItemAdjust.forEach(row => {
+    netSum += row.net_value !== '' ? Number(row.net_value) : 0;
+    vatSum += row.vat_value !== '' ? Number(row.vat_value) : 0;
+  });
+  const totalRow = document.getElementById('invoiceTotalsRow');
+  if(totalRow){
+    document.getElementById('invoiceTotalNet').textContent = netSum.toFixed(2);
+    document.getElementById('invoiceTotalVat').textContent = vatSum.toFixed(2);
+    document.getElementById('invoiceTotalGrand').textContent = (netSum + vatSum).toFixed(2);
+  }
+}
 function renderInvoiceDetailItems(){
   const results = document.getElementById('invoiceDetailResults');
-  if(currentInvoiceItems.length === 0){
+  if(invoiceItemAdjust.length === 0){
     results.innerHTML = '<div class="empty-hint">No items on this note.</div>';
     return;
   }
@@ -3010,22 +3070,55 @@ function renderInvoiceDetailItems(){
     <th class="qtycell">Pack Size</th><th class="qtycell">Qty</th><th class="qtycell">Net Value</th><th class="qtycell">VAT Value</th>
   </tr></thead>`;
   const tbody = document.createElement('tbody');
-  currentInvoiceItems.forEach(it=>{
+  invoiceItemAdjust.forEach((row, idx)=>{
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${escapeHtml(it.stock_name || '—')}</td>
-      <td class="qtycell">${it.cost_price !== null ? Number(it.cost_price).toFixed(2) : '—'}</td>
-      <td class="qtycell">${it.selling_price !== null ? Number(it.selling_price).toFixed(2) : '—'}</td>
-      <td class="qtycell">${it.pack_size !== null ? it.pack_size : '—'}</td>
-      <td class="qtycell">${it.qty !== null ? it.qty : '—'}</td>
-      <td class="qtycell">${it.net_value !== null ? Number(it.net_value).toFixed(2) : '—'}</td>
-      <td class="qtycell">${it.vat_value !== null ? Number(it.vat_value).toFixed(2) : '—'}</td>
+      <td>${escapeHtml(row.stock_name || '—')}</td>
+      <td class="qtycell"><input type="number" step="0.01" min="0" class="priceinput" data-idx="${idx}" data-field="cost_price" value="${row.cost_price}"></td>
+      <td class="qtycell"><input type="number" step="0.01" min="0" class="priceinput" data-idx="${idx}" data-field="selling_price" value="${row.selling_price}"></td>
+      <td class="qtycell"><input type="text" class="priceinput" style="width:70px;" data-idx="${idx}" data-field="pack_size" value="${escapeHtml(row.pack_size)}"></td>
+      <td class="qtycell"><input type="number" step="1" min="0" class="priceinput" style="width:60px;" data-idx="${idx}" data-field="qty" value="${row.qty}"></td>
+      <td class="qtycell"><input type="number" step="0.01" min="0" class="priceinput" data-idx="${idx}" data-field="net_value" value="${row.net_value}"></td>
+      <td class="qtycell"><input type="number" step="0.01" min="0" class="priceinput" data-idx="${idx}" data-field="vat_value" value="${row.vat_value}"></td>
     `;
     tbody.appendChild(tr);
   });
   table.appendChild(tbody);
+  const tfoot = document.createElement('tfoot');
+  tfoot.innerHTML = `<tr id="invoiceTotalsRow" style="font-weight:700;border-top:2px solid var(--line);">
+    <td colspan="5" style="text-align:right;">Total</td>
+    <td class="qtycell" id="invoiceTotalNet">0.00</td>
+    <td class="qtycell" id="invoiceTotalVat">0.00</td>
+  </tr>
+  <tr style="font-weight:700;">
+    <td colspan="5" style="text-align:right;">Grand Total (Net + VAT)</td>
+    <td class="qtycell" colspan="2" id="invoiceTotalGrand">0.00</td>
+  </tr>`;
+  table.appendChild(tfoot);
   results.innerHTML = '';
   results.appendChild(table);
+
+  // Wire up edits: Cost Price or Qty changing recalculates Net Value automatically;
+  // every field stays directly editable too (Net Value can still be overridden by hand after).
+  table.querySelectorAll('input').forEach(input => {
+    input.addEventListener('change', () => {
+      const idx = Number(input.dataset.idx);
+      const field = input.dataset.field;
+      const row = invoiceItemAdjust[idx];
+      row[field] = input.value.trim();
+      if(field === 'cost_price' || field === 'qty'){
+        const cost = Number(row.cost_price);
+        const qty = Number(row.qty);
+        if(!isNaN(cost) && !isNaN(qty) && row.cost_price !== '' && row.qty !== ''){
+          row.net_value = (cost * qty).toFixed(2);
+          const netInput = table.querySelector(`input[data-idx="${idx}"][data-field="net_value"]`);
+          if(netInput) netInput.value = row.net_value;
+        }
+      }
+      invoiceRecalcTotals();
+    });
+  });
+  invoiceRecalcTotals();
 }
 
 /* ---- Shared CSV (UTF-8) + PDF export helpers ---- */
@@ -3047,100 +3140,243 @@ function downloadCSV(filename, headers, rows){
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-function downloadInvoicesListCSV(){
-  const rows = invoicesFilteredSorted();
-  if(rows.length === 0){ toast('Nothing to export'); return; }
-  downloadCSV(
-    'invoices-' + currentInvoiceStatus + '-' + new Date().toISOString().slice(0,10) + '.csv',
-    ['Reference', 'Supplier', 'Received Date', 'Post Date', 'Items', 'Net', 'VAT'],
-    rows.map(n => [
-      n.recnoteref || '', n.supplier_name || '',
-      n.recdate ? new Date(n.recdate).toLocaleDateString() : '',
-      n.postdate ? new Date(n.postdate).toLocaleDateString() : '',
-      n.item_count, n.total_net !== null ? Number(n.total_net).toFixed(2) : '',
-      n.total_vat !== null ? Number(n.total_vat).toFixed(2) : ''
-    ])
-  );
+/* ---- Export column picker (shared by the notes list and note detail) ---- */
+let invoiceExportFormat = null; // 'csv' | 'excel' | 'pdf'
+let invoiceExportContext = null; // 'list' | 'detail'
+const INVOICE_LIST_COLUMNS = [
+  ['recnoteref', 'Reference'], ['supplier_name', 'Supplier'], ['recdate', 'Received Date'],
+  ['postdate', 'Post Date'], ['item_count', 'Items'], ['total_net', 'Net'], ['total_vat', 'VAT']
+];
+const INVOICE_DETAIL_COLUMNS = [
+  ['cost_price', 'Cost Price'], ['selling_price', 'Selling Price'], ['pack_size', 'Pack Size'],
+  ['qty', 'Qty'], ['net_value', 'Net Value'], ['vat_value', 'VAT Value']
+];
+function openInvoiceExportModal(format, context){
+  invoiceExportFormat = format;
+  invoiceExportContext = context;
+  const cols = context === 'list' ? INVOICE_LIST_COLUMNS : INVOICE_DETAIL_COLUMNS;
+  const mandatoryLabel = context === 'list' ? null : 'Product Name';
+  const box = document.getElementById('invoiceExportColumns');
+  box.innerHTML = (mandatoryLabel ? `<label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;">
+    <input type="checkbox" checked disabled> ${mandatoryLabel}
+  </label>` : '') + cols.map(([key, label]) => `
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;">
+      <input type="checkbox" id="invCol_${key}" checked> ${label}
+    </label>
+  `).join('');
+  openModal('modalInvoiceExport');
 }
-function downloadInvoicesListPDF(){
+function confirmInvoiceExport(){
+  const cols = invoiceExportContext === 'list' ? INVOICE_LIST_COLUMNS : INVOICE_DETAIL_COLUMNS;
+  const selected = cols.filter(([key]) => document.getElementById('invCol_' + key).checked);
+  closeModal('modalInvoiceExport');
+  if(invoiceExportContext === 'list') exportInvoicesList(invoiceExportFormat, selected);
+  else exportInvoiceDetail(invoiceExportFormat, selected);
+}
+function invoiceListCellValue(n, key){
+  if(key === 'recdate') return n.recdate ? new Date(n.recdate).toLocaleDateString() : '';
+  if(key === 'postdate') return n.postdate ? new Date(n.postdate).toLocaleDateString() : '';
+  if(key === 'total_net' || key === 'total_vat') return n[key] !== null && n[key] !== undefined ? Number(n[key]).toFixed(2) : '';
+  return n[key] ?? '';
+}
+function invoiceDetailCellValue(row, key){
+  return row[key] !== undefined ? row[key] : '';
+}
+function exportInvoicesList(format, selected){
   const rows = invoicesFilteredSorted();
   if(rows.length === 0){ toast('Nothing to export'); return; }
-  try{
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text('Invoices — ' + (currentInvoiceStatus === 'pending' ? 'Pending' : 'Received'), 14, 18);
-    doc.setFontSize(9);
-    doc.setTextColor(120);
-    doc.text('Generated ' + new Date().toLocaleString(), 14, 24);
-    doc.autoTable({
-      startY: 30,
-      head: [['Reference', 'Supplier', 'Received Date', 'Post Date', 'Items', 'Net', 'VAT']],
-      body: rows.map(n => [
-        n.recnoteref || '—', n.supplier_name || '—',
-        n.recdate ? new Date(n.recdate).toLocaleDateString() : '—',
-        n.postdate ? new Date(n.postdate).toLocaleDateString() : '—',
-        n.item_count, n.total_net !== null ? Number(n.total_net).toFixed(2) : '—',
-        n.total_vat !== null ? Number(n.total_vat).toFixed(2) : '—'
-      ]),
-      theme: 'grid',
-      headStyles: { fillColor: [30,34,42] },
-      styles: { fontSize: 9 },
-      margin: { left: 14, right: 14 }
+  const headers = selected.map(([, label]) => label);
+  const body = rows.map(n => selected.map(([key]) => invoiceListCellValue(n, key)));
+  const base = 'invoices-' + currentInvoiceStatus + '-' + new Date().toISOString().slice(0,10);
+  if(format === 'csv'){
+    downloadCSV(base + '.csv', headers, body);
+  }else if(format === 'excel'){
+    const sheetData = rows.map(n => {
+      const line = {};
+      selected.forEach(([key, label]) => { line[label] = invoiceListCellValue(n, key); });
+      return line;
     });
-    doc.save('invoices-' + currentInvoiceStatus + '-' + new Date().toISOString().slice(0,10) + '.pdf');
-  }catch(e){
-    toast('Could not generate PDF');
-    console.error(e);
+    const ws = XLSX.utils.json_to_sheet(sheetData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Invoices');
+    XLSX.writeFile(wb, base + '.xlsx');
+  }else{
+    try{
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      doc.setFontSize(16);
+      doc.text('Invoices — ' + (currentInvoiceStatus === 'pending' ? 'Pending' : 'Received'), 14, 18);
+      doc.setFontSize(9);
+      doc.setTextColor(120);
+      doc.text('Generated ' + new Date().toLocaleString(), 14, 24);
+      doc.autoTable({
+        startY: 30, head: [headers], body,
+        theme: 'grid', headStyles: { fillColor: [30,34,42] }, styles: { fontSize: 9 },
+        margin: { left: 14, right: 14 }
+      });
+      doc.save(base + '.pdf');
+    }catch(e){
+      toast('Could not generate PDF');
+      console.error(e);
+    }
   }
 }
-function downloadInvoiceDetailCSV(){
-  if(currentInvoiceItems.length === 0){ toast('Nothing to export'); return; }
-  downloadCSV(
-    'invoice-' + (currentInvoiceNote.recnoteref || 'note') + '.csv',
-    ['Product Name', 'Cost Price', 'Selling Price', 'Pack Size', 'Qty', 'Net Value', 'VAT Value'],
-    currentInvoiceItems.map(it => [
-      it.stock_name || '',
-      it.cost_price !== null ? Number(it.cost_price).toFixed(2) : '',
-      it.selling_price !== null ? Number(it.selling_price).toFixed(2) : '',
-      it.pack_size !== null ? it.pack_size : '',
-      it.qty !== null ? it.qty : '',
-      it.net_value !== null ? Number(it.net_value).toFixed(2) : '',
-      it.vat_value !== null ? Number(it.vat_value).toFixed(2) : ''
-    ])
-  );
-}
-function downloadInvoiceDetailPDF(){
-  if(currentInvoiceItems.length === 0){ toast('Nothing to export'); return; }
-  try{
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text('Invoice — ' + (currentInvoiceNote.recnoteref || ''), 14, 18);
-    doc.setFontSize(9);
-    doc.setTextColor(120);
-    doc.text((currentInvoiceNote.supplier_name || '') + ' — Generated ' + new Date().toLocaleString(), 14, 24);
-    doc.autoTable({
-      startY: 30,
-      head: [['Product Name', 'Cost Price', 'Selling Price', 'Pack Size', 'Qty', 'Net Value', 'VAT Value']],
-      body: currentInvoiceItems.map(it => [
-        it.stock_name || '—',
-        it.cost_price !== null ? Number(it.cost_price).toFixed(2) : '—',
-        it.selling_price !== null ? Number(it.selling_price).toFixed(2) : '—',
-        it.pack_size !== null ? it.pack_size : '—',
-        it.qty !== null ? it.qty : '—',
-        it.net_value !== null ? Number(it.net_value).toFixed(2) : '—',
-        it.vat_value !== null ? Number(it.vat_value).toFixed(2) : '—'
-      ]),
-      theme: 'grid',
-      headStyles: { fillColor: [30,34,42] },
-      styles: { fontSize: 9 },
-      margin: { left: 14, right: 14 }
+function exportInvoiceDetail(format, selected){
+  if(invoiceItemAdjust.length === 0){ toast('Nothing to export'); return; }
+  const headers = ['Product Name', ...selected.map(([, label]) => label)];
+  const body = invoiceItemAdjust.map(row => [row.stock_name || '', ...selected.map(([key]) => invoiceDetailCellValue(row, key))]);
+  const base = 'invoice-' + (currentInvoiceNote.recnoteref || 'note');
+  if(format === 'csv'){
+    downloadCSV(base + '.csv', headers, body);
+  }else if(format === 'excel'){
+    const sheetData = invoiceItemAdjust.map(row => {
+      const line = { 'Product Name': row.stock_name || '' };
+      selected.forEach(([key, label]) => { line[label] = invoiceDetailCellValue(row, key); });
+      return line;
     });
-    doc.save('invoice-' + (currentInvoiceNote.recnoteref || 'note') + '.pdf');
+    const ws = XLSX.utils.json_to_sheet(sheetData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Invoice');
+    XLSX.writeFile(wb, base + '.xlsx');
+  }else{
+    try{
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      doc.setFontSize(16);
+      doc.text('Invoice — ' + (currentInvoiceNote.recnoteref || ''), 14, 18);
+      doc.setFontSize(9);
+      doc.setTextColor(120);
+      doc.text((currentInvoiceNote.supplier_name || '') + ' — Generated ' + new Date().toLocaleString(), 14, 24);
+      doc.autoTable({
+        startY: 30, head: [headers], body,
+        theme: 'grid', headStyles: { fillColor: [30,34,42] }, styles: { fontSize: 9 },
+        margin: { left: 14, right: 14 }
+      });
+      doc.save(base + '.pdf');
+    }catch(e){
+      toast('Could not generate PDF');
+      console.error(e);
+    }
+  }
+}
+
+/* ---- Automated Check: free in-browser OCR (Tesseract.js) + best-effort line matching ----
+   This is NOT true AI understanding of the invoice — it's OCR text extraction plus a
+   fuzzy name/number match against what's already in the system. Always worth a human
+   glance at the results, especially on messy or low-quality scans. ---- */
+function openInvoiceAutomatedModal(){
+  document.getElementById('invoiceOcrFile').value = '';
+  document.getElementById('invoiceOcrProgress').style.display = 'none';
+  document.getElementById('invoiceOcrResults').innerHTML = '';
+  openModal('modalInvoiceAutomated');
+}
+function invoiceOcrParseLines(text){
+  // Best-effort: a line with some non-numeric leading text and at least one number
+  // is treated as a product line. First number found = qty guess, last number = value guess.
+  const numRe = /-?\d+(?:\.\d+)?/g;
+  return text.split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length > 3)
+    .map(line => {
+      const nums = line.match(numRe);
+      if(!nums || nums.length === 0) return null;
+      const name = line.replace(numRe, '').replace(/[|_—-]+/g, ' ').trim();
+      if(name.length < 3) return null;
+      return {
+        raw: line,
+        name,
+        qtyGuess: Number(nums[0]),
+        valueGuess: Number(nums[nums.length - 1])
+      };
+    })
+    .filter(Boolean);
+}
+function invoiceOcrWordOverlap(a, b){
+  const wa = new Set(a.toLowerCase().split(/\s+/).filter(w => w.length > 2));
+  const wb = new Set(b.toLowerCase().split(/\s+/).filter(w => w.length > 2));
+  if(wa.size === 0 || wb.size === 0) return 0;
+  let hits = 0;
+  wa.forEach(w => { if(wb.has(w)) hits++; });
+  return hits / Math.max(wa.size, wb.size);
+}
+async function runInvoiceOcrCheck(){
+  const fileInput = document.getElementById('invoiceOcrFile');
+  const file = fileInput.files && fileInput.files[0];
+  if(!file){ toast('Choose an image first'); return; }
+  const progress = document.getElementById('invoiceOcrProgress');
+  const results = document.getElementById('invoiceOcrResults');
+  const btn = document.getElementById('invoiceOcrRunBtn');
+  progress.style.display = 'block';
+  progress.textContent = 'Reading the image (this can take a moment)…';
+  results.innerHTML = '';
+  btn.disabled = true;
+  try{
+    const { data } = await Tesseract.recognize(file, 'eng', {
+      logger: m => {
+        if(m.status === 'recognizing text'){
+          progress.textContent = 'Reading the image… ' + Math.round((m.progress || 0) * 100) + '%';
+        }
+      }
+    });
+    const scannedLines = invoiceOcrParseLines(data.text || '');
+    if(scannedLines.length === 0){
+      progress.style.display = 'none';
+      results.innerHTML = '<div class="empty-hint">Could not find any readable product lines in that image. Try a clearer, flatter photo.</div>';
+      return;
+    }
+
+    // Match each system item to its best-scoring scanned line
+    const usedScanIdx = new Set();
+    const rows = invoiceItemAdjust.map(sysRow => {
+      let bestIdx = -1, bestScore = 0;
+      scannedLines.forEach((sl, i) => {
+        if(usedScanIdx.has(i)) return;
+        const score = invoiceOcrWordOverlap(sysRow.stock_name || '', sl.name);
+        if(score > bestScore){ bestScore = score; bestIdx = i; }
+      });
+      if(bestIdx === -1 || bestScore < 0.34){
+        return { name: sysRow.stock_name, sysQty: sysRow.qty, sysNet: sysRow.net_value, scan: null, comment: 'Not found on scanned invoice' };
+      }
+      usedScanIdx.add(bestIdx);
+      const sl = scannedLines[bestIdx];
+      const qtyMatches = Number(sysRow.qty) === sl.qtyGuess;
+      const comment = qtyMatches
+        ? 'Qty matches (' + sl.qtyGuess + ')'
+        : 'Qty differs — system: ' + sysRow.qty + ', scan: ' + sl.qtyGuess;
+      return { name: sysRow.stock_name, sysQty: sysRow.qty, sysNet: sysRow.net_value, scan: sl, comment };
+    });
+    const unmatchedScans = scannedLines.filter((sl, i) => !usedScanIdx.has(i));
+
+    progress.style.display = 'none';
+    const table = document.createElement('table');
+    table.className = 'finaltable';
+    table.innerHTML = `<thead><tr><th>Product</th><th class="qtycell">System Qty</th><th class="qtycell">Scanned Qty</th><th>Comment</th></tr></thead>`;
+    const tbody = document.createElement('tbody');
+    rows.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${escapeHtml(r.name || '—')}</td>
+        <td class="qtycell">${r.sysQty || '—'}</td>
+        <td class="qtycell">${r.scan ? r.scan.qtyGuess : '—'}</td>
+        <td style="font-size:12.5px;color:${r.scan ? (r.comment.startsWith('Qty matches') ? 'var(--green)' : 'var(--danger)') : 'var(--text-dim)'};">${escapeHtml(r.comment)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    results.appendChild(table);
+    if(unmatchedScans.length > 0){
+      const note = document.createElement('div');
+      note.className = 'empty-hint';
+      note.style.marginTop = '10px';
+      note.textContent = unmatchedScans.length + ' line(s) on the scan didn\'t match anything in the system — could be OCR noise, or genuinely extra items.';
+      results.appendChild(note);
+    }
   }catch(e){
-    toast('Could not generate PDF');
+    progress.style.display = 'none';
+    results.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not read that image.</div>';
     console.error(e);
+  }finally{
+    btn.disabled = false;
   }
 }
 
