@@ -3024,7 +3024,7 @@ async function loadInvoiceDetailItems(){
   const results = document.getElementById('invoiceDetailResults');
   results.innerHTML = '<div class="loading">Loading…</div>';
   try{
-    const data = await apiGet('invoices/notes/' + currentInvoiceNote.suppid + '/' + encodeURIComponent(currentInvoiceNote.recnoteref) + '/items/');
+    const data = await apiGet('invoices/notes/' + currentInvoiceNote.suppid + '/' + encodeURIComponent(currentInvoiceNote.recnoteid) + '/items/');
     // Keyed by row index, not stockid — the same product can appear as more
     // than one line on a note (separate batches), so stockid isn't unique here.
     invoiceItemAdjust = (data.items || []).map(it => ({
