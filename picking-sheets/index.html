@@ -1133,7 +1133,7 @@
     <p class="modal-sub">
       Upload a photo or scan of the physical invoice. This reads it with free, in-browser OCR
       (Tesseract) and compares it line-by-line against what's in the system — it's a best-effort
-      text match, not true AI understanding.
+      text match, not true AI understanding, so please review the results rather than trusting them blindly.
     </p>
     <input type="file" id="invoiceOcrFile" accept="image/*">
     <div id="invoiceOcrProgress" class="empty-hint" style="display:none;margin-top:10px;"></div>
@@ -3033,6 +3033,7 @@ async function loadInvoiceDetailItems(){
       retail_price: it.retail_price !== null && it.retail_price !== undefined ? Number(it.retail_price).toFixed(2) : '',
       online_price: it.online_price !== null && it.online_price !== undefined ? Number(it.online_price).toFixed(2) : '',
       pack_size: it.pack_size !== null && it.pack_size !== undefined ? String(it.pack_size) : '',
+      vatid: it.vatid !== null && it.vatid !== undefined ? String(it.vatid) : '',
       qty: it.qty !== null && it.qty !== undefined ? String(it.qty) : '',
       net_value: it.net_value !== null && it.net_value !== undefined ? Number(it.net_value).toFixed(2) : '',
       vat_value: it.vat_value !== null && it.vat_value !== undefined ? Number(it.vat_value).toFixed(2) : ''
@@ -3068,7 +3069,7 @@ function renderInvoiceDetailItems(){
   table.className = 'finaltable';
   table.innerHTML = `<thead><tr>
     <th>Product Name</th><th class="qtycell">Cost Price</th><th class="qtycell">Retail Price</th><th class="qtycell">Online Price</th>
-    <th class="qtycell">Pack Size</th><th class="qtycell">Qty</th><th class="qtycell">Net Value</th><th class="qtycell">VAT Value</th>
+    <th class="qtycell">Pack Size</th><th class="qtycell">VAT Code</th><th class="qtycell">Qty</th><th class="qtycell">Net Value</th><th class="qtycell">VAT Value</th>
   </tr></thead>`;
   const tbody = document.createElement('tbody');
   invoiceItemAdjust.forEach((row, idx)=>{
@@ -3079,6 +3080,7 @@ function renderInvoiceDetailItems(){
       <td class="qtycell"><input type="number" step="0.01" min="0" class="priceinput" data-idx="${idx}" data-field="retail_price" value="${row.retail_price}"></td>
       <td class="qtycell"><input type="number" step="0.01" min="0" class="priceinput" data-idx="${idx}" data-field="online_price" value="${row.online_price}"></td>
       <td class="qtycell"><input type="text" class="priceinput" style="width:70px;" data-idx="${idx}" data-field="pack_size" value="${escapeHtml(row.pack_size)}"></td>
+      <td class="qtycell"><input type="number" step="1" min="0" class="priceinput" style="width:60px;" data-idx="${idx}" data-field="vatid" value="${row.vatid}"></td>
       <td class="qtycell"><input type="number" step="1" min="0" class="priceinput" style="width:60px;" data-idx="${idx}" data-field="qty" value="${row.qty}"></td>
       <td class="qtycell"><input type="number" step="0.01" min="0" class="priceinput" data-idx="${idx}" data-field="net_value" value="${row.net_value}"></td>
       <td class="qtycell"><input type="number" step="0.01" min="0" class="priceinput" data-idx="${idx}" data-field="vat_value" value="${row.vat_value}"></td>
@@ -3088,12 +3090,12 @@ function renderInvoiceDetailItems(){
   table.appendChild(tbody);
   const tfoot = document.createElement('tfoot');
   tfoot.innerHTML = `<tr id="invoiceTotalsRow" style="font-weight:700;border-top:2px solid var(--line);">
-    <td colspan="6" style="text-align:right;">Total</td>
+    <td colspan="7" style="text-align:right;">Total</td>
     <td class="qtycell" id="invoiceTotalNet">0.00</td>
     <td class="qtycell" id="invoiceTotalVat">0.00</td>
   </tr>
   <tr style="font-weight:700;">
-    <td colspan="6" style="text-align:right;">Grand Total (Net + VAT)</td>
+    <td colspan="7" style="text-align:right;">Grand Total (Net + VAT)</td>
     <td class="qtycell" colspan="2" id="invoiceTotalGrand">0.00</td>
   </tr>`;
   table.appendChild(tfoot);
@@ -3151,7 +3153,7 @@ const INVOICE_LIST_COLUMNS = [
 ];
 const INVOICE_DETAIL_COLUMNS = [
   ['cost_price', 'Cost Price'], ['retail_price', 'Retail Price'], ['online_price', 'Online Price'], ['pack_size', 'Pack Size'],
-  ['qty', 'Qty'], ['net_value', 'Net Value'], ['vat_value', 'VAT Value']
+  ['vatid', 'VAT Code'], ['qty', 'Qty'], ['net_value', 'Net Value'], ['vat_value', 'VAT Value']
 ];
 function openInvoiceExportModal(format, context){
   invoiceExportFormat = format;
