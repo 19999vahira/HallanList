@@ -3278,14 +3278,19 @@ function openInvoiceAutomatedModal(){
 function invoiceOcrParseLines(text){
   // Best-effort: a line with some non-numeric leading text and at least one number
   // is treated as a product line.
-  // Numbers are split into whole numbers (candidate quantities) and decimal numbers
-  // (candidate money values), and very long numbers (barcodes / product codes, which
-  // scanned invoices often print before the product name) are ignored so they don't
-  // get mistaken for a quantity or price.
-  const numRe = /-?\d+(?:\.\d+)?/g;
+  // IMPORTANT: numbers are only pulled out when they stand alone (surrounded by
+  // whitespace/punctuation/line edges), NOT when they're embedded inside a code or
+  // size like "RYCHP030" or "Cs1x6" — otherwise digits from a product code get
+  // mistaken for the quantity column.
+  // Numbers are then split into whole numbers (candidate quantities) and decimal
+  // numbers (candidate money values).
+  const numRe = /(?<![A-Za-z0-9])-?\d+(?:\.\d+)?(?![A-Za-z0-9])/g;
+  // Common invoice boilerplate (header/footer/bank details) that isn't a product
+  // line but often has text + a number, so it would otherwise be treated as one.
+  const noiseRe = /invoice (no|number|to|date)|delivered to|account (ref|name|number)|purchase order|sort code|vat reg|tel@|website|bank name|^gross|^total|^vat:|delivery charge|registered in england|customer is advised/i;
   return text.split('\n')
     .map(l => l.trim())
-    .filter(l => l.length > 3)
+    .filter(l => l.length > 3 && !noiseRe.test(l))
     .map(line => {
       const rawNums = line.match(numRe);
       if(!rawNums || rawNums.length === 0) return null;
@@ -3307,13 +3312,34 @@ function invoiceOcrParseLines(text){
     })
     .filter(Boolean);
 }
+function invoiceOcrLevenshtein(a, b){
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++){
+    for (let j = 1; j <= n; j++){
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+function invoiceOcrWordsFuzzyMatch(wa, wb){
+  // Same tolerance model as the stock search box: exact/substring match, or a
+  // small edit distance scaled to word length — so a single OCR misread
+  // character (e.g. "gulabjam" read as "gulabjarn") still counts as a match.
+  if(wa === wb || wa.includes(wb) || wb.includes(wa)) return true;
+  const maxEdits = wa.length <= 3 ? 0 : wa.length <= 6 ? 1 : 2;
+  return invoiceOcrLevenshtein(wa, wb) <= maxEdits;
+}
 function invoiceOcrWordOverlap(a, b){
-  const wa = new Set(a.toLowerCase().split(/\s+/).filter(w => w.length > 2));
-  const wb = new Set(b.toLowerCase().split(/\s+/).filter(w => w.length > 2));
-  if(wa.size === 0 || wb.size === 0) return 0;
+  const wa = [...new Set(a.toLowerCase().split(/\s+/).filter(w => w.length > 2))];
+  const wb = [...new Set(b.toLowerCase().split(/\s+/).filter(w => w.length > 2))];
+  if(wa.length === 0 || wb.length === 0) return 0;
   let hits = 0;
-  wa.forEach(w => { if(wb.has(w)) hits++; });
-  return hits / Math.max(wa.size, wb.size);
+  wa.forEach(w => { if(wb.some(w2 => invoiceOcrWordsFuzzyMatch(w, w2))) hits++; });
+  return hits / Math.max(wa.length, wb.length);
 }
 async function runInvoiceOcrCheck(){
   const fileInput = document.getElementById('invoiceOcrFile');
