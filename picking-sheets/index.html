@@ -10,7 +10,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://unpkg.com/tesseract.js@5.0.4/dist/tesseract.min.js"></script>
 <style>
   :root{
     --bg:#ffffff; --panel:#f4f6f9; --panel2:#eceff3; --panel3:#e4e8ee;
@@ -1132,9 +1131,9 @@
     <h3>Automated Check</h3>
     <p class="modal-sub">
       Upload one or more photos or scans of the physical invoice — add every page if it spans
-      several images. This reads them with free, in-browser OCR (Tesseract) and compares the
-      combined lines against what's in the system — it's a best-effort text match, not true AI
-      understanding, so please review the results rather than trusting them blindly.
+      several images. This sends them to Google's Gemini model to read the product lines directly,
+      then compares the result against what's in the system — it's a best-effort match, not
+      guaranteed accurate, so please review the results rather than trusting them blindly.
     </p>
     <input type="file" id="invoiceOcrFile" accept="image/*" multiple>
     <div id="invoiceOcrProgress" class="empty-hint" style="display:none;margin-top:10px;"></div>
@@ -3265,52 +3264,30 @@ function exportInvoiceDetail(format, selected){
   }
 }
 
-/* ---- Automated Check: free in-browser OCR (Tesseract.js) + best-effort line matching ----
-   This is NOT true AI understanding of the invoice — it's OCR text extraction plus a
-   fuzzy name/number match against what's already in the system. Always worth a human
-   glance at the results, especially on messy or low-quality scans. ---- */
+/* ---- Automated Check: Gemini vision extraction + fuzzy name match ----
+   Images are sent to the server, which asks Gemini to read the invoice
+   photo(s) directly into structured {product_name, qty, ...} line items —
+   this replaces the old Tesseract OCR + regex-guessing approach, which
+   struggled on real-world photos (creases, watermarks, handwriting).
+   Still a best-effort match against what's in the system, not gospel —
+   always worth a human glance at the results. ---- */
 function openInvoiceAutomatedModal(){
   document.getElementById('invoiceOcrFile').value = '';
   document.getElementById('invoiceOcrProgress').style.display = 'none';
   document.getElementById('invoiceOcrResults').innerHTML = '';
   openModal('modalInvoiceAutomated');
 }
-function invoiceOcrParseLines(text){
-  // Best-effort: a line with some non-numeric leading text and at least one number
-  // is treated as a product line.
-  // IMPORTANT: numbers are only pulled out when they stand alone (surrounded by
-  // whitespace/punctuation/line edges), NOT when they're embedded inside a code or
-  // size like "RYCHP030" or "Cs1x6" — otherwise digits from a product code get
-  // mistaken for the quantity column.
-  // Numbers are then split into whole numbers (candidate quantities) and decimal
-  // numbers (candidate money values).
-  const numRe = /(?<![A-Za-z0-9])-?\d+(?:\.\d+)?(?![A-Za-z0-9])/g;
-  // Common invoice boilerplate (header/footer/bank details) that isn't a product
-  // line but often has text + a number, so it would otherwise be treated as one.
-  const noiseRe = /invoice (no|number|to|date)|delivered to|account (ref|name|number)|purchase order|sort code|vat reg|tel@|website|bank name|^gross|^total|^vat:|delivery charge|registered in england|customer is advised/i;
-  return text.split('\n')
-    .map(l => l.trim())
-    .filter(l => l.length > 3 && !noiseRe.test(l))
-    .map(line => {
-      const rawNums = line.match(numRe);
-      if(!rawNums || rawNums.length === 0) return null;
-      const name = line.replace(numRe, '').replace(/[|_—-]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
-      if(name.length < 3) return null;
-      const nums = rawNums.map(n => ({ val: Number(n), isDecimal: n.includes('.'), digits: n.replace(/[.-]/g, '').length }));
-      // Codes/barcodes are usually long (>6 digits) — set them aside as a fallback pool only
-      const plausible = nums.filter(n => n.digits <= 6);
-      const pool = plausible.length ? plausible : nums;
-      const qtyCandidate = pool.find(n => !n.isDecimal && n.val > 0 && n.val < 10000);
-      const decimals = pool.filter(n => n.isDecimal);
-      const valueCandidate = decimals.length ? decimals[decimals.length - 1] : pool[pool.length - 1];
-      return {
-        raw: line,
-        name,
-        qtyGuess: qtyCandidate ? qtyCandidate.val : pool[0].val,
-        valueGuess: valueCandidate ? valueCandidate.val : pool[pool.length - 1].val
-      };
-    })
-    .filter(Boolean);
+function invoiceOcrFileToPart(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result || '';
+      const commaIdx = result.indexOf(',');
+      resolve({ mimeType: file.type || 'image/jpeg', data: commaIdx >= 0 ? result.slice(commaIdx + 1) : result });
+    };
+    reader.onerror = () => reject(new Error('Could not read ' + file.name));
+    reader.readAsDataURL(file);
+  });
 }
 function invoiceOcrLevenshtein(a, b){
   const m = a.length, n = b.length;
@@ -3326,9 +3303,9 @@ function invoiceOcrLevenshtein(a, b){
   return dp[m][n];
 }
 function invoiceOcrWordsFuzzyMatch(wa, wb){
-  // Same tolerance model as the stock search box: exact/substring match, or a
-  // small edit distance scaled to word length — so a single OCR misread
-  // character (e.g. "gulabjam" read as "gulabjarn") still counts as a match.
+  // Exact/substring match, or a small edit distance scaled to word length —
+  // tolerates minor spelling/naming differences between the invoice and
+  // how the item is named in the system.
   if(wa === wb || wa.includes(wb) || wb.includes(wa)) return true;
   const maxEdits = wa.length <= 3 ? 0 : wa.length <= 6 ? 1 : 2;
   return invoiceOcrLevenshtein(wa, wb) <= maxEdits;
@@ -3349,22 +3326,17 @@ async function runInvoiceOcrCheck(){
   const results = document.getElementById('invoiceOcrResults');
   const btn = document.getElementById('invoiceOcrRunBtn');
   progress.style.display = 'block';
-  progress.textContent = 'Reading image 1 of ' + files.length + '…';
+  progress.textContent = 'Reading ' + files.length + ' image' + (files.length > 1 ? 's' : '') + '…';
   results.innerHTML = '';
   btn.disabled = true;
   try{
-    let scannedLines = [];
-    for(let i = 0; i < files.length; i++){
-      const file = files[i];
-      const { data } = await Tesseract.recognize(file, 'eng', {
-        logger: m => {
-          if(m.status === 'recognizing text'){
-            progress.textContent = 'Reading image ' + (i + 1) + ' of ' + files.length + '… ' + Math.round((m.progress || 0) * 100) + '%';
-          }
-        }
-      });
-      scannedLines = scannedLines.concat(invoiceOcrParseLines(data.text || ''));
-    }
+    const images = await Promise.all(files.map(invoiceOcrFileToPart));
+    const data = await apiPost('invoices/ocr-extract', { images });
+    const scannedLines = (Array.isArray(data.items) ? data.items : []).map(it => ({
+      name: it.product_name || '',
+      qtyGuess: (typeof it.qty === 'number' && !Number.isNaN(it.qty)) ? it.qty : null,
+      valueGuess: (typeof it.net_value === 'number' && !Number.isNaN(it.net_value)) ? it.net_value : null
+    })).filter(sl => sl.name.trim().length > 0);
     if(scannedLines.length === 0){
       progress.style.display = 'none';
       results.innerHTML = '<div class="empty-hint">Could not find any readable product lines in ' + (files.length > 1 ? 'those images' : 'that image') + '. Try clearer, flatter photos.</div>';
@@ -3385,10 +3357,15 @@ async function runInvoiceOcrCheck(){
       }
       usedScanIdx.add(bestIdx);
       const sl = scannedLines[bestIdx];
-      const qtyMatches = Number(sysRow.qty) === sl.qtyGuess;
-      const comment = qtyMatches
-        ? 'Qty matches (' + sl.qtyGuess + ')'
-        : 'Qty differs — system: ' + sysRow.qty + ', scan: ' + sl.qtyGuess;
+      let comment;
+      if(sl.qtyGuess === null){
+        comment = 'Matched by name, but quantity unclear from scan';
+      }else{
+        const qtyMatches = Number(sysRow.qty) === sl.qtyGuess;
+        comment = qtyMatches
+          ? 'Qty matches (' + sl.qtyGuess + ')'
+          : 'Qty differs — system: ' + sysRow.qty + ', scan: ' + sl.qtyGuess;
+      }
       return { name: sysRow.stock_name, sysQty: sysRow.qty, sysNet: sysRow.net_value, scan: sl, comment };
     });
     const unmatchedScans = scannedLines.filter((sl, i) => !usedScanIdx.has(i));
@@ -3400,11 +3377,15 @@ async function runInvoiceOcrCheck(){
     const tbody = document.createElement('tbody');
     rows.forEach(r => {
       const tr = document.createElement('tr');
+      const commentColor = !r.scan ? 'var(--text-dim)'
+        : r.comment.startsWith('Qty matches') ? 'var(--green)'
+        : r.comment.includes('unclear') ? 'var(--text-dim)'
+        : 'var(--danger)';
       tr.innerHTML = `
         <td>${escapeHtml(r.name || '—')}</td>
         <td class="qtycell">${r.sysQty || '—'}</td>
-        <td class="qtycell">${r.scan ? r.scan.qtyGuess : '—'}</td>
-        <td style="font-size:12.5px;color:${r.scan ? (r.comment.startsWith('Qty matches') ? 'var(--green)' : 'var(--danger)') : 'var(--text-dim)'};">${escapeHtml(r.comment)}</td>
+        <td class="qtycell">${r.scan && r.scan.qtyGuess !== null ? r.scan.qtyGuess : '—'}</td>
+        <td style="font-size:12.5px;color:${commentColor};">${escapeHtml(r.comment)}</td>
       `;
       tbody.appendChild(tr);
     });
@@ -3414,12 +3395,12 @@ async function runInvoiceOcrCheck(){
       const note = document.createElement('div');
       note.className = 'empty-hint';
       note.style.marginTop = '10px';
-      note.textContent = unmatchedScans.length + ' line(s) on the scan didn\'t match anything in the system — could be OCR noise, or genuinely extra items.';
+      note.textContent = unmatchedScans.length + ' line(s) on the scan didn\'t match anything in the system — could be extra items, or a naming mismatch.';
       results.appendChild(note);
     }
   }catch(e){
     progress.style.display = 'none';
-    results.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not read one or more of those images.</div>';
+    results.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not read one or more of those images: ' + escapeHtml(e.message || '') + '</div>';
     console.error(e);
   }finally{
     btn.disabled = false;
