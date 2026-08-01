@@ -1131,11 +1131,12 @@
   <div class="modal" style="width:520px;">
     <h3>Automated Check</h3>
     <p class="modal-sub">
-      Upload a photo or scan of the physical invoice. This reads it with free, in-browser OCR
-      (Tesseract) and compares it line-by-line against what's in the system — it's a best-effort
-      text match, not true AI understanding, so please review the results rather than trusting them blindly.
+      Upload one or more photos or scans of the physical invoice — add every page if it spans
+      several images. This reads them with free, in-browser OCR (Tesseract) and compares the
+      combined lines against what's in the system — it's a best-effort text match, not true AI
+      understanding, so please review the results rather than trusting them blindly.
     </p>
-    <input type="file" id="invoiceOcrFile" accept="image/*">
+    <input type="file" id="invoiceOcrFile" accept="image/*" multiple>
     <div id="invoiceOcrProgress" class="empty-hint" style="display:none;margin-top:10px;"></div>
     <div id="invoiceOcrResults" style="margin-top:14px;max-height:45vh;overflow:auto;"></div>
     <div class="modal-close-row">
@@ -3276,21 +3277,32 @@ function openInvoiceAutomatedModal(){
 }
 function invoiceOcrParseLines(text){
   // Best-effort: a line with some non-numeric leading text and at least one number
-  // is treated as a product line. First number found = qty guess, last number = value guess.
+  // is treated as a product line.
+  // Numbers are split into whole numbers (candidate quantities) and decimal numbers
+  // (candidate money values), and very long numbers (barcodes / product codes, which
+  // scanned invoices often print before the product name) are ignored so they don't
+  // get mistaken for a quantity or price.
   const numRe = /-?\d+(?:\.\d+)?/g;
   return text.split('\n')
     .map(l => l.trim())
     .filter(l => l.length > 3)
     .map(line => {
-      const nums = line.match(numRe);
-      if(!nums || nums.length === 0) return null;
-      const name = line.replace(numRe, '').replace(/[|_—-]+/g, ' ').trim();
+      const rawNums = line.match(numRe);
+      if(!rawNums || rawNums.length === 0) return null;
+      const name = line.replace(numRe, '').replace(/[|_—-]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
       if(name.length < 3) return null;
+      const nums = rawNums.map(n => ({ val: Number(n), isDecimal: n.includes('.'), digits: n.replace(/[.-]/g, '').length }));
+      // Codes/barcodes are usually long (>6 digits) — set them aside as a fallback pool only
+      const plausible = nums.filter(n => n.digits <= 6);
+      const pool = plausible.length ? plausible : nums;
+      const qtyCandidate = pool.find(n => !n.isDecimal && n.val > 0 && n.val < 10000);
+      const decimals = pool.filter(n => n.isDecimal);
+      const valueCandidate = decimals.length ? decimals[decimals.length - 1] : pool[pool.length - 1];
       return {
         raw: line,
         name,
-        qtyGuess: Number(nums[0]),
-        valueGuess: Number(nums[nums.length - 1])
+        qtyGuess: qtyCandidate ? qtyCandidate.val : pool[0].val,
+        valueGuess: valueCandidate ? valueCandidate.val : pool[pool.length - 1].val
       };
     })
     .filter(Boolean);
@@ -3305,27 +3317,31 @@ function invoiceOcrWordOverlap(a, b){
 }
 async function runInvoiceOcrCheck(){
   const fileInput = document.getElementById('invoiceOcrFile');
-  const file = fileInput.files && fileInput.files[0];
-  if(!file){ toast('Choose an image first'); return; }
+  const files = fileInput.files ? Array.from(fileInput.files) : [];
+  if(files.length === 0){ toast('Choose at least one image first'); return; }
   const progress = document.getElementById('invoiceOcrProgress');
   const results = document.getElementById('invoiceOcrResults');
   const btn = document.getElementById('invoiceOcrRunBtn');
   progress.style.display = 'block';
-  progress.textContent = 'Reading the image (this can take a moment)…';
+  progress.textContent = 'Reading image 1 of ' + files.length + '…';
   results.innerHTML = '';
   btn.disabled = true;
   try{
-    const { data } = await Tesseract.recognize(file, 'eng', {
-      logger: m => {
-        if(m.status === 'recognizing text'){
-          progress.textContent = 'Reading the image… ' + Math.round((m.progress || 0) * 100) + '%';
+    let scannedLines = [];
+    for(let i = 0; i < files.length; i++){
+      const file = files[i];
+      const { data } = await Tesseract.recognize(file, 'eng', {
+        logger: m => {
+          if(m.status === 'recognizing text'){
+            progress.textContent = 'Reading image ' + (i + 1) + ' of ' + files.length + '… ' + Math.round((m.progress || 0) * 100) + '%';
+          }
         }
-      }
-    });
-    const scannedLines = invoiceOcrParseLines(data.text || '');
+      });
+      scannedLines = scannedLines.concat(invoiceOcrParseLines(data.text || ''));
+    }
     if(scannedLines.length === 0){
       progress.style.display = 'none';
-      results.innerHTML = '<div class="empty-hint">Could not find any readable product lines in that image. Try a clearer, flatter photo.</div>';
+      results.innerHTML = '<div class="empty-hint">Could not find any readable product lines in ' + (files.length > 1 ? 'those images' : 'that image') + '. Try clearer, flatter photos.</div>';
       return;
     }
 
@@ -3377,7 +3393,7 @@ async function runInvoiceOcrCheck(){
     }
   }catch(e){
     progress.style.display = 'none';
-    results.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not read that image.</div>';
+    results.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not read one or more of those images.</div>';
     console.error(e);
   }finally{
     btn.disabled = false;
