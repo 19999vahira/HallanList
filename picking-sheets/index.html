@@ -837,8 +837,9 @@
       <div class="eyebrow">Restock</div>
       <h2>Shelf Replenishment</h2>
       <p>Pick a zone, then a shelf, to start or print a replenishment list.</p>
-      <div style="margin-top:14px;">
+      <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
         <button class="btn-amber" onclick="openReplenMultiModal()">🖨️ Print Multiple Zones</button>
+        <button class="btn-ghost" onclick="openReplenTimeMultiModal()">⏱️ Set Time — Multiple Zones</button>
       </div>
     </div>
     <div class="catgrid" id="replenZoneGrid">
@@ -1127,19 +1128,24 @@
 
 <!-- INVOICES: AUTOMATED CHECK (OCR) -->
 <div class="modal-backdrop" id="modalInvoiceAutomated">
-  <div class="modal" style="width:520px;">
+  <div class="modal" style="width:min(1150px,95vw);max-height:90vh;display:flex;flex-direction:column;">
     <h3>Automated Check</h3>
     <p class="modal-sub">
       Upload one or more photos or scans of the physical invoice — add every page if it spans
-      several images. This sends them to Google's Gemini model to read the product lines directly,
-      then compares the result against what's in the system — it's a best-effort match, not
-      guaranteed accurate, so please review the results rather than trusting them blindly.
+      several images. This sends them to Google's Gemini model to read the product lines and
+      prices directly, then compares the result against what's in the system — it's a best-effort
+      match, not guaranteed accurate, so please review the results rather than trusting them blindly.
     </p>
     <input type="file" id="invoiceOcrFile" accept="image/*" multiple>
     <div id="invoiceOcrProgress" class="empty-hint" style="display:none;margin-top:10px;"></div>
-    <div id="invoiceOcrResults" style="margin-top:14px;max-height:45vh;overflow:auto;"></div>
+    <div id="invoiceOcrResults" style="margin-top:14px;overflow:auto;flex:1;"></div>
+    <div class="modal-close-row" id="invoiceOcrDownloadRow" style="display:none;">
+      <button class="btn-ghost" onclick="downloadInvoiceOcrCsv()">Download CSV</button>
+      <button class="btn-ghost" onclick="downloadInvoiceOcrPdf()">Download PDF</button>
+    </div>
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalInvoiceAutomated')">Close</button>
+      <button class="btn-ghost" id="invoiceOcrFinaliseBtn" style="display:none;" onclick="finaliseInvoiceOcrCheck()">Finalise Check</button>
       <button class="btn-amber" id="invoiceOcrRunBtn" onclick="runInvoiceOcrCheck()">Run Check</button>
     </div>
   </div>
@@ -1194,6 +1200,39 @@
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalReplenMulti')">Cancel</button>
       <button class="btn-amber" onclick="printSelectedReplenZones()">Print Selected</button>
+    </div>
+  </div>
+</div>
+
+<!-- REPLENISHMENT: SET TIME — MULTIPLE ZONES -->
+<div class="modal-backdrop" id="modalReplenTimeMulti">
+  <div class="modal" style="width:520px;">
+    <div class="hero" style="margin-bottom:14px;">
+      <div class="eyebrow">Shelf Replenishment</div>
+      <h2>Set Time — Multiple Zones</h2>
+      <p>Tick the shelves you want, pick a time, and every selected shelf's clock is set to that same moment in one go.</p>
+    </div>
+    <div style="display:flex;gap:16px;align-items:center;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--line);flex-wrap:wrap;">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="radio" name="replenTimeMultiMode" id="replenTimeMultiModeNow" value="now" checked onchange="onReplenTimeMultiModeChange()">
+        <span>Set to now</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="radio" name="replenTimeMultiMode" id="replenTimeMultiModeManual" value="manual" onchange="onReplenTimeMultiModeChange()">
+        <span>Set manually (UK time)</span>
+      </label>
+      <input type="datetime-local" id="replenTimeMultiInput" disabled>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--line);">
+      <input type="checkbox" id="replenTimeMultiSelectAll" checked onchange="toggleReplenTimeMultiSelectAll(this.checked)">
+      <strong>Select All</strong>
+    </label>
+    <div id="replenTimeMultiList" style="max-height:42vh;overflow:auto;">
+      <div class="loading">Loading zones and shelves…</div>
+    </div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalReplenTimeMulti')">Cancel</button>
+      <button class="btn-amber" onclick="submitReplenTimeMultiReset()">Set Time for Selected</button>
     </div>
   </div>
 </div>
@@ -2126,6 +2165,23 @@ async function addProductToRow(payload){
     toast(payload.item_name + ' added to row');
     await loadRowItems();
   }catch(e){
+    // A product only lives at one location — if the server says this stockid is
+    // already filed elsewhere, offer to move it here instead of duplicating it.
+    if(e.status === 409 || e.statusCode === 409){
+      const existing = e.body && e.body.existing;
+      const where = existing ? `${existing.zone_name} / ${existing.shelf_name} / Row ${existing.row_name}` : 'another location';
+      if(confirm(`${payload.item_name} is already filed at ${where}.\n\nMove it here instead?`)){
+        try{
+          await apiPost('location/rows/' + currentRow.row_id + '/items/', { ...payload, force: true });
+          toast(payload.item_name + ' moved to this row');
+          await loadRowItems();
+        }catch(e2){
+          toast('Could not move ' + payload.item_name);
+          console.error(e2);
+        }
+      }
+      return;
+    }
     toast('Could not add ' + payload.item_name);
     console.error(e);
   }
@@ -2189,6 +2245,43 @@ function renderStockInfoResults(items){
 }
 
 /* ============ SHELF REPLENISHMENT ============ */
+/* ---- UK TIME ONLY ----
+   Everything here is shown and entered as UK time (GMT/BST via
+   Europe/London), never the viewing device's own timezone. That
+   replaces the old "adjust for the browser's local offset" hack,
+   which silently broke the moment a phone or PC wasn't set to a
+   UK timezone. */
+function ukDateTimeString(date){
+  // Display a Date as UK wall-clock time, e.g. "02/08/2026, 14:35:00"
+  return date.toLocaleString('en-GB', { timeZone: 'Europe/London' });
+}
+function ukInputValueFromDate(date){
+  // Build the "YYYY-MM-DDTHH:mm" value a <input type="datetime-local"> expects,
+  // using UK wall-clock components (not the browser's local timezone).
+  const fmt = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false
+  });
+  const parts = fmt.formatToParts(date).reduce((acc, p) => { acc[p.type] = p.value; return acc; }, {});
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+function ukOffsetMinutes(date){
+  // Minutes Europe/London is ahead of UTC at this instant (0 in winter, 60 in BST)
+  const utc = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' }));
+  const uk = new Date(date.toLocaleString('en-US', { timeZone: 'Europe/London' }));
+  return Math.round((uk - utc) / 60000);
+}
+function ukInputValueToDate(str){
+  // Interpret a "YYYY-MM-DDTHH:mm" value as UK wall-clock time and return
+  // the correct absolute Date instant for it (handles GMT/BST correctly).
+  const [datePart, timePart] = str.split('T');
+  const [y, m, d] = datePart.split('-').map(Number);
+  const [hh, mm] = timePart.split(':').map(Number);
+  const guessUtc = new Date(Date.UTC(y, m - 1, d, hh, mm));
+  const offset = ukOffsetMinutes(guessUtc);
+  return new Date(guessUtc.getTime() - offset * 60000);
+}
+
 let replenZones = [];
 let currentReplenZone = null;
 let replenShelves = [];
@@ -2301,7 +2394,7 @@ function renderReplenStatus(startedAt){
   }
   const since = new Date(startedAt);
   box.innerHTML = `
-    <div class="empty-hint" style="margin-bottom:16px;">Tracking since ${since.toLocaleString()}.</div>
+    <div class="empty-hint" style="margin-bottom:16px;">Tracking since ${ukDateTimeString(since)} (UK time).</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
       <button class="btn-ghost" onclick="beginReplenishment()">Restart</button>
       <button class="btn-ghost" onclick="openReplenManualTimeModal()">Set Time Manually</button>
@@ -2323,16 +2416,16 @@ async function beginReplenishment(startedAtIso){
   }
 }
 function openReplenManualTimeModal(){
-  const now = new Date();
-  now.setMinutes(now.getMinutes() - now.getTimezoneOffset()); // adjust for datetime-local's local-time expectation
-  document.getElementById('replenManualTimeInput').value = now.toISOString().slice(0,16);
+  document.getElementById('replenManualTimeInput').value = ukInputValueFromDate(new Date());
   openModal('modalReplenManualTime');
 }
 function submitReplenManualTime(){
   const val = document.getElementById('replenManualTimeInput').value;
   if(!val){ toast('Pick a date and time first'); return; }
   closeModal('modalReplenManualTime');
-  beginReplenishment(val);
+  // val is a UK wall-clock time (the picker shows/accepts UK time only) —
+  // convert it to the correct absolute instant before sending to the server.
+  beginReplenishment(ukInputValueToDate(val).toISOString());
 }
 
 /* ---- Print Multiple Zones: pick shelves across zones, print one combined list ---- */
@@ -2406,6 +2499,14 @@ async function printSelectedReplenZones(){
   const checked = [...document.querySelectorAll('.replenMultiCheck:checked')];
   if(checked.length === 0){ toast('Pick at least one shelf'); return; }
   const combined = [];
+  // CHECKING LAYER: track which items have already gone into the combined
+  // list (by item name, since that's what's guaranteed present) so the
+  // same product can't be listed twice if it turns up under more than one
+  // shelf in this batch. Products can now only be filed at one location
+  // (see the server-side check on adding a product to a row), so this is
+  // a safety net rather than the primary fix — but it means a stray
+  // leftover duplicate in the data still can't produce a doubled-up list.
+  const seenInCombined = new Map(); // item_name -> index in combined[]
   let printedShelfCount = 0;
   let failedShelfCount = 0;
   for(const box of checked){
@@ -2418,7 +2519,19 @@ async function printSelectedReplenZones(){
       // this just loops it across every shelf that was ticked.
       const data = await apiPost('location/shelves/' + shelfId + '/replenishment/print', {});
       const items = data.items || [];
-      items.forEach(it => combined.push({ ...it, zone_name: zoneName, shelf_name: shelfName }));
+      items.forEach(it => {
+        const key = it.item_name;
+        if(seenInCombined.has(key)){
+          // Already have this product from another shelf in this batch — merge the
+          // quantity in rather than adding a second row for it.
+          const existing = combined[seenInCombined.get(key)];
+          existing.qty_sold = Number(existing.qty_sold) + Number(it.qty_sold);
+          existing.shelf_name = existing.shelf_name + ' + ' + shelfName;
+          return;
+        }
+        seenInCombined.set(key, combined.length);
+        combined.push({ ...it, zone_name: zoneName, shelf_name: shelfName });
+      });
       printedShelfCount++;
     }catch(e){
       failedShelfCount++;
@@ -2440,9 +2553,125 @@ async function printSelectedReplenZones(){
   document.getElementById('replenPrintSub').textContent =
     'Each shelf\'s clock has reset to now. Anything below the print threshold has been quietly saved and will carry forward into the next print.' +
     (failedShelfCount ? ' ' + failedShelfCount + ' shelf' + (failedShelfCount === 1 ? '' : 'ves') + ' failed to print.' : '');
-  document.getElementById('replenPrintTimestamp').textContent = 'Printed: ' + new Date().toLocaleString();
+  document.getElementById('replenPrintTimestamp').textContent = 'Printed: ' + ukDateTimeString(new Date()) + ' (UK time)';
   renderReplenPrintTable(replenPrintData);
   openModal('modalReplenPrint');
+  // If the shelf currently open in the detail view was part of this batch, refresh its status
+  if(currentReplenShelf && checked.some(b => Number(b.dataset.shelfId) === Number(currentReplenShelf.shelf_id))){
+    await loadReplenStatus();
+  }
+}
+
+/* ---- Set Time — Multiple Zones: pick shelves across zones, set all their
+   clocks to the same moment (now, or a manual UK time) in one go. ---- */
+let replenTimeMultiData = []; // [{ zone_id, zone_name, shelves:[{shelf_id, shelf_name, started_at}] }]
+async function openReplenTimeMultiModal(){
+  openModal('modalReplenTimeMulti');
+  document.getElementById('replenTimeMultiModeNow').checked = true;
+  document.getElementById('replenTimeMultiInput').disabled = true;
+  document.getElementById('replenTimeMultiInput').value = ukInputValueFromDate(new Date());
+  document.getElementById('replenTimeMultiSelectAll').checked = true;
+  const list = document.getElementById('replenTimeMultiList');
+  list.innerHTML = '<div class="loading">Loading zones and shelves…</div>';
+  try{
+    const zonesData = await apiGet('location/zones/');
+    const zones = zonesData.items || [];
+    replenTimeMultiData = await Promise.all(zones.map(async z => {
+      const shelvesData = await apiGet('location/zones/' + z.zone_id + '/shelves/');
+      const shelves = shelvesData.items || [];
+      const withStatus = await Promise.all(shelves.map(async s => {
+        try{
+          const st = await apiGet('location/shelves/' + s.shelf_id + '/replenishment/');
+          return { shelf_id: s.shelf_id, shelf_name: s.shelf_name, started_at: st.started_at };
+        }catch(e){
+          return { shelf_id: s.shelf_id, shelf_name: s.shelf_name, started_at: null };
+        }
+      }));
+      return { zone_id: z.zone_id, zone_name: z.zone_name, shelves: withStatus };
+    }));
+    renderReplenTimeMultiList();
+  }catch(e){
+    list.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load zones and shelves.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+function renderReplenTimeMultiList(){
+  const list = document.getElementById('replenTimeMultiList');
+  const zonesWithShelves = replenTimeMultiData.filter(z => z.shelves.length > 0);
+  if(zonesWithShelves.length === 0){
+    list.innerHTML = '<div class="empty-hint">No zones or shelves set up yet — add some from Location List first.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  zonesWithShelves.forEach(z => {
+    const zoneBlock = document.createElement('div');
+    zoneBlock.style.marginBottom = '14px';
+    const header = document.createElement('div');
+    header.style.cssText = 'font-weight:700;font-size:13px;margin-bottom:6px;';
+    header.textContent = z.zone_name;
+    zoneBlock.appendChild(header);
+    z.shelves.forEach(s => {
+      // Unlike the print modal, every shelf is selectable here — including
+      // ones that haven't been started yet, since setting the time is how
+      // you'd start them.
+      const row = document.createElement('label');
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;';
+      const statusText = s.started_at ? ('since ' + ukDateTimeString(new Date(s.started_at))) : 'not started';
+      row.innerHTML = `
+        <input type="checkbox" class="replenTimeMultiCheck" data-shelf-id="${s.shelf_id}"
+          data-shelf-name="${escapeHtml(s.shelf_name)}" checked onchange="syncReplenTimeMultiSelectAll()">
+        <span>${escapeHtml(s.shelf_name)}</span>
+        <span style="font-size:11px;color:var(--text-dim);">(${statusText})</span>
+      `;
+      zoneBlock.appendChild(row);
+    });
+    list.appendChild(zoneBlock);
+  });
+  syncReplenTimeMultiSelectAll();
+}
+function syncReplenTimeMultiSelectAll(){
+  const boxes = [...document.querySelectorAll('.replenTimeMultiCheck')];
+  document.getElementById('replenTimeMultiSelectAll').checked = boxes.length > 0 && boxes.every(b => b.checked);
+}
+function toggleReplenTimeMultiSelectAll(checked){
+  document.querySelectorAll('.replenTimeMultiCheck').forEach(b => b.checked = checked);
+}
+function onReplenTimeMultiModeChange(){
+  const manual = document.getElementById('replenTimeMultiModeManual').checked;
+  document.getElementById('replenTimeMultiInput').disabled = !manual;
+}
+async function submitReplenTimeMultiReset(){
+  const checked = [...document.querySelectorAll('.replenTimeMultiCheck:checked')];
+  if(checked.length === 0){ toast('Pick at least one shelf'); return; }
+  const manual = document.getElementById('replenTimeMultiModeManual').checked;
+  let startedAtIso = null; // null = let the server use "now" for each call
+  if(manual){
+    const val = document.getElementById('replenTimeMultiInput').value;
+    if(!val){ toast('Pick a date and time first'); return; }
+    // The picker shows/accepts UK time only — convert to the correct instant once,
+    // then use that exact same instant for every selected shelf.
+    startedAtIso = ukInputValueToDate(val).toISOString();
+  }
+  let okCount = 0;
+  let failCount = 0;
+  for(const box of checked){
+    const shelfId = box.dataset.shelfId;
+    try{
+      await apiPost('location/shelves/' + shelfId + '/replenishment/begin',
+        startedAtIso ? { started_at: startedAtIso } : {});
+      okCount++;
+    }catch(e){
+      failCount++;
+      console.error('Time reset failed for shelf ' + box.dataset.shelfName, e);
+    }
+  }
+  closeModal('modalReplenTimeMulti');
+  if(okCount === 0){
+    toast('Could not set time for any of the selected shelves');
+    return;
+  }
+  toast('Time set for ' + okCount + ' shelf' + (okCount === 1 ? '' : 'ves') +
+    (failCount ? ' (' + failCount + ' failed)' : ''));
   // If the shelf currently open in the detail view was part of this batch, refresh its status
   if(currentReplenShelf && checked.some(b => Number(b.dataset.shelfId) === Number(currentReplenShelf.shelf_id))){
     await loadReplenStatus();
@@ -2508,7 +2737,7 @@ async function printReplenishment(){
     document.getElementById('replenPrintTitle').textContent = 'Sold — ' + currentReplenShelf.shelf_name;
     document.getElementById('replenPrintSub').textContent =
       'The clock has now reset. Anything below the print threshold has been quietly saved and will carry forward into the next print.';
-    document.getElementById('replenPrintTimestamp').textContent = 'Printed: ' + new Date().toLocaleString();
+    document.getElementById('replenPrintTimestamp').textContent = 'Printed: ' + ukDateTimeString(new Date()) + ' (UK time)';
     renderReplenPrintTable(replenPrintData);
     openModal('modalReplenPrint');
     await loadReplenStatus();
@@ -2526,11 +2755,11 @@ async function reprintReplenishment(){
       return;
     }
     replenPrintData = data.items;
-    const from = data.from ? new Date(data.from).toLocaleString() : '—';
-    const to = data.to ? new Date(data.to).toLocaleString() : '—';
+    const from = data.from ? ukDateTimeString(new Date(data.from)) : '—';
+    const to = data.to ? ukDateTimeString(new Date(data.to)) : '—';
     document.getElementById('replenPrintTitle').textContent = 'Sold — ' + currentReplenShelf.shelf_name + ' (reprint)';
-    document.getElementById('replenPrintSub').textContent = `Same list as last printed — covers ${from} to ${to}. Reprinting does not reset the clock.`;
-    document.getElementById('replenPrintTimestamp').textContent = 'Printed: ' + new Date().toLocaleString();
+    document.getElementById('replenPrintSub').textContent = `Same list as last printed — covers ${from} to ${to} (UK time). Reprinting does not reset the clock.`;
+    document.getElementById('replenPrintTimestamp').textContent = 'Printed: ' + ukDateTimeString(new Date()) + ' (UK time)';
     renderReplenPrintTable(replenPrintData);
     openModal('modalReplenPrint');
   }catch(e){
@@ -2545,7 +2774,7 @@ function buildReplenPDFDoc(){
   }
   const title = document.getElementById('replenPrintTitle').textContent;
   const sub = document.getElementById('replenPrintSub').textContent;
-  const printedAt = document.getElementById('replenPrintTimestamp').textContent || ('Printed: ' + new Date().toLocaleString());
+  const printedAt = document.getElementById('replenPrintTimestamp').textContent || ('Printed: ' + ukDateTimeString(new Date()) + ' (UK time)');
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
   const marginLeft = 14;
@@ -3266,15 +3495,19 @@ function exportInvoiceDetail(format, selected){
 
 /* ---- Automated Check: Gemini vision extraction + fuzzy name match ----
    Images are sent to the server, which asks Gemini to read the invoice
-   photo(s) directly into structured {product_name, qty, ...} line items —
-   this replaces the old Tesseract OCR + regex-guessing approach, which
-   struggled on real-world photos (creases, watermarks, handwriting).
-   Still a best-effort match against what's in the system, not gospel —
-   always worth a human glance at the results. ---- */
+   photo(s) directly into structured {product_name, qty, unit_price, ...}
+   line items — this replaces the old Tesseract OCR + regex-guessing
+   approach, which struggled on real-world photos (creases, watermarks,
+   handwriting). Still a best-effort match against what's in the system,
+   not gospel — always worth a human glance at the results. ---- */
+let invoiceOcrLastRows = []; // populated after each run; used by the CSV/PDF export
 function openInvoiceAutomatedModal(){
   document.getElementById('invoiceOcrFile').value = '';
   document.getElementById('invoiceOcrProgress').style.display = 'none';
   document.getElementById('invoiceOcrResults').innerHTML = '';
+  document.getElementById('invoiceOcrFinaliseBtn').style.display = 'none';
+  document.getElementById('invoiceOcrDownloadRow').style.display = 'none';
+  invoiceOcrLastRows = [];
   openModal('modalInvoiceAutomated');
 }
 function invoiceOcrFileToPart(file){
@@ -3325,6 +3558,8 @@ async function runInvoiceOcrCheck(){
   const progress = document.getElementById('invoiceOcrProgress');
   const results = document.getElementById('invoiceOcrResults');
   const btn = document.getElementById('invoiceOcrRunBtn');
+  document.getElementById('invoiceOcrFinaliseBtn').style.display = 'none';
+  document.getElementById('invoiceOcrDownloadRow').style.display = 'none';
   progress.style.display = 'block';
   progress.textContent = 'Reading ' + files.length + ' image' + (files.length > 1 ? 's' : '') + '…';
   results.innerHTML = '';
@@ -3335,7 +3570,7 @@ async function runInvoiceOcrCheck(){
     const scannedLines = (Array.isArray(data.items) ? data.items : []).map(it => ({
       name: it.product_name || '',
       qtyGuess: (typeof it.qty === 'number' && !Number.isNaN(it.qty)) ? it.qty : null,
-      valueGuess: (typeof it.net_value === 'number' && !Number.isNaN(it.net_value)) ? it.net_value : null
+      priceGuess: (typeof it.unit_price === 'number' && !Number.isNaN(it.unit_price)) ? it.unit_price : null
     })).filter(sl => sl.name.trim().length > 0);
     if(scannedLines.length === 0){
       progress.style.display = 'none';
@@ -3344,6 +3579,7 @@ async function runInvoiceOcrCheck(){
     }
 
     // Match each system item to its best-scoring scanned line
+    const PRICE_TOLERANCE = 0.03; // absolute £ tolerance to absorb rounding
     const usedScanIdx = new Set();
     const rows = invoiceItemAdjust.map(sysRow => {
       let bestIdx = -1, bestScore = 0;
@@ -3352,40 +3588,62 @@ async function runInvoiceOcrCheck(){
         const score = invoiceOcrWordOverlap(sysRow.stock_name || '', sl.name);
         if(score > bestScore){ bestScore = score; bestIdx = i; }
       });
+      const sysPrice = (sysRow.cost_price !== null && sysRow.cost_price !== undefined && sysRow.cost_price !== '') ? Number(sysRow.cost_price) : null;
       if(bestIdx === -1 || bestScore < 0.34){
-        return { name: sysRow.stock_name, sysQty: sysRow.qty, sysNet: sysRow.net_value, scan: null, comment: 'Not found on scanned invoice' };
+        return {
+          name: sysRow.stock_name, sysQty: sysRow.qty, scanQty: null, sysPrice, scanPrice: null,
+          notes: 'Not found on scanned invoice', status: 'missing'
+        };
       }
       usedScanIdx.add(bestIdx);
       const sl = scannedLines[bestIdx];
-      let comment;
+      const notesParts = [];
+      let status = 'ok';
       if(sl.qtyGuess === null){
-        comment = 'Matched by name, but quantity unclear from scan';
+        notesParts.push('Qty unclear from scan');
+        status = 'warn';
+      }else if(Number(sysRow.qty) === sl.qtyGuess){
+        notesParts.push('Qty matches');
       }else{
-        const qtyMatches = Number(sysRow.qty) === sl.qtyGuess;
-        comment = qtyMatches
-          ? 'Qty matches (' + sl.qtyGuess + ')'
-          : 'Qty differs — system: ' + sysRow.qty + ', scan: ' + sl.qtyGuess;
+        notesParts.push('Qty differs (system ' + sysRow.qty + ' / scan ' + sl.qtyGuess + ')');
+        status = 'diff';
       }
-      return { name: sysRow.stock_name, sysQty: sysRow.qty, sysNet: sysRow.net_value, scan: sl, comment };
+      if(sysPrice === null || sl.priceGuess === null){
+        notesParts.push('Price unclear');
+        if(status === 'ok') status = 'warn';
+      }else if(Math.abs(sysPrice - sl.priceGuess) <= PRICE_TOLERANCE){
+        notesParts.push('Price matches');
+      }else{
+        notesParts.push('Price differs (system £' + sysPrice.toFixed(2) + ' / scan £' + sl.priceGuess.toFixed(2) + ')');
+        status = 'diff';
+      }
+      return {
+        name: sysRow.stock_name, sysQty: sysRow.qty, scanQty: sl.qtyGuess, sysPrice, scanPrice: sl.priceGuess,
+        notes: notesParts.join(' · '), status
+      };
     });
     const unmatchedScans = scannedLines.filter((sl, i) => !usedScanIdx.has(i));
 
+    invoiceOcrLastRows = rows;
     progress.style.display = 'none';
     const table = document.createElement('table');
     table.className = 'finaltable';
-    table.innerHTML = `<thead><tr><th>Product</th><th class="qtycell">System Qty</th><th class="qtycell">Scanned Qty</th><th>Comment</th></tr></thead>`;
+    table.innerHTML = `<thead><tr>
+      <th>Product</th><th class="qtycell">System Qty</th><th class="qtycell">Scanned Qty</th>
+      <th class="qtycell">System Price</th><th class="qtycell">Scanned Price</th><th>Notes</th>
+    </tr></thead>`;
     const tbody = document.createElement('tbody');
     rows.forEach(r => {
       const tr = document.createElement('tr');
-      const commentColor = !r.scan ? 'var(--text-dim)'
-        : r.comment.startsWith('Qty matches') ? 'var(--green)'
-        : r.comment.includes('unclear') ? 'var(--text-dim)'
-        : 'var(--danger)';
+      if(r.status === 'ok') tr.style.background = 'rgba(22,163,74,0.12)';
+      const notesColor = r.status === 'ok' ? 'var(--green)' : r.status === 'diff' ? 'var(--danger)' : 'var(--text-dim)';
       tr.innerHTML = `
         <td>${escapeHtml(r.name || '—')}</td>
-        <td class="qtycell">${r.sysQty || '—'}</td>
-        <td class="qtycell">${r.scan && r.scan.qtyGuess !== null ? r.scan.qtyGuess : '—'}</td>
-        <td style="font-size:12.5px;color:${commentColor};">${escapeHtml(r.comment)}</td>
+        <td class="qtycell">${r.sysQty ?? '—'}</td>
+        <td class="qtycell">${r.scanQty !== null && r.scanQty !== undefined ? r.scanQty : '—'}</td>
+        <td class="qtycell">${r.sysPrice !== null ? '£' + r.sysPrice.toFixed(2) : '—'}</td>
+        <td class="qtycell">${r.scanPrice !== null ? '£' + r.scanPrice.toFixed(2) : '—'}</td>
+        <td style="font-size:12.5px;color:${notesColor};">${escapeHtml(r.notes)}</td>
       `;
       tbody.appendChild(tr);
     });
@@ -3398,12 +3656,64 @@ async function runInvoiceOcrCheck(){
       note.textContent = unmatchedScans.length + ' line(s) on the scan didn\'t match anything in the system — could be extra items, or a naming mismatch.';
       results.appendChild(note);
     }
+    if(rows.length > 0){
+      document.getElementById('invoiceOcrFinaliseBtn').style.display = 'inline-block';
+    }
   }catch(e){
     progress.style.display = 'none';
     results.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not read one or more of those images: ' + escapeHtml(e.message || '') + '</div>';
     console.error(e);
   }finally{
     btn.disabled = false;
+  }
+}
+function finaliseInvoiceOcrCheck(){
+  if(invoiceOcrLastRows.length === 0){ toast('Run the check first'); return; }
+  document.getElementById('invoiceOcrDownloadRow').style.display = 'flex';
+}
+function invoiceOcrExportBase(){
+  return 'automated-check-' + (currentInvoiceNote && currentInvoiceNote.recnoteref ? currentInvoiceNote.recnoteref : 'invoice');
+}
+function downloadInvoiceOcrCsv(){
+  if(invoiceOcrLastRows.length === 0){ toast('Nothing to export'); return; }
+  const headers = ['Product', 'System Qty', 'Scanned Qty', 'System Price', 'Scanned Price', 'Notes'];
+  const body = invoiceOcrLastRows.map(r => [
+    r.name || '', r.sysQty ?? '', r.scanQty ?? '',
+    r.sysPrice !== null ? r.sysPrice.toFixed(2) : '', r.scanPrice !== null ? r.scanPrice.toFixed(2) : '',
+    r.notes
+  ]);
+  downloadCSV(invoiceOcrExportBase() + '.csv', headers, body);
+}
+function downloadInvoiceOcrPdf(){
+  if(invoiceOcrLastRows.length === 0){ toast('Nothing to export'); return; }
+  try{
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text('Automated Check — ' + (currentInvoiceNote && currentInvoiceNote.recnoteref ? currentInvoiceNote.recnoteref : 'Invoice'), 14, 18);
+    doc.setFontSize(9);
+    doc.setTextColor(120);
+    doc.text((currentInvoiceNote && currentInvoiceNote.supplier_name ? currentInvoiceNote.supplier_name + ' — ' : '') + 'Generated ' + new Date().toLocaleString(), 14, 24);
+    const headers = ['Product', 'System Qty', 'Scanned Qty', 'System Price', 'Scanned Price', 'Notes'];
+    const body = invoiceOcrLastRows.map(r => [
+      r.name || '', r.sysQty ?? '', r.scanQty ?? '',
+      r.sysPrice !== null ? '£' + r.sysPrice.toFixed(2) : '', r.scanPrice !== null ? '£' + r.scanPrice.toFixed(2) : '',
+      r.notes
+    ]);
+    doc.autoTable({
+      startY: 30, head: [headers], body,
+      theme: 'grid', headStyles: { fillColor: [30,34,42] }, styles: { fontSize: 8.5 },
+      margin: { left: 10, right: 10 },
+      didParseCell: (hookData) => {
+        if(hookData.section === 'body' && invoiceOcrLastRows[hookData.row.index] && invoiceOcrLastRows[hookData.row.index].status === 'ok'){
+          hookData.cell.styles.fillColor = [220, 245, 227];
+        }
+      }
+    });
+    doc.save(invoiceOcrExportBase() + '.pdf');
+  }catch(e){
+    toast('Could not generate PDF');
+    console.error(e);
   }
 }
 
@@ -3420,36 +3730,41 @@ function openModal(id){ document.getElementById(id).classList.add('active'); }
 function closeModal(id){ document.getElementById(id).classList.remove('active'); }
 
 /* ============ API HELPERS ============ */
-async function apiErrorText(res, verb, path){
+async function apiErrorText(res, verb, path, body){
   let detail = '';
-  try{
-    const body = await res.clone().json();
-    if(body && body.error) detail = body.error;
-  }catch(e){ /* body wasn't JSON — ignore, we'll just show the status */ }
+  if(body && body.error) detail = body.error;
   return verb + ' ' + path + ' failed: ' + res.status + (detail ? ' — ' + detail : '');
+}
+async function apiThrow(res, verb, path){
+  let body = null;
+  try{ body = await res.clone().json(); }catch(e){ /* body wasn't JSON — ignore, we'll just show the status */ }
+  const err = new Error(await apiErrorText(res, verb, path, body));
+  err.status = res.status;
+  err.body = body;
+  throw err;
 }
 async function apiGet(path){
   const res = await fetch(API_BASE + path);
-  if(!res.ok) throw new Error(await apiErrorText(res, 'GET', path));
+  if(!res.ok) await apiThrow(res, 'GET', path);
   return res.json();
 }
 async function apiPost(path, body){
   const res = await fetch(API_BASE + path, {
     method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
   });
-  if(!res.ok) throw new Error(await apiErrorText(res, 'POST', path));
+  if(!res.ok) await apiThrow(res, 'POST', path);
   return res.json().catch(()=>({}));
 }
 async function apiPut(path, body){
   const res = await fetch(API_BASE + path, {
     method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
   });
-  if(!res.ok) throw new Error(await apiErrorText(res, 'PUT', path));
+  if(!res.ok) await apiThrow(res, 'PUT', path);
   return res.json().catch(()=>({}));
 }
 async function apiDelete(path){
   const res = await fetch(API_BASE + path, { method:'DELETE' });
-  if(!res.ok) throw new Error(await apiErrorText(res, 'DELETE', path));
+  if(!res.ok) await apiThrow(res, 'DELETE', path);
   return res.json().catch(()=>({}));
 }
 
