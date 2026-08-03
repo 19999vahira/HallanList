@@ -1223,6 +1223,10 @@
       </label>
       <input type="datetime-local" id="replenTimeMultiInput" disabled>
     </div>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:10px;">
+      <input type="checkbox" id="replenTimeMultiClearCarry">
+      <span>Also clear carry-forward list for selected shelves (full restart — zeroes everything, not just the clock)</span>
+    </label>
     <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--line);">
       <input type="checkbox" id="replenTimeMultiSelectAll" checked onchange="toggleReplenTimeMultiSelectAll(this.checked)">
       <strong>Select All</strong>
@@ -2386,7 +2390,7 @@ function renderReplenStatus(startedAt){
     box.innerHTML = `
       <div class="empty-hint" style="margin-bottom:16px;">Not started yet. Hit Begin to start tracking sales for this shelf.</div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <button class="btn-amber" onclick="beginReplenishment()">Begin</button>
+        <button class="btn-amber" onclick="beginReplenishment(undefined, true)">Begin</button>
         <button class="btn-ghost" onclick="openReplenManualTimeModal()">Set Time Manually</button>
       </div>
     `;
@@ -2396,19 +2400,36 @@ function renderReplenStatus(startedAt){
   box.innerHTML = `
     <div class="empty-hint" style="margin-bottom:16px;">Tracking since ${ukDateTimeString(since)} (UK time).</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
-      <button class="btn-ghost" onclick="beginReplenishment()">Restart</button>
+      <button class="btn-ghost" onclick="confirmRestartReplenishment()">Restart</button>
       <button class="btn-ghost" onclick="openReplenManualTimeModal()">Set Time Manually</button>
       <button class="btn-ghost" onclick="reprintReplenishment()">Reprint Last List</button>
       <button class="btn-amber" onclick="printReplenishment()">Print List</button>
     </div>
   `;
 }
-async function beginReplenishment(startedAtIso){
+async function confirmRestartReplenishment(){
+  if(!currentReplenShelf) return;
+  // Restart is destructive to the carry-forward list, so this needs an explicit
+  // confirmation — unlike Begin (nothing to lose yet) or Set Time Manually
+  // (a clock correction, not a reset), Restart zeroes everything out.
+  const ok = confirm(
+    `Restart tracking for ${currentReplenShelf.shelf_name}?\n\n` +
+    `This resets the clock to now AND clears this shelf's carry-forward list — ` +
+    `any quantities quietly saved below the print threshold will be wiped, not just the visible sales window.`
+  );
+  if(!ok) return;
+  await beginReplenishment(undefined, true);
+}
+async function beginReplenishment(startedAtIso, clearCarry){
   if(!currentReplenShelf) return;
   try{
-    await apiPost('location/shelves/' + currentReplenShelf.shelf_id + '/replenishment/begin',
-      startedAtIso ? { started_at: startedAtIso } : {});
-    toast('Tracking started for ' + currentReplenShelf.shelf_name);
+    const payload = {};
+    if(startedAtIso) payload.started_at = startedAtIso;
+    if(clearCarry) payload.clear_carry = true;
+    await apiPost('location/shelves/' + currentReplenShelf.shelf_id + '/replenishment/begin', payload);
+    toast(clearCarry
+      ? ('Tracking restarted for ' + currentReplenShelf.shelf_name + ' — carry-forward cleared')
+      : ('Tracking started for ' + currentReplenShelf.shelf_name));
     await loadReplenStatus();
   }catch(e){
     toast('Could not start tracking');
@@ -2570,6 +2591,7 @@ async function openReplenTimeMultiModal(){
   document.getElementById('replenTimeMultiModeNow').checked = true;
   document.getElementById('replenTimeMultiInput').disabled = true;
   document.getElementById('replenTimeMultiInput').value = ukInputValueFromDate(new Date());
+  document.getElementById('replenTimeMultiClearCarry').checked = false;
   document.getElementById('replenTimeMultiSelectAll').checked = true;
   const list = document.getElementById('replenTimeMultiList');
   list.innerHTML = '<div class="loading">Loading zones and shelves…</div>';
@@ -2644,6 +2666,7 @@ async function submitReplenTimeMultiReset(){
   const checked = [...document.querySelectorAll('.replenTimeMultiCheck:checked')];
   if(checked.length === 0){ toast('Pick at least one shelf'); return; }
   const manual = document.getElementById('replenTimeMultiModeManual').checked;
+  const clearCarry = document.getElementById('replenTimeMultiClearCarry').checked;
   let startedAtIso = null; // null = let the server use "now" for each call
   if(manual){
     const val = document.getElementById('replenTimeMultiInput').value;
@@ -2652,13 +2675,25 @@ async function submitReplenTimeMultiReset(){
     // then use that exact same instant for every selected shelf.
     startedAtIso = ukInputValueToDate(val).toISOString();
   }
+  if(clearCarry){
+    // Same confirmation as the single-shelf Restart — this wipes carry-forward
+    // data across every selected shelf, so it needs an explicit yes.
+    const names = checked.map(b => b.dataset.shelfName).join(', ');
+    const ok = confirm(
+      `Set time for ${checked.length} shelf${checked.length === 1 ? '' : 'ves'} and clear their carry-forward lists?\n\n` +
+      `${names}\n\nAny quantities quietly saved below the print threshold on these shelves will be wiped, not just the visible sales window.`
+    );
+    if(!ok) return;
+  }
   let okCount = 0;
   let failCount = 0;
   for(const box of checked){
     const shelfId = box.dataset.shelfId;
     try{
-      await apiPost('location/shelves/' + shelfId + '/replenishment/begin',
-        startedAtIso ? { started_at: startedAtIso } : {});
+      const payload = {};
+      if(startedAtIso) payload.started_at = startedAtIso;
+      if(clearCarry) payload.clear_carry = true;
+      await apiPost('location/shelves/' + shelfId + '/replenishment/begin', payload);
       okCount++;
     }catch(e){
       failCount++;
@@ -2671,6 +2706,7 @@ async function submitReplenTimeMultiReset(){
     return;
   }
   toast('Time set for ' + okCount + ' shelf' + (okCount === 1 ? '' : 'ves') +
+    (clearCarry ? ' — carry-forward cleared' : '') +
     (failCount ? ' (' + failCount + ' failed)' : ''));
   // If the shelf currently open in the detail view was part of this batch, refresh its status
   if(currentReplenShelf && checked.some(b => Number(b.dataset.shelfId) === Number(currentReplenShelf.shelf_id))){
