@@ -1363,12 +1363,9 @@
 <div class="modal-backdrop" id="modalWholesaleExport">
   <div class="modal" style="width:360px;">
     <h3>Choose columns</h3>
-    <p class="modal-sub">Pick which columns to include in the file.</p>
+    <p class="modal-sub">Pick which columns to include. Items are grouped under their department as a heading automatically.</p>
     <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;">
       <input type="checkbox" checked disabled> Item
-    </label>
-    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;">
-      <input type="checkbox" id="wsColDept" checked> Department
     </label>
     <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;">
       <input type="checkbox" id="wsColCost" checked> Supplier Cost
@@ -1376,8 +1373,11 @@
     <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;">
       <input type="checkbox" id="wsColMargin" checked> Margin
     </label>
-    <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;font-size:14px;">
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;">
       <input type="checkbox" id="wsColPrice" checked> Trade 3 Price
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;font-size:14px;">
+      <input type="checkbox" id="wsColBarcode" checked> Barcode
     </label>
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalWholesaleExport')">Cancel</button>
@@ -1613,26 +1613,30 @@ function renderWholesaleTable(){
   const table = document.createElement('table');
   table.className = 'finaltable';
   const thead = document.createElement('thead');
+  // Department is hidden here — it's shown as a grouping heading in the download
+  // instead (see groupExportRowsByDepartment), not repeated on every row.
   thead.innerHTML = `<tr>
-    <th>Item</th><th>Department</th>
+    <th>Item</th>
     <th class="qtycell">Supplier Cost</th><th class="qtycell">Margin</th><th class="qtycell">Trade 3 Price</th>
   </tr>`;
   const tbody = document.createElement('tbody');
   filtered.forEach(r=>{
-    // Live-edited state per row, seeded from the actual synced values the first time it's rendered
+    // Live-edited state per row, seeded from the actual synced values the first time it's rendered.
+    // `changed` tracks whether staff have manually overridden this row's price/margin — carried
+    // through to the export so a changed row can be flagged there.
     let adj = wholesaleAdjust[r.stock_name];
     if(!adj){
       const initialMargin = wholesaleMarginPct(r);
       adj = {
         margin: initialMargin === null ? '' : initialMargin.toFixed(1),
-        price: (r.price_net === null || r.price_net === undefined) ? '' : Number(r.price_net).toFixed(2)
+        price: (r.price_net === null || r.price_net === undefined) ? '' : Number(r.price_net).toFixed(2),
+        changed: false
       };
       wholesaleAdjust[r.stock_name] = adj;
     }
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${escapeHtml(r.stock_name)}</td>
-      <td>${escapeHtml(r.department_name)}</td>
       <td class="qtycell">${r.suppcost_net === null || r.suppcost_net === undefined ? '—' : Number(r.suppcost_net).toFixed(2)}</td>
       <td class="qtycell">
         <input type="number" step="0.1" class="margininput" value="${adj.margin}">
@@ -1651,6 +1655,7 @@ function renderWholesaleTable(){
     priceInput.addEventListener('change', () => {
       const v = priceInput.value.trim();
       adj.price = v;
+      adj.changed = true;
       pricePrint.textContent = v !== '' ? Number(v).toFixed(2) : '—';
       const newMargin = wholesaleMarginFromPrice(r.suppcost_net, v);
       if(newMargin !== null){
@@ -1662,6 +1667,7 @@ function renderWholesaleTable(){
     marginInput.addEventListener('change', () => {
       const v = marginInput.value.trim();
       adj.margin = v;
+      adj.changed = true;
       marginPrint.textContent = v !== '' ? Number(v).toFixed(1) + '%' : '—';
       const newPrice = wholesalePriceFromMargin(r.suppcost_net, v);
       if(newPrice !== null){
@@ -1685,12 +1691,32 @@ function wholesaleExportRows(){
     return {
       item: r.stock_name,
       department: r.department_name,
+      barcode: r.barcode || '',
       suppCost: r.suppcost_net === null || r.suppcost_net === undefined ? null : Number(r.suppcost_net),
       tradePrice: priceVal,
       isVat: r.vatid === 1,
-      margin: marginVal
+      margin: marginVal,
+      changed: !!adj.changed
     };
   });
+}
+// Groups already-department-sorted rows into department sections, in the order
+// they appear (the backend sorts by DEPARTMENT_NAME, STOCK_NAME, so this stays
+// alphabetical without needing to re-sort here) — used so the download can show
+// the department as a heading over each group instead of as its own column.
+function groupExportRowsByDepartment(rows){
+  const groups = [];
+  const byDept = new Map();
+  rows.forEach(r => {
+    const key = r.department || '—';
+    if(!byDept.has(key)){
+      const g = { department: key, rows: [] };
+      byDept.set(key, g);
+      groups.push(g);
+    }
+    byDept.get(key).rows.push(r);
+  });
+  return groups;
 }
 
 /* ---- Export: choose columns, then PDF or Excel ---- */
@@ -1702,10 +1728,10 @@ function openWholesaleExportModal(target){
 }
 function confirmWholesaleExport(){
   const columns = {
-    department: document.getElementById('wsColDept').checked,
     suppCost: document.getElementById('wsColCost').checked,
     tradePrice: document.getElementById('wsColPrice').checked,
-    margin: document.getElementById('wsColMargin').checked
+    margin: document.getElementById('wsColMargin').checked,
+    barcode: document.getElementById('wsColBarcode').checked
   };
   closeModal('modalWholesaleExport');
   if(wholesaleExportTarget === 'excel') downloadWholesaleExcel(columns);
@@ -1713,7 +1739,9 @@ function confirmWholesaleExport(){
 }
 function wholesalePriceCellText(r){
   if(r.tradePrice === null) return '—';
-  return r.tradePrice.toFixed(2) + (r.isVat ? ' +VAT' : '');
+  // "C" flags a price that was manually changed from the synced value, so
+  // whoever reads the exported list can see it wasn't just copied from Vector.
+  return r.tradePrice.toFixed(2) + (r.isVat ? ' +VAT' : '') + (r.changed ? ' C' : '');
 }
 function buildWholesalePDFDoc(columns){
   if(wholesaleRows.length === 0) return null;
@@ -1724,22 +1752,40 @@ function buildWholesalePDFDoc(columns){
   doc.text('Wholesale Pricing List — Trade 3', 14, 18);
   doc.setFontSize(9);
   doc.setTextColor(120);
-  doc.text('Generated ' + new Date().toLocaleString() + ' — CONFIDENTIAL', 14, 24);
+  const anyChanged = rows.some(r => r.changed);
+  doc.text(
+    'Generated ' + ukDateTimeString(new Date()) + ' (UK time) — CONFIDENTIAL' +
+    (anyChanged ? '   |   C = price manually changed from the synced value' : ''),
+    14, 24
+  );
 
+  // Department is a section heading over each group of rows here, not its own
+  // column — matches the on-screen list, which hides the department column too.
   const head = ['Item'];
-  if(columns.department) head.push('Department');
   if(columns.suppCost) head.push('Supplier Cost');
   if(columns.margin) head.push('Margin');
   if(columns.tradePrice) head.push('Trade 3 Price');
+  if(columns.barcode) head.push('Barcode');
+  const colCount = head.length;
 
-  const body = rows.map(r => {
-    const line = [r.item];
-    if(columns.department) line.push(r.department);
-    if(columns.suppCost) line.push(r.suppCost === null ? '—' : r.suppCost.toFixed(2));
-    if(columns.margin) line.push(r.margin === null ? '—' : r.margin.toFixed(1) + '%');
-    if(columns.tradePrice) line.push(wholesalePriceCellText(r));
-    return line;
+  const groups = groupExportRowsByDepartment(rows);
+  const body = [];
+  groups.forEach(g => {
+    body.push([{
+      content: g.department,
+      colSpan: colCount,
+      styles: { fillColor: [232, 221, 186], textColor: [40, 30, 10], fontStyle: 'bold', halign: 'left' }
+    }]);
+    g.rows.forEach(r => {
+      const line = [r.item];
+      if(columns.suppCost) line.push(r.suppCost === null ? '—' : r.suppCost.toFixed(2));
+      if(columns.margin) line.push(r.margin === null ? '—' : r.margin.toFixed(1) + '%');
+      if(columns.tradePrice) line.push(wholesalePriceCellText(r));
+      if(columns.barcode) line.push(r.barcode || '—');
+      body.push(line);
+    });
   });
+
   doc.autoTable({
     startY: 30,
     head: [head],
@@ -1764,7 +1810,7 @@ function downloadWholesalePDF(columns){
 function emailWholesalePDF(){
   try{
     // Email uses every column — the compact filter is really only for what's printed/downloaded to share
-    const doc = buildWholesalePDFDoc({ department: true, suppCost: true, tradePrice: true, margin: true });
+    const doc = buildWholesalePDFDoc({ suppCost: true, tradePrice: true, margin: true, barcode: true });
     if(!doc){ toast('Nothing to email yet'); return; }
     shareOrEmailPDF(doc, 'wholesale-pricing-' + new Date().toISOString().slice(0,10) + '.pdf', 'Wholesale Pricing List — Trade 3');
   }catch(e){
@@ -1776,20 +1822,45 @@ function downloadWholesaleExcel(columns){
   if(wholesaleRows.length === 0) return;
   try{
     const rows = wholesaleExportRows();
-    const sheetData = rows.map(r => {
-      const line = { 'Item': r.item };
-      if(columns.department) line['Department'] = r.department;
-      if(columns.suppCost) line['Supplier Cost'] = r.suppCost;
-      if(columns.margin) line['Margin %'] = r.margin;
-      if(columns.tradePrice) line['Trade 3 Price'] = wholesalePriceCellText(r);
-      return line;
+    const head = ['Item'];
+    if(columns.suppCost) head.push('Supplier Cost');
+    if(columns.margin) head.push('Margin %');
+    if(columns.tradePrice) head.push('Trade 3 Price');
+    if(columns.barcode) head.push('Barcode');
+    const colCount = head.length;
+
+    // Department is a merged heading row above each group instead of its own
+    // column — built as an array-of-arrays sheet (aoa_to_sheet) rather than
+    // json_to_sheet so heading rows and merges are possible.
+    const groups = groupExportRowsByDepartment(rows);
+    const aoa = [head];
+    const merges = [];
+    let anyChanged = false;
+    groups.forEach(g => {
+      const headingRow = aoa.length;
+      aoa.push([g.department]);
+      if(colCount > 1) merges.push({ s: { r: headingRow, c: 0 }, e: { r: headingRow, c: colCount - 1 } });
+      g.rows.forEach(r => {
+        if(r.changed) anyChanged = true;
+        const line = [r.item];
+        if(columns.suppCost) line.push(r.suppCost === null ? '—' : r.suppCost);
+        if(columns.margin) line.push(r.margin === null ? '—' : r.margin);
+        if(columns.tradePrice) line.push(wholesalePriceCellText(r));
+        if(columns.barcode) line.push(r.barcode || '—');
+        aoa.push(line);
+      });
     });
-    const ws = XLSX.utils.json_to_sheet(sheetData);
+    if(anyChanged){
+      aoa.push([]);
+      aoa.push(['C = price manually changed from the synced value']);
+    }
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!merges'] = merges;
     const widths = [{ wch: 40 }];
-    if(columns.department) widths.push({ wch: 20 });
     if(columns.suppCost) widths.push({ wch: 14 });
     if(columns.margin) widths.push({ wch: 10 });
     if(columns.tradePrice) widths.push({ wch: 16 });
+    if(columns.barcode) widths.push({ wch: 18 });
     ws['!cols'] = widths;
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Wholesale Pricing');
