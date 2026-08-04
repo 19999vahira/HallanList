@@ -1363,9 +1363,12 @@
 <div class="modal-backdrop" id="modalWholesaleExport">
   <div class="modal" style="width:360px;">
     <h3>Choose columns</h3>
-    <p class="modal-sub">Pick which columns to include. Items are grouped under their department as a heading automatically.</p>
+    <p class="modal-sub">Pick which columns to include in the file.</p>
     <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;">
       <input type="checkbox" checked disabled> Item
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;">
+      <input type="checkbox" id="wsColDept" checked> Department
     </label>
     <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;">
       <input type="checkbox" id="wsColCost" checked> Supplier Cost
@@ -1610,17 +1613,48 @@ function renderWholesaleTable(){
     content.innerHTML = '<div class="empty-hint">No matches for that search.</div>';
     return;
   }
+  content.innerHTML = '';
+  // On screen, department is a heading over each group of items (no separate
+  // column) — same grouping used for the download, just rendered as headings
+  // here instead of as a column there.
+  const groups = groupRowsByDepartment(filtered);
+  groups.forEach(g => {
+    const heading = document.createElement('div');
+    heading.style.cssText = 'font-weight:700;font-size:14px;margin:16px 0 6px;padding-bottom:5px;border-bottom:2px solid var(--line);';
+    heading.textContent = g.department;
+    content.appendChild(heading);
+    content.appendChild(buildWholesaleItemsTable(g.items));
+  });
+}
+// Groups already-department-sorted rows into department sections, in the order
+// they appear (the backend sorts by DEPARTMENT_NAME, STOCK_NAME already).
+function groupRowsByDepartment(rows){
+  const groups = [];
+  const byDept = new Map();
+  rows.forEach(r => {
+    const key = r.department_name || '—';
+    if(!byDept.has(key)){
+      const g = { department: key, items: [] };
+      byDept.set(key, g);
+      groups.push(g);
+    }
+    byDept.get(key).items.push(r);
+  });
+  return groups;
+}
+function buildWholesaleItemsTable(items){
   const table = document.createElement('table');
   table.className = 'finaltable';
   const thead = document.createElement('thead');
-  // Department is hidden here — it's shown as a grouping heading in the download
-  // instead (see groupExportRowsByDepartment), not repeated on every row.
+  // Department isn't a column here — it's the heading rendered above this table
+  // in renderWholesaleTable. The download shows it the other way round: as its
+  // own column, not a heading — see buildWholesalePDFDoc / downloadWholesaleExcel.
   thead.innerHTML = `<tr>
     <th>Item</th>
     <th class="qtycell">Supplier Cost</th><th class="qtycell">Margin</th><th class="qtycell">Trade 3 Price</th>
   </tr>`;
   const tbody = document.createElement('tbody');
-  filtered.forEach(r=>{
+  items.forEach(r=>{
     // Live-edited state per row, seeded from the actual synced values the first time it's rendered.
     // `changed` tracks whether staff have manually overridden this row's price/margin — carried
     // through to the export so a changed row can be flagged there.
@@ -1680,8 +1714,7 @@ function renderWholesaleTable(){
   });
   table.appendChild(thead);
   table.appendChild(tbody);
-  content.innerHTML = '';
-  content.appendChild(table);
+  return table;
 }
 function wholesaleExportRows(){
   return filteredWholesaleRows().map(r=>{
@@ -1700,24 +1733,6 @@ function wholesaleExportRows(){
     };
   });
 }
-// Groups already-department-sorted rows into department sections, in the order
-// they appear (the backend sorts by DEPARTMENT_NAME, STOCK_NAME, so this stays
-// alphabetical without needing to re-sort here) — used so the download can show
-// the department as a heading over each group instead of as its own column.
-function groupExportRowsByDepartment(rows){
-  const groups = [];
-  const byDept = new Map();
-  rows.forEach(r => {
-    const key = r.department || '—';
-    if(!byDept.has(key)){
-      const g = { department: key, rows: [] };
-      byDept.set(key, g);
-      groups.push(g);
-    }
-    byDept.get(key).rows.push(r);
-  });
-  return groups;
-}
 
 /* ---- Export: choose columns, then PDF or Excel ---- */
 let wholesaleExportTarget = null; // 'pdf' | 'excel'
@@ -1728,6 +1743,7 @@ function openWholesaleExportModal(target){
 }
 function confirmWholesaleExport(){
   const columns = {
+    department: document.getElementById('wsColDept').checked,
     suppCost: document.getElementById('wsColCost').checked,
     tradePrice: document.getElementById('wsColPrice').checked,
     margin: document.getElementById('wsColMargin').checked,
@@ -1759,33 +1775,22 @@ function buildWholesalePDFDoc(columns){
     14, 24
   );
 
-  // Department is a section heading over each group of rows here, not its own
-  // column — matches the on-screen list, which hides the department column too.
   const head = ['Item'];
+  if(columns.department) head.push('Department');
   if(columns.suppCost) head.push('Supplier Cost');
   if(columns.margin) head.push('Margin');
   if(columns.tradePrice) head.push('Trade 3 Price');
   if(columns.barcode) head.push('Barcode');
-  const colCount = head.length;
 
-  const groups = groupExportRowsByDepartment(rows);
-  const body = [];
-  groups.forEach(g => {
-    body.push([{
-      content: g.department,
-      colSpan: colCount,
-      styles: { fillColor: [232, 221, 186], textColor: [40, 30, 10], fontStyle: 'bold', halign: 'left' }
-    }]);
-    g.rows.forEach(r => {
-      const line = [r.item];
-      if(columns.suppCost) line.push(r.suppCost === null ? '—' : r.suppCost.toFixed(2));
-      if(columns.margin) line.push(r.margin === null ? '—' : r.margin.toFixed(1) + '%');
-      if(columns.tradePrice) line.push(wholesalePriceCellText(r));
-      if(columns.barcode) line.push(r.barcode || '—');
-      body.push(line);
-    });
+  const body = rows.map(r => {
+    const line = [r.item];
+    if(columns.department) line.push(r.department);
+    if(columns.suppCost) line.push(r.suppCost === null ? '—' : r.suppCost.toFixed(2));
+    if(columns.margin) line.push(r.margin === null ? '—' : r.margin.toFixed(1) + '%');
+    if(columns.tradePrice) line.push(wholesalePriceCellText(r));
+    if(columns.barcode) line.push(r.barcode || '—');
+    return line;
   });
-
   doc.autoTable({
     startY: 30,
     head: [head],
@@ -1810,7 +1815,7 @@ function downloadWholesalePDF(columns){
 function emailWholesalePDF(){
   try{
     // Email uses every column — the compact filter is really only for what's printed/downloaded to share
-    const doc = buildWholesalePDFDoc({ suppCost: true, tradePrice: true, margin: true, barcode: true });
+    const doc = buildWholesalePDFDoc({ department: true, suppCost: true, tradePrice: true, margin: true, barcode: true });
     if(!doc){ toast('Nothing to email yet'); return; }
     shareOrEmailPDF(doc, 'wholesale-pricing-' + new Date().toISOString().slice(0,10) + '.pdf', 'Wholesale Pricing List — Trade 3');
   }catch(e){
@@ -1822,41 +1827,22 @@ function downloadWholesaleExcel(columns){
   if(wholesaleRows.length === 0) return;
   try{
     const rows = wholesaleExportRows();
-    const head = ['Item'];
-    if(columns.suppCost) head.push('Supplier Cost');
-    if(columns.margin) head.push('Margin %');
-    if(columns.tradePrice) head.push('Trade 3 Price');
-    if(columns.barcode) head.push('Barcode');
-    const colCount = head.length;
-
-    // Department is a merged heading row above each group instead of its own
-    // column — built as an array-of-arrays sheet (aoa_to_sheet) rather than
-    // json_to_sheet so heading rows and merges are possible.
-    const groups = groupExportRowsByDepartment(rows);
-    const aoa = [head];
-    const merges = [];
-    let anyChanged = false;
-    groups.forEach(g => {
-      const headingRow = aoa.length;
-      aoa.push([g.department]);
-      if(colCount > 1) merges.push({ s: { r: headingRow, c: 0 }, e: { r: headingRow, c: colCount - 1 } });
-      g.rows.forEach(r => {
-        if(r.changed) anyChanged = true;
-        const line = [r.item];
-        if(columns.suppCost) line.push(r.suppCost === null ? '—' : r.suppCost);
-        if(columns.margin) line.push(r.margin === null ? '—' : r.margin);
-        if(columns.tradePrice) line.push(wholesalePriceCellText(r));
-        if(columns.barcode) line.push(r.barcode || '—');
-        aoa.push(line);
-      });
+    const anyChanged = rows.some(r => r.changed);
+    const sheetData = rows.map(r => {
+      const line = { 'Item': r.item };
+      if(columns.department) line['Department'] = r.department;
+      if(columns.suppCost) line['Supplier Cost'] = r.suppCost;
+      if(columns.margin) line['Margin %'] = r.margin;
+      if(columns.tradePrice) line['Trade 3 Price'] = wholesalePriceCellText(r);
+      if(columns.barcode) line['Barcode'] = r.barcode || '';
+      return line;
     });
+    const ws = XLSX.utils.json_to_sheet(sheetData);
     if(anyChanged){
-      aoa.push([]);
-      aoa.push(['C = price manually changed from the synced value']);
+      XLSX.utils.sheet_add_aoa(ws, [[], ['C = price manually changed from the synced value']], { origin: -1 });
     }
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['!merges'] = merges;
     const widths = [{ wch: 40 }];
+    if(columns.department) widths.push({ wch: 20 });
     if(columns.suppCost) widths.push({ wch: 14 });
     if(columns.margin) widths.push({ wch: 10 });
     if(columns.tradePrice) widths.push({ wch: 16 });
