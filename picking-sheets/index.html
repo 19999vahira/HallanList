@@ -478,6 +478,12 @@
         <h3>Invoices</h3>
         <p>Goods received notes — pending vs posted, by supplier.</p>
       </div>
+      <div class="tile" style="--tile-color:#c2410c;" onclick="openRestaurantOrders()">
+        <div class="tile-icon">🍽️</div>
+        <div class="num">09 &middot; ORDER</div>
+        <h3>Restaurant Orders</h3>
+        <p>Passcode-only ordering for wholesale restaurant customers.</p>
+      </div>
     </div>
   </div>
 
@@ -832,6 +838,121 @@
     </div>
     <div id="stockInfoResults">
       <div class="empty-hint">Start typing a barcode or item name.</div>
+    </div>
+  </div>
+
+  <!-- RESTAURANT ORDERS: PASSCODE -->
+  <div id="view-restaurant-passcode" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span><span class="current">Restaurant Orders</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Wholesale Customers</div>
+      <h2>Restaurant Orders</h2>
+      <p>Enter your passcode to build your order sheet.</p>
+      <div style="margin-top:16px;max-width:280px;">
+        <input type="text" id="restaurantPasscodeInput" placeholder="Passcode" autocomplete="off"
+          style="width:100%;padding:12px 14px;font-size:16px;border-radius:10px;border:1px solid var(--line);"
+          onkeydown="if(event.key==='Enter') submitRestaurantPasscode()">
+        <button class="btn-amber" style="margin-top:10px;width:100%;" onclick="submitRestaurantPasscode()">Continue</button>
+      </div>
+    </div>
+    <div style="margin-top:30px;">
+      <a href="#" onclick="event.preventDefault(); openRestaurantAdminGate();" style="font-size:13px;color:var(--text-dim);">Staff: manage customers &amp; passcodes</a>
+    </div>
+  </div>
+
+  <!-- RESTAURANT ORDERS: WIZARD -->
+  <div id="view-restaurant-order" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="exitRestaurantOrder()">Restaurant Orders</button><span class="sep">/</span>
+      <span class="current" id="restaurantCustomerLabel">—</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Step <span id="restaurantStepNum">1</span> of 3</div>
+      <h2 id="restaurantStepTitle">This Week</h2>
+      <p id="restaurantStepSub">Products you ordered in the last 7 days.</p>
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
+        <button class="btn-ghost" id="restaurantTabWeek" onclick="goToRestaurantStep(1)">1 · This Week</button>
+        <button class="btn-ghost" id="restaurantTabMonth" onclick="goToRestaurantStep(2)">2 · Last 3 Months</button>
+        <button class="btn-ghost" id="restaurantTabSuggested" onclick="goToRestaurantStep(3)">3 · You Might Also Like</button>
+      </div>
+    </div>
+    <div id="restaurantStepContent">
+      <div class="loading">Loading…</div>
+    </div>
+    <div style="position:sticky;bottom:0;background:var(--bg);padding:14px 0;margin-top:10px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+      <div style="font-size:13px;color:var(--text-dim);"><span id="restaurantCartCount">0</span> item(s) in your order</div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn-ghost" id="restaurantBackBtn" onclick="restaurantStepBack()">Back</button>
+        <button class="btn-amber" id="restaurantNextBtn" onclick="restaurantStepNext()">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESTAURANT ORDERS: REVIEW -->
+  <div id="view-restaurant-review" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="exitRestaurantOrder()">Restaurant Orders</button><span class="sep">/</span>
+      <span class="current">Review Order</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Almost done</div>
+      <h2>Review Your Order</h2>
+      <p>Check quantities, remove anything you don't need, then submit and download your order sheet.</p>
+    </div>
+    <div id="restaurantReviewContent">
+      <div class="empty-hint">Nothing in your order yet.</div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;">
+      <button class="btn-ghost" onclick="goToRestaurantStep(3)">Back to Edit</button>
+      <button class="btn-amber" onclick="submitRestaurantOrder()">Submit &amp; Download Order Sheet</button>
+    </div>
+  </div>
+
+  <!-- RESTAURANT ORDERS: ADMIN — MANAGE CUSTOMERS -->
+  <div id="view-restaurant-admin" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="showView('view-restaurant-passcode')">Restaurant Orders</button><span class="sep">/</span>
+      <span class="current">Manage Customers</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Staff Only</div>
+      <h2>Restaurant Customers</h2>
+      <p>Assign each restaurant a customer ID (matching their sales history) and a passcode they'll use to sign in.</p>
+    </div>
+    <div style="margin-bottom:16px;">
+      <button class="btn-ghost" onclick="openRestaurantAdminPasswordModal()">Change Manage-Customers Password</button>
+    </div>
+    <div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:20px;">
+      <h3 style="margin-top:0;">Add / Update Customer</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+        <input type="number" id="raCustId" placeholder="Customer ID">
+        <input type="text" id="raCustName" placeholder="Restaurant name">
+        <input type="text" id="raCustPasscode" placeholder="Passcode">
+      </div>
+      <button class="btn-amber" style="margin-top:10px;" onclick="saveRestaurantCustomer()">Save</button>
+    </div>
+    <div id="restaurantAdminList">
+      <div class="loading">Loading customers…</div>
+    </div>
+  </div>
+
+  <!-- RESTAURANT ADMIN PASSWORD -->
+  <div class="modal-backdrop" id="modalRestaurantAdminPassword">
+    <div class="modal" style="width:340px;">
+      <h3>Change Manage-Customers password</h3>
+      <input type="password" id="raOldPassword" placeholder="Current password" style="width:100%;margin-bottom:8px;padding:10px;">
+      <input type="password" id="raNewPassword" placeholder="New password" style="width:100%;margin-bottom:8px;padding:10px;">
+      <input type="password" id="raNewPassword2" placeholder="Confirm new password" style="width:100%;margin-bottom:8px;padding:10px;">
+      <div id="raPasswordErr" style="color:var(--danger);font-size:13px;margin-bottom:8px;display:none;"></div>
+      <div class="modal-close-row">
+        <button class="btn-ghost" onclick="closeModal('modalRestaurantAdminPassword')">Cancel</button>
+        <button class="btn-amber" onclick="submitRestaurantAdminPasswordChange()">Save</button>
+      </div>
     </div>
   </div>
 
@@ -2310,6 +2431,436 @@ function renderStockInfoResults(items){
   table.appendChild(tbody);
   results.innerHTML = '';
   results.appendChild(table);
+}
+
+/* ============ RESTAURANT ORDERS ============ */
+let restaurantStep = 1; // 1=week, 2=three-month, 3=suggested
+let restaurantStepData = { 1: null, 2: null, 3: null }; // cached items per step
+let restaurantCart = new Map(); // stockid -> { stockid, item_name, department_name, trade_price, is_vat, qty, source }
+let restaurantSubstituteCache = new Map(); // item_name -> [items]
+// Looked-up-by-key item data for whatever's currently on screen — avoids embedding
+// JSON.stringify(...) inside HTML attributes (its double quotes collide with the
+// attribute's own double quotes and corrupt the markup); onchange/onclick handlers
+// pass just the stockid key and look the full item back up from here instead.
+let restaurantItemLookup = new Map();
+
+function restaurantHeaders(){
+  return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('hallan_restaurant_token') || '') };
+}
+async function restaurantApiGet(path){
+  const res = await fetch(API_BASE + path, { headers: restaurantHeaders() });
+  if(res.status === 401){ restaurantSignOut(); throw new Error('Session expired'); }
+  if(!res.ok) throw new Error('Request failed: ' + res.status);
+  return res.json();
+}
+async function restaurantApiPost(path, body){
+  const res = await fetch(API_BASE + path, { method: 'POST', headers: restaurantHeaders(), body: JSON.stringify(body) });
+  if(res.status === 401){ restaurantSignOut(); throw new Error('Session expired'); }
+  if(!res.ok){ const err = await res.json().catch(()=>({})); throw new Error(err.error || ('Request failed: ' + res.status)); }
+  return res.json();
+}
+function restaurantSignOut(){
+  localStorage.removeItem('hallan_restaurant_token');
+  localStorage.removeItem('hallan_restaurant_customer');
+  toast('Session expired — please enter your passcode again');
+  showView('view-restaurant-passcode');
+}
+
+function openRestaurantOrders(){
+  document.getElementById('restaurantPasscodeInput').value = '';
+  showView('view-restaurant-passcode');
+}
+async function submitRestaurantPasscode(){
+  const input = document.getElementById('restaurantPasscodeInput');
+  const passcode = input.value.trim();
+  if(!passcode){ toast('Enter your passcode'); return; }
+  try{
+    const data = await apiPost('restaurant/login', { passcode });
+    localStorage.setItem('hallan_restaurant_token', data.token);
+    localStorage.setItem('hallan_restaurant_customer', JSON.stringify({ id: data.customer_id, name: data.customer_name }));
+    restaurantStepData = { 1: null, 2: null, 3: null };
+    restaurantCart = new Map();
+    document.getElementById('restaurantCustomerLabel').textContent = data.customer_name;
+    showView('view-restaurant-order');
+    goToRestaurantStep(1);
+  }catch(e){
+    toast(e.message || 'Incorrect passcode');
+  }
+}
+function exitRestaurantOrder(){
+  showView('view-restaurant-passcode');
+}
+
+// Groups any array of rows with a department_name into department sections,
+// in the order they first appear — same grouping approach used on the
+// Wholesale Pricing List page, so restaurant customers see the same
+// "veg", "cleaning & hygiene" etc. style sections they'd recognise from there.
+function groupItemsByDepartment(items){
+  const groups = [];
+  const byDept = new Map();
+  items.forEach(it => {
+    const key = it.department_name || 'Other';
+    if(!byDept.has(key)){
+      const g = { department: key, items: [] };
+      byDept.set(key, g);
+      groups.push(g);
+    }
+    byDept.get(key).items.push(it);
+  });
+  return groups;
+}
+
+const RESTAURANT_STEP_META = {
+  1: { title: 'This Week', sub: 'Products you ordered in the last 7 days.', endpoint: 'restaurant/order/week', source: 'WEEK' },
+  2: { title: 'Last 3 Months', sub: 'Everything you\u2019ve ordered in the last 3 months — pick anything else you need.', endpoint: 'restaurant/order/three-month', source: 'THREE_MONTH' },
+  3: { title: 'You Might Also Like', sub: 'Popular with other similar customers — not necessarily anything you\u2019ve ordered before.', endpoint: 'restaurant/order/suggested', source: 'SUGGESTED' }
+};
+
+async function goToRestaurantStep(step){
+  restaurantStep = step;
+  ['Week','Month','Suggested'].forEach((s,i) => {
+    document.getElementById('restaurantTab' + s).classList.toggle('btn-amber', i + 1 === step);
+    document.getElementById('restaurantTab' + s).classList.toggle('btn-ghost', i + 1 !== step);
+  });
+  const meta = RESTAURANT_STEP_META[step];
+  document.getElementById('restaurantStepNum').textContent = step;
+  document.getElementById('restaurantStepTitle').textContent = meta.title;
+  document.getElementById('restaurantStepSub').textContent = meta.sub;
+  document.getElementById('restaurantBackBtn').style.visibility = step === 1 ? 'hidden' : 'visible';
+  document.getElementById('restaurantNextBtn').textContent = step === 3 ? 'Review Order' : 'Next';
+  const content = document.getElementById('restaurantStepContent');
+  content.innerHTML = '<div class="loading">Loading…</div>';
+  try{
+    if(!restaurantStepData[step]){
+      const data = await restaurantApiGet(meta.endpoint);
+      restaurantStepData[step] = data.items || [];
+    }
+    renderRestaurantStepItems(restaurantStepData[step], meta.source);
+  }catch(e){
+    if(e.message !== 'Session expired'){
+      content.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not load this step — try again.</div>';
+      console.error(e);
+    }
+  }
+}
+function restaurantStepBack(){
+  if(restaurantStep > 1) goToRestaurantStep(restaurantStep - 1);
+}
+function restaurantStepNext(){
+  if(restaurantStep < 3) goToRestaurantStep(restaurantStep + 1);
+  else { showView('view-restaurant-review'); renderRestaurantReview(); }
+}
+
+function renderRestaurantStepItems(items, source){
+  const content = document.getElementById('restaurantStepContent');
+  if(items.length === 0){
+    content.innerHTML = '<div class="empty-hint">Nothing to show here yet.</div>';
+    return;
+  }
+  content.innerHTML = '';
+  const groups = groupItemsByDepartment(items);
+  groups.forEach(g => {
+    const heading = document.createElement('div');
+    heading.style.cssText = 'font-weight:700;font-size:14px;margin:16px 0 6px;padding-bottom:5px;border-bottom:2px solid var(--line);';
+    heading.textContent = g.department;
+    content.appendChild(heading);
+    const table = document.createElement('table');
+    table.className = 'finaltable';
+    const tbody = document.createElement('tbody');
+    g.items.forEach(it => {
+      const key = String(it.stockid);
+      restaurantItemLookup.set(key, it);
+      const inCart = restaurantCart.get(key);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>
+          ${escapeHtml(it.item_name)}
+          ${!it.in_stock ? `<div class="restaurant-oos-warn" style="color:var(--danger);font-size:12px;margin-top:3px;">\u26a0 May be out of stock \u2014 <a href="#" onclick="event.preventDefault(); toggleRestaurantSubstitutes(this, '${key}')">suggest alternatives</a></div>` : ''}
+          <div class="restaurant-sub-slot" style="margin-top:6px;"></div>
+        </td>
+        <td class="qtycell">${it.trade_price === null ? '—' : it.trade_price.toFixed(2) + (it.is_vat ? ' +VAT' : '')}</td>
+        <td class="qtycell">
+          <input type="number" min="0" step="1" class="restaurant-qty-input" style="width:70px;"
+            value="${inCart ? inCart.qty : ''}"
+            onchange="updateRestaurantCartItem('${key}', this.value, '${source}')">
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    content.appendChild(table);
+  });
+}
+
+async function toggleRestaurantSubstitutes(linkEl, key){
+  const slot = linkEl.closest('td').querySelector('.restaurant-sub-slot');
+  if(slot.innerHTML){ slot.innerHTML = ''; return; } // toggle closed if already open
+  const itemName = (restaurantItemLookup.get(key) || {}).item_name;
+  if(!itemName) return;
+  slot.innerHTML = '<div class="empty-hint" style="font-size:12px;">Loading alternatives…</div>';
+  try{
+    let subs = restaurantSubstituteCache.get(itemName);
+    if(!subs){
+      const data = await restaurantApiGet('restaurant/order/substitutes?item=' + encodeURIComponent(itemName));
+      subs = data.items || [];
+      restaurantSubstituteCache.set(itemName, subs);
+    }
+    if(subs.length === 0){
+      slot.innerHTML = '<div class="empty-hint" style="font-size:12px;">No similar in-stock items found — Hallan will follow up with you.</div>';
+      return;
+    }
+    slot.innerHTML = '<div style="font-size:12px;color:var(--text-dim);margin-bottom:4px;">Instead, try:</div>' +
+      subs.map(s => {
+        const subKey = String(s.stockid);
+        restaurantItemLookup.set(subKey, s);
+        const inCart = restaurantCart.get(subKey);
+        return `<label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-bottom:4px;">
+          <input type="checkbox" ${inCart ? 'checked' : ''} onchange="toggleRestaurantSubstituteItem(this, '${subKey}')">
+          ${escapeHtml(s.item_name)} ${s.trade_price !== null ? '(' + s.trade_price.toFixed(2) + (s.is_vat ? ' +VAT' : '') + ')' : ''}
+        </label>`;
+      }).join('');
+  }catch(e){
+    slot.innerHTML = '<div class="empty-hint" style="font-size:12px;color:var(--danger)">Could not load alternatives.</div>';
+    console.error(e);
+  }
+}
+function toggleRestaurantSubstituteItem(checkbox, key){
+  const item = restaurantItemLookup.get(key);
+  if(!item) return;
+  updateRestaurantCartItem(key, checkbox.checked ? 1 : 0, 'SUBSTITUTE');
+}
+
+function updateRestaurantCartItem(key, qtyRaw, source){
+  const item = restaurantItemLookup.get(key);
+  if(!item) return;
+  const qty = Number(qtyRaw);
+  if(!qty || qty <= 0){
+    restaurantCart.delete(key);
+  }else{
+    restaurantCart.set(key, {
+      stockid: item.stockid,
+      item_name: item.item_name,
+      department_name: item.department_name,
+      trade_price: item.trade_price,
+      is_vat: item.is_vat,
+      qty,
+      source
+    });
+  }
+  document.getElementById('restaurantCartCount').textContent = restaurantCart.size;
+}
+
+function renderRestaurantReview(){
+  const content = document.getElementById('restaurantReviewContent');
+  const items = [...restaurantCart.values()];
+  if(items.length === 0){
+    content.innerHTML = '<div class="empty-hint">Nothing in your order yet — go back and choose some items.</div>';
+    return;
+  }
+  content.innerHTML = '';
+  const groups = groupItemsByDepartment(items);
+  groups.forEach(g => {
+    const heading = document.createElement('div');
+    heading.style.cssText = 'font-weight:700;font-size:14px;margin:16px 0 6px;padding-bottom:5px;border-bottom:2px solid var(--line);';
+    heading.textContent = g.department;
+    content.appendChild(heading);
+    const table = document.createElement('table');
+    table.className = 'finaltable';
+    const tbody = document.createElement('tbody');
+    g.items.forEach(it => {
+      const key = String(it.stockid);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${escapeHtml(it.item_name)}</td>
+        <td class="qtycell">${it.trade_price === null ? '—' : it.trade_price.toFixed(2) + (it.is_vat ? ' +VAT' : '')}</td>
+        <td class="qtycell">
+          <input type="number" min="1" step="1" class="restaurant-qty-input" style="width:70px;" value="${it.qty}"
+            onchange="reviewUpdateRestaurantQty('${key}', this.value)">
+        </td>
+        <td class="qtycell"><button class="btn-ghost" onclick="reviewRemoveRestaurantItem('${key}')">Remove</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    content.appendChild(table);
+  });
+}
+function reviewUpdateRestaurantQty(key, qtyRaw){
+  const qty = Number(qtyRaw);
+  const existing = restaurantCart.get(key);
+  if(!existing) return;
+  if(!qty || qty <= 0){ restaurantCart.delete(key); }
+  else { existing.qty = qty; }
+  document.getElementById('restaurantCartCount').textContent = restaurantCart.size;
+  renderRestaurantReview();
+}
+function reviewRemoveRestaurantItem(key){
+  restaurantCart.delete(key);
+  document.getElementById('restaurantCartCount').textContent = restaurantCart.size;
+  renderRestaurantReview();
+}
+
+async function submitRestaurantOrder(){
+  const items = [...restaurantCart.values()];
+  if(items.length === 0){ toast('Add at least one item first'); return; }
+  try{
+    const stored = JSON.parse(localStorage.getItem('hallan_restaurant_customer') || '{}');
+    await restaurantApiPost('restaurant/order/submit', { items });
+    buildAndShareRestaurantOrderPDF(items, stored.name || 'Customer');
+    toast('Order submitted — thank you!');
+    restaurantCart = new Map();
+    restaurantStepData = { 1: null, 2: null, 3: null };
+    document.getElementById('restaurantCartCount').textContent = '0';
+    showView('view-restaurant-passcode');
+  }catch(e){
+    if(e.message !== 'Session expired'){
+      toast('Could not submit order — try again');
+      console.error(e);
+    }
+  }
+}
+function buildAndShareRestaurantOrderPDF(items, customerName){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.setFontSize(16);
+  doc.text('Restaurant Order — ' + customerName, 14, 18);
+  doc.setFontSize(9);
+  doc.setTextColor(120);
+  doc.text('Submitted ' + ukDateTimeString(new Date()) + ' (UK time)', 14, 24);
+
+  const groups = groupItemsByDepartment(items);
+  const body = [];
+  groups.forEach(g => {
+    body.push([{ content: g.department, colSpan: 3, styles: { fillColor: [232,221,186], textColor:[40,30,10], fontStyle:'bold', halign:'left' } }]);
+    g.items.forEach(it => {
+      body.push([it.item_name, it.qty, it.trade_price === null ? '—' : it.trade_price.toFixed(2) + (it.is_vat ? ' +VAT' : '')]);
+    });
+  });
+  doc.autoTable({
+    startY: 30,
+    head: [['Item', 'Qty', 'Trade 3 Price']],
+    body,
+    theme: 'grid',
+    headStyles: { fillColor: [30,34,42] },
+    styles: { fontSize: 9 },
+    margin: { left: 14, right: 14 }
+  });
+  shareOrEmailPDF(doc, 'restaurant-order-' + new Date().toISOString().slice(0,10) + '.pdf', 'Restaurant Order — ' + customerName);
+}
+
+/* ---- Admin: manage restaurant customers & passcodes ---- */
+async function openRestaurantAdminGate(){
+  const pw = prompt('Staff only.\nEnter the Manage-Customers password:');
+  if(pw === null) return;
+  try{
+    const data = await apiPost('restaurant/admin/auth/verify', { password: pw });
+    if(!data.ok){ toast('Incorrect password'); return; }
+  }catch(e){
+    toast('Could not check password');
+    console.error(e);
+    return;
+  }
+  showView('view-restaurant-admin');
+  loadRestaurantAdminCustomers();
+}
+let restaurantAdminCustomers = [];
+async function loadRestaurantAdminCustomers(){
+  const list = document.getElementById('restaurantAdminList');
+  list.innerHTML = '<div class="loading">Loading customers…</div>';
+  try{
+    const data = await apiGet('restaurant/admin/customers');
+    restaurantAdminCustomers = data.items || [];
+    if(restaurantAdminCustomers.length === 0){
+      list.innerHTML = '<div class="empty-hint">No restaurant customers added yet — use the form above.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.className = 'finaltable';
+    table.innerHTML = '<thead><tr><th>Customer ID</th><th>Name</th><th>Passcode</th><th>Active</th><th></th></tr></thead>';
+    const tbody = document.createElement('tbody');
+    restaurantAdminCustomers.forEach(c => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${c.customer_id}</td>
+        <td>${escapeHtml(c.customer_name)}</td>
+        <td>${escapeHtml(c.passcode)}</td>
+        <td>${c.active ? 'Yes' : 'No'}</td>
+        <td>
+          <button class="btn-ghost" onclick="editRestaurantCustomer(${c.customer_id})">Edit</button>
+          <button class="btn-ghost" onclick="deleteRestaurantCustomer(${c.customer_id})">Delete</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    list.innerHTML = '';
+    list.appendChild(table);
+  }catch(e){
+    list.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not load customers.</div>';
+    console.error(e);
+  }
+}
+function editRestaurantCustomer(id){
+  const c = restaurantAdminCustomers.find(x => Number(x.customer_id) === Number(id));
+  if(!c) return;
+  document.getElementById('raCustId').value = c.customer_id;
+  document.getElementById('raCustName').value = c.customer_name;
+  document.getElementById('raCustPasscode').value = c.passcode;
+  window.scrollTo(0,0);
+}
+async function saveRestaurantCustomer(){
+  const customer_id = document.getElementById('raCustId').value;
+  const customer_name = document.getElementById('raCustName').value.trim();
+  const passcode = document.getElementById('raCustPasscode').value.trim();
+  if(!customer_id || !customer_name || !passcode){ toast('Fill in all three fields'); return; }
+  try{
+    await apiPost('restaurant/admin/customers', { customer_id: Number(customer_id), customer_name, passcode });
+    toast('Saved');
+    document.getElementById('raCustId').value = '';
+    document.getElementById('raCustName').value = '';
+    document.getElementById('raCustPasscode').value = '';
+    await loadRestaurantAdminCustomers();
+  }catch(e){
+    toast('Could not save customer');
+    console.error(e);
+  }
+}
+async function deleteRestaurantCustomer(id){
+  if(!confirm('Remove this customer? They will no longer be able to sign in.')) return;
+  try{
+    await apiDelete('restaurant/admin/customers/' + id);
+    toast('Removed');
+    await loadRestaurantAdminCustomers();
+  }catch(e){
+    toast('Could not remove customer');
+    console.error(e);
+  }
+}
+function openRestaurantAdminPasswordModal(){
+  document.getElementById('raOldPassword').value = '';
+  document.getElementById('raNewPassword').value = '';
+  document.getElementById('raNewPassword2').value = '';
+  document.getElementById('raPasswordErr').style.display = 'none';
+  openModal('modalRestaurantAdminPassword');
+}
+async function submitRestaurantAdminPasswordChange(){
+  const oldPw = document.getElementById('raOldPassword').value;
+  const newPw = document.getElementById('raNewPassword').value;
+  const newPw2 = document.getElementById('raNewPassword2').value;
+  const err = document.getElementById('raPasswordErr');
+  if(!newPw || newPw !== newPw2){
+    err.textContent = 'New passwords do not match';
+    err.style.display = 'block';
+    return;
+  }
+  try{
+    await apiPost('restaurant/admin/auth/change', { old_password: oldPw, new_password: newPw });
+    closeModal('modalRestaurantAdminPassword');
+    toast('Password changed');
+  }catch(e){
+    err.textContent = e.message || 'Could not change password';
+    err.style.display = 'block';
+  }
 }
 
 /* ============ SHELF REPLENISHMENT ============ */
