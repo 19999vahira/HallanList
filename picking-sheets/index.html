@@ -118,6 +118,40 @@
   .tile p{color:var(--text-dim);font-size:13px;margin:0;line-height:1.5;}
   .tile.disabled{opacity:.45;cursor:not-allowed;}
   .tile.disabled:hover{border-color:var(--line);transform:none;box-shadow:none;}
+
+  /* Restaurant Orders: product cards, styled like a storefront grid rather than a list */
+  .restaurant-card-grid{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;
+  }
+  .restaurant-card{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:14px;display:flex;flex-direction:column;gap:8px;transition:.15s;
+  }
+  .restaurant-card:hover{border-color:var(--accent);box-shadow:0 8px 20px -12px rgba(0,0,0,.2);}
+  .restaurant-card.in-cart{border-color:var(--accent);background:var(--panel2);}
+  .restaurant-card-name{font-weight:600;font-size:14px;line-height:1.3;flex:1;}
+  .restaurant-card-price{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;color:var(--accent-dim);}
+  .restaurant-card-oos{color:var(--danger);font-size:12px;}
+  .restaurant-card-oos a{color:var(--danger);text-decoration:underline;}
+  .restaurant-qty-stepper{display:flex;align-items:center;gap:0;margin-top:auto;}
+  .restaurant-qty-stepper button{
+    width:32px;height:32px;border:1px solid var(--line);background:var(--panel2);
+    font-size:16px;font-weight:700;cursor:pointer;color:var(--text);
+  }
+  .restaurant-qty-stepper button:first-child{border-radius:8px 0 0 8px;}
+  .restaurant-qty-stepper button:last-child{border-radius:0 8px 8px 0;}
+  .restaurant-qty-stepper input{
+    width:48px;height:32px;text-align:center;border:1px solid var(--line);border-left:none;border-right:none;
+    font-family:'JetBrains Mono',monospace;font-weight:700;font-size:14px;
+  }
+  .restaurant-dept-heading{
+    font-weight:700;font-size:14px;margin:22px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--line);
+    display:flex;align-items:center;gap:8px;
+  }
+  .restaurant-dept-heading .tag{
+    font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--accent-dim);
+    background:var(--panel2);border-radius:20px;padding:2px 8px;font-weight:700;
+  }
   .tile .stub{
     position:absolute;top:16px;right:16px;font-size:10px;text-transform:uppercase;
     letter-spacing:1px;color:var(--text-dim);border:1px solid var(--line);padding:3px 7px;border-radius:4px;
@@ -2501,11 +2535,18 @@ function groupItemsByDepartment(items){
   items.forEach(it => {
     const key = it.department_name || 'Other';
     if(!byDept.has(key)){
-      const g = { department: key, items: [] };
+      const g = { department: key, is_wholesale: !!it.is_wholesale, items: [] };
       byDept.set(key, g);
       groups.push(g);
     }
     byDept.get(key).items.push(it);
+  });
+  // Wholesale departments first (alphabetical among themselves), then
+  // everything else alphabetical — instead of Wholesale items being
+  // scattered wherever they happened to appear in the list.
+  groups.sort((a, b) => {
+    if(a.is_wholesale !== b.is_wholesale) return a.is_wholesale ? -1 : 1;
+    return a.department.localeCompare(b.department);
   });
   return groups;
 }
@@ -2561,35 +2602,42 @@ function renderRestaurantStepItems(items, source){
   const groups = groupItemsByDepartment(items);
   groups.forEach(g => {
     const heading = document.createElement('div');
-    heading.style.cssText = 'font-weight:700;font-size:14px;margin:16px 0 6px;padding-bottom:5px;border-bottom:2px solid var(--line);';
-    heading.textContent = g.department;
+    heading.className = 'restaurant-dept-heading';
+    heading.innerHTML = escapeHtml(g.department) + (g.is_wholesale ? ' <span class="tag">Wholesale</span>' : '');
     content.appendChild(heading);
-    const table = document.createElement('table');
-    table.className = 'finaltable';
-    const tbody = document.createElement('tbody');
+    const grid = document.createElement('div');
+    grid.className = 'restaurant-card-grid';
     g.items.forEach(it => {
       const key = String(it.stockid);
       restaurantItemLookup.set(key, it);
       const inCart = restaurantCart.get(key);
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>
-          ${escapeHtml(it.item_name)}
-          ${!it.in_stock ? `<div class="restaurant-oos-warn" style="color:var(--danger);font-size:12px;margin-top:3px;">\u26a0 May be out of stock \u2014 <a href="#" onclick="event.preventDefault(); toggleRestaurantSubstitutes(this, '${key}')">suggest alternatives</a></div>` : ''}
-          <div class="restaurant-sub-slot" style="margin-top:6px;"></div>
-        </td>
-        <td class="qtycell">${it.trade_price === null ? '—' : it.trade_price.toFixed(2) + (it.is_vat ? ' +VAT' : '')}</td>
-        <td class="qtycell">
-          <input type="number" min="0" step="1" class="restaurant-qty-input" style="width:70px;"
-            value="${inCart ? inCart.qty : ''}"
+      const card = document.createElement('div');
+      card.className = 'restaurant-card' + (inCart ? ' in-cart' : '');
+      card.id = 'restaurant-card-' + key;
+      card.innerHTML = `
+        <div class="restaurant-card-name">${escapeHtml(it.item_name)}</div>
+        <div class="restaurant-card-price">${it.trade_price === null ? '—' : '£' + it.trade_price.toFixed(2) + (it.is_vat ? ' +VAT' : '')}</div>
+        ${!it.in_stock ? `<div class="restaurant-card-oos">\u26a0 May be out of stock \u2014 <a href="#" onclick="event.preventDefault(); toggleRestaurantSubstitutes(this, '${key}')">suggest alternatives</a></div>` : ''}
+        <div class="restaurant-sub-slot"></div>
+        <div class="restaurant-qty-stepper">
+          <button type="button" onclick="stepRestaurantQty('${key}', -1, '${source}')">\u2212</button>
+          <input type="number" min="0" step="1" class="restaurant-qty-input" value="${inCart ? inCart.qty : 0}"
             onchange="updateRestaurantCartItem('${key}', this.value, '${source}')">
-        </td>
+          <button type="button" onclick="stepRestaurantQty('${key}', 1, '${source}')">+</button>
+        </div>
       `;
-      tbody.appendChild(tr);
+      grid.appendChild(card);
     });
-    table.appendChild(tbody);
-    content.appendChild(table);
+    content.appendChild(grid);
   });
+}
+function stepRestaurantQty(key, delta, source){
+  const card = document.getElementById('restaurant-card-' + key);
+  if(!card) return;
+  const input = card.querySelector('.restaurant-qty-input');
+  const next = Math.max(0, (Number(input.value) || 0) + delta);
+  input.value = next;
+  updateRestaurantCartItem(key, next, source);
 }
 
 async function toggleRestaurantSubstitutes(linkEl, key){
@@ -2641,6 +2689,7 @@ function updateRestaurantCartItem(key, qtyRaw, source){
       stockid: item.stockid,
       item_name: item.item_name,
       department_name: item.department_name,
+      is_wholesale: item.is_wholesale,
       trade_price: item.trade_price,
       is_vat: item.is_vat,
       qty,
@@ -2648,6 +2697,8 @@ function updateRestaurantCartItem(key, qtyRaw, source){
     });
   }
   document.getElementById('restaurantCartCount').textContent = restaurantCart.size;
+  const card = document.getElementById('restaurant-card-' + key);
+  if(card) card.classList.toggle('in-cart', qty > 0);
 }
 
 function renderRestaurantReview(){
