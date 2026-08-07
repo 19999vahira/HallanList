@@ -2478,6 +2478,14 @@ let restaurantSubstituteCache = new Map(); // item_name -> [items]
 // pass just the stockid key and look the full item back up from here instead.
 let restaurantItemLookup = new Map();
 
+// Vegetables, lamb and mutton are ordered by the box rather than by a running
+// count, so these get a "Small box" checkbox instead of the qty +/- stepper.
+function isRestaurantBoxItem(it){
+  const dept = (it.department_name || '').toLowerCase();
+  const name = (it.item_name || '').toLowerCase();
+  return dept.includes('veg') || /\blamb\b|\bmutton\b/.test(name);
+}
+
 function restaurantHeaders(){
   return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('hallan_restaurant_token') || '') };
 }
@@ -2614,17 +2622,25 @@ function renderRestaurantStepItems(items, source){
       const card = document.createElement('div');
       card.className = 'restaurant-card' + (inCart ? ' in-cart' : '');
       card.id = 'restaurant-card-' + key;
+      const isBox = isRestaurantBoxItem(it);
       card.innerHTML = `
         <div class="restaurant-card-name">${escapeHtml(it.item_name)}</div>
         <div class="restaurant-card-price">${it.trade_price === null ? '—' : '£' + it.trade_price.toFixed(2) + (it.is_vat ? ' +VAT' : '')}</div>
         ${!it.in_stock ? `<div class="restaurant-card-oos">\u26a0 May be out of stock \u2014 <a href="#" onclick="event.preventDefault(); toggleRestaurantSubstitutes(this, '${key}')">suggest alternatives</a></div>` : ''}
         <div class="restaurant-sub-slot"></div>
+        ${isBox ? `
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-top:4px;">
+          <input type="checkbox" ${inCart ? 'checked' : ''} onchange="toggleRestaurantBoxItem('${key}', this.checked, '${source}')">
+          Small box
+        </label>
+        ` : `
         <div class="restaurant-qty-stepper">
           <button type="button" onclick="stepRestaurantQty('${key}', -1, '${source}')">\u2212</button>
           <input type="number" min="0" step="1" class="restaurant-qty-input" value="${inCart ? inCart.qty : 0}"
             onchange="updateRestaurantCartItem('${key}', this.value, '${source}')">
           <button type="button" onclick="stepRestaurantQty('${key}', 1, '${source}')">+</button>
         </div>
+        `}
       `;
       grid.appendChild(card);
     });
@@ -2700,6 +2716,31 @@ function updateRestaurantCartItem(key, qtyRaw, source){
   const card = document.getElementById('restaurant-card-' + key);
   if(card) card.classList.toggle('in-cart', qty > 0);
 }
+// Box items (veg, lamb, mutton) skip the qty stepper — checking the box
+// just adds one small box; unchecking removes it. isBox is stored on the
+// cart entry so review/PDF can say "1 box" instead of a bare number.
+function toggleRestaurantBoxItem(key, checked, source){
+  const item = restaurantItemLookup.get(key);
+  if(!item) return;
+  if(!checked){
+    restaurantCart.delete(key);
+  }else{
+    restaurantCart.set(key, {
+      stockid: item.stockid,
+      item_name: item.item_name,
+      department_name: item.department_name,
+      is_wholesale: item.is_wholesale,
+      trade_price: item.trade_price,
+      is_vat: item.is_vat,
+      qty: 1,
+      isBox: true,
+      source
+    });
+  }
+  document.getElementById('restaurantCartCount').textContent = restaurantCart.size;
+  const card = document.getElementById('restaurant-card-' + key);
+  if(card) card.classList.toggle('in-cart', checked);
+}
 
 function renderRestaurantReview(){
   const content = document.getElementById('restaurantReviewContent');
@@ -2725,8 +2766,10 @@ function renderRestaurantReview(){
         <td>${escapeHtml(it.item_name)}</td>
         <td class="qtycell">${it.trade_price === null ? '—' : it.trade_price.toFixed(2) + (it.is_vat ? ' +VAT' : '')}</td>
         <td class="qtycell">
+          ${it.isBox ? 'Small box' : `
           <input type="number" min="1" step="1" class="restaurant-qty-input" style="width:70px;" value="${it.qty}"
             onchange="reviewUpdateRestaurantQty('${key}', this.value)">
+          `}
         </td>
         <td class="qtycell"><button class="btn-ghost" onclick="reviewRemoveRestaurantItem('${key}')">Remove</button></td>
       `;
@@ -2784,7 +2827,7 @@ function buildAndShareRestaurantOrderPDF(items, customerName){
   groups.forEach(g => {
     body.push([{ content: g.department, colSpan: 3, styles: { fillColor: [232,221,186], textColor:[40,30,10], fontStyle:'bold', halign:'left' } }]);
     g.items.forEach(it => {
-      body.push([it.item_name, it.qty, it.trade_price === null ? '—' : it.trade_price.toFixed(2) + (it.is_vat ? ' +VAT' : '')]);
+      body.push([it.item_name, it.isBox ? '1 box' : it.qty, it.trade_price === null ? '—' : it.trade_price.toFixed(2) + (it.is_vat ? ' +VAT' : '')]);
     });
   });
   doc.autoTable({
@@ -2796,7 +2839,10 @@ function buildAndShareRestaurantOrderPDF(items, customerName){
     styles: { fontSize: 9 },
     margin: { left: 14, right: 14 }
   });
-  shareOrEmailPDF(doc, 'restaurant-order-' + new Date().toISOString().slice(0,10) + '.pdf', 'Restaurant Order — ' + customerName);
+  // Customers expect this to land as a normal file download, not the native
+  // Share sheet (which some phones show instead of saving anything) — so
+  // unlike the staff-facing PDFs, save it directly.
+  doc.save('restaurant-order-' + new Date().toISOString().slice(0,10) + '.pdf');
 }
 
 /* ---- Admin: manage restaurant customers & passcodes ---- */
