@@ -133,16 +133,21 @@
   .restaurant-card-price{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;color:var(--accent-dim);}
   .restaurant-card-oos{color:var(--danger);font-size:12px;}
   .restaurant-card-oos a{color:var(--danger);text-decoration:underline;}
-  .restaurant-qty-stepper{display:flex;align-items:center;gap:0;margin-top:auto;}
   .restaurant-qty-stepper button{
     width:32px;height:32px;border:1px solid var(--line);background:var(--panel2);
     font-size:16px;font-weight:700;cursor:pointer;color:var(--text);
   }
   .restaurant-qty-stepper button:first-child{border-radius:8px 0 0 8px;}
   .restaurant-qty-stepper button:last-child{border-radius:0 8px 8px 0;}
+  .restaurant-qty-stepper{display:flex;align-items:center;gap:0;margin-top:auto;flex-wrap:wrap;row-gap:4px;}
   .restaurant-qty-stepper input{
     width:48px;height:32px;text-align:center;border:1px solid var(--line);border-left:none;border-right:none;
     font-family:'JetBrains Mono',monospace;font-weight:700;font-size:14px;
+  }
+  .restaurant-unit-label{font-size:11px;color:var(--text-dim);margin-left:8px;align-self:center;}
+  .restaurant-note-input{
+    width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;
+    background:var(--bg);margin-top:2px;
   }
   .restaurant-dept-heading{
     font-weight:700;font-size:14px;margin:22px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--line);
@@ -904,13 +909,14 @@
       <span class="current" id="restaurantCustomerLabel">—</span>
     </div>
     <div class="hero">
-      <div class="eyebrow">Step <span id="restaurantStepNum">1</span> of 3</div>
+      <div class="eyebrow">Step <span id="restaurantStepNum">1</span> of <span id="restaurantStepTotal">4</span></div>
       <h2 id="restaurantStepTitle">This Week</h2>
       <p id="restaurantStepSub">Products you ordered in the last 7 days.</p>
       <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;">
         <button class="btn-ghost" id="restaurantTabWeek" onclick="goToRestaurantStep(1)">1 · This Week</button>
         <button class="btn-ghost" id="restaurantTabMonth" onclick="goToRestaurantStep(2)">2 · Last 3 Months</button>
         <button class="btn-ghost" id="restaurantTabSuggested" onclick="goToRestaurantStep(3)">3 · You Might Also Like</button>
+        <button class="btn-ghost" id="restaurantTabSearch" onclick="goToRestaurantStep(4)">4 · Search &amp; Add</button>
       </div>
     </div>
     <div id="restaurantStepContent">
@@ -942,7 +948,8 @@
     </div>
     <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;">
       <button class="btn-ghost" onclick="goToRestaurantStep(3)">Back to Edit</button>
-      <button class="btn-amber" onclick="submitRestaurantOrder()">Submit &amp; Download Order Sheet</button>
+      <button class="btn-amber" onclick="submitRestaurantOrder('download')">Submit &amp; Download Order Sheet</button>
+      <button class="btn-ghost" onclick="submitRestaurantOrder('share')">Submit &amp; Share Instead</button>
     </div>
   </div>
 
@@ -2470,21 +2477,17 @@ function renderStockInfoResults(items){
 /* ============ RESTAURANT ORDERS ============ */
 let restaurantStep = 1; // 1=week, 2=three-month, 3=suggested
 let restaurantStepData = { 1: null, 2: null, 3: null }; // cached items per step
-let restaurantCart = new Map(); // stockid -> { stockid, item_name, department_name, trade_price, is_vat, qty, source }
+let restaurantCart = new Map(); // stockid -> { stockid, item_name, department_name, trade_price, is_vat, qty, source, note }
 let restaurantSubstituteCache = new Map(); // item_name -> [items]
 // Looked-up-by-key item data for whatever's currently on screen — avoids embedding
 // JSON.stringify(...) inside HTML attributes (its double quotes collide with the
 // attribute's own double quotes and corrupt the markup); onchange/onclick handlers
 // pass just the stockid key and look the full item back up from here instead.
 let restaurantItemLookup = new Map();
-
-// Vegetables, lamb and mutton are ordered by the box rather than by a running
-// count, so these get a "Small box" checkbox instead of the qty +/- stepper.
-function isRestaurantBoxItem(it){
-  const dept = (it.department_name || '').toLowerCase();
-  const name = (it.item_name || '').toLowerCase();
-  return dept.includes('veg') || /\blamb\b|\bmutton\b/.test(name);
-}
+// Notes are kept independent of cart membership — someone might type a note
+// before setting a quantity, and the note shouldn't vanish just because the
+// item isn't "in the cart" yet at that exact moment.
+let restaurantNotes = new Map(); // key -> note text
 
 function restaurantHeaders(){
   return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('hallan_restaurant_token') || '') };
@@ -2522,6 +2525,7 @@ async function submitRestaurantPasscode(){
     localStorage.setItem('hallan_restaurant_customer', JSON.stringify({ id: data.customer_id, name: data.customer_name }));
     restaurantStepData = { 1: null, 2: null, 3: null };
     restaurantCart = new Map();
+    restaurantNotes = new Map();
     document.getElementById('restaurantCustomerLabel').textContent = data.customer_name;
     showView('view-restaurant-order');
     goToRestaurantStep(1);
@@ -2562,12 +2566,13 @@ function groupItemsByDepartment(items){
 const RESTAURANT_STEP_META = {
   1: { title: 'This Week', sub: 'Products you ordered in the last 7 days.', endpoint: 'restaurant/order/week', source: 'WEEK' },
   2: { title: 'Last 3 Months', sub: 'Everything you\u2019ve ordered in the last 3 months — pick anything else you need.', endpoint: 'restaurant/order/three-month', source: 'THREE_MONTH' },
-  3: { title: 'You Might Also Like', sub: 'Popular with other similar customers — not necessarily anything you\u2019ve ordered before.', endpoint: 'restaurant/order/suggested', source: 'SUGGESTED' }
+  3: { title: 'You Might Also Like', sub: 'Popular with other similar customers — not necessarily anything you\u2019ve ordered before.', endpoint: 'restaurant/order/suggested', source: 'SUGGESTED' },
+  4: { title: 'Search & Add Items', sub: 'Didn\u2019t see what you wanted above? Search for it, or add it by name if it\u2019s not listed.', endpoint: null, source: 'CUSTOM' }
 };
 
 async function goToRestaurantStep(step){
   restaurantStep = step;
-  ['Week','Month','Suggested'].forEach((s,i) => {
+  ['Week','Month','Suggested','Search'].forEach((s,i) => {
     document.getElementById('restaurantTab' + s).classList.toggle('btn-amber', i + 1 === step);
     document.getElementById('restaurantTab' + s).classList.toggle('btn-ghost', i + 1 !== step);
   });
@@ -2576,15 +2581,19 @@ async function goToRestaurantStep(step){
   document.getElementById('restaurantStepTitle').textContent = meta.title;
   document.getElementById('restaurantStepSub').textContent = meta.sub;
   document.getElementById('restaurantBackBtn').style.visibility = step === 1 ? 'hidden' : 'visible';
-  document.getElementById('restaurantNextBtn').textContent = step === 3 ? 'Review Order' : 'Next';
+  document.getElementById('restaurantNextBtn').textContent = step === 4 ? 'Review Order' : 'Next';
   const content = document.getElementById('restaurantStepContent');
+  if(step === 4){
+    renderRestaurantSearchStep();
+    return;
+  }
   content.innerHTML = '<div class="loading">Loading…</div>';
   try{
     if(!restaurantStepData[step]){
       const data = await restaurantApiGet(meta.endpoint);
       restaurantStepData[step] = data.items || [];
     }
-    renderRestaurantStepItems(restaurantStepData[step], meta.source);
+    renderRestaurantStepItems(restaurantStepData[step], meta.source, content);
   }catch(e){
     if(e.message !== 'Session expired'){
       content.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not load this step — try again.</div>';
@@ -2596,12 +2605,52 @@ function restaurantStepBack(){
   if(restaurantStep > 1) goToRestaurantStep(restaurantStep - 1);
 }
 function restaurantStepNext(){
-  if(restaurantStep < 3) goToRestaurantStep(restaurantStep + 1);
+  if(restaurantStep < 4) goToRestaurantStep(restaurantStep + 1);
   else { showView('view-restaurant-review'); renderRestaurantReview(); }
 }
 
-function renderRestaurantStepItems(items, source){
-  const content = document.getElementById('restaurantStepContent');
+// Departments where customers order by the box — same quantity stepper as
+// everything else (they can still order 2, 3 boxes), just labelled "box(es)"
+// instead of a bare number so it's clear what the count means. Matched on the
+// department name itself, so it applies wherever a department's real name
+// (from VEDEPTS, via enrichWithWholesaleMeta) contains one of these words.
+const RESTAURANT_BOX_ONLY_KEYWORDS = ['veg', 'lamb', 'mutton'];
+function isBoxOnlyDepartment(departmentName){
+  const d = (departmentName || '').toLowerCase();
+  return RESTAURANT_BOX_ONLY_KEYWORDS.some(kw => d.includes(kw));
+}
+
+// Single card builder shared by the three history-based steps and the
+// Search & Add results — keeps the qty stepper, note field, and out-of-stock
+// handling consistent everywhere an item can be added from.
+function buildRestaurantItemCard(it, source){
+  const key = String(it.stockid);
+  restaurantItemLookup.set(key, it);
+  const inCart = restaurantCart.get(key);
+  const boxOnly = isBoxOnlyDepartment(it.department_name);
+  const note = restaurantNotes.get(key) || (inCart ? inCart.note : '') || '';
+  const card = document.createElement('div');
+  card.className = 'restaurant-card' + (inCart ? ' in-cart' : '');
+  card.id = 'restaurant-card-' + key;
+  card.innerHTML = `
+    <div class="restaurant-card-name">${escapeHtml(it.item_name)}</div>
+    <div class="restaurant-card-price">${it.trade_price === null ? '—' : '£' + it.trade_price.toFixed(2) + (it.is_vat ? ' +VAT' : '')}</div>
+    ${!it.in_stock ? `<div class="restaurant-card-oos">\u26a0 May be out of stock \u2014 <a href="#" onclick="event.preventDefault(); toggleRestaurantSubstitutes(this, '${key}')">suggest alternatives</a></div>` : ''}
+    <div class="restaurant-sub-slot"></div>
+    <div class="restaurant-qty-stepper">
+      <button type="button" onclick="stepRestaurantQty('${key}', -1, '${source}')">\u2212</button>
+      <input type="number" min="0" step="1" class="restaurant-qty-input" value="${inCart ? inCart.qty : 0}"
+        onchange="updateRestaurantCartItem('${key}', this.value, '${source}')">
+      <button type="button" onclick="stepRestaurantQty('${key}', 1, '${source}')">+</button>
+      ${boxOnly ? '<span class="restaurant-unit-label">box(es)</span>' : ''}
+    </div>
+    <input type="text" class="restaurant-note-input" placeholder="Note (optional) — e.g. ripe, extra small"
+      value="${escapeHtml(note)}" onchange="updateRestaurantItemNote('${key}', this.value)">
+  `;
+  return card;
+}
+
+function renderRestaurantStepItems(items, source, content){
   if(items.length === 0){
     content.innerHTML = '<div class="empty-hint">Nothing to show here yet.</div>';
     return;
@@ -2609,41 +2658,14 @@ function renderRestaurantStepItems(items, source){
   content.innerHTML = '';
   const groups = groupItemsByDepartment(items);
   groups.forEach(g => {
+    const boxOnly = isBoxOnlyDepartment(g.department);
     const heading = document.createElement('div');
     heading.className = 'restaurant-dept-heading';
-    heading.innerHTML = escapeHtml(g.department) + (g.is_wholesale ? ' <span class="tag">Wholesale</span>' : '');
+    heading.innerHTML = escapeHtml(g.department) + (g.is_wholesale ? ' <span class="tag">Wholesale</span>' : '') + (boxOnly ? ' <span class="tag">By the box</span>' : '');
     content.appendChild(heading);
     const grid = document.createElement('div');
     grid.className = 'restaurant-card-grid';
-    g.items.forEach(it => {
-      const key = String(it.stockid);
-      restaurantItemLookup.set(key, it);
-      const inCart = restaurantCart.get(key);
-      const card = document.createElement('div');
-      card.className = 'restaurant-card' + (inCart ? ' in-cart' : '');
-      card.id = 'restaurant-card-' + key;
-      const isBox = isRestaurantBoxItem(it);
-      card.innerHTML = `
-        <div class="restaurant-card-name">${escapeHtml(it.item_name)}</div>
-        <div class="restaurant-card-price">${it.trade_price === null ? '—' : '£' + it.trade_price.toFixed(2) + (it.is_vat ? ' +VAT' : '')}</div>
-        ${!it.in_stock ? `<div class="restaurant-card-oos">\u26a0 May be out of stock \u2014 <a href="#" onclick="event.preventDefault(); toggleRestaurantSubstitutes(this, '${key}')">suggest alternatives</a></div>` : ''}
-        <div class="restaurant-sub-slot"></div>
-        ${isBox ? `
-        <label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-top:4px;">
-          <input type="checkbox" ${inCart ? 'checked' : ''} onchange="toggleRestaurantBoxItem('${key}', this.checked, '${source}')">
-          Small box
-        </label>
-        ` : `
-        <div class="restaurant-qty-stepper">
-          <button type="button" onclick="stepRestaurantQty('${key}', -1, '${source}')">\u2212</button>
-          <input type="number" min="0" step="1" class="restaurant-qty-input" value="${inCart ? inCart.qty : 0}"
-            onchange="updateRestaurantCartItem('${key}', this.value, '${source}')">
-          <button type="button" onclick="stepRestaurantQty('${key}', 1, '${source}')">+</button>
-        </div>
-        `}
-      `;
-      grid.appendChild(card);
-    });
+    g.items.forEach(it => grid.appendChild(buildRestaurantItemCard(it, source)));
     content.appendChild(grid);
   });
 }
@@ -2654,6 +2676,100 @@ function stepRestaurantQty(key, delta, source){
   const next = Math.max(0, (Number(input.value) || 0) + delta);
   input.value = next;
   updateRestaurantCartItem(key, next, source);
+}
+function updateRestaurantItemNote(key, note){
+  const trimmed = (note || '').trim();
+  if(trimmed) restaurantNotes.set(key, trimmed);
+  else restaurantNotes.delete(key);
+  const existing = restaurantCart.get(key);
+  if(existing) existing.note = trimmed;
+}
+
+/* ---- Step 4: Search & Add Items ---- */
+let restaurantSearchDebounce = null;
+function renderRestaurantSearchStep(){
+  const content = document.getElementById('restaurantStepContent');
+  content.innerHTML = `
+    <div style="max-width:420px;margin-bottom:10px;">
+      <input type="text" id="restaurantSearchInput" placeholder="Search for a product…" autocomplete="off"
+        style="width:100%;padding:12px 14px;font-size:15px;border-radius:10px;border:1px solid var(--line);"
+        oninput="onRestaurantSearchInput()">
+    </div>
+    <div id="restaurantSearchResults"></div>
+    <div style="margin-top:28px;padding-top:16px;border-top:1px solid var(--line);max-width:520px;">
+      <div style="font-weight:700;font-size:14px;margin-bottom:8px;">Can't find it? Add it by name</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <input type="text" id="restaurantCustomItemName" placeholder="Item name" style="flex:2;min-width:160px;padding:10px;border-radius:8px;border:1px solid var(--line);">
+        <input type="number" id="restaurantCustomItemQty" placeholder="Qty" min="1" value="1" style="width:80px;padding:10px;border-radius:8px;border:1px solid var(--line);">
+        <button class="btn-amber" onclick="addCustomRestaurantItem()">Add</button>
+      </div>
+      <input type="text" id="restaurantCustomItemNote" placeholder="Note (optional)" style="width:100%;margin-top:8px;padding:10px;border-radius:8px;border:1px solid var(--line);">
+    </div>
+    <div id="restaurantCustomAddedList" style="margin-top:20px;"></div>
+  `;
+  renderRestaurantCustomAddedList();
+}
+function onRestaurantSearchInput(){
+  clearTimeout(restaurantSearchDebounce);
+  restaurantSearchDebounce = setTimeout(runRestaurantSearch, 300);
+}
+async function runRestaurantSearch(){
+  const input = document.getElementById('restaurantSearchInput');
+  if(!input) return; // stepped away from this step before the debounce fired
+  const q = input.value.trim();
+  const results = document.getElementById('restaurantSearchResults');
+  if(q.length < 2){ results.innerHTML = ''; return; }
+  results.innerHTML = '<div class="loading">Searching…</div>';
+  try{
+    const data = await restaurantApiGet('restaurant/order/search?q=' + encodeURIComponent(q));
+    const items = data.items || [];
+    if(items.length === 0){
+      results.innerHTML = '<div class="empty-hint">No matches — add it by name below.</div>';
+      return;
+    }
+    results.innerHTML = '';
+    const grid = document.createElement('div');
+    grid.className = 'restaurant-card-grid';
+    items.forEach(it => grid.appendChild(buildRestaurantItemCard(it, 'CUSTOM')));
+    results.appendChild(grid);
+  }catch(e){
+    if(e.message !== 'Session expired'){
+      results.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Search failed — try again.</div>';
+      console.error(e);
+    }
+  }
+}
+function addCustomRestaurantItem(){
+  const nameInput = document.getElementById('restaurantCustomItemName');
+  const qtyInput = document.getElementById('restaurantCustomItemQty');
+  const noteInput = document.getElementById('restaurantCustomItemNote');
+  const name = nameInput.value.trim();
+  const qty = Number(qtyInput.value) || 1;
+  const note = noteInput.value.trim();
+  if(!name){ toast('Enter an item name'); return; }
+  const key = 'custom:' + name.toLowerCase();
+  restaurantItemLookup.set(key, {
+    stockid: null, item_name: name, department_name: 'Custom / Not Listed',
+    is_wholesale: false, trade_price: null, is_vat: false, in_stock: true
+  });
+  if(note) restaurantNotes.set(key, note);
+  updateRestaurantCartItem(key, qty, 'CUSTOM');
+  nameInput.value = '';
+  qtyInput.value = 1;
+  noteInput.value = '';
+  toast(name + ' added');
+  renderRestaurantCustomAddedList();
+}
+function renderRestaurantCustomAddedList(){
+  const list = document.getElementById('restaurantCustomAddedList');
+  if(!list) return;
+  const customItems = [...restaurantCart.values()].filter(it => it.source === 'CUSTOM' && it.stockid === null);
+  if(customItems.length === 0){ list.innerHTML = ''; return; }
+  list.innerHTML = '<div style="font-weight:700;font-size:13px;margin-bottom:6px;">Added by name:</div>' +
+    customItems.map(it => `<div style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:4px;">
+        <span>${escapeHtml(it.item_name)} \u00d7 ${it.qty}${it.note ? ' — ' + escapeHtml(it.note) : ''}</span>
+        <button class="btn-ghost" style="padding:2px 8px;" onclick="reviewRemoveRestaurantItem('${it.key}'); renderRestaurantCustomAddedList();">Remove</button>
+      </div>`).join('');
 }
 
 async function toggleRestaurantSubstitutes(linkEl, key){
@@ -2702,6 +2818,7 @@ function updateRestaurantCartItem(key, qtyRaw, source){
     restaurantCart.delete(key);
   }else{
     restaurantCart.set(key, {
+      key,
       stockid: item.stockid,
       item_name: item.item_name,
       department_name: item.department_name,
@@ -2709,37 +2826,15 @@ function updateRestaurantCartItem(key, qtyRaw, source){
       trade_price: item.trade_price,
       is_vat: item.is_vat,
       qty,
-      source
+      source,
+      note: restaurantNotes.get(key) || ''
     });
   }
   document.getElementById('restaurantCartCount').textContent = restaurantCart.size;
   const card = document.getElementById('restaurant-card-' + key);
   if(card) card.classList.toggle('in-cart', qty > 0);
-}
-// Box items (veg, lamb, mutton) skip the qty stepper — checking the box
-// just adds one small box; unchecking removes it. isBox is stored on the
-// cart entry so review/PDF can say "1 box" instead of a bare number.
-function toggleRestaurantBoxItem(key, checked, source){
-  const item = restaurantItemLookup.get(key);
-  if(!item) return;
-  if(!checked){
-    restaurantCart.delete(key);
-  }else{
-    restaurantCart.set(key, {
-      stockid: item.stockid,
-      item_name: item.item_name,
-      department_name: item.department_name,
-      is_wholesale: item.is_wholesale,
-      trade_price: item.trade_price,
-      is_vat: item.is_vat,
-      qty: 1,
-      isBox: true,
-      source
-    });
-  }
-  document.getElementById('restaurantCartCount').textContent = restaurantCart.size;
-  const card = document.getElementById('restaurant-card-' + key);
-  if(card) card.classList.toggle('in-cart', checked);
+  const customList = document.getElementById('restaurantCustomAddedList');
+  if(customList) renderRestaurantCustomAddedList();
 }
 
 function renderRestaurantReview(){
@@ -2760,16 +2855,20 @@ function renderRestaurantReview(){
     table.className = 'finaltable';
     const tbody = document.createElement('tbody');
     g.items.forEach(it => {
-      const key = String(it.stockid);
+      const key = it.key;
+      const boxOnly = isBoxOnlyDepartment(it.department_name);
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td>${escapeHtml(it.item_name)}</td>
+        <td>
+          ${escapeHtml(it.item_name)}
+          <input type="text" class="restaurant-note-input" style="margin-top:4px;font-size:12px;" placeholder="Note (optional)"
+            value="${escapeHtml(it.note || '')}" onchange="reviewUpdateRestaurantNote('${key}', this.value)">
+        </td>
         <td class="qtycell">${it.trade_price === null ? '—' : it.trade_price.toFixed(2) + (it.is_vat ? ' +VAT' : '')}</td>
         <td class="qtycell">
-          ${it.isBox ? 'Small box' : `
           <input type="number" min="1" step="1" class="restaurant-qty-input" style="width:70px;" value="${it.qty}"
             onchange="reviewUpdateRestaurantQty('${key}', this.value)">
-          `}
+          ${boxOnly ? '<div style="font-size:11px;color:var(--text-dim);">box(es)</div>' : ''}
         </td>
         <td class="qtycell"><button class="btn-ghost" onclick="reviewRemoveRestaurantItem('${key}')">Remove</button></td>
       `;
@@ -2788,19 +2887,25 @@ function reviewUpdateRestaurantQty(key, qtyRaw){
   document.getElementById('restaurantCartCount').textContent = restaurantCart.size;
   renderRestaurantReview();
 }
+function reviewUpdateRestaurantNote(key, note){
+  updateRestaurantItemNote(key, note);
+  renderRestaurantReview();
+}
 function reviewRemoveRestaurantItem(key){
   restaurantCart.delete(key);
+  restaurantNotes.delete(key);
   document.getElementById('restaurantCartCount').textContent = restaurantCart.size;
   renderRestaurantReview();
 }
 
-async function submitRestaurantOrder(){
+async function submitRestaurantOrder(mode){
   const items = [...restaurantCart.values()];
   if(items.length === 0){ toast('Add at least one item first'); return; }
   try{
     const stored = JSON.parse(localStorage.getItem('hallan_restaurant_customer') || '{}');
     await restaurantApiPost('restaurant/order/submit', { items });
-    buildAndShareRestaurantOrderPDF(items, stored.name || 'Customer');
+    if(mode === 'share') shareRestaurantOrderPDF(items, stored.name || 'Customer');
+    else downloadRestaurantOrderPDF(items, stored.name || 'Customer');
     toast('Order submitted — thank you!');
     restaurantCart = new Map();
     restaurantStepData = { 1: null, 2: null, 3: null };
@@ -2813,7 +2918,7 @@ async function submitRestaurantOrder(){
     }
   }
 }
-function buildAndShareRestaurantOrderPDF(items, customerName){
+function buildRestaurantOrderPDFDoc(items, customerName){
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
   doc.setFontSize(16);
@@ -2825,24 +2930,42 @@ function buildAndShareRestaurantOrderPDF(items, customerName){
   const groups = groupItemsByDepartment(items);
   const body = [];
   groups.forEach(g => {
-    body.push([{ content: g.department, colSpan: 3, styles: { fillColor: [232,221,186], textColor:[40,30,10], fontStyle:'bold', halign:'left' } }]);
+    const boxOnly = isBoxOnlyDepartment(g.department);
+    body.push([{ content: g.department, colSpan: 4, styles: { fillColor: [232,221,186], textColor:[40,30,10], fontStyle:'bold', halign:'left' } }]);
     g.items.forEach(it => {
-      body.push([it.item_name, it.isBox ? '1 box' : it.qty, it.trade_price === null ? '—' : it.trade_price.toFixed(2) + (it.is_vat ? ' +VAT' : '')]);
+      body.push([
+        it.item_name,
+        it.qty + (boxOnly ? ' box(es)' : ''),
+        it.trade_price === null ? '—' : it.trade_price.toFixed(2) + (it.is_vat ? ' +VAT' : ''),
+        it.note || ''
+      ]);
     });
   });
   doc.autoTable({
     startY: 30,
-    head: [['Item', 'Qty', 'Trade 3 Price']],
+    head: [['Item', 'Qty', 'Trade 3 Price', 'Note']],
     body,
     theme: 'grid',
     headStyles: { fillColor: [30,34,42] },
     styles: { fontSize: 9 },
     margin: { left: 14, right: 14 }
   });
-  // Customers expect this to land as a normal file download, not the native
-  // Share sheet (which some phones show instead of saving anything) — so
-  // unlike the staff-facing PDFs, save it directly.
+  return doc;
+}
+// Straight to a file in Downloads — no OS share sheet. shareOrEmailPDF (used
+// elsewhere in this app, e.g. Wholesale Pricing) tries navigator.share first
+// whenever the browser supports it, which is what was showing a share prompt
+// instead of actually downloading here. Submitting an order should always
+// produce a real downloaded file first and foremost.
+function downloadRestaurantOrderPDF(items, customerName){
+  const doc = buildRestaurantOrderPDFDoc(items, customerName);
   doc.save('restaurant-order-' + new Date().toISOString().slice(0,10) + '.pdf');
+}
+// Optional secondary path for anyone who'd rather send it straight to
+// WhatsApp/email instead of hunting through their Downloads folder.
+function shareRestaurantOrderPDF(items, customerName){
+  const doc = buildRestaurantOrderPDFDoc(items, customerName);
+  shareOrEmailPDF(doc, 'restaurant-order-' + new Date().toISOString().slice(0,10) + '.pdf', 'Restaurant Order — ' + customerName);
 }
 
 /* ---- Admin: manage restaurant customers & passcodes ---- */
