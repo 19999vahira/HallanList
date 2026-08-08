@@ -406,6 +406,11 @@
   }
   .wsprintprice{display:none;}
   .wsprintmargin{display:none;}
+  /* ---- invoice margin flag (below department minimum) ---- */
+  .invmarginlow{background:rgba(220,38,38,.14);}
+  .invmarginlow td{color:var(--danger) !important;}
+  .invmargincell{font-weight:700;}
+  .invdeptcell{font-size:12px;color:var(--text-dim);}
 
   /* ---- final list ---- */
   .catblock{margin-bottom:26px;}
@@ -1231,6 +1236,10 @@
       <h2>Invoices</h2>
       <p>Goods received notes — split by whether they've been posted yet.</p>
     </div>
+    <div class="actionbar">
+      <span></span>
+      <button class="btn-ghost" onclick="openDeptMarginsModal()">Edit Minimum Margins</button>
+    </div>
     <div class="catgrid">
       <div class="bincard" onclick="openInvoicesList('pending')">
         <h4>⏳ Pending</h4>
@@ -1318,6 +1327,20 @@
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalSupplierDelivery')">Cancel</button>
       <button class="btn-amber" onclick="submitSupplierDelivery()">Set Date</button>
+    </div>
+  </div>
+</div>
+
+<!-- INVOICES: EDIT MINIMUM MARGINS (per department, VEDEPTS.MIN_MARGIN_PCT) -->
+<div class="modal-backdrop" id="modalDeptMargins">
+  <div class="modal" style="width:420px;max-height:80vh;display:flex;flex-direction:column;">
+    <h3>Edit Minimum Margins</h3>
+    <p class="modal-sub">Lines below their department's minimum are flagged red on invoices. Defaults to 38%.</p>
+    <div id="deptMarginsList" style="overflow-y:auto;flex:1;"></div>
+    <div class="errdetail" id="deptMarginsErr" style="display:none;"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalDeptMargins')">Cancel</button>
+      <button class="btn-amber" onclick="saveDeptMargins()">Save</button>
     </div>
   </div>
 </div>
@@ -4075,6 +4098,56 @@ let invoiceItemAdjust = []; // live-edited copy, keyed by row index (not stockid
 
 function openInvoices(){ showView('view-invoices-hub'); }
 
+/* ---- Edit Minimum Margins (per department, VEDEPTS.MIN_MARGIN_PCT) ---- */
+let deptMarginsData = [];
+async function openDeptMarginsModal(){
+  const list = document.getElementById('deptMarginsList');
+  const err = document.getElementById('deptMarginsErr');
+  err.style.display = 'none';
+  list.innerHTML = '<div class="loading">Loading…</div>';
+  openModal('modalDeptMargins');
+  try{
+    const data = await apiGet('departments/margins/');
+    deptMarginsData = data.departments || [];
+    if(deptMarginsData.length === 0){
+      list.innerHTML = '<div class="empty-hint">No departments found.</div>';
+      return;
+    }
+    list.innerHTML = deptMarginsData.map((d, idx) => `
+      <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;font-size:14px;">
+        <span>${escapeHtml(d.name || '—')}</span>
+        <input type="number" step="0.1" min="0" max="99" class="margininput" style="width:80px;"
+               data-deptidx="${idx}" value="${Number(d.min_margin_pct).toFixed(1)}">
+      </label>
+    `).join('');
+  }catch(e){
+    list.innerHTML = '';
+    err.textContent = 'Could not load departments.';
+    err.style.display = 'block';
+    console.error(e);
+  }
+}
+async function saveDeptMargins(){
+  const err = document.getElementById('deptMarginsErr');
+  err.style.display = 'none';
+  const inputs = document.querySelectorAll('#deptMarginsList input[data-deptidx]');
+  const departments = Array.from(inputs).map(input => ({
+    deptid: deptMarginsData[Number(input.dataset.deptidx)].deptid,
+    min_margin_pct: Number(input.value)
+  })).filter(d => !isNaN(d.min_margin_pct));
+  try{
+    await apiPut('departments/margins/', { departments });
+    closeModal('modalDeptMargins');
+    toast('Minimum margins updated');
+    // Refresh the currently open note (if any) so its rows re-flag against the new thresholds.
+    if(currentInvoiceNote) loadInvoiceDetailItems();
+  }catch(e){
+    err.textContent = 'Could not save — try again.';
+    err.style.display = 'block';
+    console.error(e);
+  }
+}
+
 function openInvoicesList(status){
   currentInvoiceStatus = status;
   const label = status === 'pending' ? 'Pending' : 'Received';
@@ -4203,7 +4276,9 @@ async function loadInvoiceDetailItems(){
       vatid: it.vatid !== null && it.vatid !== undefined ? String(it.vatid) : '',
       qty: it.qty !== null && it.qty !== undefined ? String(it.qty) : '',
       net_value: it.net_value !== null && it.net_value !== undefined ? Number(it.net_value).toFixed(2) : '',
-      vat_value: it.vat_value !== null && it.vat_value !== undefined ? Number(it.vat_value).toFixed(2) : ''
+      vat_value: it.vat_value !== null && it.vat_value !== undefined ? Number(it.vat_value).toFixed(2) : '',
+      department_name: it.department_name || 'Other',
+      min_margin_pct: it.min_margin_pct !== null && it.min_margin_pct !== undefined ? Number(it.min_margin_pct) : 38
     }));
     currentInvoiceItems = data.items || [];
     document.getElementById('invoiceDetailCount').textContent = currentInvoiceItems.length + ' item' + (currentInvoiceItems.length === 1 ? '' : 's');
@@ -4212,6 +4287,14 @@ async function loadInvoiceDetailItems(){
     results.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load items.</div>' + errDetailHtml(e);
     console.error(e);
   }
+}
+// Margin % = (Retail Price - Cost Price) / Retail Price × 100 — same formula
+// used on the Wholesale Pricing List. Null when either price is missing/zero.
+function invoiceMarginPct(row){
+  const retail = Number(row.retail_price);
+  const cost = Number(row.cost_price);
+  if(row.retail_price === '' || row.cost_price === '' || isNaN(retail) || isNaN(cost) || retail <= 0) return null;
+  return ((retail - cost) / retail) * 100;
 }
 function invoiceRecalcTotals(){
   let netSum = 0, vatSum = 0;
@@ -4237,10 +4320,12 @@ function renderInvoiceDetailItems(){
   table.innerHTML = `<thead><tr>
     <th>Product Name</th><th class="qtycell">Cost Price</th><th class="qtycell">Retail Price</th><th class="qtycell">Online Price</th>
     <th class="qtycell">Pack Size</th><th class="qtycell">VAT Code</th><th class="qtycell">Qty</th><th class="qtycell">Net Value</th><th class="qtycell">VAT Value</th>
+    <th class="qtycell">Margin</th><th>Department</th>
   </tr></thead>`;
   const tbody = document.createElement('tbody');
   invoiceItemAdjust.forEach((row, idx)=>{
     const tr = document.createElement('tr');
+    tr.dataset.idx = idx;
     tr.innerHTML = `
       <td>${escapeHtml(row.stock_name || '—')}</td>
       <td class="qtycell"><input type="number" step="0.01" min="0" class="priceinput" data-idx="${idx}" data-field="cost_price" value="${row.cost_price}"></td>
@@ -4251,6 +4336,8 @@ function renderInvoiceDetailItems(){
       <td class="qtycell"><input type="number" step="1" min="0" class="priceinput" style="width:60px;" data-idx="${idx}" data-field="qty" value="${row.qty}"></td>
       <td class="qtycell"><input type="number" step="0.01" min="0" class="priceinput" data-idx="${idx}" data-field="net_value" value="${row.net_value}"></td>
       <td class="qtycell"><input type="number" step="0.01" min="0" class="priceinput" data-idx="${idx}" data-field="vat_value" value="${row.vat_value}"></td>
+      <td class="qtycell invmargincell" data-margincell="${idx}"></td>
+      <td class="invdeptcell">${escapeHtml(row.department_name || 'Other')}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -4260,10 +4347,12 @@ function renderInvoiceDetailItems(){
     <td colspan="7" style="text-align:right;">Total</td>
     <td class="qtycell" id="invoiceTotalNet">0.00</td>
     <td class="qtycell" id="invoiceTotalVat">0.00</td>
+    <td colspan="2"></td>
   </tr>
   <tr style="font-weight:700;">
     <td colspan="7" style="text-align:right;">Grand Total (Net + VAT)</td>
     <td class="qtycell" colspan="2" id="invoiceTotalGrand">0.00</td>
+    <td colspan="2"></td>
   </tr>`;
   table.appendChild(tfoot);
   results.innerHTML = '';
@@ -4271,6 +4360,8 @@ function renderInvoiceDetailItems(){
 
   // Wire up edits: Cost Price or Qty changing recalculates Net Value automatically;
   // every field stays directly editable too (Net Value can still be overridden by hand after).
+  // Cost Price and Retail Price changing also recomputes that row's Margin and its
+  // below-minimum highlight.
   table.querySelectorAll('input').forEach(input => {
     input.addEventListener('change', () => {
       const idx = Number(input.dataset.idx);
@@ -4286,10 +4377,25 @@ function renderInvoiceDetailItems(){
           if(netInput) netInput.value = row.net_value;
         }
       }
+      if(field === 'cost_price' || field === 'retail_price'){
+        updateInvoiceMarginCell(table, idx);
+      }
       invoiceRecalcTotals();
     });
   });
+  invoiceItemAdjust.forEach((row, idx) => updateInvoiceMarginCell(table, idx));
   invoiceRecalcTotals();
+}
+// Recomputes and redraws one row's Margin cell + red below-minimum highlight.
+function updateInvoiceMarginCell(table, idx){
+  const row = invoiceItemAdjust[idx];
+  const margin = invoiceMarginPct(row);
+  row.margin_pct = margin;
+  const cell = table.querySelector(`[data-margincell="${idx}"]`);
+  const tr = table.querySelector(`tr[data-idx="${idx}"]`);
+  if(cell) cell.textContent = margin === null ? '—' : margin.toFixed(1) + '%';
+  const isLow = margin !== null && margin < Number(row.min_margin_pct);
+  if(tr) tr.classList.toggle('invmarginlow', isLow);
 }
 
 /* ---- Shared CSV (UTF-8) + PDF export helpers ---- */
@@ -4320,7 +4426,8 @@ const INVOICE_LIST_COLUMNS = [
 ];
 const INVOICE_DETAIL_COLUMNS = [
   ['cost_price', 'Cost Price'], ['retail_price', 'Retail Price'], ['online_price', 'Online Price'], ['pack_size', 'Pack Size'],
-  ['vatid', 'VAT Code'], ['qty', 'Qty'], ['net_value', 'Net Value'], ['vat_value', 'VAT Value']
+  ['vatid', 'VAT Code'], ['qty', 'Qty'], ['net_value', 'Net Value'], ['vat_value', 'VAT Value'],
+  ['margin_pct', 'Margin'], ['department_name', 'Department']
 ];
 function openInvoiceExportModal(format, context){
   invoiceExportFormat = format;
@@ -4351,6 +4458,7 @@ function invoiceListCellValue(n, key){
   return n[key] ?? '';
 }
 function invoiceDetailCellValue(row, key){
+  if(key === 'margin_pct') return row.margin_pct === null || row.margin_pct === undefined ? '' : Number(row.margin_pct).toFixed(1) + '%';
   return row[key] !== undefined ? row[key] : '';
 }
 function exportInvoicesList(format, selected){
@@ -4421,7 +4529,18 @@ function exportInvoiceDetail(format, selected){
       doc.autoTable({
         startY: 30, head: [headers], body,
         theme: 'grid', headStyles: { fillColor: [30,34,42] }, styles: { fontSize: 9 },
-        margin: { left: 14, right: 14 }
+        margin: { left: 14, right: 14 },
+        // Rows below their department's minimum margin are shown in red, matching
+        // the on-screen highlight (.invmarginlow).
+        didParseCell: (data) => {
+          if(data.section !== 'body') return;
+          const row = invoiceItemAdjust[data.row.index];
+          if(!row) return;
+          const margin = invoiceMarginPct(row);
+          if(margin !== null && margin < Number(row.min_margin_pct)){
+            data.cell.styles.textColor = [220, 38, 38];
+          }
+        }
       });
       doc.save(base + '.pdf');
     }catch(e){
