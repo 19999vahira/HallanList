@@ -133,6 +133,18 @@
   .restaurant-card-price{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;color:var(--accent-dim);}
   .restaurant-card-oos{color:var(--danger);font-size:12px;}
   .restaurant-card-oos a{color:var(--danger);text-decoration:underline;}
+  .restaurant-card-img{
+    width:100%;height:110px;object-fit:cover;border-radius:8px;background:var(--panel2);
+    border:1px solid var(--line);
+  }
+  .restaurant-card-img-placeholder{
+    width:100%;height:110px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);
+    display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:11px;
+  }
+  .restaurant-review-thumb{
+    width:40px;height:40px;object-fit:cover;border-radius:6px;border:1px solid var(--line);
+    background:var(--panel2);flex-shrink:0;
+  }
   .restaurant-qty-stepper button{
     width:32px;height:32px;border:1px solid var(--line);background:var(--panel2);
     font-size:16px;font-weight:700;cursor:pointer;color:var(--text);
@@ -2703,6 +2715,9 @@ function buildRestaurantItemCard(it, source){
   card.className = 'restaurant-card' + (inCart ? ' in-cart' : '');
   card.id = 'restaurant-card-' + key;
   card.innerHTML = `
+    ${it.image_url
+      ? `<img class="restaurant-card-img" src="${it.image_url}" alt="" loading="lazy" onerror="this.outerHTML='<div class=&quot;restaurant-card-img-placeholder&quot;>No photo</div>'">`
+      : `<div class="restaurant-card-img-placeholder">No photo</div>`}
     <div class="restaurant-card-name">${escapeHtml(it.item_name)}</div>
     <div class="restaurant-card-price">${it.trade_price === null ? '—' : '£' + it.trade_price.toFixed(2) + (it.is_vat ? ' +VAT' : '')}</div>
     ${!it.in_stock ? `<div class="restaurant-card-oos">\u26a0 May be out of stock \u2014 <a href="#" onclick="event.preventDefault(); toggleRestaurantSubstitutes(this, '${key}')">suggest alternatives</a></div>` : ''}
@@ -2910,6 +2925,7 @@ function updateRestaurantCartItem(key, qtyRaw, source){
       is_wholesale: item.is_wholesale,
       trade_price: item.trade_price,
       is_vat: item.is_vat,
+      image_url: item.image_url || null,
       qty,
       source,
       note: restaurantNotes.get(key) || '',
@@ -2945,9 +2961,14 @@ function renderRestaurantReview(){
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>
-          ${escapeHtml(it.item_name)}
-          <input type="text" class="restaurant-note-input" style="margin-top:4px;font-size:12px;" placeholder="Note (optional)"
-            value="${escapeHtml(it.note || '')}" onchange="reviewUpdateRestaurantNote('${key}', this.value)">
+          <div style="display:flex;align-items:center;gap:8px;">
+            ${it.image_url ? `<img class="restaurant-review-thumb" src="${it.image_url}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
+            <div style="flex:1;">
+              ${escapeHtml(it.item_name)}
+              <input type="text" class="restaurant-note-input" style="margin-top:4px;font-size:12px;" placeholder="Note (optional)"
+                value="${escapeHtml(it.note || '')}" onchange="reviewUpdateRestaurantNote('${key}', this.value)">
+            </div>
+          </div>
         </td>
         <td class="qtycell">${it.trade_price === null ? '—' : it.trade_price.toFixed(2) + (it.is_vat ? ' +VAT' : '')}</td>
         <td class="qtycell">
