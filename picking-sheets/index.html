@@ -1443,7 +1443,7 @@
     </div>
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalReplenMulti')">Cancel</button>
-      <button class="btn-amber" onclick="printSelectedReplenZones()">Print Selected</button>
+      <button class="btn-amber" onclick="printSelectedReplenZones()" id="replenMultiPrintBtn">Print Selected</button>
     </div>
   </div>
 </div>
@@ -3348,8 +3348,8 @@ function renderReplenStatus(startedAt){
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
       <button class="btn-ghost" onclick="confirmRestartReplenishment()">Restart</button>
       <button class="btn-ghost" onclick="openReplenManualTimeModal()">Set Time Manually</button>
-      <button class="btn-ghost" onclick="reprintReplenishment()">Reprint Last List</button>
-      <button class="btn-amber" onclick="printReplenishment()">Print List</button>
+      <button class="btn-ghost" onclick="reprintReplenishment()" id="replenReprintBtn">Reprint Last List</button>
+      <button class="btn-amber" onclick="printReplenishment()" id="replenPrintBtn">Print List</button>
     </div>
   `;
 }
@@ -3465,6 +3465,9 @@ function toggleReplenMultiSelectAll(checked){
 async function printSelectedReplenZones(){
   const checked = [...document.querySelectorAll('.replenMultiCheck:checked')];
   if(checked.length === 0){ toast('Pick at least one shelf'); return; }
+  const btn = document.getElementById('replenMultiPrintBtn');
+  if(btn && btn.disabled) return;
+  if(btn){ btn.disabled = true; btn.textContent = 'Printing…'; }
   const combined = [];
   // CHECKING LAYER: track which items have already gone into the combined
   // list (by item name, since that's what's guaranteed present) so the
@@ -3476,35 +3479,44 @@ async function printSelectedReplenZones(){
   const seenInCombined = new Map(); // item_name -> index in combined[]
   let printedShelfCount = 0;
   let failedShelfCount = 0;
-  for(const box of checked){
-    const shelfId = box.dataset.shelfId;
+  // Each shelf uses the existing per-shelf print endpoint, so every shelf's own
+  // started time is combined with its own carry-forward and reset correctly.
+  // Fired in parallel (not one-at-a-time) — with several shelves ticked this
+  // was previously the slowest part of "Print Selected": N shelves meant N
+  // sequential round trips stacked back to back with no visible progress.
+  // Promise.allSettled still returns results in the same order as `checked`
+  // regardless of which finishes first, so the merge order below is unaffected.
+  const results = await Promise.allSettled(
+    checked.map(box =>
+      apiPost('location/shelves/' + box.dataset.shelfId + '/replenishment/print', {})
+    )
+  );
+  results.forEach((result, i) => {
+    const box = checked[i];
     const zoneName = box.dataset.zoneName;
     const shelfName = box.dataset.shelfName;
-    try{
-      // Each call uses the existing per-shelf print endpoint, so every shelf's own
-      // started time is combined with its own carry-forward and reset correctly —
-      // this just loops it across every shelf that was ticked.
-      const data = await apiPost('location/shelves/' + shelfId + '/replenishment/print', {});
-      const items = data.items || [];
-      items.forEach(it => {
-        const key = it.item_name;
-        if(seenInCombined.has(key)){
-          // Already have this product from another shelf in this batch — merge the
-          // quantity in rather than adding a second row for it.
-          const existing = combined[seenInCombined.get(key)];
-          existing.qty_sold = Number(existing.qty_sold) + Number(it.qty_sold);
-          existing.shelf_name = existing.shelf_name + ' + ' + shelfName;
-          return;
-        }
-        seenInCombined.set(key, combined.length);
-        combined.push({ ...it, zone_name: zoneName, shelf_name: shelfName });
-      });
-      printedShelfCount++;
-    }catch(e){
+    if(result.status !== 'fulfilled'){
       failedShelfCount++;
-      console.error('Print failed for shelf ' + shelfName, e);
+      console.error('Print failed for shelf ' + shelfName, result.reason);
+      return;
     }
-  }
+    const items = result.value.items || [];
+    items.forEach(it => {
+      const key = it.item_name;
+      if(seenInCombined.has(key)){
+        // Already have this product from another shelf in this batch — merge the
+        // quantity in rather than adding a second row for it.
+        const existing = combined[seenInCombined.get(key)];
+        existing.qty_sold = Number(existing.qty_sold) + Number(it.qty_sold);
+        existing.shelf_name = existing.shelf_name + ' + ' + shelfName;
+        return;
+      }
+      seenInCombined.set(key, combined.length);
+      combined.push({ ...it, zone_name: zoneName, shelf_name: shelfName });
+    });
+    printedShelfCount++;
+  });
+  if(btn){ btn.disabled = false; btn.textContent = 'Print Selected'; }
   closeModal('modalReplenMulti');
   if(printedShelfCount === 0){
     toast('Could not print any of the selected shelves');
@@ -3713,6 +3725,13 @@ function renderReplenPrintTable(items){
 }
 async function printReplenishment(){
   if(!currentReplenShelf) return;
+  const btn = document.getElementById('replenPrintBtn');
+  // Guards against the exact symptom reported: with no loading indicator, a slow
+  // request invites repeated clicks — each one kicking off its own full print
+  // (and its own clock-reset), which can double-count or clash. Disabling the
+  // button and showing "Printing…" for the duration closes that gap.
+  if(btn && btn.disabled) return;
+  if(btn){ btn.disabled = true; btn.textContent = 'Printing…'; }
   try{
     const data = await apiPost('location/shelves/' + currentReplenShelf.shelf_id + '/replenishment/print', {});
     replenPrintData = data.items || [];
@@ -3726,10 +3745,15 @@ async function printReplenishment(){
   }catch(e){
     toast('Could not print — ' + (e.message || 'try again'));
     console.error(e);
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = 'Print List'; }
   }
 }
 async function reprintReplenishment(){
   if(!currentReplenShelf) return;
+  const btn = document.getElementById('replenReprintBtn');
+  if(btn && btn.disabled) return;
+  if(btn){ btn.disabled = true; btn.textContent = 'Loading…'; }
   try{
     const data = await apiGet('location/shelves/' + currentReplenShelf.shelf_id + '/replenishment/last-print/');
     if(!data.items){
@@ -3747,6 +3771,8 @@ async function reprintReplenishment(){
   }catch(e){
     toast('Could not load previous list');
     console.error(e);
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = 'Reprint Last List'; }
   }
 }
 function buildReplenPDFDoc(){
