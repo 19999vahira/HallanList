@@ -145,6 +145,10 @@
     font-family:'JetBrains Mono',monospace;font-weight:700;font-size:14px;
   }
   .restaurant-unit-label{font-size:11px;color:var(--text-dim);margin-left:8px;align-self:center;}
+  .restaurant-unit-toggle{
+    display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim);cursor:pointer;
+  }
+  .restaurant-unit-toggle input{width:14px;height:14px;cursor:pointer;}
   .restaurant-note-input{
     width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;
     background:var(--bg);margin-top:2px;
@@ -2609,16 +2613,21 @@ function restaurantStepNext(){
   else { showView('view-restaurant-review'); renderRestaurantReview(); }
 }
 
-// Departments where customers order by the box — same quantity stepper as
-// everything else (they can still order 2, 3 boxes), just labelled "box(es)"
-// instead of a bare number so it's clear what the count means. Matched on the
-// department name itself, so it applies wherever a department's real name
-// (from VEDEPTS, via enrichWithWholesaleMeta) contains one of these words.
-const RESTAURANT_BOX_ONLY_KEYWORDS = ['veg', 'lamb', 'mutton'];
-function isBoxOnlyDepartment(departmentName){
+// Departments customers order by weight (kg) rather than a flat count — a
+// checkbox lets them switch a given item over to ordering by the box instead,
+// which just changes what the same quantity number means (2 -> "2 kg" vs
+// "2 boxes"), not a separate field. Matched on the department name itself,
+// so it applies wherever a department's real name (from VEDEPTS, via
+// enrichWithWholesaleMeta) contains one of these words.
+const RESTAURANT_KG_OR_BOX_KEYWORDS = ['veg', 'lamb', 'mutton'];
+function isKgOrBoxDepartment(departmentName){
   const d = (departmentName || '').toLowerCase();
-  return RESTAURANT_BOX_ONLY_KEYWORDS.some(kw => d.includes(kw));
+  return RESTAURANT_KG_OR_BOX_KEYWORDS.some(kw => d.includes(kw));
 }
+// key -> 'kg' | 'box', only meaningful for kg-or-box departments. Kept
+// independent of cart membership for the same reason notes are — someone
+// might tick "order by box" before setting a quantity at all.
+let restaurantUnits = new Map();
 
 // Single card builder shared by the three history-based steps and the
 // Search & Add results — keeps the qty stepper, note field, and out-of-stock
@@ -2627,7 +2636,9 @@ function buildRestaurantItemCard(it, source){
   const key = String(it.stockid);
   restaurantItemLookup.set(key, it);
   const inCart = restaurantCart.get(key);
-  const boxOnly = isBoxOnlyDepartment(it.department_name);
+  const kgOrBox = isKgOrBoxDepartment(it.department_name);
+  const unit = restaurantUnits.get(key) || (inCart && inCart.unit) || 'kg';
+  if(kgOrBox) restaurantUnits.set(key, unit);
   const note = restaurantNotes.get(key) || (inCart ? inCart.note : '') || '';
   const card = document.createElement('div');
   card.className = 'restaurant-card' + (inCart ? ' in-cart' : '');
@@ -2642,12 +2653,26 @@ function buildRestaurantItemCard(it, source){
       <input type="number" min="0" step="1" class="restaurant-qty-input" value="${inCart ? inCart.qty : 0}"
         onchange="updateRestaurantCartItem('${key}', this.value, '${source}')">
       <button type="button" onclick="stepRestaurantQty('${key}', 1, '${source}')">+</button>
-      ${boxOnly ? '<span class="restaurant-unit-label">box(es)</span>' : ''}
+      ${kgOrBox ? `<span class="restaurant-unit-label" id="restaurant-unit-${key}">${unit === 'box' ? 'box(es)' : 'kg'}</span>` : ''}
     </div>
+    ${kgOrBox ? `
+    <label class="restaurant-unit-toggle">
+      <input type="checkbox" ${unit === 'box' ? 'checked' : ''} onchange="toggleRestaurantUnit('${key}', this.checked, '${source}')">
+      Order by box instead of kg
+    </label>
+    ` : ''}
     <input type="text" class="restaurant-note-input" placeholder="Note (optional) — e.g. ripe, extra small"
       value="${escapeHtml(note)}" onchange="updateRestaurantItemNote('${key}', this.value)">
   `;
   return card;
+}
+function toggleRestaurantUnit(key, isBox, source){
+  const unit = isBox ? 'box' : 'kg';
+  restaurantUnits.set(key, unit);
+  const label = document.getElementById('restaurant-unit-' + key);
+  if(label) label.textContent = unit === 'box' ? 'box(es)' : 'kg';
+  const existing = restaurantCart.get(key);
+  if(existing) existing.unit = unit;
 }
 
 function renderRestaurantStepItems(items, source, content){
@@ -2658,10 +2683,10 @@ function renderRestaurantStepItems(items, source, content){
   content.innerHTML = '';
   const groups = groupItemsByDepartment(items);
   groups.forEach(g => {
-    const boxOnly = isBoxOnlyDepartment(g.department);
+    const kgOrBox = isKgOrBoxDepartment(g.department);
     const heading = document.createElement('div');
     heading.className = 'restaurant-dept-heading';
-    heading.innerHTML = escapeHtml(g.department) + (g.is_wholesale ? ' <span class="tag">Wholesale</span>' : '') + (boxOnly ? ' <span class="tag">By the box</span>' : '');
+    heading.innerHTML = escapeHtml(g.department) + (g.is_wholesale ? ' <span class="tag">Wholesale</span>' : '') + (kgOrBox ? ' <span class="tag">kg or box</span>' : '');
     content.appendChild(heading);
     const grid = document.createElement('div');
     grid.className = 'restaurant-card-grid';
@@ -2814,6 +2839,7 @@ function updateRestaurantCartItem(key, qtyRaw, source){
   const item = restaurantItemLookup.get(key);
   if(!item) return;
   const qty = Number(qtyRaw);
+  const unit = isKgOrBoxDepartment(item.department_name) ? (restaurantUnits.get(key) || 'kg') : null;
   if(!qty || qty <= 0){
     restaurantCart.delete(key);
   }else{
@@ -2827,7 +2853,8 @@ function updateRestaurantCartItem(key, qtyRaw, source){
       is_vat: item.is_vat,
       qty,
       source,
-      note: restaurantNotes.get(key) || ''
+      note: restaurantNotes.get(key) || '',
+      unit
     });
   }
   document.getElementById('restaurantCartCount').textContent = restaurantCart.size;
@@ -2856,7 +2883,6 @@ function renderRestaurantReview(){
     const tbody = document.createElement('tbody');
     g.items.forEach(it => {
       const key = it.key;
-      const boxOnly = isBoxOnlyDepartment(it.department_name);
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>
@@ -2868,7 +2894,7 @@ function renderRestaurantReview(){
         <td class="qtycell">
           <input type="number" min="1" step="1" class="restaurant-qty-input" style="width:70px;" value="${it.qty}"
             onchange="reviewUpdateRestaurantQty('${key}', this.value)">
-          ${boxOnly ? '<div style="font-size:11px;color:var(--text-dim);">box(es)</div>' : ''}
+          ${it.unit ? `<div style="font-size:11px;color:var(--text-dim);">${it.unit === 'box' ? 'box(es)' : 'kg'}</div>` : ''}
         </td>
         <td class="qtycell"><button class="btn-ghost" onclick="reviewRemoveRestaurantItem('${key}')">Remove</button></td>
       `;
@@ -2930,12 +2956,11 @@ function buildRestaurantOrderPDFDoc(items, customerName){
   const groups = groupItemsByDepartment(items);
   const body = [];
   groups.forEach(g => {
-    const boxOnly = isBoxOnlyDepartment(g.department);
     body.push([{ content: g.department, colSpan: 4, styles: { fillColor: [232,221,186], textColor:[40,30,10], fontStyle:'bold', halign:'left' } }]);
     g.items.forEach(it => {
       body.push([
         it.item_name,
-        it.qty + (boxOnly ? ' box(es)' : ''),
+        it.qty + (it.unit ? (' ' + (it.unit === 'box' ? 'box(es)' : 'kg')) : ''),
         it.trade_price === null ? '—' : it.trade_price.toFixed(2) + (it.is_vat ? ' +VAT' : ''),
         it.note || ''
       ]);
