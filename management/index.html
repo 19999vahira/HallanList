@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Management — Hallan Cash &amp; Carry</title>
+<link rel="icon" href="../assets/hallan-logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy-deep:#0e1e33; --navy-mid:#173763; --blue-accent:#1d4b8f;
+    --gold:#b8860b; --gold-light:#f2c85b;
+    --paper:#f7f8fa; --panel:#ffffff; --line:#e2e6ec;
+    --ink:#1a2233; --slate:#667085; --danger:#b3261e; --green:#1a7f37;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;min-height:100vh;}
+  h1,h2,h3{font-family:'Space Grotesk',sans-serif;margin:0;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  a{color:inherit;}
+
+  header.topbar{
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
+    padding:16px 28px;background:var(--navy-deep);position:sticky;top:0;z-index:20;
+    border-bottom:1px solid rgba(255,255,255,.08);
+  }
+  .brand{display:flex;align-items:center;gap:14px;color:#f2f1ec;}
+  .brand h1{font-size:18px;}
+  .brand .sub{font-size:11px;color:#93a8c4;text-transform:uppercase;letter-spacing:1.6px;margin-top:2px;}
+  .topbtn{
+    background:transparent;border:1px solid rgba(255,255,255,.25);color:#dbe4f2;
+    padding:8px 16px;border-radius:7px;font-size:13px;cursor:pointer;transition:.15s;
+  }
+  .topbtn:hover{border-color:var(--gold);color:var(--gold-light);}
+
+  main{max-width:960px;margin:0 auto;padding:36px 24px 80px;}
+  .crumbrow{font-size:13px;color:var(--slate);margin-bottom:18px;}
+  .crumbrow button{background:none;border:none;color:var(--gold);cursor:pointer;font:inherit;padding:0;}
+  .crumbrow .sep{margin:0 6px;}
+  .crumbrow .current{color:var(--ink);font-weight:600;}
+
+  .eyebrow{color:var(--gold);font-size:12px;letter-spacing:2px;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:8px;}
+  h2{font-size:26px;margin-bottom:6px;}
+  .sub-text{color:var(--slate);font-size:14.5px;margin:0 0 24px;max-width:640px;line-height:1.55;}
+
+  .view{display:none;}
+  .view.active{display:block;}
+
+  .btn{
+    background:var(--navy-deep);color:#fff;border:none;padding:10px 18px;border-radius:8px;
+    font-size:13.5px;font-weight:600;cursor:pointer;transition:.15s;
+  }
+  .btn:hover{background:var(--navy-mid);}
+  .btn-gold{background:var(--gold);color:#211804;}
+  .btn-gold:hover{background:var(--gold-light);}
+  .btn-ghost{background:var(--panel);border:1px solid var(--line);color:var(--ink);padding:10px 18px;border-radius:8px;font-size:13.5px;cursor:pointer;}
+  .btn-ghost:hover{border-color:#c9d2df;}
+  .btn-danger{background:transparent;border:1px solid var(--danger);color:var(--danger);padding:8px 14px;border-radius:7px;font-size:12.5px;cursor:pointer;}
+
+  input[type=text],input[type=password]{
+    width:100%;padding:11px 13px;border-radius:8px;border:1px solid var(--line);font-size:14px;font-family:inherit;
+  }
+  input:focus{outline:2px solid var(--gold-light);outline-offset:1px;}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:22px;}
+
+  .zonegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-top:20px;}
+  .zonetile{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;cursor:pointer;
+    transition:.15s;position:relative;
+  }
+  .zonetile:hover{border-color:var(--gold);transform:translateY(-2px);box-shadow:0 10px 22px -14px rgba(14,30,51,.3);}
+  .zonetile h4{font-size:16px;margin:0 0 6px;}
+  .zonetile .count{font-size:12.5px;color:var(--slate);}
+  .zonetile .del{
+    position:absolute;top:10px;right:10px;background:none;border:none;color:var(--slate);
+    cursor:pointer;font-size:15px;opacity:.6;
+  }
+  .zonetile .del:hover{opacity:1;color:var(--danger);}
+
+  .addrow{display:flex;gap:10px;margin-top:22px;flex-wrap:wrap;}
+  .addrow input{flex:1;min-width:200px;}
+
+  .loclist{margin-top:20px;display:flex;flex-direction:column;gap:10px;}
+  .locrow{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;
+    display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+  }
+  .locrow.checked{border-color:var(--green);background:#f4faf5;}
+  .locname{font-weight:600;font-size:14.5px;}
+  .lockstatus{font-size:12.5px;color:var(--slate);margin-top:3px;}
+  .lockstatus.done{color:var(--green);}
+  .locactions{display:flex;gap:8px;align-items:center;}
+
+  .empty-hint{color:var(--slate);font-size:13.5px;padding:18px 0;}
+  .loading{color:var(--slate);font-size:13.5px;padding:18px 0;}
+  .err{color:var(--danger);font-size:13px;margin-top:8px;display:none;}
+
+  .userlist{margin-top:14px;display:flex;flex-direction:column;gap:6px;}
+  .userrow{font-size:13.5px;padding:8px 0;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;}
+
+  .loginwrap{max-width:380px;margin:80px auto;}
+  .loginwrap .card{display:flex;flex-direction:column;gap:12px;}
+
+  @media(max-width:600px){
+    main{padding:24px 16px 60px;}
+    .addrow{flex-direction:column;}
+    .addrow input{width:100%;}
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div>
+      <h1>Hallan Cash &amp; Carry</h1>
+      <div class="sub">Management</div>
+    </div>
+  </div>
+  <button class="topbtn" id="signOutBtn" style="display:none;" onclick="managementSignOut()">Sign Out</button>
+</header>
+
+<main>
+
+  <!-- LOGIN -->
+  <div id="view-login" class="view active">
+    <div class="loginwrap">
+      <div class="eyebrow" style="text-align:center;">Management</div>
+      <h2 style="text-align:center;margin-bottom:20px;">Sign In</h2>
+      <div class="card">
+        <input type="text" id="loginName" placeholder="Name" autocomplete="username">
+        <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password"
+          onkeydown="if(event.key==='Enter') submitManagementLogin()">
+        <button class="btn btn-gold" onclick="submitManagementLogin()">Sign In</button>
+        <div class="err" id="loginErr"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ZONES -->
+  <div id="view-zones" class="view">
+    <div class="crumbrow"><span class="current">Zones</span></div>
+    <div class="eyebrow">Shelf-Check Checklist</div>
+    <h2>Zones</h2>
+    <p class="sub-text">Pick a zone, then tick off each location as you check it. This covers the whole store for walk-through checks — it's separate from the shelf-picking locations used elsewhere.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn-ghost" onclick="openManageUsersView()">Manage Users</button>
+    </div>
+    <div class="addrow">
+      <input type="text" id="newZoneName" placeholder="New zone name" onkeydown="if(event.key==='Enter') addZone()">
+      <button class="btn btn-gold" onclick="addZone()">+ Add Zone</button>
+    </div>
+    <div class="err" id="zonesErr"></div>
+    <div id="zonesList" class="zonegrid"><div class="loading">Loading…</div></div>
+  </div>
+
+  <!-- LOCATIONS WITHIN A ZONE -->
+  <div id="view-locations" class="view">
+    <div class="crumbrow">
+      <button onclick="openZonesView()">Zones</button><span class="sep">/</span>
+      <span class="current" id="locationsZoneLabel">—</span>
+    </div>
+    <div class="eyebrow">Shelf-Check Checklist</div>
+    <h2 id="locationsZoneTitle">Locations</h2>
+    <p class="sub-text">Tick "Mark Checked" once you've checked a location — it records your name and the time (UK) straight away.</p>
+    <div class="addrow">
+      <input type="text" id="newLocationName" placeholder="New location name" onkeydown="if(event.key==='Enter') addLocation()">
+      <button class="btn btn-gold" onclick="addLocation()">+ Add Location</button>
+    </div>
+    <div class="err" id="locationsErr"></div>
+    <div id="locationsList" class="loclist"><div class="loading">Loading…</div></div>
+  </div>
+
+  <!-- MANAGE USERS -->
+  <div id="view-users" class="view">
+    <div class="crumbrow">
+      <button onclick="openZonesView()">Zones</button><span class="sep">/</span>
+      <span class="current">Manage Users</span>
+    </div>
+    <div class="eyebrow">Management</div>
+    <h2>Users</h2>
+    <p class="sub-text">Add another manager login. Each person should have their own — checks are recorded under whoever's signed in.</p>
+    <div class="addrow">
+      <input type="text" id="newUserName" placeholder="Name">
+      <input type="text" id="newUserPassword" placeholder="Password">
+      <button class="btn btn-gold" onclick="addManagementUser()">+ Add User</button>
+    </div>
+    <div class="err" id="usersErr"></div>
+    <div class="card" style="margin-top:20px;">
+      <div id="usersList" class="userlist"><div class="loading">Loading…</div></div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+const API_BASE = "https://hallan-picking-backend.onrender.com/api/";
+
+/* ---- UK time only, same approach as the picking-sheets app ---- */
+function ukDateTimeString(date){
+  return date.toLocaleString('en-GB', { timeZone: 'Europe/London' });
+}
+
+/* ---- auth + fetch helpers ---- */
+function managementToken(){ return localStorage.getItem('hallan_mgmt_token') || ''; }
+function managementHeaders(){
+  return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + managementToken() };
+}
+async function mgmtGet(path){
+  const res = await fetch(API_BASE + path, { headers: managementHeaders() });
+  if(res.status === 401){ managementSignOut(); throw new Error('Session expired'); }
+  if(!res.ok) throw new Error('Request failed: ' + res.status);
+  return res.json();
+}
+async function mgmtPost(path, body){
+  const res = await fetch(API_BASE + path, { method: 'POST', headers: managementHeaders(), body: JSON.stringify(body || {}) });
+  if(res.status === 401){ managementSignOut(); throw new Error('Session expired'); }
+  if(!res.ok){ const err = await res.json().catch(()=>({})); throw new Error(err.error || ('Request failed: ' + res.status)); }
+  return res.json();
+}
+async function mgmtDelete(path){
+  const res = await fetch(API_BASE + path, { method: 'DELETE', headers: managementHeaders() });
+  if(res.status === 401){ managementSignOut(); throw new Error('Session expired'); }
+  if(!res.ok) throw new Error('Request failed: ' + res.status);
+  return res.json();
+}
+
+function showView(id){
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0,0);
+}
+
+/* ---- login ---- */
+async function submitManagementLogin(){
+  const name = document.getElementById('loginName').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const err = document.getElementById('loginErr');
+  err.style.display = 'none';
+  if(!name || !password){ err.textContent = 'Enter your name and password'; err.style.display = 'block'; return; }
+  try{
+    const res = await fetch(API_BASE + 'management/login/', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, password })
+    });
+    const data = await res.json();
+    if(!res.ok || !data.ok){ throw new Error(data.error || 'Sign in failed'); }
+    localStorage.setItem('hallan_mgmt_token', data.token);
+    localStorage.setItem('hallan_mgmt_name', data.name);
+    document.getElementById('signOutBtn').style.display = 'inline-block';
+    openZonesView();
+  }catch(e){
+    err.textContent = e.message || 'Sign in failed';
+    err.style.display = 'block';
+  }
+}
+function managementSignOut(){
+  localStorage.removeItem('hallan_mgmt_token');
+  localStorage.removeItem('hallan_mgmt_name');
+  document.getElementById('signOutBtn').style.display = 'none';
+  document.getElementById('loginName').value = '';
+  document.getElementById('loginPassword').value = '';
+  showView('view-login');
+}
+// Resume a session on refresh if a token is already stored — the first
+// protected call will bounce back to login automatically if it's expired.
+if(managementToken()){
+  document.getElementById('signOutBtn').style.display = 'inline-block';
+  openZonesView();
+}
+
+/* ---- zones ---- */
+let currentZone = null; // { zone_id, zone_name }
+function openZonesView(){
+  showView('view-zones');
+  loadZones();
+}
+async function loadZones(){
+  const box = document.getElementById('zonesList');
+  box.innerHTML = '<div class="loading">Loading…</div>';
+  try{
+    const data = await mgmtGet('management/zones/');
+    const zones = data.zones || [];
+    if(zones.length === 0){
+      box.innerHTML = '<div class="empty-hint">No zones yet — add one above.</div>';
+      return;
+    }
+    box.innerHTML = '';
+    zones.forEach(z => {
+      const tile = document.createElement('div');
+      tile.className = 'zonetile';
+      tile.innerHTML = `
+        <button class="del" onclick="event.stopPropagation(); deleteZone(${z.zone_id}, ${JSON.stringify(z.zone_name).replace(/"/g,'&quot;')})">✕</button>
+        <h4>${escapeHtml(z.zone_name)}</h4>
+        <div class="count">${z.location_count} location${z.location_count === 1 ? '' : 's'}</div>
+      `;
+      tile.addEventListener('click', () => openLocationsView(z.zone_id, z.zone_name));
+      box.appendChild(tile);
+    });
+  }catch(e){
+    if(e.message !== 'Session expired'){
+      box.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not load zones.</div>';
+      console.error(e);
+    }
+  }
+}
+async function addZone(){
+  const input = document.getElementById('newZoneName');
+  const name = input.value.trim();
+  const err = document.getElementById('zonesErr');
+  err.style.display = 'none';
+  if(!name){ err.textContent = 'Enter a zone name'; err.style.display = 'block'; return; }
+  try{
+    await mgmtPost('management/zones/', { zone_name: name });
+    input.value = '';
+    await loadZones();
+  }catch(e){
+    err.textContent = e.message || 'Could not add zone';
+    err.style.display = 'block';
+  }
+}
+async function deleteZone(id, name){
+  if(!confirm(`Delete "${name}"? This removes all its locations and their check history too.`)) return;
+  try{
+    await mgmtDelete('management/zones/' + id);
+    await loadZones();
+  }catch(e){
+    alert('Could not delete zone');
+    console.error(e);
+  }
+}
+
+/* ---- locations within a zone ---- */
+function openLocationsView(zoneId, zoneName){
+  currentZone = { zone_id: zoneId, zone_name: zoneName };
+  document.getElementById('locationsZoneLabel').textContent = zoneName;
+  document.getElementById('locationsZoneTitle').textContent = zoneName;
+  showView('view-locations');
+  loadLocations();
+}
+async function loadLocations(){
+  const box = document.getElementById('locationsList');
+  box.innerHTML = '<div class="loading">Loading…</div>';
+  try{
+    const data = await mgmtGet('management/zones/' + currentZone.zone_id + '/locations/');
+    const locations = data.locations || [];
+    if(locations.length === 0){
+      box.innerHTML = '<div class="empty-hint">No locations in this zone yet — add one above.</div>';
+      return;
+    }
+    box.innerHTML = '';
+    locations.forEach(l => {
+      const row = document.createElement('div');
+      const checked = !!l.last_checked_at;
+      row.className = 'locrow' + (checked ? ' checked' : '');
+      row.innerHTML = `
+        <div>
+          <div class="locname">${escapeHtml(l.location_name)}</div>
+          <div class="lockstatus${checked ? ' done' : ''}">
+            ${checked ? '✓ Checked by ' + escapeHtml(l.last_checked_by) + ' at ' + ukDateTimeString(new Date(l.last_checked_at)) + ' (UK time)' : 'Not yet checked'}
+          </div>
+        </div>
+        <div class="locactions">
+          <button class="btn btn-gold" onclick="checkLocation(${l.location_id})">Mark Checked</button>
+          <button class="btn-danger" onclick="deleteLocation(${l.location_id}, ${JSON.stringify(l.location_name).replace(/"/g,'&quot;')})">Remove</button>
+        </div>
+      `;
+      box.appendChild(row);
+    });
+  }catch(e){
+    if(e.message !== 'Session expired'){
+      box.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not load locations.</div>';
+      console.error(e);
+    }
+  }
+}
+async function addLocation(){
+  const input = document.getElementById('newLocationName');
+  const name = input.value.trim();
+  const err = document.getElementById('locationsErr');
+  err.style.display = 'none';
+  if(!name){ err.textContent = 'Enter a location name'; err.style.display = 'block'; return; }
+  try{
+    await mgmtPost('management/zones/' + currentZone.zone_id + '/locations/', { location_name: name });
+    input.value = '';
+    await loadLocations();
+  }catch(e){
+    err.textContent = e.message || 'Could not add location';
+    err.style.display = 'block';
+  }
+}
+async function checkLocation(id){
+  try{
+    await mgmtPost('management/locations/' + id + '/check/', {});
+    await loadLocations();
+  }catch(e){
+    if(e.message !== 'Session expired'){
+      alert('Could not mark as checked');
+      console.error(e);
+    }
+  }
+}
+async function deleteLocation(id, name){
+  if(!confirm(`Remove "${name}"? This also removes its check history.`)) return;
+  try{
+    await mgmtDelete('management/locations/' + id);
+    await loadLocations();
+  }catch(e){
+    alert('Could not remove location');
+    console.error(e);
+  }
+}
+
+/* ---- manage users ---- */
+function openManageUsersView(){
+  showView('view-users');
+  loadManagementUsers();
+}
+async function loadManagementUsers(){
+  const box = document.getElementById('usersList');
+  box.innerHTML = '<div class="loading">Loading…</div>';
+  try{
+    const data = await mgmtGet('management/users/');
+    const users = data.users || [];
+    if(users.length === 0){ box.innerHTML = '<div class="empty-hint">No users yet.</div>'; return; }
+    box.innerHTML = users.map(u => `
+      <div class="userrow"><span>${escapeHtml(u.name)}</span><span style="color:var(--slate);">since ${ukDateTimeString(new Date(u.created_at))}</span></div>
+    `).join('');
+  }catch(e){
+    if(e.message !== 'Session expired'){
+      box.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not load users.</div>';
+      console.error(e);
+    }
+  }
+}
+async function addManagementUser(){
+  const nameInput = document.getElementById('newUserName');
+  const passInput = document.getElementById('newUserPassword');
+  const name = nameInput.value.trim();
+  const password = passInput.value.trim();
+  const err = document.getElementById('usersErr');
+  err.style.display = 'none';
+  if(!name || !password){ err.textContent = 'Enter a name and password'; err.style.display = 'block'; return; }
+  try{
+    await mgmtPost('management/users/', { name, password });
+    nameInput.value = '';
+    passInput.value = '';
+    await loadManagementUsers();
+  }catch(e){
+    err.textContent = e.message || 'Could not add user';
+    err.style.display = 'block';
+  }
+}
+
+function escapeHtml(str){
+  const div = document.createElement('div');
+  div.textContent = str == null ? '' : String(str);
+  return div.innerHTML;
+}
+</script>
+</body>
+</html>
