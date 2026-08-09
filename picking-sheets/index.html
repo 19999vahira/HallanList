@@ -1261,6 +1261,10 @@
         <h4>✅ Received</h4>
         <div class="count">Post date set — already posted</div>
       </div>
+      <div class="bincard" onclick="openCreatedInvoicesList()">
+        <h4>🧾 Create Invoice</h4>
+        <div class="count">Build one from a supplier PDF</div>
+      </div>
     </div>
   </div>
 
@@ -1312,6 +1316,81 @@
     </div>
     <div id="invoiceDetailResults"></div>
   </div>
+
+  <!-- CREATE INVOICE: LIST -->
+  <div id="view-created-invoices-list" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openInvoices()">Invoices</button><span class="sep">/</span>
+      <span class="current">Create Invoice</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Build From a Supplier PDF</div>
+      <h2>Created Invoices</h2>
+      <p>Upload a supplier invoice, match it to real products, enter quantities, then confirm prices.</p>
+    </div>
+    <div class="actionbar">
+      <span></span>
+      <button class="btn-amber" onclick="openNewCreatedInvoiceModal()">+ New</button>
+    </div>
+    <div id="createdInvoicesList">
+      <div class="loading">Loading…</div>
+    </div>
+  </div>
+
+  <!-- CREATE INVOICE: STEP 1 — MATCH & QUANTITY -->
+  <div id="view-created-invoice-match" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openInvoices()">Invoices</button><span class="sep">/</span>
+      <button onclick="openCreatedInvoicesList()">Create Invoice</button><span class="sep">/</span>
+      <span class="current" id="createdInvoiceMatchLabel">—</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Step 1 of 2</div>
+      <h2>Match Items &amp; Enter Quantities</h2>
+      <p>Lines in red weren't matched automatically — search and pick the right product for each. Quantities are left blank on purpose; enter them by hand (decimals are fine).</p>
+    </div>
+    <div id="createdInvoiceMatchContent">
+      <div class="loading">Loading…</div>
+    </div>
+    <div class="restaurant-footer-bar">
+      <div style="font-size:13px;color:var(--text-dim);"><span id="createdInvoiceMatchedCount">0</span> of <span id="createdInvoiceTotalCount">0</span> items matched</div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn-ghost" onclick="saveAndExitCreatedInvoice()">Save &amp; Exit</button>
+        <button class="btn-amber" onclick="goToCreatedInvoicePrices()">Next: Prices</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CREATE INVOICE: STEP 2 — PRICES -->
+  <div id="view-created-invoice-prices" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openInvoices()">Invoices</button><span class="sep">/</span>
+      <button onclick="openCreatedInvoicesList()">Create Invoice</button><span class="sep">/</span>
+      <span class="current" id="createdInvoicePricesLabel">—</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Step 2 of 2</div>
+      <h2>Confirm Prices</h2>
+      <p>Previous cost/selling price come from the last time <em>this supplier</em> supplied this item. Margin compares the new cost against the existing selling price — red means it's below that department's minimum.</p>
+    </div>
+    <div class="actionbar">
+      <span></span>
+      <div style="display:flex;gap:10px;">
+        <button class="btn-ghost" onclick="openCreatedInvoiceExportModal('csv')">Download CSV</button>
+        <button class="btn-amber" onclick="openCreatedInvoiceExportModal('pdf')">Download PDF</button>
+      </div>
+    </div>
+    <div id="createdInvoicePricesContent">
+      <div class="loading">Loading…</div>
+    </div>
+    <div class="restaurant-review-actions">
+      <button class="btn-ghost" onclick="backToCreatedInvoiceMatch()">Back</button>
+      <button class="btn-amber" onclick="finishCreatedInvoice()">Mark Complete</button>
+    </div>
+  </div>
 </div>
 
 <!-- SUPPLIER ORDERS: CHANGE PASSWORD -->
@@ -1339,6 +1418,38 @@
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalSupplierDelivery')">Cancel</button>
       <button class="btn-amber" onclick="submitSupplierDelivery()">Set Date</button>
+    </div>
+  </div>
+</div>
+
+<!-- CREATE INVOICE: NEW — pick supplier, upload PDF -->
+<div class="modal-backdrop" id="modalNewCreatedInvoice">
+  <div class="modal" style="width:460px;">
+    <h3>New Invoice</h3>
+    <p class="modal-sub">Pick the supplier this invoice is from, then upload the PDF. Previous prices are looked up specifically for this supplier, so getting this right matters.</p>
+    <input type="text" id="newInvoiceSupplierSearch" placeholder="Search supplier…" autocomplete="off"
+      oninput="onNewInvoiceSupplierSearch()" style="width:100%;padding:10px;margin-bottom:6px;">
+    <div id="newInvoiceSupplierResults" style="max-height:160px;overflow-y:auto;margin-bottom:6px;"></div>
+    <div id="newInvoiceSupplierChosen" style="display:none;margin-bottom:12px;font-size:13px;font-weight:600;color:var(--accent-dim);"></div>
+    <input type="file" id="newInvoiceFile" accept="application/pdf" style="width:100%;">
+    <div id="newInvoiceProgress" class="empty-hint" style="display:none;margin-top:10px;"></div>
+    <div class="errdetail" id="newInvoiceErr" style="display:none;"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalNewCreatedInvoice')">Cancel</button>
+      <button class="btn-amber" id="newInvoiceCreateBtn" onclick="createNewInvoiceFromPdf()">Create &amp; Extract</button>
+    </div>
+  </div>
+</div>
+
+<!-- CREATE INVOICE: EXPORT COLUMN PICKER -->
+<div class="modal-backdrop" id="modalCreatedInvoiceExport">
+  <div class="modal" style="width:360px;">
+    <h3>Choose columns</h3>
+    <p class="modal-sub">Pick which columns to include in the file.</p>
+    <div id="createdInvoiceExportColumns"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalCreatedInvoiceExport')">Cancel</button>
+      <button class="btn-amber" onclick="confirmCreatedInvoiceExport()">Export</button>
     </div>
   </div>
 </div>
@@ -4818,6 +4929,469 @@ function downloadInvoiceOcrPdf(){
   }catch(e){
     toast('Could not generate PDF');
     console.error(e);
+  }
+}
+
+/* ============ CREATE INVOICE (3rd Invoices category) ============ */
+let currentCreatedInvoice = null; // { header, items } — items: {ocr_product_name, stockid, matched_name, qty, current_cost_price, previous_cost_price, previous_selling_price, barcode, department_name, min_margin_pct, _ocrQtyHint}
+let newInvoiceChosenSupplier = null; // { suppid, name }
+let createdInvoiceExportFormat = null;
+
+function openCreatedInvoicesList(){
+  showView('view-created-invoices-list');
+  loadCreatedInvoicesList();
+}
+async function loadCreatedInvoicesList(){
+  const box = document.getElementById('createdInvoicesList');
+  box.innerHTML = '<div class="loading">Loading…</div>';
+  try{
+    const data = await apiGet('invoices/created/');
+    const invoices = data.invoices || [];
+    if(invoices.length === 0){
+      box.innerHTML = '<div class="empty-hint">No invoices created yet — click + New to build one from a PDF.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.className = 'finaltable';
+    table.innerHTML = '<thead><tr><th>Supplier</th><th>Reference</th><th>Status</th><th class="qtycell">Items</th><th>Created</th><th></th></tr></thead>';
+    const tbody = document.createElement('tbody');
+    invoices.forEach(inv => {
+      const tr = document.createElement('tr');
+      tr.style.cursor = 'pointer';
+      tr.innerHTML = `
+        <td>${escapeHtml(inv.supplier_name || '')}</td>
+        <td>${escapeHtml(inv.reference || '—')}</td>
+        <td>${inv.status === 'COMPLETE' ? '✅ Complete' : '📝 Draft'}</td>
+        <td class="qtycell">${inv.item_count}</td>
+        <td>${ukDateTimeString(new Date(inv.created_at))}</td>
+        <td><button class="btn-ghost" onclick="event.stopPropagation(); deleteCreatedInvoice(${inv.invoice_id})">Delete</button></td>
+      `;
+      tr.addEventListener('click', () => openCreatedInvoice(inv.invoice_id));
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    const scrollWrap = document.createElement('div');
+    scrollWrap.className = 'restaurant-table-scroll';
+    scrollWrap.appendChild(table);
+    box.innerHTML = '';
+    box.appendChild(scrollWrap);
+  }catch(e){
+    box.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not load invoices.</div>';
+    console.error(e);
+  }
+}
+async function deleteCreatedInvoice(id){
+  if(!confirm('Delete this invoice? This cannot be undone.')) return;
+  try{
+    await apiDelete('invoices/created/' + id);
+    toast('Deleted');
+    await loadCreatedInvoicesList();
+  }catch(e){
+    toast('Could not delete');
+    console.error(e);
+  }
+}
+// Resume where it was left off: if every line already has a quantity, go
+// straight to Prices; otherwise go to Match & Quantity first.
+async function openCreatedInvoice(id){
+  try{
+    const data = await apiGet('invoices/created/' + id + '/');
+    currentCreatedInvoice = data;
+    const allQtyFilled = data.items.length > 0 && data.items.every(it => it.qty !== null && it.qty !== undefined && it.qty !== '');
+    if(allQtyFilled) goToCreatedInvoicePrices();
+    else openCreatedInvoiceMatchStep();
+  }catch(e){
+    toast('Could not open invoice');
+    console.error(e);
+  }
+}
+
+/* ---- New Invoice modal: pick supplier, upload PDF, OCR + auto-match ---- */
+function openNewCreatedInvoiceModal(){
+  newInvoiceChosenSupplier = null;
+  document.getElementById('newInvoiceSupplierSearch').value = '';
+  document.getElementById('newInvoiceSupplierResults').innerHTML = '';
+  document.getElementById('newInvoiceSupplierChosen').style.display = 'none';
+  document.getElementById('newInvoiceFile').value = '';
+  document.getElementById('newInvoiceProgress').style.display = 'none';
+  document.getElementById('newInvoiceErr').style.display = 'none';
+  openModal('modalNewCreatedInvoice');
+}
+let newInvoiceSupplierDebounce = null;
+function onNewInvoiceSupplierSearch(){
+  clearTimeout(newInvoiceSupplierDebounce);
+  newInvoiceSupplierDebounce = setTimeout(runNewInvoiceSupplierSearch, 250);
+}
+async function runNewInvoiceSupplierSearch(){
+  const q = document.getElementById('newInvoiceSupplierSearch').value.trim();
+  const results = document.getElementById('newInvoiceSupplierResults');
+  if(q.length < 2){ results.innerHTML = ''; return; }
+  try{
+    const data = await apiGet('suppliers/search/?q=' + encodeURIComponent(q));
+    const items = data.items || [];
+    if(items.length === 0){ results.innerHTML = '<div class="empty-hint" style="font-size:12px;">No suppliers found.</div>'; return; }
+    results.innerHTML = items.map(s => `
+      <div style="padding:8px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px;"
+        onclick="chooseNewInvoiceSupplier(${s.suppid}, ${JSON.stringify(s.name).replace(/"/g,'&quot;')})">${escapeHtml(s.name)}</div>
+    `).join('');
+  }catch(e){ console.error(e); }
+}
+function chooseNewInvoiceSupplier(suppid, name){
+  newInvoiceChosenSupplier = { suppid, name };
+  document.getElementById('newInvoiceSupplierSearch').value = '';
+  document.getElementById('newInvoiceSupplierResults').innerHTML = '';
+  const chosen = document.getElementById('newInvoiceSupplierChosen');
+  chosen.style.display = 'block';
+  chosen.textContent = 'Supplier: ' + name;
+}
+async function createNewInvoiceFromPdf(){
+  const err = document.getElementById('newInvoiceErr');
+  err.style.display = 'none';
+  if(!newInvoiceChosenSupplier){ err.textContent = 'Pick a supplier first'; err.style.display = 'block'; return; }
+  const fileInput = document.getElementById('newInvoiceFile');
+  const file = fileInput.files && fileInput.files[0];
+  if(!file){ err.textContent = 'Choose a PDF first'; err.style.display = 'block'; return; }
+  const progress = document.getElementById('newInvoiceProgress');
+  const btn = document.getElementById('newInvoiceCreateBtn');
+  btn.disabled = true;
+  progress.style.display = 'block';
+  try{
+    progress.textContent = 'Creating invoice…';
+    const created = await apiPost('invoices/created/', {
+      suppid: newInvoiceChosenSupplier.suppid,
+      supplier_name: newInvoiceChosenSupplier.name,
+      created_by: localStorage.getItem('hallan_staff_name') || null
+    });
+    const invoiceId = created.invoice_id;
+
+    progress.textContent = 'Reading the PDF…';
+    // Gemini accepts a PDF directly via inline_data, the same as an image —
+    // no client-side conversion needed, the whole multi-page PDF goes in one go.
+    const part = await invoiceOcrFileToPart(file);
+    const ocrData = await apiPost('invoices/ocr-extract/', { images: [part] });
+    const ocrItems = ocrData.items || [];
+    if(ocrItems.length === 0){
+      err.textContent = 'Could not read any product lines from that PDF — try a clearer scan.';
+      err.style.display = 'block';
+      btn.disabled = false;
+      progress.style.display = 'none';
+      return;
+    }
+
+    progress.textContent = 'Matching ' + ocrItems.length + ' items to real products…';
+    const matchData = await apiPost('invoices/match-items/', { names: ocrItems.map(i => i.product_name || '') });
+    const matches = matchData.matches || [];
+
+    const items = ocrItems.map((oi, i) => {
+      const m = matches[i] || {};
+      return {
+        ocr_product_name: oi.product_name || '',
+        stockid: m.stockid || null,
+        matched_name: m.item_name || null,
+        qty: null, // deliberately blank — filled in by hand on the next screen
+        current_cost_price: (oi.unit_price === undefined || oi.unit_price === null) ? null : oi.unit_price,
+        _ocrQtyHint: (oi.qty === undefined || oi.qty === null) ? null : oi.qty
+      };
+    });
+
+    progress.textContent = 'Saving…';
+    await apiPut('invoices/created/' + invoiceId + '/items/', { items });
+
+    closeModal('modalNewCreatedInvoice');
+    currentCreatedInvoice = { header: { invoice_id: invoiceId, supplier_name: newInvoiceChosenSupplier.name, suppid: newInvoiceChosenSupplier.suppid, status: 'DRAFT' }, items };
+    openCreatedInvoiceMatchStep();
+  }catch(e){
+    err.textContent = e.message || 'Something went wrong';
+    err.style.display = 'block';
+    console.error(e);
+  }finally{
+    btn.disabled = false;
+    progress.style.display = 'none';
+  }
+}
+
+/* ---- Step 1: Match & Quantity ---- */
+function openCreatedInvoiceMatchStep(){
+  document.getElementById('createdInvoiceMatchLabel').textContent = currentCreatedInvoice.header.supplier_name || 'Invoice';
+  showView('view-created-invoice-match');
+  renderCreatedInvoiceMatchTable();
+}
+function renderCreatedInvoiceMatchTable(){
+  const content = document.getElementById('createdInvoiceMatchContent');
+  const items = currentCreatedInvoice.items;
+  if(items.length === 0){
+    content.innerHTML = '<div class="empty-hint">No items to match.</div>';
+    updateCreatedInvoiceMatchedCount();
+    return;
+  }
+  const table = document.createElement('table');
+  table.className = 'finaltable';
+  table.innerHTML = '<thead><tr><th>Item</th><th class="qtycell">Quantity</th></tr></thead>';
+  const tbody = document.createElement('tbody');
+  items.forEach((it, idx) => {
+    const matched = !!it.stockid;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>
+        ${matched
+          ? `<div>${escapeHtml(it.matched_name)}</div><div style="font-size:11px;color:var(--text-dim);">from PDF: ${escapeHtml(it.ocr_product_name)}</div>`
+          : `<div style="color:var(--danger);font-weight:600;">${escapeHtml(it.ocr_product_name)}</div>
+             <div style="font-size:12px;color:var(--danger);">\u26a0 Not matched \u2014 <a href="#" onclick="event.preventDefault(); toggleCreatedInvoiceSearch(${idx})">search for the right product</a></div>`
+        }
+        <div class="restaurant-sub-slot" id="createdInvoiceSearchSlot-${idx}" style="margin-top:6px;"></div>
+      </td>
+      <td class="qtycell">
+        <input type="number" min="0" step="0.001" class="restaurant-qty-input" style="width:90px;"
+          placeholder="${it._ocrQtyHint !== null && it._ocrQtyHint !== undefined ? 'PDF: ' + it._ocrQtyHint : ''}"
+          value="${it.qty !== null && it.qty !== undefined ? it.qty : ''}"
+          onchange="updateCreatedInvoiceQty(${idx}, this.value)">
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  content.innerHTML = '';
+  const scrollWrap = document.createElement('div');
+  scrollWrap.className = 'restaurant-table-scroll';
+  scrollWrap.appendChild(table);
+  content.appendChild(scrollWrap);
+  updateCreatedInvoiceMatchedCount();
+}
+function updateCreatedInvoiceQty(idx, value){
+  currentCreatedInvoice.items[idx].qty = value === '' ? null : Number(value);
+}
+function updateCreatedInvoiceMatchedCount(){
+  const items = currentCreatedInvoice.items;
+  const matched = items.filter(it => it.stockid).length;
+  document.getElementById('createdInvoiceMatchedCount').textContent = matched;
+  document.getElementById('createdInvoiceTotalCount').textContent = items.length;
+}
+let createdInvoiceSearchDebounce = null;
+function toggleCreatedInvoiceSearch(idx){
+  const slot = document.getElementById('createdInvoiceSearchSlot-' + idx);
+  if(slot.innerHTML){ slot.innerHTML = ''; return; }
+  slot.innerHTML = `<input type="text" placeholder="Search products…" autocomplete="off"
+    style="width:100%;max-width:320px;padding:8px;border-radius:6px;border:1px solid var(--line);"
+    oninput="onCreatedInvoiceSearchInput(${idx}, this.value)">
+    <div id="createdInvoiceSearchResults-${idx}" style="margin-top:4px;"></div>`;
+}
+function onCreatedInvoiceSearchInput(idx, q){
+  clearTimeout(createdInvoiceSearchDebounce);
+  createdInvoiceSearchDebounce = setTimeout(() => runCreatedInvoiceSearch(idx, q), 300);
+}
+async function runCreatedInvoiceSearch(idx, q){
+  const results = document.getElementById('createdInvoiceSearchResults-' + idx);
+  if(!results) return; // moved away before the debounce fired
+  q = q.trim();
+  if(q.length < 2){ results.innerHTML = ''; return; }
+  results.innerHTML = '<div class="empty-hint" style="font-size:12px;">Searching…</div>';
+  try{
+    const data = await apiGet('stock/search/?q=' + encodeURIComponent(q));
+    const items = (data.items || []).slice(0, 8);
+    if(items.length === 0){ results.innerHTML = '<div class="empty-hint" style="font-size:12px;">No matches.</div>'; return; }
+    results.innerHTML = items.map(it => `
+      <div style="padding:6px 8px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px;"
+        onclick="pickCreatedInvoiceMatch(${idx}, ${it.stockid}, ${JSON.stringify(it.name).replace(/"/g,'&quot;')})">${escapeHtml(it.name)}</div>
+    `).join('');
+  }catch(e){
+    results.innerHTML = '<div class="empty-hint" style="font-size:12px;color:var(--danger)">Search failed.</div>';
+    console.error(e);
+  }
+}
+function pickCreatedInvoiceMatch(idx, stockid, name){
+  currentCreatedInvoice.items[idx].stockid = stockid;
+  currentCreatedInvoice.items[idx].matched_name = name;
+  renderCreatedInvoiceMatchTable();
+}
+async function saveCreatedInvoiceItems(){
+  await apiPut('invoices/created/' + currentCreatedInvoice.header.invoice_id + '/items/', {
+    items: currentCreatedInvoice.items.map(it => ({
+      ocr_product_name: it.ocr_product_name,
+      stockid: it.stockid,
+      matched_name: it.matched_name,
+      qty: it.qty,
+      current_cost_price: it.current_cost_price
+    }))
+  });
+}
+async function saveAndExitCreatedInvoice(){
+  try{
+    await saveCreatedInvoiceItems();
+    toast('Saved');
+    openCreatedInvoicesList();
+  }catch(e){
+    toast('Could not save');
+    console.error(e);
+  }
+}
+async function goToCreatedInvoicePrices(){
+  const unmatched = currentCreatedInvoice.items.filter(it => !it.stockid).length;
+  const missingQty = currentCreatedInvoice.items.filter(it => it.qty === null || it.qty === undefined).length;
+  if(unmatched > 0 || missingQty > 0){
+    if(!confirm(`${unmatched} item(s) still unmatched and ${missingQty} still missing a quantity. Continue to Prices anyway?`)) return;
+  }
+  try{
+    await saveCreatedInvoiceItems();
+    const data = await apiGet('invoices/created/' + currentCreatedInvoice.header.invoice_id + '/');
+    currentCreatedInvoice = data;
+    document.getElementById('createdInvoicePricesLabel').textContent = data.header.supplier_name || 'Invoice';
+    showView('view-created-invoice-prices');
+    renderCreatedInvoicePricesTable();
+  }catch(e){
+    toast('Could not load prices');
+    console.error(e);
+  }
+}
+function backToCreatedInvoiceMatch(){
+  saveCreatedInvoiceItems().catch(e => console.error(e));
+  openCreatedInvoiceMatchStep();
+}
+
+/* ---- Step 2: Prices ---- */
+function createdInvoiceMarginPct(it){
+  if(it.previous_selling_price === null || it.previous_selling_price === undefined) return null;
+  if(it.current_cost_price === null || it.current_cost_price === undefined) return null;
+  if(Number(it.previous_selling_price) === 0) return null;
+  return (Number(it.previous_selling_price) - Number(it.current_cost_price)) / Number(it.previous_selling_price) * 100;
+}
+function renderCreatedInvoicePricesTable(){
+  const content = document.getElementById('createdInvoicePricesContent');
+  const items = currentCreatedInvoice.items;
+  if(items.length === 0){
+    content.innerHTML = '<div class="empty-hint">No items on this invoice.</div>';
+    return;
+  }
+  const table = document.createElement('table');
+  table.className = 'finaltable';
+  table.innerHTML = `<thead><tr>
+    <th>Item</th><th class="qtycell">Previous Cost</th><th class="qtycell">Current Cost</th>
+    <th class="qtycell">Previous Selling</th><th class="qtycell">Margin</th><th>Barcode</th>
+  </tr></thead>`;
+  const tbody = document.createElement('tbody');
+  items.forEach((it, idx) => {
+    const margin = createdInvoiceMarginPct(it);
+    const belowMin = margin !== null && margin < (it.min_margin_pct || 38);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${escapeHtml(it.matched_name || it.ocr_product_name)}</td>
+      <td class="qtycell">${it.previous_cost_price === null || it.previous_cost_price === undefined ? '—' : Number(it.previous_cost_price).toFixed(2)}</td>
+      <td class="qtycell">
+        <input type="number" min="0" step="0.01" class="restaurant-qty-input" style="width:80px;"
+          value="${it.current_cost_price === null || it.current_cost_price === undefined ? '' : it.current_cost_price}"
+          onchange="updateCreatedInvoiceCostPrice(${idx}, this.value)">
+      </td>
+      <td class="qtycell">${it.previous_selling_price === null || it.previous_selling_price === undefined ? '—' : Number(it.previous_selling_price).toFixed(2)}</td>
+      <td class="qtycell" id="createdInvoiceMarginCell-${idx}" style="${belowMin ? 'color:var(--danger);font-weight:700;' : ''}">${margin === null ? '—' : margin.toFixed(1) + '%'}</td>
+      <td>${escapeHtml(it.barcode || '—')}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  content.innerHTML = '';
+  const scrollWrap = document.createElement('div');
+  scrollWrap.className = 'restaurant-table-scroll';
+  scrollWrap.appendChild(table);
+  content.appendChild(scrollWrap);
+}
+function updateCreatedInvoiceCostPrice(idx, value){
+  currentCreatedInvoice.items[idx].current_cost_price = value === '' ? null : Number(value);
+  const it = currentCreatedInvoice.items[idx];
+  const margin = createdInvoiceMarginPct(it);
+  const belowMin = margin !== null && margin < (it.min_margin_pct || 38);
+  const cell = document.getElementById('createdInvoiceMarginCell-' + idx);
+  if(cell){
+    cell.textContent = margin === null ? '—' : margin.toFixed(1) + '%';
+    cell.style.color = belowMin ? 'var(--danger)' : '';
+    cell.style.fontWeight = belowMin ? '700' : '';
+  }
+}
+async function finishCreatedInvoice(){
+  try{
+    await saveCreatedInvoiceItems();
+    await apiPut('invoices/created/' + currentCreatedInvoice.header.invoice_id + '/', { status: 'COMPLETE' });
+    toast('Invoice marked complete');
+    openCreatedInvoicesList();
+  }catch(e){
+    toast('Could not save');
+    console.error(e);
+  }
+}
+
+/* ---- Export (CSV/PDF with a column picker, same idea as Wholesale Pricing) ---- */
+const CREATED_INVOICE_EXPORT_COLUMNS = [
+  { key: 'item', label: 'Item', always: true },
+  { key: 'qty', label: 'Qty' },
+  { key: 'previous_cost', label: 'Previous Cost' },
+  { key: 'current_cost', label: 'Current Cost' },
+  { key: 'previous_selling', label: 'Previous Selling' },
+  { key: 'margin', label: 'Margin' },
+  { key: 'barcode', label: 'Barcode' }
+];
+function openCreatedInvoiceExportModal(format){
+  createdInvoiceExportFormat = format;
+  const box = document.getElementById('createdInvoiceExportColumns');
+  box.innerHTML = CREATED_INVOICE_EXPORT_COLUMNS.map(c => `
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;">
+      <input type="checkbox" id="cieCol-${c.key}" ${c.always ? 'checked disabled' : 'checked'}> ${c.label}
+    </label>
+  `).join('');
+  openModal('modalCreatedInvoiceExport');
+}
+function confirmCreatedInvoiceExport(){
+  const columns = {};
+  CREATED_INVOICE_EXPORT_COLUMNS.forEach(c => {
+    columns[c.key] = c.always || document.getElementById('cieCol-' + c.key).checked;
+  });
+  closeModal('modalCreatedInvoiceExport');
+  exportCreatedInvoice(createdInvoiceExportFormat, columns);
+}
+function createdInvoiceExportRow(it, columns){
+  const margin = createdInvoiceMarginPct(it);
+  const row = {};
+  if(columns.item) row['Item'] = it.matched_name || it.ocr_product_name;
+  if(columns.qty) row['Qty'] = it.qty === null || it.qty === undefined ? '' : it.qty;
+  if(columns.previous_cost) row['Previous Cost'] = it.previous_cost_price === null || it.previous_cost_price === undefined ? '' : Number(it.previous_cost_price).toFixed(2);
+  if(columns.current_cost) row['Current Cost'] = it.current_cost_price === null || it.current_cost_price === undefined ? '' : Number(it.current_cost_price).toFixed(2);
+  if(columns.previous_selling) row['Previous Selling'] = it.previous_selling_price === null || it.previous_selling_price === undefined ? '' : Number(it.previous_selling_price).toFixed(2);
+  if(columns.margin) row['Margin'] = margin === null ? '' : margin.toFixed(1) + '%';
+  if(columns.barcode) row['Barcode'] = it.barcode || '';
+  return row;
+}
+function exportCreatedInvoice(format, columns){
+  const items = currentCreatedInvoice.items;
+  const supplierName = currentCreatedInvoice.header.supplier_name || 'Invoice';
+  const filenameBase = 'invoice-' + supplierName.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + new Date().toISOString().slice(0,10);
+  if(format === 'csv'){
+    const rows = items.map(it => createdInvoiceExportRow(it, columns));
+    const headers = Object.keys(rows[0] || {});
+    const csvLines = [headers.join(',')].concat(
+      rows.map(r => headers.map(h => '"' + String(r[h] ?? '').replace(/"/g, '""') + '"').join(','))
+    );
+    const blob = new Blob([csvLines.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filenameBase + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }else{
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text('Invoice — ' + supplierName, 14, 18);
+    doc.setFontSize(9);
+    doc.setTextColor(120);
+    doc.text('Generated ' + ukDateTimeString(new Date()) + ' (UK time)', 14, 24);
+    const head = CREATED_INVOICE_EXPORT_COLUMNS.filter(c => columns[c.key]).map(c => c.label);
+    const body = items.map(it => {
+      const row = createdInvoiceExportRow(it, columns);
+      return head.map(h => row[h] ?? '');
+    });
+    doc.autoTable({
+      startY: 30, head: [head], body,
+      theme: 'grid', headStyles: { fillColor: [30,34,42] }, styles: { fontSize: 9 },
+      margin: { left: 14, right: 14 }
+    });
+    doc.save(filenameBase + '.pdf');
   }
 }
 
