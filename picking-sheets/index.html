@@ -515,6 +515,14 @@
   .pick-scan-card .psc-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
   .pick-scan-card .psc-actions .stepper{flex:none;}
   .pick-scan-card .psc-actions .btn-amber,.pick-scan-card .psc-actions .btn-ghost{padding:9px 14px;}
+  .making-scan-card{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:14px;margin-top:10px;}
+  .making-scan-card .msc-name{font-size:15px;font-weight:700;margin-bottom:4px;}
+  .making-scan-card .msc-barcode{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);margin-bottom:8px;}
+  .making-scan-card .msc-stock{font-family:'JetBrains Mono',monospace;font-size:12px;margin-bottom:10px;}
+  .making-scan-card .msc-meta{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--text-dim);margin-bottom:10px;}
+  .making-scan-card .msc-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+  .making-scan-card .msc-actions .stepper{flex:none;}
+  .making-scan-card .msc-actions button{padding:9px 14px;}
   .plocation{font-size:11px;color:var(--accent-dim);font-weight:600;}
   .locationcell{white-space:normal;min-width:130px;}
 
@@ -1782,7 +1790,7 @@
       <div class="scanner-direct-icon">▣</div>
       <div>
         <strong>Ready to scan</strong>
-        <span id="scannerStatus">Scan a barcode — it will be added automatically.</span>
+        <span id="scannerStatus">Scan a barcode — product details will appear here.</span>
       </div>
     </div>
     <input type="text" id="manualBarcodeInput" class="scanner-input"
@@ -6131,7 +6139,7 @@ function openScanner(target){
     sub.textContent = 'Scan a barcode with the handheld scanner.';
   }
 
-  status.textContent = 'Scan a barcode — it will be added automatically.';
+  status.textContent = 'Scan a barcode — product details will appear here.';
   openModal('modalScanner');
 
   requestAnimationFrame(() => {
@@ -6232,21 +6240,28 @@ async function handleScannedCode(code){
       return;
     }
 
-    // One physical scan = one unit. Scanning it again increases the quantity.
+    // Making-list scan: add one box/unit immediately, show the product name and
+    // live stock with +/- controls, then return focus to the scanner so the next
+    // barcode can be scanned without closing the card or pressing another button.
     if(scannerTarget === 'warehouse'){
       addScannedItemToWarehouseCategory(stock, 1);
+      const ok = document.createElement('div');
+      ok.className = 'scan-ok';
+      ok.textContent = '✓ ' + stock.name + ' added';
+      box.prepend(ok);
     }else if(scannerTarget === 'location'){
       addScannedItemToRow(stock);
+      const ok = document.createElement('div');
+      ok.className = 'scan-ok';
+      ok.textContent = '✓ ' + stock.name + ' added';
+      box.prepend(ok);
     }else{
-      addScannedItemToMakingList(stock, 1);
+      const item = addScannedItemToMakingList(stock, 1);
+      const card = renderMakingScanResultCard(stock, code, item);
+      box.prepend(card);
     }
 
-    const ok = document.createElement('div');
-    ok.className = 'scan-ok';
-    ok.textContent = '✓ ' + stock.name + ' added';
-    box.prepend(ok);
     status.textContent = 'Ready — scan the next barcode.';
-
     input.disabled = false;
     input.focus({ preventScroll: true });
   }catch(e){
@@ -6265,8 +6280,8 @@ async function handleScannedCode(code){
 }
 
 function addScannedItemToMakingList(stock, qty){
-  if(!currentMakingList) return;
-  const existing = currentMakingItems.find(it => it.stockid === stock.stockid || it.item_name.toLowerCase().trim() === (stock.name||'').toLowerCase().trim());
+  if(!currentMakingList) return null;
+  const existing = currentMakingItems.find(it => it.stockid === stock.stockid || (it.item_name||'').toLowerCase().trim() === (stock.name||'').toLowerCase().trim());
   if(existing){
     existing.qty_added += qty;
     const block = document.querySelector('#makingItemList .itemblock[data-row-id="' + CSS.escape(String(existing.item_row_id)) + '"]');
@@ -6274,13 +6289,14 @@ function addScannedItemToMakingList(stock, qty){
       block.querySelector('.qty').textContent = existing.qty_added;
       block.querySelector('.ibstock .val').textContent = existing.qty_added;
     }
-    apiPut('retail/lists/' + currentMakingList.list_id + '/items/' + existing.item_row_id, { qty_added: existing.qty_added }).catch(e=>console.error(e));
-    toast(stock.name + ' quantity increased');
-    return;
+    existing._savePromise = apiPut('retail/lists/' + currentMakingList.list_id + '/items/' + existing.item_row_id, { qty_added: existing.qty_added })
+      .catch(e=>console.error(e));
+    return existing;
   }
   const tempItem = {
     item_row_id: 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2),
-    item_name: stock.name, qty_added: qty, stockid: stock.stockid || null, barcode: stock.barcode || null
+    item_name: stock.name, qty_added: qty, stockid: stock.stockid || null, barcode: stock.barcode || null,
+    stock_available: stock.quantity == null ? null : Number(stock.quantity)
   };
   currentMakingItems.push(tempItem);
   const list = document.getElementById('makingItemList');
@@ -6289,22 +6305,73 @@ function addScannedItemToMakingList(stock, qty){
     list.appendChild(renderMakingItemBlock(tempItem));
     document.getElementById('makingItemCount').textContent = currentMakingItems.length + ' items';
   }
-  apiPost('retail/lists/' + currentMakingList.list_id + '/items', {
+  tempItem._savePromise = apiPost('retail/lists/' + currentMakingList.list_id + '/items', {
     item_name: stock.name, stockid: stock.stockid || null, barcode: stock.barcode || null, qty_added: qty
   }).then(()=> apiGet('retail/lists/' + currentMakingList.list_id))
     .then(data=>{
-      const match = (data.items||[]).find(i => (i.item_name||'').toLowerCase().trim() === stock.name.toLowerCase().trim());
+      const match = (data.items||[]).find(i => (i.stockid && stock.stockid && Number(i.stockid) === Number(stock.stockid)) || (i.item_name||'').toLowerCase().trim() === stock.name.toLowerCase().trim());
       if(match){
         const oldId = tempItem.item_row_id;
         tempItem.item_row_id = match.item_row_id;
         const block = document.querySelector('#makingItemList .itemblock[data-row-id="' + CSS.escape(String(oldId)) + '"]');
         if(block) block.dataset.rowId = match.item_row_id;
       }
+      return tempItem;
     }).catch(e=>{
       toast('Could not save ' + stock.name);
       console.error(e);
+      throw e;
     });
-  toast(stock.name + ' added');
+  return tempItem;
+}
+
+function renderMakingScanResultCard(stock, scannedCode, item){
+  const card = document.createElement('div');
+  card.className = 'making-scan-card';
+  const stockQty = stock.quantity == null ? '—' : stock.quantity;
+  const barcodeText = stock.barcode || scannedCode || '';
+  let qty = item ? Number(item.qty_added || 1) : 1;
+  card.innerHTML = `
+    <div class="msc-name"></div>
+    <div class="msc-barcode"></div>
+    <div class="msc-stock">Stock available: <span class="val ${stockClass(stock.quantity)}"></span></div>
+    <div class="msc-meta"><span>Quantity: <strong class="msc-qty"></strong></span></div>
+    <div class="msc-actions">
+      <div class="stepper">
+        <button class="ibminus" type="button">−</button>
+        <div class="qty msc-qty-display"></div>
+        <button class="ibplus" type="button">+</button>
+      </div>
+    </div>
+  `;
+  card.querySelector('.msc-name').textContent = stock.name || (item && item.item_name) || 'Unknown product';
+  card.querySelector('.msc-barcode').textContent = barcodeText ? ('#' + barcodeText) : '';
+  card.querySelector('.msc-stock .val').textContent = String(stockQty);
+  const qtyText = card.querySelector('.msc-qty');
+  const qtyDisplay = card.querySelector('.msc-qty-display');
+  const updateQty = () => { qtyText.textContent = qty; qtyDisplay.textContent = qty; };
+  updateQty();
+  const saveQty = () => {
+    if(!item || !currentMakingList) return;
+    item.qty_added = qty;
+    const block = document.querySelector('#makingItemList .itemblock[data-row-id="' + CSS.escape(String(item.item_row_id)) + '"]');
+    if(block){
+      const q = block.querySelector('.qty');
+      const a = block.querySelector('.ibstock .val');
+      if(q) q.textContent = qty;
+      if(a) a.textContent = qty;
+    }
+    const doSave = () => apiPut('retail/lists/' + currentMakingList.list_id + '/items/' + item.item_row_id, { qty_added: qty }).catch(e=>console.error(e));
+    item._savePromise = item._savePromise ? item._savePromise.then(doSave, doSave) : doSave();
+  };
+  card.querySelector('.ibminus').onclick = () => {
+    if(qty <= 1) return;
+    qty--; updateQty(); saveQty();
+  };
+  card.querySelector('.ibplus').onclick = () => {
+    qty++; updateQty(); saveQty();
+  };
+  return card;
 }
 function addScannedItemToWarehouseCategory(stock, qty){
   if(!currentCategory) return;
