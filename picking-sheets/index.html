@@ -15,7 +15,6 @@
      the page is considered "ready" — no behaviour change, just no longer blocking. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <style>
   :root{
@@ -484,6 +483,105 @@
       display:inline-block;width:16px;height:16px;border:1.5px solid #111;
     }
   }
+
+  /* =========================================================
+     PHYSICAL SCANNER + MOBILE RESPONSIVE OVERRIDES
+     ========================================================= */
+  .scanner-modal{width:440px;max-width:calc(100vw - 24px);}
+  .scanner-direct{
+    display:flex;align-items:center;gap:12px;padding:13px 14px;margin:0 0 12px;
+    border:1px solid var(--line);border-radius:8px;background:var(--panel2);
+  }
+  .scanner-direct-icon{
+    width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+    background:rgba(22,163,74,.12);color:var(--green);font-size:20px;flex:none;
+  }
+  .scanner-direct strong{display:block;font-size:13px;margin-bottom:2px;}
+  .scanner-direct span{display:block;color:var(--text-dim);font-size:11px;line-height:1.35;}
+  .scanner-input{
+    width:100%;height:52px;padding:0 14px;border:2px solid var(--accent);border-radius:8px;
+    background:#fff;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:18px;
+    letter-spacing:.4px;text-align:center;
+  }
+  .scanner-input:focus{outline:3px solid rgba(184,134,11,.16);outline-offset:1px;}
+  .scanner-input:disabled{opacity:.65;}
+  .scan-ok{color:var(--green);font-size:13px;font-weight:600;padding:8px 0;border-bottom:1px solid var(--line);}
+  .scanner-feedback{padding:8px 0;border-bottom:1px solid var(--line);}
+  .pick-scan-card{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:14px;margin-top:10px;}
+  .pick-scan-card .psc-name{font-size:15px;font-weight:700;margin-bottom:4px;}
+  .pick-scan-card .psc-barcode{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);margin-bottom:8px;}
+  .pick-scan-card .psc-stock{font-family:'JetBrains Mono',monospace;font-size:12px;margin-bottom:10px;}
+  .pick-scan-card .psc-meta{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--text-dim);margin-bottom:10px;}
+  .pick-scan-card .psc-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+  .pick-scan-card .psc-actions .stepper{flex:none;}
+  .pick-scan-card .psc-actions .btn-amber,.pick-scan-card .psc-actions .btn-ghost{padding:9px 14px;}
+  .plocation{font-size:11px;color:var(--accent-dim);font-weight:600;}
+  .locationcell{white-space:normal;min-width:130px;}
+
+  @media(max-width:760px){
+    body{font-size:14px;overflow-x:hidden;}
+    #app{width:100%;max-width:none;padding:0 12px 42px;}
+    header.topbar{position:sticky;top:0;margin:0 -12px 18px;padding:10px 12px;border-radius:0 0 10px 10px;gap:8px;}
+    .brand{min-width:0;flex:1;}
+    .brand h1{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .brand .sub{font-size:9px;letter-spacing:1px;}
+    .brand .tag{width:32px;height:32px;flex:none;}
+    nav.topnav{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+    .navbtn{width:100%;padding:9px 8px;font-size:12px;}
+    .hero{margin-bottom:20px;}
+    .hero h2{font-size:24px;line-height:1.15;}
+    .hero p{font-size:13px;line-height:1.45;}
+    .hero-home{padding:22px 18px;margin-bottom:18px;border-radius:12px;}
+    .tilegrid{grid-template-columns:1fr;gap:10px;}
+    .tile{padding:18px 16px;border-radius:9px;}
+    .tile h3{font-size:17px;}
+    .actionbar{flex-direction:column;align-items:stretch;gap:10px;margin-bottom:14px;}
+    .actionbar > div{width:100%;display:grid !important;grid-template-columns:1fr;gap:8px !important;}
+    .actionbar button,.actionbar .btn-ghost,.actionbar .btn-amber{width:100%;}
+    .historysearch{width:100%;max-width:none;}
+    .catgrid{grid-template-columns:1fr 1fr;gap:8px;}
+    .bincard{padding:14px;}
+    .bincard h4{font-size:14px;padding-right:0;line-height:1.3;}
+    .bincard-actions{top:8px;right:8px;}
+    .cardicon{width:30px;height:30px;}
+    .itemblocks{grid-template-columns:1fr 1fr;gap:8px;}
+    .itemblock{min-width:0;padding:9px;}
+    .itemblock .ibname{font-size:12px;}
+    .stepper button{width:38px;height:38px;}
+    .stepper .qty{height:38px;}
+    .modal-backdrop{padding:12px;align-items:center;}
+    .modal,.scanner-modal{width:100% !important;max-width:none;padding:20px;border-radius:12px;}
+    .modal input[type=text],.modal input[type=password],.modal input[type=datetime-local],.modal input[type=email]{font-size:16px;}
+    .pickrow{flex-direction:column;align-items:stretch;gap:10px;padding:13px;}
+    .pickrow .pickinfo{width:100%;}
+    .pickrow .pickqty{width:100%;display:grid;grid-template-columns:1fr auto auto auto;gap:7px;}
+    .pickrow .preq{align-self:center;}
+    .pickrow .stepper{min-width:112px;}
+    .pickrow .pickall{min-height:38px;}
+    .finaltable{display:block;width:100%;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;}
+    .finaltable th,.finaltable td{padding:9px 8px;font-size:12px;}
+    .restaurant-table-scroll{overflow-x:auto;}
+    .restaurant-footer-bar{padding:10px 0;}
+    .restaurant-footer-bar > div:last-child{display:grid !important;grid-template-columns:1fr;gap:8px;}
+    .restaurant-footer-bar > div:last-child button{width:100%;}
+    .searchresults{max-height:42vh;}
+    .crumbrow{margin-bottom:14px;overflow-x:auto;white-space:nowrap;padding-bottom:2px;}
+    .modal-close-row{flex-wrap:wrap;}
+    .modal-close-row button{flex:1;min-width:120px;}
+  }
+
+  @media(max-width:480px){
+    .catgrid{grid-template-columns:1fr;}
+    .itemblocks{grid-template-columns:1fr;}
+    .pickrow .pickqty{grid-template-columns:1fr 1fr 1fr;}
+    .pickrow .preq{grid-column:1 / -1;}
+    .pickrow .stepper{width:100%;min-width:0;}
+    .pickrow .pickall{width:100%;}
+    .pickrow .pickqty > .printqty{grid-column:1 / -1;}
+    .login-card{width:100%;max-width:none;padding:28px 20px;}
+    .scanner-input{height:56px;font-size:17px;}
+  }
+
 </style>
 </head>
 <body>
@@ -712,6 +810,7 @@
     <div class="actionbar no-print">
       <span></span>
       <div style="display:flex;gap:10px;">
+        <button class="btn-ghost" onclick="openScanner('picking')">Scan Barcode</button>
         <button class="btn-ghost" onclick="window.print()">Print</button>
         <button class="btn-amber" onclick="downloadPickingListPDF()">Download PDF</button>
         <button class="btn-ghost" onclick="emailPickingListPDF()">Email</button>
@@ -1325,9 +1424,9 @@
       <span class="current">Create Invoice</span>
     </div>
     <div class="hero">
-      <div class="eyebrow">Supplier Invoice</div>
+      <div class="eyebrow">Build From a Supplier PDF</div>
       <h2>Created Invoices</h2>
-      <p>Read the invoice, match names only against comma-separated Vector NOTES, then check the KG in each box before completing the invoice.</p>
+      <p>Upload a supplier invoice, match it to real products, enter quantities, then confirm prices.</p>
     </div>
     <div class="actionbar">
       <span></span>
@@ -1338,7 +1437,7 @@
     </div>
   </div>
 
-  <!-- CREATE INVOICE: STEP 1 — MATCH + BOX QUANTITY -->
+  <!-- CREATE INVOICE: STEP 1 — MATCH & QUANTITY -->
   <div id="view-created-invoice-match" class="view">
     <div class="crumbrow">
       <button onclick="goHome()">Home</button><span class="sep">/</span>
@@ -1348,29 +1447,22 @@
     </div>
     <div class="hero">
       <div class="eyebrow">Step 1 of 2</div>
-      <h2>Invoice Names &amp; Box Quantities</h2>
-      <p>
-        Automatic matching is exact only: the invoice name must equal one complete comma-separated
-        part of Vector's NOTES. There is no automatic guessing. The invoice quantity is the number
-        of boxes/cartons.
-      </p>
+      <h2>Match Items &amp; Enter Quantities</h2>
+      <p>Lines in red weren't matched automatically — search and pick the right product for each. Quantities are left blank on purpose; enter them by hand (decimals are fine).</p>
     </div>
     <div id="createdInvoiceMatchContent">
       <div class="loading">Loading…</div>
     </div>
     <div class="restaurant-footer-bar">
-      <div style="font-size:13px;color:var(--text-dim);">
-        <span id="createdInvoiceMatchedCount">0</span> of
-        <span id="createdInvoiceTotalCount">0</span> items matched
-      </div>
+      <div style="font-size:13px;color:var(--text-dim);"><span id="createdInvoiceMatchedCount">0</span> of <span id="createdInvoiceTotalCount">0</span> items matched</div>
       <div style="display:flex;gap:10px;">
         <button class="btn-ghost" onclick="saveAndExitCreatedInvoice()">Save &amp; Exit</button>
-        <button class="btn-amber" onclick="goToCreatedInvoicePrices()">Finalise &amp; Check Box KG</button>
+        <button class="btn-amber" onclick="goToCreatedInvoicePrices()">Next: Prices</button>
       </div>
     </div>
   </div>
 
-  <!-- CREATE INVOICE: STEP 2 — FINAL 8 COLUMNS -->
+  <!-- CREATE INVOICE: STEP 2 — PRICES -->
   <div id="view-created-invoice-prices" class="view">
     <div class="crumbrow">
       <button onclick="goHome()">Home</button><span class="sep">/</span>
@@ -1380,17 +1472,12 @@
     </div>
     <div class="hero">
       <div class="eyebrow">Step 2 of 2</div>
-      <h2>Check Each Box &amp; Complete Invoice</h2>
-      <p>
-        Everything is filled from the invoice and Vector. Only
-        <strong>Quantity per Each Box (KG)</strong> must be checked and entered.
-        Price per KG is then calculated from the invoice box price. Previous cost and selling
-        price come directly from VESUPPSTOCK for this supplier.
-      </p>
+      <h2>Confirm Prices</h2>
+      <p>Previous cost/selling price come from the last time <em>this supplier</em> supplied this item. Margin compares the new cost against the existing selling price — red means it's below that department's minimum.</p>
     </div>
     <div class="actionbar">
       <span></span>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <div style="display:flex;gap:10px;">
         <button class="btn-ghost" onclick="openCreatedInvoiceExportModal('csv')">Download CSV</button>
         <button class="btn-amber" onclick="openCreatedInvoiceExportModal('pdf')">Download PDF</button>
       </div>
@@ -1400,7 +1487,7 @@
     </div>
     <div class="restaurant-review-actions">
       <button class="btn-ghost" onclick="backToCreatedInvoiceMatch()">Back</button>
-      <button class="btn-amber" onclick="finishCreatedInvoice()">OK — Complete Invoice</button>
+      <button class="btn-amber" onclick="finishCreatedInvoice()">Mark Complete</button>
     </div>
   </div>
 </div>
@@ -1438,37 +1525,21 @@
 <div class="modal-backdrop" id="modalNewCreatedInvoice">
   <div class="modal" style="width:460px;">
     <h3>New Invoice</h3>
-    <p class="modal-sub">
-      Pick the supplier and upload the invoice. Product names are matched automatically only when
-      they exactly match a complete comma-separated part of Vector NOTES — no automatic guessing.
-      Box quantity and invoice box price are read from the invoice.
-    </p>
-
-    <input type="text" id="newInvoiceSupplierSearch"
-      placeholder="Search supplier…" autocomplete="off"
-      oninput="onNewInvoiceSupplierSearch(this.value)"
-      style="width:100%;padding:10px;margin-bottom:6px;">
-
-    <div id="newInvoiceSupplierResults"
-      style="max-height:160px;overflow-y:auto;margin-bottom:8px;"></div>
-
-    <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px;">
-      Selected supplier:
-      <strong id="newInvoiceChosenSupplier">No supplier selected</strong>
-    </div>
-
-    <input type="file" id="newInvoiceFile" accept="application/pdf,image/*"
-      style="width:100%;">
-
+    <p class="modal-sub">Pick the supplier this invoice is from, then upload the PDF. Previous prices are looked up specifically for this supplier, so getting this right matters.</p>
+    <input type="text" id="newInvoiceSupplierSearch" placeholder="Search supplier…" autocomplete="off"
+      oninput="onNewInvoiceSupplierSearch()" style="width:100%;padding:10px;margin-bottom:6px;">
+    <div id="newInvoiceSupplierResults" style="max-height:160px;overflow-y:auto;margin-bottom:6px;"></div>
+    <div id="newInvoiceSupplierChosen" style="display:none;margin-bottom:12px;font-size:13px;font-weight:600;color:var(--accent-dim);"></div>
+    <input type="file" id="newInvoiceFile" accept="application/pdf" style="width:100%;">
     <div id="newInvoiceProgress" class="empty-hint" style="display:none;margin-top:10px;"></div>
-    <div class="errdetail" id="newInvoiceError" style="display:none;"></div>
-
+    <div class="errdetail" id="newInvoiceErr" style="display:none;"></div>
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalNewCreatedInvoice')">Cancel</button>
-      <button class="btn-amber" id="newInvoiceCreateBtn" onclick="createNewCreatedInvoice()">Create &amp; Extract</button>
+      <button class="btn-amber" id="newInvoiceCreateBtn" onclick="createNewInvoiceFromPdf()">Create &amp; Extract</button>
     </div>
   </div>
 </div>
+
 <!-- CREATE INVOICE: EXPORT COLUMN PICKER -->
 <div class="modal-backdrop" id="modalCreatedInvoiceExport">
   <div class="modal" style="width:360px;">
@@ -1702,19 +1773,25 @@
   </div>
 </div>
 
-<!-- BARCODE SCANNER MODAL -->
+<!-- PHYSICAL BARCODE SCANNER MODAL -->
 <div class="modal-backdrop" id="modalScanner">
-  <div class="modal" style="width:440px;">
+  <div class="modal scanner-modal">
     <h3>Scan barcode</h3>
-    <p class="modal-sub" id="scannerSubtitle">Point the camera at a barcode, or type it in below</p>
-    <div id="scannerBox"></div>
-    <div id="scanFeedback"></div>
-    <div class="scanmanual">
-      <input type="text" id="manualBarcodeInput" placeholder="Type barcode…" onkeydown="if(event.key==='Enter')submitManualBarcode()">
-      <button class="btn-ghost" onclick="submitManualBarcode()">Look up</button>
+    <p class="modal-sub" id="scannerSubtitle">Scan a barcode with the handheld scanner.</p>
+    <div class="scanner-direct">
+      <div class="scanner-direct-icon">▣</div>
+      <div>
+        <strong>Ready to scan</strong>
+        <span id="scannerStatus">Scan a barcode — it will be added automatically.</span>
+      </div>
     </div>
+    <input type="text" id="manualBarcodeInput" class="scanner-input"
+      placeholder="Scan barcode…" autocomplete="off" autocapitalize="off"
+      spellcheck="false" inputmode="none"
+      onkeydown="handleScannerKeydown(event)" oninput="handleScannerInput()">
+    <div id="scanFeedback"></div>
     <div class="modal-close-row">
-      <button class="btn-ghost" onclick="closeScanner()">Done adding</button>
+      <button class="btn-ghost" onclick="closeScanner()">Done</button>
     </div>
   </div>
 </div>
@@ -4961,31 +5038,27 @@ function downloadInvoiceOcrPdf(){
 }
 
 /* ============ CREATE INVOICE (3rd Invoices category) ============ */
-let currentCreatedInvoice = null;
-let newInvoiceChosenSupplier = null;
+let currentCreatedInvoice = null; // { header, items } — items: {ocr_product_name, stockid, matched_name, qty, current_cost_price, previous_cost_price, previous_selling_price, barcode, department_name, min_margin_pct, _ocrQtyHint}
+let newInvoiceChosenSupplier = null; // { suppid, name }
 let createdInvoiceExportFormat = null;
 
 function openCreatedInvoicesList(){
   showView('view-created-invoices-list');
   loadCreatedInvoicesList();
 }
-
 async function loadCreatedInvoicesList(){
   const box = document.getElementById('createdInvoicesList');
   box.innerHTML = '<div class="loading">Loading…</div>';
   try{
     const data = await apiGet('invoices/created/');
     const invoices = data.invoices || [];
-
     if(invoices.length === 0){
       box.innerHTML = '<div class="empty-hint">No invoices created yet — click + New to build one from a PDF.</div>';
       return;
     }
-
     const table = document.createElement('table');
     table.className = 'finaltable';
     table.innerHTML = '<thead><tr><th>Supplier</th><th>Reference</th><th>Status</th><th class="qtycell">Items</th><th>Created</th><th></th></tr></thead>';
-
     const tbody = document.createElement('tbody');
     invoices.forEach(inv => {
       const tr = document.createElement('tr');
@@ -5001,7 +5074,6 @@ async function loadCreatedInvoicesList(){
       tr.addEventListener('click', () => openCreatedInvoice(inv.invoice_id));
       tbody.appendChild(tr);
     });
-
     table.appendChild(tbody);
     const scrollWrap = document.createElement('div');
     scrollWrap.className = 'restaurant-table-scroll';
@@ -5013,7 +5085,6 @@ async function loadCreatedInvoicesList(){
     console.error(e);
   }
 }
-
 async function deleteCreatedInvoice(id){
   if(!confirm('Delete this invoice? This cannot be undone.')) return;
   try{
@@ -5025,191 +5096,118 @@ async function deleteCreatedInvoice(id){
     console.error(e);
   }
 }
-
-/* ---- Resume an existing invoice ---- */
+// Resume where it was left off: if every line already has a quantity, go
+// straight to Prices; otherwise go to Match & Quantity first.
 async function openCreatedInvoice(id){
   try{
     const data = await apiGet('invoices/created/' + id + '/');
     currentCreatedInvoice = data;
-
-    const allHaveBoxSize = data.items.length > 0 &&
-      data.items.every(it => it.box_size_kg !== null && it.box_size_kg !== undefined && Number(it.box_size_kg) > 0);
-
-    if(data.header.status === 'COMPLETE' || allHaveBoxSize){
-      document.getElementById('createdInvoicePricesLabel').textContent = data.header.supplier_name || 'Invoice';
-      showView('view-created-invoice-prices');
-      renderCreatedInvoicePricesTable();
-    }else{
-      openCreatedInvoiceMatchStep();
-    }
+    const allQtyFilled = data.items.length > 0 && data.items.every(it => it.qty !== null && it.qty !== undefined && it.qty !== '');
+    if(allQtyFilled) goToCreatedInvoicePrices();
+    else openCreatedInvoiceMatchStep();
   }catch(e){
     toast('Could not open invoice');
     console.error(e);
   }
 }
 
-/* ---- Create a new invoice ---- */
+/* ---- New Invoice modal: pick supplier, upload PDF, OCR + auto-match ---- */
 function openNewCreatedInvoiceModal(){
   newInvoiceChosenSupplier = null;
-  const supplierInput = document.getElementById('newInvoiceSupplierSearch');
-  if(supplierInput) supplierInput.value = '';
-  const supplierResults = document.getElementById('newInvoiceSupplierResults');
-  if(supplierResults) supplierResults.innerHTML = '';
-  const chosen = document.getElementById('newInvoiceChosenSupplier');
-  if(chosen) chosen.textContent = 'No supplier selected';
+  document.getElementById('newInvoiceSupplierSearch').value = '';
+  document.getElementById('newInvoiceSupplierResults').innerHTML = '';
+  document.getElementById('newInvoiceSupplierChosen').style.display = 'none';
   document.getElementById('newInvoiceFile').value = '';
-  document.getElementById('newInvoiceError').style.display = 'none';
   document.getElementById('newInvoiceProgress').style.display = 'none';
+  document.getElementById('newInvoiceErr').style.display = 'none';
   openModal('modalNewCreatedInvoice');
 }
-
-let newInvoiceSupplierSearchTimer = null;
-function onNewInvoiceSupplierSearch(value){
-  clearTimeout(newInvoiceSupplierSearchTimer);
-  newInvoiceSupplierSearchTimer = setTimeout(() => searchNewInvoiceSuppliers(value), 250);
+let newInvoiceSupplierDebounce = null;
+function onNewInvoiceSupplierSearch(){
+  clearTimeout(newInvoiceSupplierDebounce);
+  newInvoiceSupplierDebounce = setTimeout(runNewInvoiceSupplierSearch, 250);
 }
-
-async function searchNewInvoiceSuppliers(q){
-  const box = document.getElementById('newInvoiceSupplierResults');
-  q = (q || '').trim();
-
-  if(q.length < 2){
-    box.innerHTML = '';
-    return;
-  }
-
-  box.innerHTML = '<div class="empty-hint">Searching…</div>';
-
+async function runNewInvoiceSupplierSearch(){
+  const q = document.getElementById('newInvoiceSupplierSearch').value.trim();
+  const results = document.getElementById('newInvoiceSupplierResults');
+  if(q.length < 2){ results.innerHTML = ''; return; }
   try{
     const data = await apiGet('suppliers/search/?q=' + encodeURIComponent(q));
-    const items = data.items || data.suppliers || [];
-
-    if(items.length === 0){
-      box.innerHTML = '<div class="empty-hint">No suppliers found.</div>';
-      return;
-    }
-
-    box.innerHTML = items.slice(0, 12).map(s => `
-      <div class="searchresult" onclick="chooseNewInvoiceSupplier(${s.suppid}, ${JSON.stringify(s.name).replace(/"/g,'&quot;')})">
-        <span class="sname">${escapeHtml(s.name || '')}</span>
-      </div>
+    const items = data.items || [];
+    if(items.length === 0){ results.innerHTML = '<div class="empty-hint" style="font-size:12px;">No suppliers found.</div>'; return; }
+    results.innerHTML = items.map(s => `
+      <div style="padding:8px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px;"
+        onclick="chooseNewInvoiceSupplier(${s.suppid}, ${JSON.stringify(s.name).replace(/"/g,'&quot;')})">${escapeHtml(s.name)}</div>
     `).join('');
-  }catch(e){
-    box.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Supplier search failed.</div>';
-    console.error(e);
-  }
+  }catch(e){ console.error(e); }
 }
-
 function chooseNewInvoiceSupplier(suppid, name){
   newInvoiceChosenSupplier = { suppid, name };
-  document.getElementById('newInvoiceChosenSupplier').textContent = name;
+  document.getElementById('newInvoiceSupplierSearch').value = '';
   document.getElementById('newInvoiceSupplierResults').innerHTML = '';
-  document.getElementById('newInvoiceSupplierSearch').value = name;
+  const chosen = document.getElementById('newInvoiceSupplierChosen');
+  chosen.style.display = 'block';
+  chosen.textContent = 'Supplier: ' + name;
 }
-
-async function createNewCreatedInvoice(){
-  const err = document.getElementById('newInvoiceError');
+async function createNewInvoiceFromPdf(){
+  const err = document.getElementById('newInvoiceErr');
   err.style.display = 'none';
-
-  if(!newInvoiceChosenSupplier){
-    err.textContent = 'Choose a supplier first.';
-    err.style.display = 'block';
-    return;
-  }
-
+  if(!newInvoiceChosenSupplier){ err.textContent = 'Pick a supplier first'; err.style.display = 'block'; return; }
   const fileInput = document.getElementById('newInvoiceFile');
   const file = fileInput.files && fileInput.files[0];
-
-  if(!file){
-    err.textContent = 'Choose a PDF or invoice image first.';
-    err.style.display = 'block';
-    return;
-  }
-
+  if(!file){ err.textContent = 'Choose a PDF first'; err.style.display = 'block'; return; }
   const progress = document.getElementById('newInvoiceProgress');
   const btn = document.getElementById('newInvoiceCreateBtn');
-
   btn.disabled = true;
   progress.style.display = 'block';
-
   try{
     progress.textContent = 'Creating invoice…';
-
     const created = await apiPost('invoices/created/', {
       suppid: newInvoiceChosenSupplier.suppid,
       supplier_name: newInvoiceChosenSupplier.name,
       created_by: localStorage.getItem('hallan_staff_name') || null
     });
-
     const invoiceId = created.invoice_id;
 
-    progress.textContent = 'Reading the invoice…';
-
+    progress.textContent = 'Reading the PDF…';
+    // Gemini accepts a PDF directly via inline_data, the same as an image —
+    // no client-side conversion needed, the whole multi-page PDF goes in one go.
     const part = await invoiceOcrFileToPart(file);
     const ocrData = await apiPost('invoices/ocr-extract/', { images: [part] });
     const ocrItems = ocrData.items || [];
-
     if(ocrItems.length === 0){
-      throw new Error('Could not read any product lines from that invoice.');
+      err.textContent = 'Could not read any product lines from that PDF — try a clearer scan.';
+      err.style.display = 'block';
+      btn.disabled = false;
+      progress.style.display = 'none';
+      return;
     }
 
-    progress.textContent = 'Matching invoice names against Vector NOTES…';
-
-    const matchData = await apiPost('invoices/match-items/', {
-      names: ocrItems.map(i => i.product_name || '')
-    });
+    progress.textContent = 'Matching ' + ocrItems.length + ' items to real products…';
+    const matchData = await apiPost('invoices/match-items/', { names: ocrItems.map(i => i.product_name || '') });
     const matches = matchData.matches || [];
 
     const items = ocrItems.map((oi, i) => {
       const m = matches[i] || {};
-
-      // The invoice quantity is the number of BOXES/CARTONS, not individual
-      // units. Gemini already returns case_qty for this.
-      const boxQty = oi.case_qty !== undefined && oi.case_qty !== null
-        ? Number(oi.case_qty)
-        : (oi.qty !== undefined && oi.qty !== null ? Number(oi.qty) : null);
-
-      // Gemini returns case_price as the price for one box/carton.
-      let boxPrice = (oi.case_price !== undefined && oi.case_price !== null)
-        ? Number(oi.case_price)
-        : null;
-
-      // Fallback only when Gemini supplied a unit price and units_per_case.
-      if(boxPrice === null &&
-         oi.unit_price !== undefined && oi.unit_price !== null &&
-         oi.units_per_case !== undefined && oi.units_per_case !== null){
-        boxPrice = Number(oi.unit_price) * Number(oi.units_per_case);
-      }
-
       return {
         ocr_product_name: oi.product_name || '',
         stockid: m.stockid || null,
         matched_name: m.item_name || null,
-        qty: Number.isFinite(boxQty) ? boxQty : null,
-        invoice_box_price: Number.isFinite(boxPrice) ? boxPrice : null,
-        box_size_kg: null,
-        price_per_kg: null,
-        current_cost_price: null,
-        previous_cost_price: null,
-        previous_selling_price: null,
-        previous_pack_size: null,
-        barcode: '',
-        min_margin_pct: 38,
-        _matchedVia: m.matched_via || null
+        qty: null, // deliberately blank — filled in by hand on the next screen
+        current_cost_price: (oi.unit_price === undefined || oi.unit_price === null) ? null : oi.unit_price,
+        _ocrQtyHint: (oi.qty === undefined || oi.qty === null) ? null : oi.qty,
+        _matchedVia: m.matched_via || null // 'notes_exact' | 'fuzzy' | null — frontend hint only, not saved
       };
     });
 
-    progress.textContent = 'Loading previous supplier prices…';
-
+    progress.textContent = 'Saving…';
     await apiPut('invoices/created/' + invoiceId + '/items/', { items });
 
-    const detail = await apiGet('invoices/created/' + invoiceId + '/');
-    currentCreatedInvoice = detail;
-
     closeModal('modalNewCreatedInvoice');
+    currentCreatedInvoice = { header: { invoice_id: invoiceId, supplier_name: newInvoiceChosenSupplier.name, suppid: newInvoiceChosenSupplier.suppid, status: 'DRAFT' }, items };
     openCreatedInvoiceMatchStep();
   }catch(e){
-    err.textContent = e.message || 'Something went wrong.';
+    err.textContent = e.message || 'Something went wrong';
     err.style.display = 'block';
     console.error(e);
   }finally{
@@ -5218,169 +5216,105 @@ async function createNewCreatedInvoice(){
   }
 }
 
-/* ---- Step 1: exact match review + box quantities ---- */
+/* ---- Step 1: Match & Quantity ---- */
 function openCreatedInvoiceMatchStep(){
-  document.getElementById('createdInvoiceMatchLabel').textContent =
-    currentCreatedInvoice.header.supplier_name || 'Invoice';
-
+  document.getElementById('createdInvoiceMatchLabel').textContent = currentCreatedInvoice.header.supplier_name || 'Invoice';
   showView('view-created-invoice-match');
   renderCreatedInvoiceMatchTable();
 }
-
+function renderCreatedInvoiceMatchTable(){
+  const content = document.getElementById('createdInvoiceMatchContent');
+  const items = currentCreatedInvoice.items;
+  if(items.length === 0){
+    content.innerHTML = '<div class="empty-hint">No items to match.</div>';
+    updateCreatedInvoiceMatchedCount();
+    return;
+  }
+  const table = document.createElement('table');
+  table.className = 'finaltable';
+  table.innerHTML = '<thead><tr><th>Item</th><th class="qtycell">Quantity</th></tr></thead>';
+  const tbody = document.createElement('tbody');
+  items.forEach((it, idx) => {
+    const matched = !!it.stockid;
+    const matchTag = it._matchedVia === 'notes_exact'
+      ? '<span style="font-size:10px;letter-spacing:.03em;text-transform:uppercase;color:var(--green);background:#eafaf0;border-radius:20px;padding:2px 8px;font-weight:700;margin-left:6px;">\u2713 Exact match</span>'
+      : (it._matchedVia === 'fuzzy'
+        ? '<span style="font-size:10px;letter-spacing:.03em;text-transform:uppercase;color:var(--accent-dim);background:var(--panel2);border-radius:20px;padding:2px 8px;font-weight:700;margin-left:6px;">Guessed \u2014 check</span>'
+        : '');
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>
+        ${matched
+          ? `<div>${escapeHtml(it.matched_name)}${matchTag}</div><div style="font-size:11px;color:var(--text-dim);">from PDF: ${escapeHtml(it.ocr_product_name)}</div>`
+          : `<div style="color:var(--danger);font-weight:600;">${escapeHtml(it.ocr_product_name)}</div>
+             <div style="font-size:12px;color:var(--danger);">\u26a0 Not matched \u2014 <a href="#" onclick="event.preventDefault(); toggleCreatedInvoiceSearch(${idx})">search for the right product</a></div>`
+        }
+        <div class="restaurant-sub-slot" id="createdInvoiceSearchSlot-${idx}" style="margin-top:6px;"></div>
+      </td>
+      <td class="qtycell">
+        <input type="number" min="0" step="0.001" class="restaurant-qty-input" style="width:90px;"
+          placeholder="${it._ocrQtyHint !== null && it._ocrQtyHint !== undefined ? 'PDF: ' + it._ocrQtyHint : ''}"
+          value="${it.qty !== null && it.qty !== undefined ? it.qty : ''}"
+          onchange="updateCreatedInvoiceQty(${idx}, this.value)">
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  content.innerHTML = '';
+  const scrollWrap = document.createElement('div');
+  scrollWrap.className = 'restaurant-table-scroll';
+  scrollWrap.appendChild(table);
+  content.appendChild(scrollWrap);
+  updateCreatedInvoiceMatchedCount();
+}
+function updateCreatedInvoiceQty(idx, value){
+  currentCreatedInvoice.items[idx].qty = value === '' ? null : Number(value);
+}
 function updateCreatedInvoiceMatchedCount(){
   const items = currentCreatedInvoice.items;
   const matched = items.filter(it => it.stockid).length;
   document.getElementById('createdInvoiceMatchedCount').textContent = matched;
   document.getElementById('createdInvoiceTotalCount').textContent = items.length;
 }
-
-function renderCreatedInvoiceMatchTable(){
-  const content = document.getElementById('createdInvoiceMatchContent');
-  const items = currentCreatedInvoice.items;
-
-  if(items.length === 0){
-    content.innerHTML = '<div class="empty-hint">No items on this invoice.</div>';
-    updateCreatedInvoiceMatchedCount();
-    return;
-  }
-
-  const table = document.createElement('table');
-  table.className = 'finaltable';
-  table.innerHTML = `<thead><tr>
-    <th>Name as per Invoice</th>
-    <th>Description as per Vector</th>
-    <th class="qtycell">Quantity (Box)</th>
-    <th class="qtycell">Invoice Price / Box</th>
-    <th>Match</th>
-  </tr></thead>`;
-
-  const tbody = document.createElement('tbody');
-
-  items.forEach((it, idx) => {
-    const matched = !!it.stockid;
-    const ambiguous = it._matchedVia === 'notes_ambiguous';
-
-    const tr = document.createElement('tr');
-    if(!matched) tr.style.background = 'rgba(220,38,38,.08)';
-
-    tr.innerHTML = `
-      <td>
-        <div style="font-weight:600;">${escapeHtml(it.ocr_product_name || '')}</div>
-        ${ambiguous
-          ? '<div style="font-size:11px;color:var(--danger);margin-top:3px;">Multiple Vector products use this NOTES value — choose manually.</div>'
-          : ''}
-      </td>
-      <td>
-        ${matched
-          ? `<div>${escapeHtml(it.matched_name || '')}</div>
-             <div style="font-size:11px;color:var(--green);margin-top:3px;">Exact NOTES match</div>`
-          : `<div style="color:var(--danger);font-size:12px;">No exact NOTES match</div>
-             <div id="createdInvoiceSearchSlot-${idx}" style="margin-top:6px;"></div>
-             <button class="btn-ghost" style="margin-top:6px;" onclick="toggleCreatedInvoiceSearch(${idx})">Choose Vector Product</button>`
-        }
-      </td>
-      <td class="qtycell">
-        <input type="number" min="0" step="1" class="restaurant-qty-input"
-          style="width:90px;"
-          value="${it.qty === null || it.qty === undefined ? '' : it.qty}"
-          onchange="updateCreatedInvoiceQty(${idx}, this.value)">
-      </td>
-      <td class="qtycell">
-        <input type="number" min="0" step="0.01" class="restaurant-qty-input"
-          style="width:100px;"
-          value="${it.invoice_box_price === null || it.invoice_box_price === undefined ? '' : it.invoice_box_price}"
-          onchange="updateCreatedInvoiceBoxPrice(${idx}, this.value)">
-      </td>
-      <td>
-        ${matched
-          ? '<span style="color:var(--green);font-weight:700;">Matched</span>'
-          : '<span style="color:var(--danger);font-weight:700;">Needs selection</span>'}
-      </td>
-    `;
-
-    tbody.appendChild(tr);
-  });
-
-  table.appendChild(tbody);
-  const scrollWrap = document.createElement('div');
-  scrollWrap.className = 'restaurant-table-scroll';
-  scrollWrap.appendChild(table);
-
-  content.innerHTML = '';
-  content.appendChild(scrollWrap);
-  updateCreatedInvoiceMatchedCount();
-}
-
-function updateCreatedInvoiceQty(idx, value){
-  currentCreatedInvoice.items[idx].qty = value === '' ? null : Number(value);
-}
-
-function updateCreatedInvoiceBoxPrice(idx, value){
-  currentCreatedInvoice.items[idx].invoice_box_price = value === '' ? null : Number(value);
-}
-
 let createdInvoiceSearchDebounce = null;
 function toggleCreatedInvoiceSearch(idx){
   const slot = document.getElementById('createdInvoiceSearchSlot-' + idx);
-  if(!slot) return;
-
-  if(slot.innerHTML){
-    slot.innerHTML = '';
-    return;
-  }
-
-  slot.innerHTML = `
-    <input type="text" placeholder="Search Vector product…" autocomplete="off"
-      style="width:100%;max-width:320px;padding:8px;border-radius:6px;border:1px solid var(--line);"
-      oninput="onCreatedInvoiceSearchInput(${idx}, this.value)">
+  if(slot.innerHTML){ slot.innerHTML = ''; return; }
+  slot.innerHTML = `<input type="text" placeholder="Search products…" autocomplete="off"
+    style="width:100%;max-width:320px;padding:8px;border-radius:6px;border:1px solid var(--line);"
+    oninput="onCreatedInvoiceSearchInput(${idx}, this.value)">
     <div id="createdInvoiceSearchResults-${idx}" style="margin-top:4px;"></div>`;
 }
-
 function onCreatedInvoiceSearchInput(idx, q){
   clearTimeout(createdInvoiceSearchDebounce);
   createdInvoiceSearchDebounce = setTimeout(() => runCreatedInvoiceSearch(idx, q), 300);
 }
-
 async function runCreatedInvoiceSearch(idx, q){
   const results = document.getElementById('createdInvoiceSearchResults-' + idx);
-  if(!results) return;
-
+  if(!results) return; // moved away before the debounce fired
   q = q.trim();
-  if(q.length < 2){
-    results.innerHTML = '';
-    return;
-  }
-
+  if(q.length < 2){ results.innerHTML = ''; return; }
   results.innerHTML = '<div class="empty-hint" style="font-size:12px;">Searching…</div>';
-
   try{
     const data = await apiGet('stock/search/?q=' + encodeURIComponent(q));
     const items = (data.items || []).slice(0, 8);
-
-    if(items.length === 0){
-      results.innerHTML = '<div class="empty-hint" style="font-size:12px;">No matches.</div>';
-      return;
-    }
-
+    if(items.length === 0){ results.innerHTML = '<div class="empty-hint" style="font-size:12px;">No matches.</div>'; return; }
     results.innerHTML = items.map(it => `
-      <div style="padding:7px 8px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px;"
-        onclick="pickCreatedInvoiceMatch(${idx}, ${it.stockid}, ${JSON.stringify(it.name).replace(/"/g,'&quot;')})">
-        ${escapeHtml(it.name)}
-      </div>
+      <div style="padding:6px 8px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px;"
+        onclick="pickCreatedInvoiceMatch(${idx}, ${it.stockid}, ${JSON.stringify(it.name).replace(/"/g,'&quot;')})">${escapeHtml(it.name)}</div>
     `).join('');
   }catch(e){
     results.innerHTML = '<div class="empty-hint" style="font-size:12px;color:var(--danger)">Search failed.</div>';
     console.error(e);
   }
 }
-
 function pickCreatedInvoiceMatch(idx, stockid, name){
   currentCreatedInvoice.items[idx].stockid = stockid;
   currentCreatedInvoice.items[idx].matched_name = name;
   currentCreatedInvoice.items[idx]._matchedVia = 'manual';
   renderCreatedInvoiceMatchTable();
 }
-
 async function saveCreatedInvoiceItems(){
   await apiPut('invoices/created/' + currentCreatedInvoice.header.invoice_id + '/items/', {
     items: currentCreatedInvoice.items.map(it => ({
@@ -5388,12 +5322,10 @@ async function saveCreatedInvoiceItems(){
       stockid: it.stockid,
       matched_name: it.matched_name,
       qty: it.qty,
-      invoice_box_price: it.invoice_box_price,
-      box_size_kg: it.box_size_kg
+      current_cost_price: it.current_cost_price
     }))
   });
 }
-
 async function saveAndExitCreatedInvoice(){
   try{
     await saveCreatedInvoiceItems();
@@ -5404,398 +5336,174 @@ async function saveAndExitCreatedInvoice(){
     console.error(e);
   }
 }
-
 async function goToCreatedInvoicePrices(){
   const unmatched = currentCreatedInvoice.items.filter(it => !it.stockid).length;
-  const missingQty = currentCreatedInvoice.items.filter(it =>
-    it.qty === null || it.qty === undefined || Number(it.qty) <= 0
-  ).length;
-  const missingBoxPrice = currentCreatedInvoice.items.filter(it =>
-    it.invoice_box_price === null || it.invoice_box_price === undefined || Number(it.invoice_box_price) < 0
-  ).length;
-
-  if(unmatched > 0 || missingQty > 0 || missingBoxPrice > 0){
-    alert(
-      `Before continuing, please complete the invoice lines.\n\n` +
-      `Unmatched products: ${unmatched}\n` +
-      `Missing box quantity: ${missingQty}\n` +
-      `Missing invoice box price: ${missingBoxPrice}`
-    );
-    return;
+  const missingQty = currentCreatedInvoice.items.filter(it => it.qty === null || it.qty === undefined).length;
+  if(unmatched > 0 || missingQty > 0){
+    if(!confirm(`${unmatched} item(s) still unmatched and ${missingQty} still missing a quantity. Continue to Prices anyway?`)) return;
   }
-
   try{
     await saveCreatedInvoiceItems();
-
     const data = await apiGet('invoices/created/' + currentCreatedInvoice.header.invoice_id + '/');
     currentCreatedInvoice = data;
-
-    document.getElementById('createdInvoicePricesLabel').textContent =
-      data.header.supplier_name || 'Invoice';
-
+    document.getElementById('createdInvoicePricesLabel').textContent = data.header.supplier_name || 'Invoice';
     showView('view-created-invoice-prices');
     renderCreatedInvoicePricesTable();
   }catch(e){
-    toast('Could not load invoice prices');
+    toast('Could not load prices');
     console.error(e);
   }
 }
-
 function backToCreatedInvoiceMatch(){
   saveCreatedInvoiceItems().catch(e => console.error(e));
   openCreatedInvoiceMatchStep();
 }
 
-/* ---- Step 2: final eight-column invoice table ---- */
+/* ---- Step 2: Prices ---- */
 function createdInvoiceMarginPct(it){
   if(it.previous_selling_price === null || it.previous_selling_price === undefined) return null;
-
-  const selling = Number(it.previous_selling_price);
-  const pricePerKg = Number(it.price_per_kg);
-
-  if(!Number.isFinite(selling) || selling <= 0 || !Number.isFinite(pricePerKg)) return null;
-
-  return ((selling - pricePerKg) / selling) * 100;
+  if(it.current_cost_price === null || it.current_cost_price === undefined) return null;
+  if(Number(it.previous_selling_price) === 0) return null;
+  return (Number(it.previous_selling_price) - Number(it.current_cost_price)) / Number(it.previous_selling_price) * 100;
 }
-
-function recalcCreatedInvoiceItem(idx){
-  const it = currentCreatedInvoice.items[idx];
-  const boxPrice = Number(it.invoice_box_price);
-  const boxKg = Number(it.box_size_kg);
-
-  it.price_per_kg = (
-    Number.isFinite(boxPrice) &&
-    Number.isFinite(boxKg) &&
-    boxKg > 0
-  ) ? boxPrice / boxKg : null;
-
-  it.current_cost_price = it.price_per_kg;
-}
-
 function renderCreatedInvoicePricesTable(){
   const content = document.getElementById('createdInvoicePricesContent');
   const items = currentCreatedInvoice.items;
-
   if(items.length === 0){
     content.innerHTML = '<div class="empty-hint">No items on this invoice.</div>';
     return;
   }
-
-  items.forEach((_, idx) => recalcCreatedInvoiceItem(idx));
-
   const table = document.createElement('table');
   table.className = 'finaltable';
   table.innerHTML = `<thead><tr>
-    <th>Name as per Invoice</th>
-    <th>Description as per Vector</th>
-    <th class="qtycell">Quantity as Box</th>
-    <th class="qtycell">Quantity per Each Box (KG)</th>
-    <th class="qtycell">Price per KG</th>
-    <th class="qtycell">Previous Cost Price</th>
-    <th class="qtycell">Selling Price</th>
-    <th class="qtycell">Margin</th>
+    <th>Item</th><th class="qtycell">Previous Cost</th><th class="qtycell">Current Cost</th>
+    <th class="qtycell">Previous Selling</th><th class="qtycell">Margin</th><th>Barcode</th>
   </tr></thead>`;
-
   const tbody = document.createElement('tbody');
-
   items.forEach((it, idx) => {
     const margin = createdInvoiceMarginPct(it);
     const belowMin = margin !== null && margin < (it.min_margin_pct || 38);
-
-    const previousCost = it.previous_cost_price === null || it.previous_cost_price === undefined
-      ? '—' : Number(it.previous_cost_price).toFixed(2);
-
-    const sellingPrice = it.previous_selling_price === null || it.previous_selling_price === undefined
-      ? '—' : Number(it.previous_selling_price).toFixed(2);
-
-    const pricePerKg = it.price_per_kg === null || it.price_per_kg === undefined
-      ? '—' : Number(it.price_per_kg).toFixed(2);
-
     const tr = document.createElement('tr');
-
     tr.innerHTML = `
-      <td>
-        <div style="font-weight:600;">${escapeHtml(it.ocr_product_name || '')}</div>
-        ${it.invoice_box_price !== null && it.invoice_box_price !== undefined
-          ? `<div style="font-size:11px;color:var(--text-dim);margin-top:3px;">Invoice: £${Number(it.invoice_box_price).toFixed(2)} / box</div>`
-          : `<div style="font-size:11px;color:var(--danger);margin-top:3px;">Invoice box price missing</div>`}
-      </td>
-
-      <td>
-        <div>${escapeHtml(it.matched_name || '—')}</div>
-        ${it.previous_pack_size !== null && it.previous_pack_size !== undefined
-          ? `<div style="font-size:11px;color:var(--text-dim);margin-top:3px;">Previous pack: ${escapeHtml(String(it.previous_pack_size))}</div>`
-          : ''}
-      </td>
-
-      <td class="qtycell">${it.qty === null || it.qty === undefined ? '—' : Number(it.qty)}</td>
-
+      <td>${escapeHtml(it.matched_name || it.ocr_product_name)}</td>
+      <td class="qtycell">${it.previous_cost_price === null || it.previous_cost_price === undefined ? '—' : Number(it.previous_cost_price).toFixed(2)}</td>
       <td class="qtycell">
-        <input type="number" min="0.001" step="0.001"
-          class="restaurant-qty-input"
-          style="width:105px;"
-          value="${it.box_size_kg === null || it.box_size_kg === undefined ? '' : it.box_size_kg}"
-          placeholder="KG"
-          onchange="updateCreatedInvoiceBoxSize(${idx}, this.value)">
+        <input type="number" min="0" step="0.01" class="restaurant-qty-input" style="width:80px;"
+          value="${it.current_cost_price === null || it.current_cost_price === undefined ? '' : it.current_cost_price}"
+          onchange="updateCreatedInvoiceCostPrice(${idx}, this.value)">
       </td>
-
-      <td class="qtycell" id="createdInvoicePriceKgCell-${idx}">
-        ${pricePerKg === '—' ? '—' : '£' + pricePerKg}
-      </td>
-
-      <td class="qtycell">${previousCost === '—' ? '—' : '£' + previousCost}</td>
-
-      <td class="qtycell">${sellingPrice === '—' ? '—' : '£' + sellingPrice}</td>
-
-      <td class="qtycell" id="createdInvoiceMarginCell-${idx}"
-          style="${belowMin ? 'color:var(--danger);font-weight:700;' : ''}">
-        ${margin === null ? '—' : margin.toFixed(1) + '%'}
-      </td>
+      <td class="qtycell">${it.previous_selling_price === null || it.previous_selling_price === undefined ? '—' : Number(it.previous_selling_price).toFixed(2)}</td>
+      <td class="qtycell" id="createdInvoiceMarginCell-${idx}" style="${belowMin ? 'color:var(--danger);font-weight:700;' : ''}">${margin === null ? '—' : margin.toFixed(1) + '%'}</td>
+      <td>${escapeHtml(it.barcode || '—')}</td>
     `;
-
     tbody.appendChild(tr);
   });
-
   table.appendChild(tbody);
+  content.innerHTML = '';
   const scrollWrap = document.createElement('div');
   scrollWrap.className = 'restaurant-table-scroll';
   scrollWrap.appendChild(table);
-
-  content.innerHTML = '';
   content.appendChild(scrollWrap);
 }
-
-function updateCreatedInvoiceBoxSize(idx, value){
-  currentCreatedInvoice.items[idx].box_size_kg =
-    value === '' ? null : Number(value);
-
-  recalcCreatedInvoiceItem(idx);
-
+function updateCreatedInvoiceCostPrice(idx, value){
+  currentCreatedInvoice.items[idx].current_cost_price = value === '' ? null : Number(value);
   const it = currentCreatedInvoice.items[idx];
   const margin = createdInvoiceMarginPct(it);
   const belowMin = margin !== null && margin < (it.min_margin_pct || 38);
-
-  const priceCell = document.getElementById('createdInvoicePriceKgCell-' + idx);
-  if(priceCell){
-    priceCell.textContent =
-      it.price_per_kg === null || it.price_per_kg === undefined
-        ? '—'
-        : '£' + Number(it.price_per_kg).toFixed(2);
-  }
-
-  const marginCell = document.getElementById('createdInvoiceMarginCell-' + idx);
-  if(marginCell){
-    marginCell.textContent = margin === null ? '—' : margin.toFixed(1) + '%';
-    marginCell.style.color = belowMin ? 'var(--danger)' : '';
-    marginCell.style.fontWeight = belowMin ? '700' : '';
+  const cell = document.getElementById('createdInvoiceMarginCell-' + idx);
+  if(cell){
+    cell.textContent = margin === null ? '—' : margin.toFixed(1) + '%';
+    cell.style.color = belowMin ? 'var(--danger)' : '';
+    cell.style.fontWeight = belowMin ? '700' : '';
   }
 }
-
 async function finishCreatedInvoice(){
-  const missingBoxSize = currentCreatedInvoice.items.filter(it =>
-    it.box_size_kg === null ||
-    it.box_size_kg === undefined ||
-    !Number.isFinite(Number(it.box_size_kg)) ||
-    Number(it.box_size_kg) <= 0
-  ).length;
-
-  const unmatched = currentCreatedInvoice.items.filter(it => !it.stockid).length;
-  const missingQty = currentCreatedInvoice.items.filter(it =>
-    it.qty === null || it.qty === undefined || Number(it.qty) <= 0
-  ).length;
-  const missingBoxPrice = currentCreatedInvoice.items.filter(it =>
-    it.invoice_box_price === null ||
-    it.invoice_box_price === undefined ||
-    !Number.isFinite(Number(it.invoice_box_price))
-  ).length;
-
-  if(unmatched || missingQty || missingBoxPrice || missingBoxSize){
-    alert(
-      `The invoice cannot be completed yet.\n\n` +
-      `Unmatched products: ${unmatched}\n` +
-      `Missing box quantity: ${missingQty}\n` +
-      `Missing invoice box price: ${missingBoxPrice}\n` +
-      `Missing box KG: ${missingBoxSize}`
-    );
-    return;
-  }
-
   try{
-    currentCreatedInvoice.items.forEach((_, idx) => recalcCreatedInvoiceItem(idx));
-
     await saveCreatedInvoiceItems();
-
-    await apiPut(
-      'invoices/created/' + currentCreatedInvoice.header.invoice_id + '/',
-      { status: 'COMPLETE' }
-    );
-
+    await apiPut('invoices/created/' + currentCreatedInvoice.header.invoice_id + '/', { status: 'COMPLETE' });
     toast('Invoice marked complete');
     openCreatedInvoicesList();
   }catch(e){
-    toast('Could not complete invoice');
+    toast('Could not save');
     console.error(e);
   }
 }
 
-/* ---- Export: choose columns, CSV/PDF ----
-   Barcode is deliberately NOT shown in the table, but is available as an
-   optional export-only checkbox. */
+/* ---- Export (CSV/PDF with a column picker, same idea as Wholesale Pricing) ---- */
 const CREATED_INVOICE_EXPORT_COLUMNS = [
-  { key: 'invoice_name', label: 'Name as per Invoice', defaultChecked: true },
-  { key: 'vector_description', label: 'Description as per Vector', defaultChecked: true },
-  { key: 'qty_box', label: 'Quantity as Box', defaultChecked: true },
-  { key: 'box_size_kg', label: 'Quantity per Each Box (KG)', defaultChecked: true },
-  { key: 'price_per_kg', label: 'Price per KG', defaultChecked: true },
-  { key: 'previous_cost', label: 'Previous Cost Price', defaultChecked: true },
-  { key: 'selling_price', label: 'Selling Price', defaultChecked: true },
-  { key: 'margin', label: 'Margin', defaultChecked: true },
-  { key: 'barcode', label: 'Barcode', defaultChecked: false, exportOnly: true }
+  { key: 'item', label: 'Item', always: true },
+  { key: 'qty', label: 'Qty' },
+  { key: 'previous_cost', label: 'Previous Cost' },
+  { key: 'current_cost', label: 'Current Cost' },
+  { key: 'previous_selling', label: 'Previous Selling' },
+  { key: 'margin', label: 'Margin' },
+  { key: 'barcode', label: 'Barcode' }
 ];
-
 function openCreatedInvoiceExportModal(format){
-  if(!currentCreatedInvoice || !currentCreatedInvoice.items.length){
-    toast('Nothing to export');
-    return;
-  }
-
   createdInvoiceExportFormat = format;
-
   const box = document.getElementById('createdInvoiceExportColumns');
-
   box.innerHTML = CREATED_INVOICE_EXPORT_COLUMNS.map(c => `
     <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;">
-      <input type="checkbox"
-        id="cieCol-${c.key}"
-        ${c.defaultChecked ? 'checked' : ''}>
-      ${c.label}${c.exportOnly ? ' <span style="color:var(--text-dim);font-size:11px;">(export only)</span>' : ''}
+      <input type="checkbox" id="cieCol-${c.key}" ${c.always ? 'checked disabled' : 'checked'}> ${c.label}
     </label>
   `).join('');
-
   openModal('modalCreatedInvoiceExport');
 }
-
 function confirmCreatedInvoiceExport(){
   const columns = {};
-
   CREATED_INVOICE_EXPORT_COLUMNS.forEach(c => {
-    columns[c.key] = document.getElementById('cieCol-' + c.key).checked;
+    columns[c.key] = c.always || document.getElementById('cieCol-' + c.key).checked;
   });
-
-  if(!Object.values(columns).some(Boolean)){
-    toast('Select at least one column');
-    return;
-  }
-
   closeModal('modalCreatedInvoiceExport');
   exportCreatedInvoice(createdInvoiceExportFormat, columns);
 }
-
 function createdInvoiceExportRow(it, columns){
   const margin = createdInvoiceMarginPct(it);
   const row = {};
-
-  if(columns.invoice_name)
-    row['Name as per Invoice'] = it.ocr_product_name || '';
-
-  if(columns.vector_description)
-    row['Description as per Vector'] = it.matched_name || '';
-
-  if(columns.qty_box)
-    row['Quantity as Box'] = it.qty === null || it.qty === undefined ? '' : it.qty;
-
-  if(columns.box_size_kg)
-    row['Quantity per Each Box (KG)'] = it.box_size_kg === null || it.box_size_kg === undefined ? '' : Number(it.box_size_kg).toFixed(3);
-
-  if(columns.price_per_kg)
-    row['Price per KG'] = it.price_per_kg === null || it.price_per_kg === undefined ? '' : Number(it.price_per_kg).toFixed(2);
-
-  if(columns.previous_cost)
-    row['Previous Cost Price'] = it.previous_cost_price === null || it.previous_cost_price === undefined ? '' : Number(it.previous_cost_price).toFixed(2);
-
-  if(columns.selling_price)
-    row['Selling Price'] = it.previous_selling_price === null || it.previous_selling_price === undefined ? '' : Number(it.previous_selling_price).toFixed(2);
-
-  if(columns.margin)
-    row['Margin'] = margin === null ? '' : margin.toFixed(1) + '%';
-
-  if(columns.barcode)
-    row['Barcode'] = it.barcode || '';
-
+  if(columns.item) row['Item'] = it.matched_name || it.ocr_product_name;
+  if(columns.qty) row['Qty'] = it.qty === null || it.qty === undefined ? '' : it.qty;
+  if(columns.previous_cost) row['Previous Cost'] = it.previous_cost_price === null || it.previous_cost_price === undefined ? '' : Number(it.previous_cost_price).toFixed(2);
+  if(columns.current_cost) row['Current Cost'] = it.current_cost_price === null || it.current_cost_price === undefined ? '' : Number(it.current_cost_price).toFixed(2);
+  if(columns.previous_selling) row['Previous Selling'] = it.previous_selling_price === null || it.previous_selling_price === undefined ? '' : Number(it.previous_selling_price).toFixed(2);
+  if(columns.margin) row['Margin'] = margin === null ? '' : margin.toFixed(1) + '%';
+  if(columns.barcode) row['Barcode'] = it.barcode || '';
   return row;
 }
-
 function exportCreatedInvoice(format, columns){
   const items = currentCreatedInvoice.items;
   const supplierName = currentCreatedInvoice.header.supplier_name || 'Invoice';
-
-  const filenameBase =
-    'invoice-' +
-    supplierName.toLowerCase().replace(/[^a-z0-9]+/g, '-') +
-    '-' +
-    new Date().toISOString().slice(0,10);
-
-  const rows = items.map(it => createdInvoiceExportRow(it, columns));
-
+  const filenameBase = 'invoice-' + supplierName.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + new Date().toISOString().slice(0,10);
   if(format === 'csv'){
+    const rows = items.map(it => createdInvoiceExportRow(it, columns));
     const headers = Object.keys(rows[0] || {});
-
     const csvLines = [headers.join(',')].concat(
-      rows.map(r =>
-        headers.map(h =>
-          '"' + String(r[h] ?? '').replace(/"/g, '""') + '"'
-        ).join(',')
-      )
+      rows.map(r => headers.map(h => '"' + String(r[h] ?? '').replace(/"/g, '""') + '"').join(','))
     );
-
-    const blob = new Blob([csvLines.join('\n')], { type:'text/csv;charset=utf-8;' });
+    const blob = new Blob([csvLines.join('\n')], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-
-    a.href = url;
-    a.download = filenameBase + '.csv';
-    document.body.appendChild(a);
+    a.href = url; a.download = filenameBase + '.csv';
     a.click();
-    a.remove();
     URL.revokeObjectURL(url);
-    return;
-  }
-
-  try{
+  }else{
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({
-      orientation: 'landscape',
-      unit: 'mm',
-      format: 'a4'
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text('Invoice — ' + supplierName, 14, 18);
+    doc.setFontSize(9);
+    doc.setTextColor(120);
+    doc.text('Generated ' + ukDateTimeString(new Date()) + ' (UK time)', 14, 24);
+    const head = CREATED_INVOICE_EXPORT_COLUMNS.filter(c => columns[c.key]).map(c => c.label);
+    const body = items.map(it => {
+      const row = createdInvoiceExportRow(it, columns);
+      return head.map(h => row[h] ?? '');
     });
-
-    doc.setFontSize(15);
-    doc.text('Created Supplier Invoice — ' + supplierName, 10, 12);
-
-    doc.setFontSize(8);
-    doc.setTextColor(100);
-    doc.text(
-      'Generated ' + ukDateTimeString(new Date()) + ' (UK time)',
-      10, 18
-    );
-
-    const headers = Object.keys(rows[0] || {});
-    const body = rows.map(r => headers.map(h => r[h] ?? ''));
-
     doc.autoTable({
-      startY: 24,
-      head: [headers],
-      body,
-      theme: 'grid',
-      styles: { fontSize: 7, cellPadding: 2 },
-      headStyles: { fillColor: [30,34,42] },
-      margin: { left: 8, right: 8 }
+      startY: 30, head: [head], body,
+      theme: 'grid', headStyles: { fillColor: [30,34,42] }, styles: { fontSize: 9 },
+      margin: { left: 14, right: 14 }
     });
-
     doc.save(filenameBase + '.pdf');
-  }catch(e){
-    toast('Could not generate PDF');
-    console.error(e);
   }
 }
 
@@ -6389,172 +6097,173 @@ function closeMakingList(){
   loadMakingLists();
 }
 
-/* ============ RETAIL: BARCODE SCANNER ============ */
+/* ============ RETAIL: PHYSICAL BARCODE SCANNER ============ */
+/*
+  The handheld scanner behaves like a keyboard. The barcode field is
+  focused automatically, Enter submits immediately, and the matched item
+  is added automatically. No camera and no separate Look Up/Add click.
+*/
+let scannerInputTimer = null;
+let scannerLookupInProgress = false;
+let scannerSequence = 0;
+
 function openScanner(target){
   scannerTarget = target || 'retail';
   scannerListEl = document.getElementById('scanFeedback');
   scannerListEl.innerHTML = '';
-  document.getElementById('manualBarcodeInput').value = '';
-  lastScannedCode = null;
-  lastScannedAt = 0;
+
+  const input = document.getElementById('manualBarcodeInput');
+  input.value = '';
+  input.disabled = false;
+
   const sub = document.getElementById('scannerSubtitle');
+  const status = document.getElementById('scannerStatus');
+
   if(scannerTarget === 'warehouse' && currentCategory){
-    sub.textContent = 'Adding to "' + currentCategory.category_name + '" — point the camera at a barcode, or type it in below';
+    sub.textContent = 'Adding to "' + currentCategory.category_name + '"';
   } else if(scannerTarget === 'retail' && currentMakingList){
-    sub.textContent = 'Adding to "' + currentMakingList.list_name + '" — point the camera at a barcode, or type it in below';
+    sub.textContent = 'Adding to "' + currentMakingList.list_name + '"';
   } else if(scannerTarget === 'location' && currentRow){
-    sub.textContent = 'Adding to Row ' + currentRow.row_name + ' — point the camera at a barcode, or type it in below';
+    sub.textContent = 'Adding to Row ' + currentRow.row_name;
+  } else if(scannerTarget === 'picking' && currentPickingList){
+    sub.textContent = 'Picking from "' + currentPickingList.list_name + '"';
   } else {
-    sub.textContent = 'Point the camera at a barcode, or type it in below';
+    sub.textContent = 'Scan a barcode with the handheld scanner.';
   }
+
+  status.textContent = 'Scan a barcode — it will be added automatically.';
   openModal('modalScanner');
-  startCameraScanner();
+
+  requestAnimationFrame(() => {
+    input.focus({ preventScroll: true });
+    input.select();
+  });
 }
+
 function closeScanner(){
-  stopCameraScanner();
+  if(scannerInputTimer){
+    clearTimeout(scannerInputTimer);
+    scannerInputTimer = null;
+  }
+  scannerLookupInProgress = false;
+  scannerSequence++;
   closeModal('modalScanner');
 }
-let html5QrInstance = null;
-// Limit decoding to the barcode formats we actually use (skips QR/PDF417/etc checks each frame — faster)
-const SCAN_FORMATS = (typeof Html5QrcodeSupportedFormats !== 'undefined') ? [
-  Html5QrcodeSupportedFormats.EAN_13,
-  Html5QrcodeSupportedFormats.EAN_8,
-  Html5QrcodeSupportedFormats.UPC_A,
-  Html5QrcodeSupportedFormats.UPC_E,
-  Html5QrcodeSupportedFormats.CODE_128,
-  Html5QrcodeSupportedFormats.CODE_39,
-  Html5QrcodeSupportedFormats.CODABAR,
-  Html5QrcodeSupportedFormats.ITF
-] : undefined;
-function startCameraScanner(){
-  if(typeof Html5Qrcode === 'undefined'){
-    document.getElementById('scannerBox').innerHTML = '<div class="scanfail" style="padding:14px;">Camera scanner failed to load — use the barcode field below instead.</div>';
-    return;
-  }
-  document.getElementById('scannerBox').innerHTML = '<div id="scannerVideoBox"></div>';
-  html5QrInstance = new Html5Qrcode('scannerVideoBox', {
-    formatsToSupport: SCAN_FORMATS,
-    // Uses the phone's native barcode decoder when the browser supports it (fast path on
-    // recent iOS Safari / Chrome) instead of the slower pure-JS decoder every frame.
-    experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-    verbose: false
-  });
-  scannerRunning = true;
-  html5QrInstance.start(
-    { facingMode: 'environment' },
-    {
-      fps: 15,
-      // Wide, short box matches a barcode's shape and adapts to the phone's screen width —
-      // easier to line up a barcode into, which is most of what was "slow" before.
-      qrbox: (viewfinderWidth, viewfinderHeight) => ({
-        width: Math.floor(Math.min(viewfinderWidth * 0.85, 380)),
-        height: Math.floor(Math.min(viewfinderHeight * 0.45, 160))
-      })
-    },
-    (decodedText) => {
-      const now = Date.now();
-      if(decodedText === lastScannedCode && (now - lastScannedAt) < SCAN_COOLDOWN_MS){
-        return; // same code decoded again within cooldown — ignore, don't re-lookup
-      }
-      lastScannedCode = decodedText;
-      lastScannedAt = now;
-      handleScannedCode(decodedText);
-    },
-    () => {}
-  ).catch(()=>{
-    document.getElementById('scannerBox').innerHTML = '<div class="scanfail" style="padding:14px;">Could not access camera — allow camera permission, or use the barcode field below.</div>';
-  });
-}
-function pauseCameraScanner(){
-  if(html5QrInstance && scannerRunning){
-    try{ html5QrInstance.pause(true); }catch(e){}
+
+function handleScannerKeydown(event){
+  if(event.key === 'Enter' || event.key === 'Tab'){
+    event.preventDefault();
+    clearTimeout(scannerInputTimer);
+    scannerInputTimer = null;
+    submitManualBarcode();
   }
 }
-function resumeCameraScanner(){
-  if(html5QrInstance && scannerRunning){
-    try{ html5QrInstance.resume(); }catch(e){}
-  }
+
+function handleScannerInput(){
+  clearTimeout(scannerInputTimer);
+  const input = document.getElementById('manualBarcodeInput');
+  if(!input || !input.value.trim()) return;
+
+  // Fallback for scanners that do not append Enter.
+  scannerInputTimer = setTimeout(() => {
+    scannerInputTimer = null;
+    submitManualBarcode();
+  }, 180);
 }
-function stopCameraScanner(){
-  if(html5QrInstance && scannerRunning){
-    scannerRunning = false;
-    html5QrInstance.stop().then(()=>html5QrInstance.clear()).catch(()=>{});
-  }
-}
+
 function submitManualBarcode(){
-  const code = document.getElementById('manualBarcodeInput').value.trim();
+  const input = document.getElementById('manualBarcodeInput');
+  if(!input || scannerLookupInProgress) return;
+
+  const code = input.value.trim();
   if(!code) return;
+
+  clearTimeout(scannerInputTimer);
+  scannerInputTimer = null;
   handleScannedCode(code);
 }
+
 async function handleScannedCode(code){
-  document.getElementById('manualBarcodeInput').value = '';
-  pauseCameraScanner();
+  if(scannerLookupInProgress) return;
+
+  scannerLookupInProgress = true;
+  const mySequence = scannerSequence;
+  const input = document.getElementById('manualBarcodeInput');
+  const status = document.getElementById('scannerStatus');
   const box = document.getElementById('scanFeedback');
-  const loadingEl = document.createElement('div');
-  loadingEl.className = 'loading';
-  loadingEl.textContent = 'Looking up ' + code + '…';
-  box.prepend(loadingEl);
+
+  input.value = '';
+  input.disabled = true;
+  status.textContent = 'Looking up ' + code + '…';
+
   try{
     const data = await apiGet('stock/barcode/' + encodeURIComponent(code));
-    loadingEl.remove();
+
+    if(mySequence !== scannerSequence) return;
+
     if(!data.item){
       const fail = document.createElement('div');
-      fail.className = 'scanfail';
-      fail.textContent = 'No stock item found for barcode ' + code;
+      fail.className = 'scanfail scanner-feedback';
+      fail.textContent = 'Barcode not found: ' + code;
       box.prepend(fail);
-      resumeCameraScanner();
+      status.textContent = 'Not found — scan another barcode.';
+      input.disabled = false;
+      input.focus({ preventScroll: true });
       return;
     }
-    box.prepend(renderScanResultCard(data.item, code));
+
+    const stock = data.item;
+
+    // Picking screen: show the matched product and live stock first, then
+    // let the picker increase/decrease the picked quantity before saving.
+    if(scannerTarget === 'picking'){
+      const match = currentPickingItems.find(it =>
+        (stock.stockid != null && Number(it.stockid) === Number(stock.stockid)) ||
+        (stock.barcode && it.barcode && String(it.barcode).trim() === String(stock.barcode).trim())
+      );
+
+      const card = renderPickingScanResultCard(stock, code, match);
+      box.prepend(card);
+      status.textContent = match
+        ? 'Product found — adjust the picked quantity if needed.'
+        : 'Product found, but it is not on this picking list.';
+      input.disabled = false;
+      input.focus({ preventScroll: true });
+      return;
+    }
+
+    // One physical scan = one unit. Scanning it again increases the quantity.
+    if(scannerTarget === 'warehouse'){
+      addScannedItemToWarehouseCategory(stock, 1);
+    }else if(scannerTarget === 'location'){
+      addScannedItemToRow(stock);
+    }else{
+      addScannedItemToMakingList(stock, 1);
+    }
+
+    const ok = document.createElement('div');
+    ok.className = 'scan-ok';
+    ok.textContent = '✓ ' + stock.name + ' added';
+    box.prepend(ok);
+    status.textContent = 'Ready — scan the next barcode.';
+
+    input.disabled = false;
+    input.focus({ preventScroll: true });
   }catch(e){
-    loadingEl.remove();
+    if(mySequence !== scannerSequence) return;
     const fail = document.createElement('div');
-    fail.className = 'scanfail';
+    fail.className = 'scanfail scanner-feedback';
     fail.textContent = 'Lookup failed for ' + code;
     box.prepend(fail);
+    status.textContent = 'Lookup failed — scan again.';
+    input.disabled = false;
+    input.focus({ preventScroll: true });
     console.error(e);
-    resumeCameraScanner();
+  }finally{
+    scannerLookupInProgress = false;
   }
 }
-function renderScanResultCard(stock, scannedCode){
-  const card = document.createElement('div');
-  card.className = 'scanresult-card';
-  let qty = 1;
-  const barcodeText = stock.barcode || scannedCode || '—';
-  const showStepper = scannerTarget !== 'location';
-  card.innerHTML = `
-    <div class="srname">${escapeHtml(stock.name)}</div>
-    <div class="srbarcode">Barcode: ${escapeHtml(barcodeText)}</div>
-    <div class="srstock">In stock: <span class="val ${stockClass(stock.quantity)}">${stock.quantity ?? '—'}</span></div>
-    <div class="srrow">
-      ${showStepper ? `
-      <div class="stepper">
-        <button class="ibminus" type="button">−</button>
-        <div class="qty">1</div>
-        <button class="ibplus" type="button">+</button>
-      </div>` : ''}
-      <button class="btn-ghost srskip">Skip</button>
-      <button class="btn-amber">${scannerTarget === 'location' ? 'Add to row' : 'Add to list'}</button>
-    </div>
-  `;
-  if(showStepper){
-    const qtyEl = card.querySelector('.qty');
-    card.querySelector('.ibminus').onclick = () => { qty = Math.max(1, qty-1); qtyEl.textContent = qty; };
-    card.querySelector('.ibplus').onclick = () => { qty = qty+1; qtyEl.textContent = qty; };
-  }
-  card.querySelector('.srskip').onclick = () => {
-    card.remove();
-    resumeCameraScanner();
-  };
-  card.querySelector('.btn-amber').onclick = () => {
-    if(scannerTarget === 'warehouse'){ addScannedItemToWarehouseCategory(stock, qty); }
-    else if(scannerTarget === 'location'){ addScannedItemToRow(stock); }
-    else { addScannedItemToMakingList(stock, qty); }
-    card.remove();
-    resumeCameraScanner();
-  };
-  return card;
-}
+
 function addScannedItemToMakingList(stock, qty){
   if(!currentMakingList) return;
   const existing = currentMakingItems.find(it => it.stockid === stock.stockid || it.item_name.toLowerCase().trim() === (stock.name||'').toLowerCase().trim());
@@ -6714,6 +6423,82 @@ async function openPickingListDetail(id){
     console.error(e);
   }
 }
+function renderPickingScanResultCard(stock, scannedCode, item){
+  const card = document.createElement('div');
+  card.className = 'pick-scan-card';
+  const barcodeText = stock.barcode || scannedCode || '';
+  const stockQty = stock.quantity === null || stock.quantity === undefined ? '—' : stock.quantity;
+
+  if(!item){
+    card.innerHTML = `
+      <div class="psc-name">${escapeHtml(stock.name || 'Unknown product')}</div>
+      <div class="psc-barcode">Barcode: ${escapeHtml(barcodeText)}</div>
+      <div class="psc-stock">Stock available: <span class="val ${stockClass(stock.quantity)}">${escapeHtml(String(stockQty))}</span></div>
+      <div class="scanfail">This product is not on the current picking list.</div>
+    `;
+    return card;
+  }
+
+  let picked = Number(item.qty_picked || 0);
+  const requested = Number(item.qty_added || 0);
+  const max = Math.max(0, requested);
+
+  card.innerHTML = `
+    <div class="psc-name">${escapeHtml(stock.name || item.item_name)}</div>
+    <div class="psc-barcode">Barcode: ${escapeHtml(barcodeText)}</div>
+    <div class="psc-stock">Stock available: <span class="val ${stockClass(stock.quantity)}">${escapeHtml(String(stockQty))}</span></div>
+    <div class="psc-meta">
+      <span>Requested: <strong>${requested}</strong></span>
+      <span>Currently picked: <strong class="psc-picked">${picked}</strong></span>
+    </div>
+    <div class="psc-actions">
+      <div class="stepper">
+        <button class="ibminus" type="button">−</button>
+        <div class="qty psc-qty">${picked}</div>
+        <button class="ibplus" type="button">+</button>
+      </div>
+      <button class="btn-amber psc-save" type="button">Update picked</button>
+      <button class="btn-ghost psc-close" type="button">Close</button>
+    </div>
+  `;
+
+  const qtyEl = card.querySelector('.psc-qty');
+  const pickedEl = card.querySelector('.psc-picked');
+  const setLocal = (value) => {
+    picked = Math.max(0, Math.min(max, value));
+    qtyEl.textContent = picked;
+    pickedEl.textContent = picked;
+  };
+
+  // A scan immediately means one picked unit, unless the requested quantity
+  // has already been reached. The +/- controls then allow the picker to adjust it.
+  setLocal(Math.min(max, picked + 1));
+
+  card.querySelector('.ibminus').onclick = () => setLocal(picked - 1);
+  card.querySelector('.ibplus').onclick = () => setLocal(picked + 1);
+  card.querySelector('.psc-save').onclick = () => {
+    const row = document.querySelector('#pickingItemList .pickrow[data-item-row-id="' + CSS.escape(String(item.item_row_id)) + '"]');
+    if(row) setPickedQty(item, row, picked);
+    else {
+      item.qty_picked = picked;
+      item.picked = picked >= item.qty_added && item.qty_added > 0;
+      renderPickingItems();
+      apiPut('retail/lists/' + currentPickingList.list_id + '/items/' + item.item_row_id, {
+        qty_picked: picked, picked: item.picked
+      }).catch(e=>console.error(e));
+    }
+    card.querySelector('.psc-save').textContent = 'Saved';
+    card.querySelector('.psc-save').disabled = true;
+    setTimeout(() => { if(card.isConnected) card.remove(); }, 500);
+    const input = document.getElementById('manualBarcodeInput');
+    if(input){ input.disabled = false; input.focus({ preventScroll: true }); }
+    status = document.getElementById('scannerStatus');
+    if(status) status.textContent = 'Ready — scan the next barcode.';
+  };
+  card.querySelector('.psc-close').onclick = () => card.remove();
+  return card;
+}
+
 function renderPickingItems(){
   const list = document.getElementById('pickingItemList');
   list.innerHTML = '';
@@ -6727,6 +6512,7 @@ function renderPickingPrintTable(){
   const rows = currentPickingItems.map(it => `
     <tr>
       <td>${escapeHtml(it.item_name)}</td>
+      <td class="locationcell">${escapeHtml(it.location || '')}</td>
       <td>${it.barcode ? escapeHtml(it.barcode) : '—'}</td>
       <td class="qtycell">${it.stock_available === null || it.stock_available === undefined ? '—' : it.stock_available}</td>
       <td class="qtycell">${it.qty_added}</td>
@@ -6736,7 +6522,7 @@ function renderPickingPrintTable(){
   table.innerHTML = `
     <thead>
       <tr>
-        <th>Item</th><th>Barcode</th><th class="qtycell">In Stock</th><th class="qtycell">Requested</th><th class="checkcell">✓</th>
+        <th>Item</th><th>Location</th><th>Barcode</th><th class="qtycell">In Stock</th><th class="qtycell">Requested</th><th class="checkcell">✓</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>
@@ -6754,10 +6540,12 @@ function pickRowStateClass(it){
 function renderPickingRow(it){
   const row = document.createElement('div');
   row.className = 'pickrow' + pickRowStateClass(it);
+  row.dataset.itemRowId = String(it.item_row_id);
   row.innerHTML = `
     <div class="pickinfo">
       <span class="pname${it.qty_added > 0 && it.qty_picked >= it.qty_added ? ' done' : ''}">${escapeHtml(it.item_name)}</span>
       ${it.barcode ? `<span class="pbarcode">#${escapeHtml(it.barcode)}</span>` : ''}
+      <span class="plocation">${escapeHtml(it.location || '')}</span>
     </div>
     <div class="pickqty">
       <span class="preq">Req: ${it.qty_added}</span>
@@ -7003,6 +6791,7 @@ async function openHistoryDetail(id){
       return `
         <tr>
           <td>${escapeHtml(it.item_name)}</td>
+          <td class="locationcell">${escapeHtml(it.location || '')}</td>
           <td class="mono" style="font-size:11px;color:var(--text-dim);">${it.barcode ? escapeHtml(it.barcode) : '—'}</td>
           <td class="qtycell">${it.qty_added}</td>
           <td class="qtycell">${it.qty_picked}</td>
@@ -7011,7 +6800,7 @@ async function openHistoryDetail(id){
     }).join('');
     content.innerHTML = `
       <table class="finaltable">
-        <thead><tr><th>Item</th><th>Barcode</th><th class="qtycell">Requested</th><th class="qtycell">Picked</th><th>Result</th></tr></thead>
+        <thead><tr><th>Item</th><th>Location</th><th>Barcode</th><th class="qtycell">Requested</th><th class="qtycell">Picked</th><th>Result</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     `;
@@ -7071,13 +6860,14 @@ async function showFinal(){
       let rows = catItems.map(it => `
         <tr>
           <td>${escapeHtml(it.item_name)}</td>
+          <td class="locationcell">${escapeHtml(it.location || '')}</td>
           <td class="qtycell">${it.qty_required}</td>
           <td class="qtycell">${it.stock_available === null || it.stock_available === undefined ? '—' : it.stock_available}</td>
         </tr>`).join('');
       block.innerHTML = `
         <h3>${cat ? escapeHtml(cat.category_name) : 'Category'} <span class="tagchip">BIN-${String(catId).padStart(3,'0')}</span></h3>
         <table class="finaltable">
-          <thead><tr><th>Item</th><th class="qtycell">Qty required</th><th class="qtycell">Stock available</th></tr></thead>
+          <thead><tr><th>Item</th><th>Location</th><th class="qtycell">Qty required</th><th class="qtycell">Stock available</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       `;
@@ -7107,7 +6897,9 @@ async function buildFinalListPDFDoc(){
   Object.keys(grouped).forEach(catId=>{
     const cat = catMap[catId];
     const rows = grouped[catId].map(it => [
-      it.item_name, String(it.qty_required),
+      it.item_name,
+      it.location || '',
+      String(it.qty_required),
       it.stock_available === null || it.stock_available === undefined ? '—' : String(it.stock_available)
     ]);
     doc.setFontSize(12);
@@ -7115,7 +6907,7 @@ async function buildFinalListPDFDoc(){
     doc.text(cat ? cat.category_name : 'Category', 14, y);
     doc.autoTable({
       startY: y + 3,
-      head: [['Item', 'Qty required', 'Stock available']],
+      head: [['Item', 'Location', 'Qty required', 'Stock available']],
       body: rows,
       theme: 'grid',
       headStyles: { fillColor: [30,34,42] },
@@ -7159,6 +6951,7 @@ function buildRetailPickingSheetPDF(title, metaLines, items, filenamePrefix){
   y += 3;
   const rows = items.map(it => [
     it.item_name,
+    it.location || '',
     it.barcode || '—',
     String(it.qty_added),
     String(it.qty_picked),
@@ -7166,7 +6959,7 @@ function buildRetailPickingSheetPDF(title, metaLines, items, filenamePrefix){
   ]);
   doc.autoTable({
     startY: y,
-    head: [['Item', 'Barcode', 'Requested', 'Picked', 'Result']],
+    head: [['Item', 'Location', 'Barcode', 'Requested', 'Picked', 'Result']],
     body: rows,
     theme: 'grid',
     headStyles: { fillColor: [30,34,42] },
@@ -7196,6 +6989,7 @@ function buildBlankPickingSheetPDF(title, metaLines, items, filenamePrefix){
   const sorted = [...items].sort((a, b) => a.item_name.localeCompare(b.item_name, undefined, { sensitivity: 'base' }));
   const rows = sorted.map(it => [
     it.item_name,
+    it.location || '',
     it.barcode || '—',
     (it.stock_available === null || it.stock_available === undefined) ? '—' : String(it.stock_available),
     String(it.qty_added),
@@ -7203,7 +6997,7 @@ function buildBlankPickingSheetPDF(title, metaLines, items, filenamePrefix){
   ]);
   doc.autoTable({
     startY: y,
-    head: [['Item', 'Barcode', 'In Stock', 'Requested', 'Picked']],
+    head: [['Item', 'Location', 'Barcode', 'In Stock', 'Requested', 'Picked']],
     body: rows,
     theme: 'grid',
     headStyles: { fillColor: [30,34,42] },
