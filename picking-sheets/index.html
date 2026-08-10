@@ -5090,7 +5090,8 @@ async function createNewInvoiceFromPdf(){
         matched_name: m.item_name || null,
         qty: null, // deliberately blank — filled in by hand on the next screen
         current_cost_price: (oi.unit_price === undefined || oi.unit_price === null) ? null : oi.unit_price,
-        _ocrQtyHint: (oi.qty === undefined || oi.qty === null) ? null : oi.qty
+        _ocrQtyHint: (oi.qty === undefined || oi.qty === null) ? null : oi.qty,
+        _matchedVia: m.matched_via || null // 'notes_exact' | 'fuzzy' | null — frontend hint only, not saved
       };
     });
 
@@ -5130,11 +5131,16 @@ function renderCreatedInvoiceMatchTable(){
   const tbody = document.createElement('tbody');
   items.forEach((it, idx) => {
     const matched = !!it.stockid;
+    const matchTag = it._matchedVia === 'notes_exact'
+      ? '<span style="font-size:10px;letter-spacing:.03em;text-transform:uppercase;color:var(--green);background:#eafaf0;border-radius:20px;padding:2px 8px;font-weight:700;margin-left:6px;">\u2713 Exact match</span>'
+      : (it._matchedVia === 'fuzzy'
+        ? '<span style="font-size:10px;letter-spacing:.03em;text-transform:uppercase;color:var(--accent-dim);background:var(--panel2);border-radius:20px;padding:2px 8px;font-weight:700;margin-left:6px;">Guessed \u2014 check</span>'
+        : '');
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>
         ${matched
-          ? `<div>${escapeHtml(it.matched_name)}</div><div style="font-size:11px;color:var(--text-dim);">from PDF: ${escapeHtml(it.ocr_product_name)}</div>`
+          ? `<div>${escapeHtml(it.matched_name)}${matchTag}</div><div style="font-size:11px;color:var(--text-dim);">from PDF: ${escapeHtml(it.ocr_product_name)}</div>`
           : `<div style="color:var(--danger);font-weight:600;">${escapeHtml(it.ocr_product_name)}</div>
              <div style="font-size:12px;color:var(--danger);">\u26a0 Not matched \u2014 <a href="#" onclick="event.preventDefault(); toggleCreatedInvoiceSearch(${idx})">search for the right product</a></div>`
         }
@@ -5201,6 +5207,7 @@ async function runCreatedInvoiceSearch(idx, q){
 function pickCreatedInvoiceMatch(idx, stockid, name){
   currentCreatedInvoice.items[idx].stockid = stockid;
   currentCreatedInvoice.items[idx].matched_name = name;
+  currentCreatedInvoice.items[idx]._matchedVia = 'manual';
   renderCreatedInvoiceMatchTable();
 }
 async function saveCreatedInvoiceItems(){
