@@ -15,7 +15,6 @@
      the page is considered "ready" — no behaviour change, just no longer blocking. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <style>
   :root{
@@ -484,6 +483,97 @@
       display:inline-block;width:16px;height:16px;border:1.5px solid #111;
     }
   }
+
+  /* =========================================================
+     PHYSICAL SCANNER + MOBILE RESPONSIVE OVERRIDES
+     ========================================================= */
+  .scanner-modal{width:440px;max-width:calc(100vw - 24px);}
+  .scanner-direct{
+    display:flex;align-items:center;gap:12px;padding:13px 14px;margin:0 0 12px;
+    border:1px solid var(--line);border-radius:8px;background:var(--panel2);
+  }
+  .scanner-direct-icon{
+    width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+    background:rgba(22,163,74,.12);color:var(--green);font-size:20px;flex:none;
+  }
+  .scanner-direct strong{display:block;font-size:13px;margin-bottom:2px;}
+  .scanner-direct span{display:block;color:var(--text-dim);font-size:11px;line-height:1.35;}
+  .scanner-input{
+    width:100%;height:52px;padding:0 14px;border:2px solid var(--accent);border-radius:8px;
+    background:#fff;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:18px;
+    letter-spacing:.4px;text-align:center;
+  }
+  .scanner-input:focus{outline:3px solid rgba(184,134,11,.16);outline-offset:1px;}
+  .scanner-input:disabled{opacity:.65;}
+  .scan-ok{color:var(--green);font-size:13px;font-weight:600;padding:8px 0;border-bottom:1px solid var(--line);}
+  .scanner-feedback{padding:8px 0;border-bottom:1px solid var(--line);}
+  .plocation{font-size:11px;color:var(--accent-dim);font-weight:600;}
+  .locationcell{white-space:normal;min-width:130px;}
+
+  @media(max-width:760px){
+    body{font-size:14px;overflow-x:hidden;}
+    #app{width:100%;max-width:none;padding:0 12px 42px;}
+    header.topbar{position:sticky;top:0;margin:0 -12px 18px;padding:10px 12px;border-radius:0 0 10px 10px;gap:8px;}
+    .brand{min-width:0;flex:1;}
+    .brand h1{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .brand .sub{font-size:9px;letter-spacing:1px;}
+    .brand .tag{width:32px;height:32px;flex:none;}
+    nav.topnav{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+    .navbtn{width:100%;padding:9px 8px;font-size:12px;}
+    .hero{margin-bottom:20px;}
+    .hero h2{font-size:24px;line-height:1.15;}
+    .hero p{font-size:13px;line-height:1.45;}
+    .hero-home{padding:22px 18px;margin-bottom:18px;border-radius:12px;}
+    .tilegrid{grid-template-columns:1fr;gap:10px;}
+    .tile{padding:18px 16px;border-radius:9px;}
+    .tile h3{font-size:17px;}
+    .actionbar{flex-direction:column;align-items:stretch;gap:10px;margin-bottom:14px;}
+    .actionbar > div{width:100%;display:grid !important;grid-template-columns:1fr;gap:8px !important;}
+    .actionbar button,.actionbar .btn-ghost,.actionbar .btn-amber{width:100%;}
+    .historysearch{width:100%;max-width:none;}
+    .catgrid{grid-template-columns:1fr 1fr;gap:8px;}
+    .bincard{padding:14px;}
+    .bincard h4{font-size:14px;padding-right:0;line-height:1.3;}
+    .bincard-actions{top:8px;right:8px;}
+    .cardicon{width:30px;height:30px;}
+    .itemblocks{grid-template-columns:1fr 1fr;gap:8px;}
+    .itemblock{min-width:0;padding:9px;}
+    .itemblock .ibname{font-size:12px;}
+    .stepper button{width:38px;height:38px;}
+    .stepper .qty{height:38px;}
+    .modal-backdrop{padding:12px;align-items:center;}
+    .modal,.scanner-modal{width:100% !important;max-width:none;padding:20px;border-radius:12px;}
+    .modal input[type=text],.modal input[type=password],.modal input[type=datetime-local],.modal input[type=email]{font-size:16px;}
+    .pickrow{flex-direction:column;align-items:stretch;gap:10px;padding:13px;}
+    .pickrow .pickinfo{width:100%;}
+    .pickrow .pickqty{width:100%;display:grid;grid-template-columns:1fr auto auto auto;gap:7px;}
+    .pickrow .preq{align-self:center;}
+    .pickrow .stepper{min-width:112px;}
+    .pickrow .pickall{min-height:38px;}
+    .finaltable{display:block;width:100%;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;}
+    .finaltable th,.finaltable td{padding:9px 8px;font-size:12px;}
+    .restaurant-table-scroll{overflow-x:auto;}
+    .restaurant-footer-bar{padding:10px 0;}
+    .restaurant-footer-bar > div:last-child{display:grid !important;grid-template-columns:1fr;gap:8px;}
+    .restaurant-footer-bar > div:last-child button{width:100%;}
+    .searchresults{max-height:42vh;}
+    .crumbrow{margin-bottom:14px;overflow-x:auto;white-space:nowrap;padding-bottom:2px;}
+    .modal-close-row{flex-wrap:wrap;}
+    .modal-close-row button{flex:1;min-width:120px;}
+  }
+
+  @media(max-width:480px){
+    .catgrid{grid-template-columns:1fr;}
+    .itemblocks{grid-template-columns:1fr;}
+    .pickrow .pickqty{grid-template-columns:1fr 1fr 1fr;}
+    .pickrow .preq{grid-column:1 / -1;}
+    .pickrow .stepper{width:100%;min-width:0;}
+    .pickrow .pickall{width:100%;}
+    .pickrow .pickqty > .printqty{grid-column:1 / -1;}
+    .login-card{width:100%;max-width:none;padding:28px 20px;}
+    .scanner-input{height:56px;font-size:17px;}
+  }
+
 </style>
 </head>
 <body>
@@ -1674,19 +1764,25 @@
   </div>
 </div>
 
-<!-- BARCODE SCANNER MODAL -->
+<!-- PHYSICAL BARCODE SCANNER MODAL -->
 <div class="modal-backdrop" id="modalScanner">
-  <div class="modal" style="width:440px;">
+  <div class="modal scanner-modal">
     <h3>Scan barcode</h3>
-    <p class="modal-sub" id="scannerSubtitle">Point the camera at a barcode, or type it in below</p>
-    <div id="scannerBox"></div>
-    <div id="scanFeedback"></div>
-    <div class="scanmanual">
-      <input type="text" id="manualBarcodeInput" placeholder="Type barcode…" onkeydown="if(event.key==='Enter')submitManualBarcode()">
-      <button class="btn-ghost" onclick="submitManualBarcode()">Look up</button>
+    <p class="modal-sub" id="scannerSubtitle">Scan a barcode with the handheld scanner.</p>
+    <div class="scanner-direct">
+      <div class="scanner-direct-icon">▣</div>
+      <div>
+        <strong>Ready to scan</strong>
+        <span id="scannerStatus">Scan a barcode — it will be added automatically.</span>
+      </div>
     </div>
+    <input type="text" id="manualBarcodeInput" class="scanner-input"
+      placeholder="Scan barcode…" autocomplete="off" autocapitalize="off"
+      spellcheck="false" inputmode="none"
+      onkeydown="handleScannerKeydown(event)" oninput="handleScannerInput()">
+    <div id="scanFeedback"></div>
     <div class="modal-close-row">
-      <button class="btn-ghost" onclick="closeScanner()">Done adding</button>
+      <button class="btn-ghost" onclick="closeScanner()">Done</button>
     </div>
   </div>
 </div>
@@ -5992,172 +6088,153 @@ function closeMakingList(){
   loadMakingLists();
 }
 
-/* ============ RETAIL: BARCODE SCANNER ============ */
+/* ============ RETAIL: PHYSICAL BARCODE SCANNER ============ */
+/*
+  The handheld scanner behaves like a keyboard. The barcode field is
+  focused automatically, Enter submits immediately, and the matched item
+  is added automatically. No camera and no separate Look Up/Add click.
+*/
+let scannerInputTimer = null;
+let scannerLookupInProgress = false;
+let scannerSequence = 0;
+
 function openScanner(target){
   scannerTarget = target || 'retail';
   scannerListEl = document.getElementById('scanFeedback');
   scannerListEl.innerHTML = '';
-  document.getElementById('manualBarcodeInput').value = '';
-  lastScannedCode = null;
-  lastScannedAt = 0;
+
+  const input = document.getElementById('manualBarcodeInput');
+  input.value = '';
+  input.disabled = false;
+
   const sub = document.getElementById('scannerSubtitle');
+  const status = document.getElementById('scannerStatus');
+
   if(scannerTarget === 'warehouse' && currentCategory){
-    sub.textContent = 'Adding to "' + currentCategory.category_name + '" — point the camera at a barcode, or type it in below';
+    sub.textContent = 'Adding to "' + currentCategory.category_name + '"';
   } else if(scannerTarget === 'retail' && currentMakingList){
-    sub.textContent = 'Adding to "' + currentMakingList.list_name + '" — point the camera at a barcode, or type it in below';
+    sub.textContent = 'Adding to "' + currentMakingList.list_name + '"';
   } else if(scannerTarget === 'location' && currentRow){
-    sub.textContent = 'Adding to Row ' + currentRow.row_name + ' — point the camera at a barcode, or type it in below';
+    sub.textContent = 'Adding to Row ' + currentRow.row_name;
   } else {
-    sub.textContent = 'Point the camera at a barcode, or type it in below';
+    sub.textContent = 'Scan a barcode with the handheld scanner.';
   }
+
+  status.textContent = 'Scan a barcode — it will be added automatically.';
   openModal('modalScanner');
-  startCameraScanner();
+
+  requestAnimationFrame(() => {
+    input.focus({ preventScroll: true });
+    input.select();
+  });
 }
+
 function closeScanner(){
-  stopCameraScanner();
+  if(scannerInputTimer){
+    clearTimeout(scannerInputTimer);
+    scannerInputTimer = null;
+  }
+  scannerLookupInProgress = false;
+  scannerSequence++;
   closeModal('modalScanner');
 }
-let html5QrInstance = null;
-// Limit decoding to the barcode formats we actually use (skips QR/PDF417/etc checks each frame — faster)
-const SCAN_FORMATS = (typeof Html5QrcodeSupportedFormats !== 'undefined') ? [
-  Html5QrcodeSupportedFormats.EAN_13,
-  Html5QrcodeSupportedFormats.EAN_8,
-  Html5QrcodeSupportedFormats.UPC_A,
-  Html5QrcodeSupportedFormats.UPC_E,
-  Html5QrcodeSupportedFormats.CODE_128,
-  Html5QrcodeSupportedFormats.CODE_39,
-  Html5QrcodeSupportedFormats.CODABAR,
-  Html5QrcodeSupportedFormats.ITF
-] : undefined;
-function startCameraScanner(){
-  if(typeof Html5Qrcode === 'undefined'){
-    document.getElementById('scannerBox').innerHTML = '<div class="scanfail" style="padding:14px;">Camera scanner failed to load — use the barcode field below instead.</div>';
-    return;
-  }
-  document.getElementById('scannerBox').innerHTML = '<div id="scannerVideoBox"></div>';
-  html5QrInstance = new Html5Qrcode('scannerVideoBox', {
-    formatsToSupport: SCAN_FORMATS,
-    // Uses the phone's native barcode decoder when the browser supports it (fast path on
-    // recent iOS Safari / Chrome) instead of the slower pure-JS decoder every frame.
-    experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-    verbose: false
-  });
-  scannerRunning = true;
-  html5QrInstance.start(
-    { facingMode: 'environment' },
-    {
-      fps: 15,
-      // Wide, short box matches a barcode's shape and adapts to the phone's screen width —
-      // easier to line up a barcode into, which is most of what was "slow" before.
-      qrbox: (viewfinderWidth, viewfinderHeight) => ({
-        width: Math.floor(Math.min(viewfinderWidth * 0.85, 380)),
-        height: Math.floor(Math.min(viewfinderHeight * 0.45, 160))
-      })
-    },
-    (decodedText) => {
-      const now = Date.now();
-      if(decodedText === lastScannedCode && (now - lastScannedAt) < SCAN_COOLDOWN_MS){
-        return; // same code decoded again within cooldown — ignore, don't re-lookup
-      }
-      lastScannedCode = decodedText;
-      lastScannedAt = now;
-      handleScannedCode(decodedText);
-    },
-    () => {}
-  ).catch(()=>{
-    document.getElementById('scannerBox').innerHTML = '<div class="scanfail" style="padding:14px;">Could not access camera — allow camera permission, or use the barcode field below.</div>';
-  });
-}
-function pauseCameraScanner(){
-  if(html5QrInstance && scannerRunning){
-    try{ html5QrInstance.pause(true); }catch(e){}
+
+function handleScannerKeydown(event){
+  if(event.key === 'Enter' || event.key === 'Tab'){
+    event.preventDefault();
+    clearTimeout(scannerInputTimer);
+    scannerInputTimer = null;
+    submitManualBarcode();
   }
 }
-function resumeCameraScanner(){
-  if(html5QrInstance && scannerRunning){
-    try{ html5QrInstance.resume(); }catch(e){}
-  }
+
+function handleScannerInput(){
+  clearTimeout(scannerInputTimer);
+  const input = document.getElementById('manualBarcodeInput');
+  if(!input || !input.value.trim()) return;
+
+  // Fallback for scanners that do not append Enter.
+  scannerInputTimer = setTimeout(() => {
+    scannerInputTimer = null;
+    submitManualBarcode();
+  }, 180);
 }
-function stopCameraScanner(){
-  if(html5QrInstance && scannerRunning){
-    scannerRunning = false;
-    html5QrInstance.stop().then(()=>html5QrInstance.clear()).catch(()=>{});
-  }
-}
+
 function submitManualBarcode(){
-  const code = document.getElementById('manualBarcodeInput').value.trim();
+  const input = document.getElementById('manualBarcodeInput');
+  if(!input || scannerLookupInProgress) return;
+
+  const code = input.value.trim();
   if(!code) return;
+
+  clearTimeout(scannerInputTimer);
+  scannerInputTimer = null;
   handleScannedCode(code);
 }
+
 async function handleScannedCode(code){
-  document.getElementById('manualBarcodeInput').value = '';
-  pauseCameraScanner();
+  if(scannerLookupInProgress) return;
+
+  scannerLookupInProgress = true;
+  const mySequence = scannerSequence;
+  const input = document.getElementById('manualBarcodeInput');
+  const status = document.getElementById('scannerStatus');
   const box = document.getElementById('scanFeedback');
-  const loadingEl = document.createElement('div');
-  loadingEl.className = 'loading';
-  loadingEl.textContent = 'Looking up ' + code + '…';
-  box.prepend(loadingEl);
+
+  input.value = '';
+  input.disabled = true;
+  status.textContent = 'Looking up ' + code + '…';
+
   try{
     const data = await apiGet('stock/barcode/' + encodeURIComponent(code));
-    loadingEl.remove();
+
+    if(mySequence !== scannerSequence) return;
+
     if(!data.item){
       const fail = document.createElement('div');
-      fail.className = 'scanfail';
-      fail.textContent = 'No stock item found for barcode ' + code;
+      fail.className = 'scanfail scanner-feedback';
+      fail.textContent = 'Barcode not found: ' + code;
       box.prepend(fail);
-      resumeCameraScanner();
+      status.textContent = 'Not found — scan another barcode.';
+      input.disabled = false;
+      input.focus({ preventScroll: true });
       return;
     }
-    box.prepend(renderScanResultCard(data.item, code));
+
+    const stock = data.item;
+
+    // One physical scan = one unit. Scanning it again increases the quantity.
+    if(scannerTarget === 'warehouse'){
+      addScannedItemToWarehouseCategory(stock, 1);
+    }else if(scannerTarget === 'location'){
+      addScannedItemToRow(stock);
+    }else{
+      addScannedItemToMakingList(stock, 1);
+    }
+
+    const ok = document.createElement('div');
+    ok.className = 'scan-ok';
+    ok.textContent = '✓ ' + stock.name + ' added';
+    box.prepend(ok);
+    status.textContent = 'Ready — scan the next barcode.';
+
+    input.disabled = false;
+    input.focus({ preventScroll: true });
   }catch(e){
-    loadingEl.remove();
+    if(mySequence !== scannerSequence) return;
     const fail = document.createElement('div');
-    fail.className = 'scanfail';
+    fail.className = 'scanfail scanner-feedback';
     fail.textContent = 'Lookup failed for ' + code;
     box.prepend(fail);
+    status.textContent = 'Lookup failed — scan again.';
+    input.disabled = false;
+    input.focus({ preventScroll: true });
     console.error(e);
-    resumeCameraScanner();
+  }finally{
+    scannerLookupInProgress = false;
   }
 }
-function renderScanResultCard(stock, scannedCode){
-  const card = document.createElement('div');
-  card.className = 'scanresult-card';
-  let qty = 1;
-  const barcodeText = stock.barcode || scannedCode || '—';
-  const showStepper = scannerTarget !== 'location';
-  card.innerHTML = `
-    <div class="srname">${escapeHtml(stock.name)}</div>
-    <div class="srbarcode">Barcode: ${escapeHtml(barcodeText)}</div>
-    <div class="srstock">In stock: <span class="val ${stockClass(stock.quantity)}">${stock.quantity ?? '—'}</span></div>
-    <div class="srrow">
-      ${showStepper ? `
-      <div class="stepper">
-        <button class="ibminus" type="button">−</button>
-        <div class="qty">1</div>
-        <button class="ibplus" type="button">+</button>
-      </div>` : ''}
-      <button class="btn-ghost srskip">Skip</button>
-      <button class="btn-amber">${scannerTarget === 'location' ? 'Add to row' : 'Add to list'}</button>
-    </div>
-  `;
-  if(showStepper){
-    const qtyEl = card.querySelector('.qty');
-    card.querySelector('.ibminus').onclick = () => { qty = Math.max(1, qty-1); qtyEl.textContent = qty; };
-    card.querySelector('.ibplus').onclick = () => { qty = qty+1; qtyEl.textContent = qty; };
-  }
-  card.querySelector('.srskip').onclick = () => {
-    card.remove();
-    resumeCameraScanner();
-  };
-  card.querySelector('.btn-amber').onclick = () => {
-    if(scannerTarget === 'warehouse'){ addScannedItemToWarehouseCategory(stock, qty); }
-    else if(scannerTarget === 'location'){ addScannedItemToRow(stock); }
-    else { addScannedItemToMakingList(stock, qty); }
-    card.remove();
-    resumeCameraScanner();
-  };
-  return card;
-}
+
 function addScannedItemToMakingList(stock, qty){
   if(!currentMakingList) return;
   const existing = currentMakingItems.find(it => it.stockid === stock.stockid || it.item_name.toLowerCase().trim() === (stock.name||'').toLowerCase().trim());
@@ -6330,6 +6407,7 @@ function renderPickingPrintTable(){
   const rows = currentPickingItems.map(it => `
     <tr>
       <td>${escapeHtml(it.item_name)}</td>
+      <td class="locationcell">${escapeHtml(it.location || '')}</td>
       <td>${it.barcode ? escapeHtml(it.barcode) : '—'}</td>
       <td class="qtycell">${it.stock_available === null || it.stock_available === undefined ? '—' : it.stock_available}</td>
       <td class="qtycell">${it.qty_added}</td>
@@ -6339,7 +6417,7 @@ function renderPickingPrintTable(){
   table.innerHTML = `
     <thead>
       <tr>
-        <th>Item</th><th>Barcode</th><th class="qtycell">In Stock</th><th class="qtycell">Requested</th><th class="checkcell">✓</th>
+        <th>Item</th><th>Location</th><th>Barcode</th><th class="qtycell">In Stock</th><th class="qtycell">Requested</th><th class="checkcell">✓</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>
@@ -6361,6 +6439,7 @@ function renderPickingRow(it){
     <div class="pickinfo">
       <span class="pname${it.qty_added > 0 && it.qty_picked >= it.qty_added ? ' done' : ''}">${escapeHtml(it.item_name)}</span>
       ${it.barcode ? `<span class="pbarcode">#${escapeHtml(it.barcode)}</span>` : ''}
+      <span class="plocation">${escapeHtml(it.location || '')}</span>
     </div>
     <div class="pickqty">
       <span class="preq">Req: ${it.qty_added}</span>
@@ -6606,6 +6685,7 @@ async function openHistoryDetail(id){
       return `
         <tr>
           <td>${escapeHtml(it.item_name)}</td>
+          <td class="locationcell">${escapeHtml(it.location || '')}</td>
           <td class="mono" style="font-size:11px;color:var(--text-dim);">${it.barcode ? escapeHtml(it.barcode) : '—'}</td>
           <td class="qtycell">${it.qty_added}</td>
           <td class="qtycell">${it.qty_picked}</td>
@@ -6614,7 +6694,7 @@ async function openHistoryDetail(id){
     }).join('');
     content.innerHTML = `
       <table class="finaltable">
-        <thead><tr><th>Item</th><th>Barcode</th><th class="qtycell">Requested</th><th class="qtycell">Picked</th><th>Result</th></tr></thead>
+        <thead><tr><th>Item</th><th>Location</th><th>Barcode</th><th class="qtycell">Requested</th><th class="qtycell">Picked</th><th>Result</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     `;
@@ -6674,13 +6754,14 @@ async function showFinal(){
       let rows = catItems.map(it => `
         <tr>
           <td>${escapeHtml(it.item_name)}</td>
+          <td class="locationcell">${escapeHtml(it.location || '')}</td>
           <td class="qtycell">${it.qty_required}</td>
           <td class="qtycell">${it.stock_available === null || it.stock_available === undefined ? '—' : it.stock_available}</td>
         </tr>`).join('');
       block.innerHTML = `
         <h3>${cat ? escapeHtml(cat.category_name) : 'Category'} <span class="tagchip">BIN-${String(catId).padStart(3,'0')}</span></h3>
         <table class="finaltable">
-          <thead><tr><th>Item</th><th class="qtycell">Qty required</th><th class="qtycell">Stock available</th></tr></thead>
+          <thead><tr><th>Item</th><th>Location</th><th class="qtycell">Qty required</th><th class="qtycell">Stock available</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       `;
@@ -6710,7 +6791,9 @@ async function buildFinalListPDFDoc(){
   Object.keys(grouped).forEach(catId=>{
     const cat = catMap[catId];
     const rows = grouped[catId].map(it => [
-      it.item_name, String(it.qty_required),
+      it.item_name,
+      it.location || '',
+      String(it.qty_required),
       it.stock_available === null || it.stock_available === undefined ? '—' : String(it.stock_available)
     ]);
     doc.setFontSize(12);
@@ -6718,7 +6801,7 @@ async function buildFinalListPDFDoc(){
     doc.text(cat ? cat.category_name : 'Category', 14, y);
     doc.autoTable({
       startY: y + 3,
-      head: [['Item', 'Qty required', 'Stock available']],
+      head: [['Item', 'Location', 'Qty required', 'Stock available']],
       body: rows,
       theme: 'grid',
       headStyles: { fillColor: [30,34,42] },
@@ -6762,6 +6845,7 @@ function buildRetailPickingSheetPDF(title, metaLines, items, filenamePrefix){
   y += 3;
   const rows = items.map(it => [
     it.item_name,
+    it.location || '',
     it.barcode || '—',
     String(it.qty_added),
     String(it.qty_picked),
@@ -6769,7 +6853,7 @@ function buildRetailPickingSheetPDF(title, metaLines, items, filenamePrefix){
   ]);
   doc.autoTable({
     startY: y,
-    head: [['Item', 'Barcode', 'Requested', 'Picked', 'Result']],
+    head: [['Item', 'Location', 'Barcode', 'Requested', 'Picked', 'Result']],
     body: rows,
     theme: 'grid',
     headStyles: { fillColor: [30,34,42] },
@@ -6799,6 +6883,7 @@ function buildBlankPickingSheetPDF(title, metaLines, items, filenamePrefix){
   const sorted = [...items].sort((a, b) => a.item_name.localeCompare(b.item_name, undefined, { sensitivity: 'base' }));
   const rows = sorted.map(it => [
     it.item_name,
+    it.location || '',
     it.barcode || '—',
     (it.stock_available === null || it.stock_available === undefined) ? '—' : String(it.stock_available),
     String(it.qty_added),
@@ -6806,7 +6891,7 @@ function buildBlankPickingSheetPDF(title, metaLines, items, filenamePrefix){
   ]);
   doc.autoTable({
     startY: y,
-    head: [['Item', 'Barcode', 'In Stock', 'Requested', 'Picked']],
+    head: [['Item', 'Location', 'Barcode', 'In Stock', 'Requested', 'Picked']],
     body: rows,
     theme: 'grid',
     headStyles: { fillColor: [30,34,42] },
