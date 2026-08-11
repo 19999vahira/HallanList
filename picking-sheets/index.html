@@ -24,7 +24,7 @@
     --header-bg:#0e1e33; --header-text:#f2f1ec; --header-text-dim:#93a8c4; --header-line:#28466b;
   }
   *{box-sizing:border-box;}
-  body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;overflow-x:hidden;}
   h1,h2,h3,.display{font-family:'Space Grotesk',sans-serif;}
   .mono{font-family:'JetBrains Mono',monospace;}
   ::selection{background:var(--accent);color:#0e1e33;}
@@ -52,7 +52,7 @@
   }
   .navbtn:hover{border-color:var(--accent);color:var(--accent);}
 
-  .crumbrow{display:flex;align-items:center;gap:8px;margin-bottom:22px;color:var(--text-dim);font-size:13px;}
+  .crumbrow{display:flex;align-items:center;gap:8px;margin-bottom:22px;color:var(--text-dim);font-size:13px;flex-wrap:wrap;row-gap:4px;}
   .crumbrow button{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:13px;font-family:'Inter',sans-serif;padding:0;}
   .crumbrow button:hover{color:var(--accent);}
   .crumbrow .sep{opacity:.4;}
@@ -193,7 +193,7 @@
     /* Qty stepper: slightly larger tap targets, and let the unit label/toggle
        drop to their own line instead of squeezing onto the stepper's row */
     .restaurant-qty-stepper button{width:38px;height:38px;font-size:18px;}
-    .restaurant-qty-stepper input{width:56px;height:38px;font-size:15px;}
+    .restaurant-qty-stepper input{width:56px;height:38px;font-size:16px;}
     .restaurant-unit-label{width:100%;margin-left:0;margin-top:4px;}
   }
   .restaurant-note-input{
@@ -336,11 +336,12 @@
   }
   .modal-backdrop.active{display:flex;}
   .modal{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:26px;width:420px;max-width:92vw;}
+  @media(max-width:480px){ .modal{padding:18px;} }
   .modal h3{margin:0 0 4px;font-size:17px;}
   .modal .modal-sub{color:var(--text-dim);font-size:12px;margin:0 0 18px;}
   .modal input[type=text],.modal input[type=password],.modal input[type=datetime-local],.modal input[type=email]{
     width:100%;padding:11px 13px;border-radius:6px;border:1px solid var(--line);
-    background:var(--panel2);color:var(--text);font-size:14px;margin-bottom:10px;font-family:'Inter',sans-serif;
+    background:var(--panel2);color:var(--text);font-size:16px;margin-bottom:10px;font-family:'Inter',sans-serif;
   }
   .modal input:focus{outline:none;border-color:var(--accent);}
   .searchresults{max-height:280px;overflow-y:auto;margin-top:4px;}
@@ -352,13 +353,9 @@
   .searchresult .sname{flex:1;padding-right:10px;}
   .searchresult .sstock{font-family:'JetBrains Mono',monospace;color:var(--text-dim);font-size:12px;white-space:nowrap;}
 
-  /* ---- barcode scanner ---- */
-  #scannerBox{
-    width:100%;max-width:320px;margin:0 auto 12px;border-radius:8px;overflow:hidden;background:#000;
-  }
-  #scannerBox video{width:100% !important;height:auto !important;display:block !important;object-fit:contain !important;}
+  /* ---- barcode scanner (hardware scanner — no camera) ---- */
   .scanmanual{display:flex;gap:8px;margin:4px 0 6px;}
-  .scanmanual input{flex:1;margin-bottom:0 !important;}
+  .scanmanual input{flex:1;margin-bottom:0 !important;font-size:16px;} /* 16px avoids iOS zoom-on-focus */
   .scanresult-card{
     background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:12px;
   }
@@ -435,6 +432,16 @@
     font-family:'JetBrains Mono',monospace;font-weight:700;
   }
   table.finaltable{width:100%;border-collapse:collapse;}
+  @media(max-width:760px){
+    /* overflow-x works directly on a <table> without changing its display —
+       forcing display:block here would break thead/tbody column alignment,
+       since each would start computing its own column widths independently */
+    table.finaltable{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%;}
+    /* iOS zooms the whole page in on focus for any input under 16px — several
+       inputs throughout the app set a smaller size via inline style, which a
+       plain rule can't out-rank, hence !important here specifically */
+    input, select, textarea { font-size:16px !important; }
+  }
   table.finaltable th{
     text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);
     padding:6px 10px;font-weight:600;
@@ -483,113 +490,6 @@
       display:inline-block;width:16px;height:16px;border:1.5px solid #111;
     }
   }
-
-  /* =========================================================
-     PHYSICAL SCANNER + MOBILE RESPONSIVE OVERRIDES
-     ========================================================= */
-  .scanner-modal{width:440px;max-width:calc(100vw - 24px);}
-  .scanner-direct{
-    display:flex;align-items:center;gap:12px;padding:13px 14px;margin:0 0 12px;
-    border:1px solid var(--line);border-radius:8px;background:var(--panel2);
-  }
-  .scanner-direct-icon{
-    width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;
-    background:rgba(22,163,74,.12);color:var(--green);font-size:20px;flex:none;
-  }
-  .scanner-direct strong{display:block;font-size:13px;margin-bottom:2px;}
-  .scanner-direct span{display:block;color:var(--text-dim);font-size:11px;line-height:1.35;}
-  .scanner-input{
-    width:100%;height:52px;padding:0 14px;border:2px solid var(--accent);border-radius:8px;
-    background:#fff;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:18px;
-    letter-spacing:.4px;text-align:center;
-  }
-  .scanner-input:focus{outline:3px solid rgba(184,134,11,.16);outline-offset:1px;}
-  .scanner-input:disabled{opacity:.65;}
-  .scan-ok{color:var(--green);font-size:13px;font-weight:600;padding:8px 0;border-bottom:1px solid var(--line);}
-  .scanner-feedback{padding:8px 0;border-bottom:1px solid var(--line);}
-  .pick-scan-card{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:14px;margin-top:10px;}
-  .pick-scan-card .psc-name{font-size:15px;font-weight:700;margin-bottom:4px;}
-  .pick-scan-card .psc-barcode{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);margin-bottom:8px;}
-  .pick-scan-card .psc-stock{font-family:'JetBrains Mono',monospace;font-size:12px;margin-bottom:10px;}
-  .pick-scan-card .psc-meta{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--text-dim);margin-bottom:10px;}
-  .pick-scan-card .psc-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
-  .pick-scan-card .psc-actions .stepper{flex:none;}
-  .pick-scan-card .psc-actions .btn-amber,.pick-scan-card .psc-actions .btn-ghost{padding:9px 14px;}
-  .making-scan-card{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:14px;margin-top:10px;}
-  .making-scan-card .msc-name{font-size:15px;font-weight:700;margin-bottom:4px;}
-  .making-scan-card .msc-barcode{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);margin-bottom:8px;}
-  .making-scan-card .msc-stock{font-family:'JetBrains Mono',monospace;font-size:12px;margin-bottom:10px;}
-  .making-scan-card .msc-meta{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--text-dim);margin-bottom:10px;}
-  .making-scan-card .msc-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
-  .making-scan-card .msc-actions .stepper{flex:none;}
-  .making-scan-card .msc-actions button{padding:9px 14px;}
-  .plocation{font-size:11px;color:var(--accent-dim);font-weight:600;}
-  .locationcell{white-space:normal;min-width:130px;}
-
-  @media(max-width:760px){
-    body{font-size:14px;overflow-x:hidden;}
-    #app{width:100%;max-width:none;padding:0 12px 42px;}
-    header.topbar{position:sticky;top:0;margin:0 -12px 18px;padding:10px 12px;border-radius:0 0 10px 10px;gap:8px;}
-    .brand{min-width:0;flex:1;}
-    .brand h1{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-    .brand .sub{font-size:9px;letter-spacing:1px;}
-    .brand .tag{width:32px;height:32px;flex:none;}
-    nav.topnav{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:6px;}
-    .navbtn{width:100%;padding:9px 8px;font-size:12px;}
-    .hero{margin-bottom:20px;}
-    .hero h2{font-size:24px;line-height:1.15;}
-    .hero p{font-size:13px;line-height:1.45;}
-    .hero-home{padding:22px 18px;margin-bottom:18px;border-radius:12px;}
-    .tilegrid{grid-template-columns:1fr;gap:10px;}
-    .tile{padding:18px 16px;border-radius:9px;}
-    .tile h3{font-size:17px;}
-    .actionbar{flex-direction:column;align-items:stretch;gap:10px;margin-bottom:14px;}
-    .actionbar > div{width:100%;display:grid !important;grid-template-columns:1fr;gap:8px !important;}
-    .actionbar button,.actionbar .btn-ghost,.actionbar .btn-amber{width:100%;}
-    .historysearch{width:100%;max-width:none;}
-    .catgrid{grid-template-columns:1fr 1fr;gap:8px;}
-    .bincard{padding:14px;}
-    .bincard h4{font-size:14px;padding-right:0;line-height:1.3;}
-    .bincard-actions{top:8px;right:8px;}
-    .cardicon{width:30px;height:30px;}
-    .itemblocks{grid-template-columns:1fr 1fr;gap:8px;}
-    .itemblock{min-width:0;padding:9px;}
-    .itemblock .ibname{font-size:12px;}
-    .stepper button{width:38px;height:38px;}
-    .stepper .qty{height:38px;}
-    .modal-backdrop{padding:12px;align-items:center;}
-    .modal,.scanner-modal{width:100% !important;max-width:none;padding:20px;border-radius:12px;}
-    .modal input[type=text],.modal input[type=password],.modal input[type=datetime-local],.modal input[type=email]{font-size:16px;}
-    .pickrow{flex-direction:column;align-items:stretch;gap:10px;padding:13px;}
-    .pickrow .pickinfo{width:100%;}
-    .pickrow .pickqty{width:100%;display:grid;grid-template-columns:1fr auto auto auto;gap:7px;}
-    .pickrow .preq{align-self:center;}
-    .pickrow .stepper{min-width:112px;}
-    .pickrow .pickall{min-height:38px;}
-    .finaltable{display:block;width:100%;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;}
-    .finaltable th,.finaltable td{padding:9px 8px;font-size:12px;}
-    .restaurant-table-scroll{overflow-x:auto;}
-    .restaurant-footer-bar{padding:10px 0;}
-    .restaurant-footer-bar > div:last-child{display:grid !important;grid-template-columns:1fr;gap:8px;}
-    .restaurant-footer-bar > div:last-child button{width:100%;}
-    .searchresults{max-height:42vh;}
-    .crumbrow{margin-bottom:14px;overflow-x:auto;white-space:nowrap;padding-bottom:2px;}
-    .modal-close-row{flex-wrap:wrap;}
-    .modal-close-row button{flex:1;min-width:120px;}
-  }
-
-  @media(max-width:480px){
-    .catgrid{grid-template-columns:1fr;}
-    .itemblocks{grid-template-columns:1fr;}
-    .pickrow .pickqty{grid-template-columns:1fr 1fr 1fr;}
-    .pickrow .preq{grid-column:1 / -1;}
-    .pickrow .stepper{width:100%;min-width:0;}
-    .pickrow .pickall{width:100%;}
-    .pickrow .pickqty > .printqty{grid-column:1 / -1;}
-    .login-card{width:100%;max-width:none;padding:28px 20px;}
-    .scanner-input{height:56px;font-size:17px;}
-  }
-
 </style>
 </head>
 <body>
@@ -818,7 +718,6 @@
     <div class="actionbar no-print">
       <span></span>
       <div style="display:flex;gap:10px;">
-        <button class="btn-ghost" onclick="openScanner('picking')">Scan Barcode</button>
         <button class="btn-ghost" onclick="window.print()">Print</button>
         <button class="btn-amber" onclick="downloadPickingListPDF()">Download PDF</button>
         <button class="btn-ghost" onclick="emailPickingListPDF()">Email</button>
@@ -1781,25 +1680,19 @@
   </div>
 </div>
 
-<!-- PHYSICAL BARCODE SCANNER MODAL -->
+<!-- BARCODE SCANNER MODAL -->
 <div class="modal-backdrop" id="modalScanner">
-  <div class="modal scanner-modal">
+  <div class="modal" style="width:400px;">
     <h3>Scan barcode</h3>
-    <p class="modal-sub" id="scannerSubtitle">Scan a barcode with the handheld scanner.</p>
-    <div class="scanner-direct">
-      <div class="scanner-direct-icon">▣</div>
-      <div>
-        <strong>Ready to scan</strong>
-        <span id="scannerStatus">Scan a barcode — product details will appear here.</span>
-      </div>
+    <p class="modal-sub" id="scannerSubtitle">Scan now — it looks up automatically</p>
+    <div class="scanmanual">
+      <input type="text" id="manualBarcodeInput" placeholder="Waiting for scan…" autocomplete="off" autocapitalize="off"
+        onkeydown="if(event.key==='Enter')submitManualBarcode()">
+      <button class="btn-ghost" onclick="submitManualBarcode()">Look up</button>
     </div>
-    <input type="text" id="manualBarcodeInput" class="scanner-input"
-      placeholder="Scan barcode…" autocomplete="off" autocapitalize="off"
-      spellcheck="false" inputmode="none"
-      onkeydown="handleScannerKeydown(event)" oninput="handleScannerInput()">
     <div id="scanFeedback"></div>
     <div class="modal-close-row">
-      <button class="btn-ghost" onclick="closeScanner()">Done</button>
+      <button class="btn-ghost" onclick="closeScanner()">Done adding</button>
     </div>
   </div>
 </div>
@@ -1867,10 +1760,7 @@ let currentMakingList = null;
 let currentMakingItems = [];
 let currentPickingList = null;
 let currentPickingItems = [];
-let scannerRunning = false;
 let scannerListEl = null;
-let lastScannedCode = null;
-let lastScannedAt = 0;
 let scannerTarget = 'retail'; // 'retail' (Making List), 'warehouse' (Warehouse category), or 'location' (Row products)
 let historyLists = [];
 let wholesaleRows = [];
@@ -1943,7 +1833,6 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 window.addEventListener('beforeunload', () => { if(activeTimer.phase) flushActiveTimer(true); });
-const SCAN_COOLDOWN_MS = 2500;
 
 /* ============ AUTH ============ */
 function doLogin(){
@@ -6105,183 +5994,111 @@ function closeMakingList(){
   loadMakingLists();
 }
 
-/* ============ RETAIL: PHYSICAL BARCODE SCANNER ============ */
-/*
-  The handheld scanner behaves like a keyboard. The barcode field is
-  focused automatically, Enter submits immediately, and the matched item
-  is added automatically. No camera and no separate Look Up/Add click.
-*/
-let scannerInputTimer = null;
-let scannerLookupInProgress = false;
-let scannerSequence = 0;
-
+/* ============ RETAIL: BARCODE SCANNER ============ */
 function openScanner(target){
   scannerTarget = target || 'retail';
   scannerListEl = document.getElementById('scanFeedback');
   scannerListEl.innerHTML = '';
-
   const input = document.getElementById('manualBarcodeInput');
   input.value = '';
-  input.disabled = false;
-
   const sub = document.getElementById('scannerSubtitle');
-  const status = document.getElementById('scannerStatus');
-
   if(scannerTarget === 'warehouse' && currentCategory){
-    sub.textContent = 'Adding to "' + currentCategory.category_name + '"';
+    sub.textContent = 'Adding to "' + currentCategory.category_name + '" — scan now, it looks up automatically';
   } else if(scannerTarget === 'retail' && currentMakingList){
-    sub.textContent = 'Adding to "' + currentMakingList.list_name + '"';
+    sub.textContent = 'Adding to "' + currentMakingList.list_name + '" — scan now, it looks up automatically';
   } else if(scannerTarget === 'location' && currentRow){
-    sub.textContent = 'Adding to Row ' + currentRow.row_name;
-  } else if(scannerTarget === 'picking' && currentPickingList){
-    sub.textContent = 'Picking from "' + currentPickingList.list_name + '"';
+    sub.textContent = 'Adding to Row ' + currentRow.row_name + ' — scan now, it looks up automatically';
   } else {
-    sub.textContent = 'Scan a barcode with the handheld scanner.';
+    sub.textContent = 'Scan now — it looks up automatically';
   }
-
-  status.textContent = 'Scan a barcode — product details will appear here.';
   openModal('modalScanner');
-
-  requestAnimationFrame(() => {
-    input.focus({ preventScroll: true });
-    input.select();
-  });
+  // The scanner is a keyboard-emulating hardware device — it types the
+  // barcode into whatever field has focus, then sends Enter. Focusing
+  // this field the instant the modal opens means the very first scan
+  // lands correctly with no click needed first.
+  input.focus();
 }
-
 function closeScanner(){
-  if(scannerInputTimer){
-    clearTimeout(scannerInputTimer);
-    scannerInputTimer = null;
-  }
-  scannerLookupInProgress = false;
-  scannerSequence++;
   closeModal('modalScanner');
 }
-
-function handleScannerKeydown(event){
-  if(event.key === 'Enter' || event.key === 'Tab'){
-    event.preventDefault();
-    clearTimeout(scannerInputTimer);
-    scannerInputTimer = null;
-    submitManualBarcode();
-  }
-}
-
-function handleScannerInput(){
-  clearTimeout(scannerInputTimer);
-  const input = document.getElementById('manualBarcodeInput');
-  if(!input || !input.value.trim()) return;
-
-  // Fallback for scanners that do not append Enter.
-  scannerInputTimer = setTimeout(() => {
-    scannerInputTimer = null;
-    submitManualBarcode();
-  }, 180);
-}
-
 function submitManualBarcode(){
-  const input = document.getElementById('manualBarcodeInput');
-  if(!input || scannerLookupInProgress) return;
-
-  const code = input.value.trim();
+  const code = document.getElementById('manualBarcodeInput').value.trim();
   if(!code) return;
-
-  clearTimeout(scannerInputTimer);
-  scannerInputTimer = null;
   handleScannedCode(code);
 }
-
 async function handleScannedCode(code){
-  if(scannerLookupInProgress) return;
-
-  scannerLookupInProgress = true;
-  const mySequence = scannerSequence;
   const input = document.getElementById('manualBarcodeInput');
-  const status = document.getElementById('scannerStatus');
-  const box = document.getElementById('scanFeedback');
-
   input.value = '';
-  input.disabled = true;
-  status.textContent = 'Looking up ' + code + '…';
-
+  const box = document.getElementById('scanFeedback');
+  const loadingEl = document.createElement('div');
+  loadingEl.className = 'loading';
+  loadingEl.textContent = 'Looking up ' + code + '…';
+  box.prepend(loadingEl);
   try{
     const data = await apiGet('stock/barcode/' + encodeURIComponent(code));
-
-    if(mySequence !== scannerSequence) return;
-
+    loadingEl.remove();
     if(!data.item){
       const fail = document.createElement('div');
-      fail.className = 'scanfail scanner-feedback';
-      fail.textContent = 'Barcode not found: ' + code;
+      fail.className = 'scanfail';
+      fail.textContent = 'No stock item found for barcode ' + code;
       box.prepend(fail);
-      status.textContent = 'Not found — scan another barcode.';
-      input.disabled = false;
-      input.focus({ preventScroll: true });
+      input.focus(); // straight back to ready-for-the-next-scan
       return;
     }
-
-    const stock = data.item;
-
-    // Picking screen: show the matched product and live stock first, then
-    // let the picker increase/decrease the picked quantity before saving.
-    if(scannerTarget === 'picking'){
-      const match = currentPickingItems.find(it =>
-        (stock.stockid != null && Number(it.stockid) === Number(stock.stockid)) ||
-        (stock.barcode && it.barcode && String(it.barcode).trim() === String(stock.barcode).trim())
-      );
-
-      const card = renderPickingScanResultCard(stock, code, match);
-      box.prepend(card);
-      status.textContent = match
-        ? 'Product found — adjust the picked quantity if needed.'
-        : 'Product found, but it is not on this picking list.';
-      input.disabled = false;
-      input.focus({ preventScroll: true });
-      return;
-    }
-
-    // Making-list scan: add one box/unit immediately, show the product name and
-    // live stock with +/- controls, then return focus to the scanner so the next
-    // barcode can be scanned without closing the card or pressing another button.
-    if(scannerTarget === 'warehouse'){
-      addScannedItemToWarehouseCategory(stock, 1);
-      const ok = document.createElement('div');
-      ok.className = 'scan-ok';
-      ok.textContent = '✓ ' + stock.name + ' added';
-      box.prepend(ok);
-    }else if(scannerTarget === 'location'){
-      addScannedItemToRow(stock);
-      const ok = document.createElement('div');
-      ok.className = 'scan-ok';
-      ok.textContent = '✓ ' + stock.name + ' added';
-      box.prepend(ok);
-    }else{
-      const item = addScannedItemToMakingList(stock, 1);
-      const card = renderMakingScanResultCard(stock, code, item);
-      box.prepend(card);
-    }
-
-    status.textContent = 'Ready — scan the next barcode.';
-    input.disabled = false;
-    input.focus({ preventScroll: true });
+    box.prepend(renderScanResultCard(data.item, code));
+    input.focus();
   }catch(e){
-    if(mySequence !== scannerSequence) return;
+    loadingEl.remove();
     const fail = document.createElement('div');
-    fail.className = 'scanfail scanner-feedback';
+    fail.className = 'scanfail';
     fail.textContent = 'Lookup failed for ' + code;
     box.prepend(fail);
-    status.textContent = 'Lookup failed — scan again.';
-    input.disabled = false;
-    input.focus({ preventScroll: true });
     console.error(e);
-  }finally{
-    scannerLookupInProgress = false;
+    input.focus();
   }
 }
-
+function renderScanResultCard(stock, scannedCode){
+  const card = document.createElement('div');
+  card.className = 'scanresult-card';
+  let qty = 1;
+  const barcodeText = stock.barcode || scannedCode || '—';
+  const showStepper = scannerTarget !== 'location';
+  card.innerHTML = `
+    <div class="srname">${escapeHtml(stock.name)}</div>
+    <div class="srbarcode">Barcode: ${escapeHtml(barcodeText)}</div>
+    <div class="srstock">In stock: <span class="val ${stockClass(stock.quantity)}">${stock.quantity ?? '—'}</span></div>
+    <div class="srrow">
+      ${showStepper ? `
+      <div class="stepper">
+        <button class="ibminus" type="button">−</button>
+        <div class="qty">1</div>
+        <button class="ibplus" type="button">+</button>
+      </div>` : ''}
+      <button class="btn-ghost srskip">Skip</button>
+      <button class="btn-amber">${scannerTarget === 'location' ? 'Add to row' : 'Add to list'}</button>
+    </div>
+  `;
+  if(showStepper){
+    const qtyEl = card.querySelector('.qty');
+    card.querySelector('.ibminus').onclick = () => { qty = Math.max(1, qty-1); qtyEl.textContent = qty; };
+    card.querySelector('.ibplus').onclick = () => { qty = qty+1; qtyEl.textContent = qty; };
+  }
+  card.querySelector('.srskip').onclick = () => {
+    card.remove();
+    document.getElementById('manualBarcodeInput').focus();
+  };
+  card.querySelector('.btn-amber').onclick = () => {
+    if(scannerTarget === 'warehouse'){ addScannedItemToWarehouseCategory(stock, qty); }
+    else if(scannerTarget === 'location'){ addScannedItemToRow(stock); }
+    else { addScannedItemToMakingList(stock, qty); }
+    card.remove();
+    document.getElementById('manualBarcodeInput').focus();
+  };
+  return card;
+}
 function addScannedItemToMakingList(stock, qty){
-  if(!currentMakingList) return null;
-  const existing = currentMakingItems.find(it => it.stockid === stock.stockid || (it.item_name||'').toLowerCase().trim() === (stock.name||'').toLowerCase().trim());
+  if(!currentMakingList) return;
+  const existing = currentMakingItems.find(it => it.stockid === stock.stockid || it.item_name.toLowerCase().trim() === (stock.name||'').toLowerCase().trim());
   if(existing){
     existing.qty_added += qty;
     const block = document.querySelector('#makingItemList .itemblock[data-row-id="' + CSS.escape(String(existing.item_row_id)) + '"]');
@@ -6289,14 +6106,13 @@ function addScannedItemToMakingList(stock, qty){
       block.querySelector('.qty').textContent = existing.qty_added;
       block.querySelector('.ibstock .val').textContent = existing.qty_added;
     }
-    existing._savePromise = apiPut('retail/lists/' + currentMakingList.list_id + '/items/' + existing.item_row_id, { qty_added: existing.qty_added })
-      .catch(e=>console.error(e));
-    return existing;
+    apiPut('retail/lists/' + currentMakingList.list_id + '/items/' + existing.item_row_id, { qty_added: existing.qty_added }).catch(e=>console.error(e));
+    toast(stock.name + ' quantity increased');
+    return;
   }
   const tempItem = {
     item_row_id: 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2),
-    item_name: stock.name, qty_added: qty, stockid: stock.stockid || null, barcode: stock.barcode || null,
-    stock_available: stock.quantity == null ? null : Number(stock.quantity)
+    item_name: stock.name, qty_added: qty, stockid: stock.stockid || null, barcode: stock.barcode || null
   };
   currentMakingItems.push(tempItem);
   const list = document.getElementById('makingItemList');
@@ -6305,73 +6121,22 @@ function addScannedItemToMakingList(stock, qty){
     list.appendChild(renderMakingItemBlock(tempItem));
     document.getElementById('makingItemCount').textContent = currentMakingItems.length + ' items';
   }
-  tempItem._savePromise = apiPost('retail/lists/' + currentMakingList.list_id + '/items', {
+  apiPost('retail/lists/' + currentMakingList.list_id + '/items', {
     item_name: stock.name, stockid: stock.stockid || null, barcode: stock.barcode || null, qty_added: qty
   }).then(()=> apiGet('retail/lists/' + currentMakingList.list_id))
     .then(data=>{
-      const match = (data.items||[]).find(i => (i.stockid && stock.stockid && Number(i.stockid) === Number(stock.stockid)) || (i.item_name||'').toLowerCase().trim() === stock.name.toLowerCase().trim());
+      const match = (data.items||[]).find(i => (i.item_name||'').toLowerCase().trim() === stock.name.toLowerCase().trim());
       if(match){
         const oldId = tempItem.item_row_id;
         tempItem.item_row_id = match.item_row_id;
         const block = document.querySelector('#makingItemList .itemblock[data-row-id="' + CSS.escape(String(oldId)) + '"]');
         if(block) block.dataset.rowId = match.item_row_id;
       }
-      return tempItem;
     }).catch(e=>{
       toast('Could not save ' + stock.name);
       console.error(e);
-      throw e;
     });
-  return tempItem;
-}
-
-function renderMakingScanResultCard(stock, scannedCode, item){
-  const card = document.createElement('div');
-  card.className = 'making-scan-card';
-  const stockQty = stock.quantity == null ? '—' : stock.quantity;
-  const barcodeText = stock.barcode || scannedCode || '';
-  let qty = item ? Number(item.qty_added || 1) : 1;
-  card.innerHTML = `
-    <div class="msc-name"></div>
-    <div class="msc-barcode"></div>
-    <div class="msc-stock">Stock available: <span class="val ${stockClass(stock.quantity)}"></span></div>
-    <div class="msc-meta"><span>Quantity: <strong class="msc-qty"></strong></span></div>
-    <div class="msc-actions">
-      <div class="stepper">
-        <button class="ibminus" type="button">−</button>
-        <div class="qty msc-qty-display"></div>
-        <button class="ibplus" type="button">+</button>
-      </div>
-    </div>
-  `;
-  card.querySelector('.msc-name').textContent = stock.name || (item && item.item_name) || 'Unknown product';
-  card.querySelector('.msc-barcode').textContent = barcodeText ? ('#' + barcodeText) : '';
-  card.querySelector('.msc-stock .val').textContent = String(stockQty);
-  const qtyText = card.querySelector('.msc-qty');
-  const qtyDisplay = card.querySelector('.msc-qty-display');
-  const updateQty = () => { qtyText.textContent = qty; qtyDisplay.textContent = qty; };
-  updateQty();
-  const saveQty = () => {
-    if(!item || !currentMakingList) return;
-    item.qty_added = qty;
-    const block = document.querySelector('#makingItemList .itemblock[data-row-id="' + CSS.escape(String(item.item_row_id)) + '"]');
-    if(block){
-      const q = block.querySelector('.qty');
-      const a = block.querySelector('.ibstock .val');
-      if(q) q.textContent = qty;
-      if(a) a.textContent = qty;
-    }
-    const doSave = () => apiPut('retail/lists/' + currentMakingList.list_id + '/items/' + item.item_row_id, { qty_added: qty }).catch(e=>console.error(e));
-    item._savePromise = item._savePromise ? item._savePromise.then(doSave, doSave) : doSave();
-  };
-  card.querySelector('.ibminus').onclick = () => {
-    if(qty <= 1) return;
-    qty--; updateQty(); saveQty();
-  };
-  card.querySelector('.ibplus').onclick = () => {
-    qty++; updateQty(); saveQty();
-  };
-  return card;
+  toast(stock.name + ' added');
 }
 function addScannedItemToWarehouseCategory(stock, qty){
   if(!currentCategory) return;
@@ -6490,82 +6255,6 @@ async function openPickingListDetail(id){
     console.error(e);
   }
 }
-function renderPickingScanResultCard(stock, scannedCode, item){
-  const card = document.createElement('div');
-  card.className = 'pick-scan-card';
-  const barcodeText = stock.barcode || scannedCode || '';
-  const stockQty = stock.quantity === null || stock.quantity === undefined ? '—' : stock.quantity;
-
-  if(!item){
-    card.innerHTML = `
-      <div class="psc-name">${escapeHtml(stock.name || 'Unknown product')}</div>
-      <div class="psc-barcode">Barcode: ${escapeHtml(barcodeText)}</div>
-      <div class="psc-stock">Stock available: <span class="val ${stockClass(stock.quantity)}">${escapeHtml(String(stockQty))}</span></div>
-      <div class="scanfail">This product is not on the current picking list.</div>
-    `;
-    return card;
-  }
-
-  let picked = Number(item.qty_picked || 0);
-  const requested = Number(item.qty_added || 0);
-  const max = Math.max(0, requested);
-
-  card.innerHTML = `
-    <div class="psc-name">${escapeHtml(stock.name || item.item_name)}</div>
-    <div class="psc-barcode">Barcode: ${escapeHtml(barcodeText)}</div>
-    <div class="psc-stock">Stock available: <span class="val ${stockClass(stock.quantity)}">${escapeHtml(String(stockQty))}</span></div>
-    <div class="psc-meta">
-      <span>Requested: <strong>${requested}</strong></span>
-      <span>Currently picked: <strong class="psc-picked">${picked}</strong></span>
-    </div>
-    <div class="psc-actions">
-      <div class="stepper">
-        <button class="ibminus" type="button">−</button>
-        <div class="qty psc-qty">${picked}</div>
-        <button class="ibplus" type="button">+</button>
-      </div>
-      <button class="btn-amber psc-save" type="button">Update picked</button>
-      <button class="btn-ghost psc-close" type="button">Close</button>
-    </div>
-  `;
-
-  const qtyEl = card.querySelector('.psc-qty');
-  const pickedEl = card.querySelector('.psc-picked');
-  const setLocal = (value) => {
-    picked = Math.max(0, Math.min(max, value));
-    qtyEl.textContent = picked;
-    pickedEl.textContent = picked;
-  };
-
-  // A scan immediately means one picked unit, unless the requested quantity
-  // has already been reached. The +/- controls then allow the picker to adjust it.
-  setLocal(Math.min(max, picked + 1));
-
-  card.querySelector('.ibminus').onclick = () => setLocal(picked - 1);
-  card.querySelector('.ibplus').onclick = () => setLocal(picked + 1);
-  card.querySelector('.psc-save').onclick = () => {
-    const row = document.querySelector('#pickingItemList .pickrow[data-item-row-id="' + CSS.escape(String(item.item_row_id)) + '"]');
-    if(row) setPickedQty(item, row, picked);
-    else {
-      item.qty_picked = picked;
-      item.picked = picked >= item.qty_added && item.qty_added > 0;
-      renderPickingItems();
-      apiPut('retail/lists/' + currentPickingList.list_id + '/items/' + item.item_row_id, {
-        qty_picked: picked, picked: item.picked
-      }).catch(e=>console.error(e));
-    }
-    card.querySelector('.psc-save').textContent = 'Saved';
-    card.querySelector('.psc-save').disabled = true;
-    setTimeout(() => { if(card.isConnected) card.remove(); }, 500);
-    const input = document.getElementById('manualBarcodeInput');
-    if(input){ input.disabled = false; input.focus({ preventScroll: true }); }
-    status = document.getElementById('scannerStatus');
-    if(status) status.textContent = 'Ready — scan the next barcode.';
-  };
-  card.querySelector('.psc-close').onclick = () => card.remove();
-  return card;
-}
-
 function renderPickingItems(){
   const list = document.getElementById('pickingItemList');
   list.innerHTML = '';
@@ -6579,7 +6268,6 @@ function renderPickingPrintTable(){
   const rows = currentPickingItems.map(it => `
     <tr>
       <td>${escapeHtml(it.item_name)}</td>
-      <td class="locationcell">${escapeHtml(it.location || '')}</td>
       <td>${it.barcode ? escapeHtml(it.barcode) : '—'}</td>
       <td class="qtycell">${it.stock_available === null || it.stock_available === undefined ? '—' : it.stock_available}</td>
       <td class="qtycell">${it.qty_added}</td>
@@ -6589,7 +6277,7 @@ function renderPickingPrintTable(){
   table.innerHTML = `
     <thead>
       <tr>
-        <th>Item</th><th>Location</th><th>Barcode</th><th class="qtycell">In Stock</th><th class="qtycell">Requested</th><th class="checkcell">✓</th>
+        <th>Item</th><th>Barcode</th><th class="qtycell">In Stock</th><th class="qtycell">Requested</th><th class="checkcell">✓</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>
@@ -6607,12 +6295,10 @@ function pickRowStateClass(it){
 function renderPickingRow(it){
   const row = document.createElement('div');
   row.className = 'pickrow' + pickRowStateClass(it);
-  row.dataset.itemRowId = String(it.item_row_id);
   row.innerHTML = `
     <div class="pickinfo">
       <span class="pname${it.qty_added > 0 && it.qty_picked >= it.qty_added ? ' done' : ''}">${escapeHtml(it.item_name)}</span>
       ${it.barcode ? `<span class="pbarcode">#${escapeHtml(it.barcode)}</span>` : ''}
-      <span class="plocation">${escapeHtml(it.location || '')}</span>
     </div>
     <div class="pickqty">
       <span class="preq">Req: ${it.qty_added}</span>
@@ -6858,7 +6544,6 @@ async function openHistoryDetail(id){
       return `
         <tr>
           <td>${escapeHtml(it.item_name)}</td>
-          <td class="locationcell">${escapeHtml(it.location || '')}</td>
           <td class="mono" style="font-size:11px;color:var(--text-dim);">${it.barcode ? escapeHtml(it.barcode) : '—'}</td>
           <td class="qtycell">${it.qty_added}</td>
           <td class="qtycell">${it.qty_picked}</td>
@@ -6867,7 +6552,7 @@ async function openHistoryDetail(id){
     }).join('');
     content.innerHTML = `
       <table class="finaltable">
-        <thead><tr><th>Item</th><th>Location</th><th>Barcode</th><th class="qtycell">Requested</th><th class="qtycell">Picked</th><th>Result</th></tr></thead>
+        <thead><tr><th>Item</th><th>Barcode</th><th class="qtycell">Requested</th><th class="qtycell">Picked</th><th>Result</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     `;
@@ -6927,14 +6612,13 @@ async function showFinal(){
       let rows = catItems.map(it => `
         <tr>
           <td>${escapeHtml(it.item_name)}</td>
-          <td class="locationcell">${escapeHtml(it.location || '')}</td>
           <td class="qtycell">${it.qty_required}</td>
           <td class="qtycell">${it.stock_available === null || it.stock_available === undefined ? '—' : it.stock_available}</td>
         </tr>`).join('');
       block.innerHTML = `
         <h3>${cat ? escapeHtml(cat.category_name) : 'Category'} <span class="tagchip">BIN-${String(catId).padStart(3,'0')}</span></h3>
         <table class="finaltable">
-          <thead><tr><th>Item</th><th>Location</th><th class="qtycell">Qty required</th><th class="qtycell">Stock available</th></tr></thead>
+          <thead><tr><th>Item</th><th class="qtycell">Qty required</th><th class="qtycell">Stock available</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       `;
@@ -6964,17 +6648,16 @@ async function buildFinalListPDFDoc(){
   Object.keys(grouped).forEach(catId=>{
     const cat = catMap[catId];
     const rows = grouped[catId].map(it => [
-      it.item_name,
-      it.location || '',
-      String(it.qty_required),
-      it.stock_available === null || it.stock_available === undefined ? '—' : String(it.stock_available)
+      it.item_name, String(it.qty_required),
+      it.stock_available === null || it.stock_available === undefined ? '—' : String(it.stock_available),
+      it.location || ''
     ]);
     doc.setFontSize(12);
     doc.setTextColor(20);
     doc.text(cat ? cat.category_name : 'Category', 14, y);
     doc.autoTable({
       startY: y + 3,
-      head: [['Item', 'Location', 'Qty required', 'Stock available']],
+      head: [['Item', 'Qty required', 'Stock available', 'Location']],
       body: rows,
       theme: 'grid',
       headStyles: { fillColor: [30,34,42] },
@@ -7018,15 +6701,15 @@ function buildRetailPickingSheetPDF(title, metaLines, items, filenamePrefix){
   y += 3;
   const rows = items.map(it => [
     it.item_name,
-    it.location || '',
     it.barcode || '—',
     String(it.qty_added),
     String(it.qty_picked),
-    it.qty_picked >= it.qty_added ? 'Complete' : (it.qty_added - it.qty_picked) + ' short'
+    it.qty_picked >= it.qty_added ? 'Complete' : (it.qty_added - it.qty_picked) + ' short',
+    it.location || ''
   ]);
   doc.autoTable({
     startY: y,
-    head: [['Item', 'Location', 'Barcode', 'Requested', 'Picked', 'Result']],
+    head: [['Item', 'Barcode', 'Requested', 'Picked', 'Result', 'Location']],
     body: rows,
     theme: 'grid',
     headStyles: { fillColor: [30,34,42] },
@@ -7056,23 +6739,23 @@ function buildBlankPickingSheetPDF(title, metaLines, items, filenamePrefix){
   const sorted = [...items].sort((a, b) => a.item_name.localeCompare(b.item_name, undefined, { sensitivity: 'base' }));
   const rows = sorted.map(it => [
     it.item_name,
-    it.location || '',
     it.barcode || '—',
+    it.location || '',
     (it.stock_available === null || it.stock_available === undefined) ? '—' : String(it.stock_available),
     String(it.qty_added),
     ''
   ]);
   doc.autoTable({
     startY: y,
-    head: [['Item', 'Location', 'Barcode', 'In Stock', 'Requested', 'Picked']],
+    head: [['Item', 'Barcode', 'Location', 'In Stock', 'Requested', 'Picked']],
     body: rows,
     theme: 'grid',
     headStyles: { fillColor: [30,34,42] },
     styles: { fontSize: 9 },
-    columnStyles: { 4: { cellWidth: 20 } },
+    columnStyles: { 5: { cellWidth: 20 } },
     margin: { left: 14, right: 14 },
     didDrawCell: (data) => {
-      if(data.section === 'body' && data.column.index === 4){
+      if(data.section === 'body' && data.column.index === 5){
         const size = 10;
         const bx = data.cell.x + (data.cell.width - size) / 2;
         const by = data.cell.y + (data.cell.height - size) / 2;
