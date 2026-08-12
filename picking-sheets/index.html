@@ -1354,8 +1354,8 @@
     </div>
     <div class="hero">
       <div class="eyebrow">Step 1 of 2</div>
-      <h2>Match Items &amp; Enter Quantities</h2>
-      <p>Lines in red weren't matched automatically — search and pick the right product for each. Quantities are left blank on purpose; enter them by hand (decimals are fine).</p>
+      <h2>Match Items &amp; Quantity as Box</h2>
+      <p>Matching is exact — a name only matches if it's listed in that product's NOTES. Lines in red weren't matched at all; search and pick the right product for those. Quantity as Box comes from the invoice — check it and adjust if needed.</p>
     </div>
     <div id="createdInvoiceMatchContent">
       <div class="loading">Loading…</div>
@@ -1379,8 +1379,8 @@
     </div>
     <div class="hero">
       <div class="eyebrow">Step 2 of 2</div>
-      <h2>Confirm Prices</h2>
-      <p>Previous cost/selling price come from the last time <em>this supplier</em> supplied this item. Margin compares the new cost against the existing selling price — red means it's below that department's minimum.</p>
+      <h2>Packaging &amp; Pricing</h2>
+      <p>Everything here is ready except Qty per Box — that's filled in by hand while physically checking each box. Cost/Unit, Total Qty, and Margin update automatically as you go. Previous Cost and Pack Size come from what's on file for <em>this exact supplier</em>. Margin turns red when it's below that department's minimum.</p>
     </div>
     <div class="actionbar">
       <span></span>
@@ -4935,7 +4935,7 @@ function downloadInvoiceOcrPdf(){
 }
 
 /* ============ CREATE INVOICE (3rd Invoices category) ============ */
-let currentCreatedInvoice = null; // { header, items } — items: {ocr_product_name, stockid, matched_name, qty, current_cost_price, previous_cost_price, previous_selling_price, barcode, department_name, min_margin_pct, _ocrQtyHint}
+let currentCreatedInvoice = null; // { header, items } — items: {ocr_product_name, stockid, matched_name, qty_box, qty_per_box, box_price, retail_price, previous_cost_price, pack_size_previous, barcode, department_name, min_margin_pct}
 let newInvoiceChosenSupplier = null; // { suppid, name }
 let createdInvoiceExportFormat = null;
 
@@ -4999,7 +4999,7 @@ async function openCreatedInvoice(id){
   try{
     const data = await apiGet('invoices/created/' + id + '/');
     currentCreatedInvoice = data;
-    const allQtyFilled = data.items.length > 0 && data.items.every(it => it.qty !== null && it.qty !== undefined && it.qty !== '');
+    const allQtyFilled = data.items.length > 0 && data.items.every(it => it.qty_box !== null && it.qty_box !== undefined && it.qty_box !== '');
     if(allQtyFilled) goToCreatedInvoicePrices();
     else openCreatedInvoiceMatchStep();
   }catch(e){
@@ -5090,10 +5090,11 @@ async function createNewInvoiceFromPdf(){
         ocr_product_name: oi.product_name || '',
         stockid: m.stockid || null,
         matched_name: m.item_name || null,
-        qty: null, // deliberately blank — filled in by hand on the next screen
-        current_cost_price: (oi.unit_price === undefined || oi.unit_price === null) ? null : oi.unit_price,
-        _ocrQtyHint: (oi.qty === undefined || oi.qty === null) ? null : oi.qty,
-        _matchedVia: m.matched_via || null // 'notes_exact' | 'fuzzy' | null — frontend hint only, not saved
+        qty_box: (oi.qty === undefined || oi.qty === null) ? null : oi.qty, // from the invoice, editable
+        qty_per_box: null, // the ONE field left blank on purpose — filled in by hand while checking each box
+        box_price: (oi.unit_price === undefined || oi.unit_price === null) ? null : oi.unit_price, // cost for one whole box, editable
+        retail_price: null, // editable, set by staff on the pricing step
+        _matchedVia: m.matched_via || null // 'notes_exact' | null — frontend hint only, not saved
       };
     });
 
@@ -5129,30 +5130,25 @@ function renderCreatedInvoiceMatchTable(){
   }
   const table = document.createElement('table');
   table.className = 'finaltable';
-  table.innerHTML = '<thead><tr><th>Item</th><th class="qtycell">Quantity</th></tr></thead>';
+  table.innerHTML = '<thead><tr><th>Name as per Invoice</th><th>Description as per Vector</th><th class="qtycell">Quantity as Box</th></tr></thead>';
   const tbody = document.createElement('tbody');
   items.forEach((it, idx) => {
     const matched = !!it.stockid;
-    const matchTag = it._matchedVia === 'notes_exact'
-      ? '<span style="font-size:10px;letter-spacing:.03em;text-transform:uppercase;color:var(--green);background:#eafaf0;border-radius:20px;padding:2px 8px;font-weight:700;margin-left:6px;">\u2713 Exact match</span>'
-      : (it._matchedVia === 'fuzzy'
-        ? '<span style="font-size:10px;letter-spacing:.03em;text-transform:uppercase;color:var(--accent-dim);background:var(--panel2);border-radius:20px;padding:2px 8px;font-weight:700;margin-left:6px;">Guessed \u2014 check</span>'
-        : '');
     const tr = document.createElement('tr');
     tr.innerHTML = `
+      <td>${escapeHtml(it.ocr_product_name)}</td>
       <td>
         ${matched
-          ? `<div>${escapeHtml(it.matched_name)}${matchTag}</div><div style="font-size:11px;color:var(--text-dim);">from PDF: ${escapeHtml(it.ocr_product_name)}</div>`
-          : `<div style="color:var(--danger);font-weight:600;">${escapeHtml(it.ocr_product_name)}</div>
-             <div style="font-size:12px;color:var(--danger);">\u26a0 Not matched \u2014 <a href="#" onclick="event.preventDefault(); toggleCreatedInvoiceSearch(${idx})">search for the right product</a></div>`
+          ? `${escapeHtml(it.matched_name)} <span style="font-size:10px;letter-spacing:.03em;text-transform:uppercase;color:var(--green);background:#eafaf0;border-radius:20px;padding:2px 8px;font-weight:700;margin-left:4px;">\u2713 Exact match</span>`
+          : `<div style="color:var(--danger);font-weight:600;">\u26a0 Not matched</div>
+             <div style="font-size:12px;"><a href="#" onclick="event.preventDefault(); toggleCreatedInvoiceSearch(${idx})">search for the right product</a></div>`
         }
         <div class="restaurant-sub-slot" id="createdInvoiceSearchSlot-${idx}" style="margin-top:6px;"></div>
       </td>
       <td class="qtycell">
         <input type="number" min="0" step="0.001" class="restaurant-qty-input" style="width:90px;"
-          placeholder="${it._ocrQtyHint !== null && it._ocrQtyHint !== undefined ? 'PDF: ' + it._ocrQtyHint : ''}"
-          value="${it.qty !== null && it.qty !== undefined ? it.qty : ''}"
-          onchange="updateCreatedInvoiceQty(${idx}, this.value)">
+          value="${it.qty_box !== null && it.qty_box !== undefined ? it.qty_box : ''}"
+          onchange="updateCreatedInvoiceQtyBox(${idx}, this.value)">
       </td>
     `;
     tbody.appendChild(tr);
@@ -5165,8 +5161,8 @@ function renderCreatedInvoiceMatchTable(){
   content.appendChild(scrollWrap);
   updateCreatedInvoiceMatchedCount();
 }
-function updateCreatedInvoiceQty(idx, value){
-  currentCreatedInvoice.items[idx].qty = value === '' ? null : Number(value);
+function updateCreatedInvoiceQtyBox(idx, value){
+  currentCreatedInvoice.items[idx].qty_box = value === '' ? null : Number(value);
 }
 function updateCreatedInvoiceMatchedCount(){
   const items = currentCreatedInvoice.items;
@@ -5218,8 +5214,10 @@ async function saveCreatedInvoiceItems(){
       ocr_product_name: it.ocr_product_name,
       stockid: it.stockid,
       matched_name: it.matched_name,
-      qty: it.qty,
-      current_cost_price: it.current_cost_price
+      qty_box: it.qty_box,
+      qty_per_box: it.qty_per_box,
+      box_price: it.box_price,
+      retail_price: it.retail_price
     }))
   });
 }
@@ -5235,9 +5233,9 @@ async function saveAndExitCreatedInvoice(){
 }
 async function goToCreatedInvoicePrices(){
   const unmatched = currentCreatedInvoice.items.filter(it => !it.stockid).length;
-  const missingQty = currentCreatedInvoice.items.filter(it => it.qty === null || it.qty === undefined).length;
+  const missingQty = currentCreatedInvoice.items.filter(it => it.qty_box === null || it.qty_box === undefined).length;
   if(unmatched > 0 || missingQty > 0){
-    if(!confirm(`${unmatched} item(s) still unmatched and ${missingQty} still missing a quantity. Continue to Prices anyway?`)) return;
+    if(!confirm(`${unmatched} item(s) still unmatched and ${missingQty} still missing a Quantity as Box. Continue anyway?`)) return;
   }
   try{
     await saveCreatedInvoiceItems();
@@ -5256,12 +5254,27 @@ function backToCreatedInvoiceMatch(){
   openCreatedInvoiceMatchStep();
 }
 
-/* ---- Step 2: Prices ---- */
+/* ---- Step 2: Packaging & Pricing ----
+   Only QTY_PER_BOX is left for staff to fill in while physically checking
+   each box — everything else here is either carried from step 1, looked
+   up (previous cost price / pack size, from SUPPLIER_STOCK for this exact
+   supplier), or computed live from the numbers already on the row. */
+function createdInvoiceCostPerUnit(it){
+  if(it.box_price === null || it.box_price === undefined) return null;
+  if(!it.qty_per_box) return null; // covers null, undefined, and 0 (division by zero)
+  return Number(it.box_price) / Number(it.qty_per_box);
+}
+function createdInvoiceTotalQty(it){
+  if(it.qty_box === null || it.qty_box === undefined) return null;
+  if(it.qty_per_box === null || it.qty_per_box === undefined) return null;
+  return Number(it.qty_box) * Number(it.qty_per_box);
+}
 function createdInvoiceMarginPct(it){
-  if(it.previous_selling_price === null || it.previous_selling_price === undefined) return null;
-  if(it.current_cost_price === null || it.current_cost_price === undefined) return null;
-  if(Number(it.previous_selling_price) === 0) return null;
-  return (Number(it.previous_selling_price) - Number(it.current_cost_price)) / Number(it.previous_selling_price) * 100;
+  const costPerUnit = createdInvoiceCostPerUnit(it);
+  if(costPerUnit === null) return null;
+  if(it.retail_price === null || it.retail_price === undefined) return null;
+  if(Number(it.retail_price) === 0) return null;
+  return (Number(it.retail_price) - costPerUnit) / Number(it.retail_price) * 100;
 }
 function renderCreatedInvoicePricesTable(){
   const content = document.getElementById('createdInvoicePricesContent');
@@ -5273,25 +5286,49 @@ function renderCreatedInvoicePricesTable(){
   const table = document.createElement('table');
   table.className = 'finaltable';
   table.innerHTML = `<thead><tr>
-    <th>Item</th><th class="qtycell">Previous Cost</th><th class="qtycell">Current Cost</th>
-    <th class="qtycell">Previous Selling</th><th class="qtycell">Margin</th><th>Barcode</th>
+    <th>Name as per Invoice</th><th>Description as per Vector</th>
+    <th class="qtycell">Qty as Box</th><th class="qtycell">Qty per Box</th>
+    <th class="qtycell">Box Price</th><th class="qtycell">Cost / Unit</th>
+    <th class="qtycell">Retail Price</th><th class="qtycell">Total Qty</th>
+    <th class="qtycell">Margin</th><th class="qtycell">Pack Size (Prev)</th>
+    <th class="qtycell">Previous Cost</th>
   </tr></thead>`;
   const tbody = document.createElement('tbody');
   items.forEach((it, idx) => {
     const margin = createdInvoiceMarginPct(it);
     const belowMin = margin !== null && margin < (it.min_margin_pct || 38);
+    const totalQty = createdInvoiceTotalQty(it);
+    const costPerUnit = createdInvoiceCostPerUnit(it);
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${escapeHtml(it.matched_name || it.ocr_product_name)}</td>
-      <td class="qtycell">${it.previous_cost_price === null || it.previous_cost_price === undefined ? '—' : Number(it.previous_cost_price).toFixed(2)}</td>
+      <td>${escapeHtml(it.ocr_product_name)}</td>
+      <td>${escapeHtml(it.matched_name || '—')}</td>
+      <td class="qtycell">
+        <input type="number" min="0" step="0.001" class="restaurant-qty-input" style="width:80px;"
+          value="${it.qty_box === null || it.qty_box === undefined ? '' : it.qty_box}"
+          onchange="updateCreatedInvoiceField(${idx}, 'qty_box', this.value)">
+      </td>
+      <td class="qtycell">
+        <input type="number" min="0" step="0.001" class="restaurant-qty-input" style="width:80px;"
+          placeholder="check each box"
+          value="${it.qty_per_box === null || it.qty_per_box === undefined ? '' : it.qty_per_box}"
+          onchange="updateCreatedInvoiceField(${idx}, 'qty_per_box', this.value)">
+      </td>
       <td class="qtycell">
         <input type="number" min="0" step="0.01" class="restaurant-qty-input" style="width:80px;"
-          value="${it.current_cost_price === null || it.current_cost_price === undefined ? '' : it.current_cost_price}"
-          onchange="updateCreatedInvoiceCostPrice(${idx}, this.value)">
+          value="${it.box_price === null || it.box_price === undefined ? '' : it.box_price}"
+          onchange="updateCreatedInvoiceField(${idx}, 'box_price', this.value)">
       </td>
-      <td class="qtycell">${it.previous_selling_price === null || it.previous_selling_price === undefined ? '—' : Number(it.previous_selling_price).toFixed(2)}</td>
+      <td class="qtycell" id="createdInvoiceCostUnitCell-${idx}">${costPerUnit === null ? '—' : costPerUnit.toFixed(2)}</td>
+      <td class="qtycell">
+        <input type="number" min="0" step="0.01" class="restaurant-qty-input" style="width:80px;"
+          value="${it.retail_price === null || it.retail_price === undefined ? '' : it.retail_price}"
+          onchange="updateCreatedInvoiceField(${idx}, 'retail_price', this.value)">
+      </td>
+      <td class="qtycell" id="createdInvoiceTotalQtyCell-${idx}">${totalQty === null ? '—' : totalQty}</td>
       <td class="qtycell" id="createdInvoiceMarginCell-${idx}" style="${belowMin ? 'color:var(--danger);font-weight:700;' : ''}">${margin === null ? '—' : margin.toFixed(1) + '%'}</td>
-      <td>${escapeHtml(it.barcode || '—')}</td>
+      <td class="qtycell">${it.pack_size_previous === null || it.pack_size_previous === undefined ? '—' : it.pack_size_previous}</td>
+      <td class="qtycell">${it.previous_cost_price === null || it.previous_cost_price === undefined ? '—' : Number(it.previous_cost_price).toFixed(2)}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -5302,16 +5339,29 @@ function renderCreatedInvoicePricesTable(){
   scrollWrap.appendChild(table);
   content.appendChild(scrollWrap);
 }
-function updateCreatedInvoiceCostPrice(idx, value){
-  currentCreatedInvoice.items[idx].current_cost_price = value === '' ? null : Number(value);
+// One handler for every editable field on this step — recomputes whichever
+// derived cells depend on it (cost/unit depends on box_price + qty_per_box;
+// total qty depends on qty_box + qty_per_box; margin depends on cost/unit +
+// retail_price) rather than re-rendering the whole table on every keystroke.
+function updateCreatedInvoiceField(idx, field, value){
+  currentCreatedInvoice.items[idx][field] = value === '' ? null : Number(value);
   const it = currentCreatedInvoice.items[idx];
+
+  const costPerUnit = createdInvoiceCostPerUnit(it);
+  const costCell = document.getElementById('createdInvoiceCostUnitCell-' + idx);
+  if(costCell) costCell.textContent = costPerUnit === null ? '—' : costPerUnit.toFixed(2);
+
+  const totalQty = createdInvoiceTotalQty(it);
+  const totalCell = document.getElementById('createdInvoiceTotalQtyCell-' + idx);
+  if(totalCell) totalCell.textContent = totalQty === null ? '—' : totalQty;
+
   const margin = createdInvoiceMarginPct(it);
   const belowMin = margin !== null && margin < (it.min_margin_pct || 38);
-  const cell = document.getElementById('createdInvoiceMarginCell-' + idx);
-  if(cell){
-    cell.textContent = margin === null ? '—' : margin.toFixed(1) + '%';
-    cell.style.color = belowMin ? 'var(--danger)' : '';
-    cell.style.fontWeight = belowMin ? '700' : '';
+  const marginCell = document.getElementById('createdInvoiceMarginCell-' + idx);
+  if(marginCell){
+    marginCell.textContent = margin === null ? '—' : margin.toFixed(1) + '%';
+    marginCell.style.color = belowMin ? 'var(--danger)' : '';
+    marginCell.style.fontWeight = belowMin ? '700' : '';
   }
 }
 async function finishCreatedInvoice(){
@@ -5326,22 +5376,31 @@ async function finishCreatedInvoice(){
   }
 }
 
-/* ---- Export (CSV/PDF with a column picker, same idea as Wholesale Pricing) ---- */
+/* ---- Export (CSV/PDF with a column picker, same idea as Wholesale Pricing).
+   Barcode and Supplier are checkboxes here but never appear in the on-screen
+   table — download-only extras, unchecked by default since they're not
+   needed day-to-day but should still be available when they are. ---- */
 const CREATED_INVOICE_EXPORT_COLUMNS = [
-  { key: 'item', label: 'Item', always: true },
-  { key: 'qty', label: 'Qty' },
-  { key: 'previous_cost', label: 'Previous Cost' },
-  { key: 'current_cost', label: 'Current Cost' },
-  { key: 'previous_selling', label: 'Previous Selling' },
+  { key: 'invoice_name', label: 'Name as per Invoice', always: true },
+  { key: 'description', label: 'Description as per Vector' },
+  { key: 'qty_box', label: 'Qty as Box' },
+  { key: 'qty_per_box', label: 'Qty per Box' },
+  { key: 'box_price', label: 'Box Price' },
+  { key: 'cost_per_unit', label: 'Cost / Unit' },
+  { key: 'retail_price', label: 'Retail Price' },
+  { key: 'total_qty', label: 'Total Qty' },
   { key: 'margin', label: 'Margin' },
-  { key: 'barcode', label: 'Barcode' }
+  { key: 'pack_size_previous', label: 'Pack Size (Previous)' },
+  { key: 'previous_cost_price', label: 'Previous Cost' },
+  { key: 'barcode', label: 'Barcode', extra: true },
+  { key: 'supplier', label: 'Supplier', extra: true }
 ];
 function openCreatedInvoiceExportModal(format){
   createdInvoiceExportFormat = format;
   const box = document.getElementById('createdInvoiceExportColumns');
   box.innerHTML = CREATED_INVOICE_EXPORT_COLUMNS.map(c => `
     <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;">
-      <input type="checkbox" id="cieCol-${c.key}" ${c.always ? 'checked disabled' : 'checked'}> ${c.label}
+      <input type="checkbox" id="cieCol-${c.key}" ${c.always ? 'checked disabled' : (c.extra ? '' : 'checked')}> ${c.label}${c.extra ? ' <span style="color:var(--text-dim);font-size:12px;">(not shown on screen)</span>' : ''}
     </label>
   `).join('');
   openModal('modalCreatedInvoiceExport');
@@ -5356,14 +5415,22 @@ function confirmCreatedInvoiceExport(){
 }
 function createdInvoiceExportRow(it, columns){
   const margin = createdInvoiceMarginPct(it);
+  const totalQty = createdInvoiceTotalQty(it);
+  const costPerUnit = createdInvoiceCostPerUnit(it);
   const row = {};
-  if(columns.item) row['Item'] = it.matched_name || it.ocr_product_name;
-  if(columns.qty) row['Qty'] = it.qty === null || it.qty === undefined ? '' : it.qty;
-  if(columns.previous_cost) row['Previous Cost'] = it.previous_cost_price === null || it.previous_cost_price === undefined ? '' : Number(it.previous_cost_price).toFixed(2);
-  if(columns.current_cost) row['Current Cost'] = it.current_cost_price === null || it.current_cost_price === undefined ? '' : Number(it.current_cost_price).toFixed(2);
-  if(columns.previous_selling) row['Previous Selling'] = it.previous_selling_price === null || it.previous_selling_price === undefined ? '' : Number(it.previous_selling_price).toFixed(2);
+  if(columns.invoice_name) row['Name as per Invoice'] = it.ocr_product_name;
+  if(columns.description) row['Description as per Vector'] = it.matched_name || '';
+  if(columns.qty_box) row['Qty as Box'] = it.qty_box === null || it.qty_box === undefined ? '' : it.qty_box;
+  if(columns.qty_per_box) row['Qty per Box'] = it.qty_per_box === null || it.qty_per_box === undefined ? '' : it.qty_per_box;
+  if(columns.box_price) row['Box Price'] = it.box_price === null || it.box_price === undefined ? '' : Number(it.box_price).toFixed(2);
+  if(columns.cost_per_unit) row['Cost / Unit'] = costPerUnit === null ? '' : costPerUnit.toFixed(2);
+  if(columns.retail_price) row['Retail Price'] = it.retail_price === null || it.retail_price === undefined ? '' : Number(it.retail_price).toFixed(2);
+  if(columns.total_qty) row['Total Qty'] = totalQty === null ? '' : totalQty;
   if(columns.margin) row['Margin'] = margin === null ? '' : margin.toFixed(1) + '%';
+  if(columns.pack_size_previous) row['Pack Size (Previous)'] = it.pack_size_previous === null || it.pack_size_previous === undefined ? '' : it.pack_size_previous;
+  if(columns.previous_cost_price) row['Previous Cost'] = it.previous_cost_price === null || it.previous_cost_price === undefined ? '' : Number(it.previous_cost_price).toFixed(2);
   if(columns.barcode) row['Barcode'] = it.barcode || '';
+  if(columns.supplier) row['Supplier'] = currentCreatedInvoice.header.supplier_name || '';
   return row;
 }
 function exportCreatedInvoice(format, columns){
@@ -5384,7 +5451,7 @@ function exportCreatedInvoice(format, columns){
     URL.revokeObjectURL(url);
   }else{
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
+    const doc = new jsPDF({ orientation: 'landscape' }); // this table has a lot of columns — landscape keeps it readable
     doc.setFontSize(16);
     doc.text('Invoice — ' + supplierName, 14, 18);
     doc.setFontSize(9);
@@ -5397,7 +5464,7 @@ function exportCreatedInvoice(format, columns){
     });
     doc.autoTable({
       startY: 30, head: [head], body,
-      theme: 'grid', headStyles: { fillColor: [30,34,42] }, styles: { fontSize: 9 },
+      theme: 'grid', headStyles: { fillColor: [30,34,42] }, styles: { fontSize: 8 },
       margin: { left: 14, right: 14 }
     });
     doc.save(filenameBase + '.pdf');
