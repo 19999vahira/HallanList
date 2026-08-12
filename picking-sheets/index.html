@@ -5377,9 +5377,10 @@ async function finishCreatedInvoice(){
 }
 
 /* ---- Export (CSV/PDF with a column picker, same idea as Wholesale Pricing).
-   Barcode and Supplier are checkboxes here but never appear in the on-screen
-   table — download-only extras, unchecked by default since they're not
-   needed day-to-day but should still be available when they are. ---- */
+   Barcode, Supplier, and Department are checkboxes here but never appear in
+   the on-screen table — download-only extras, unchecked by default since
+   they're not needed day-to-day but should still be available when they
+   are. ---- */
 const CREATED_INVOICE_EXPORT_COLUMNS = [
   { key: 'invoice_name', label: 'Name as per Invoice', always: true },
   { key: 'description', label: 'Description as per Vector' },
@@ -5393,7 +5394,8 @@ const CREATED_INVOICE_EXPORT_COLUMNS = [
   { key: 'pack_size_previous', label: 'Pack Size (Previous)' },
   { key: 'previous_cost_price', label: 'Previous Cost' },
   { key: 'barcode', label: 'Barcode', extra: true },
-  { key: 'supplier', label: 'Supplier', extra: true }
+  { key: 'supplier', label: 'Supplier', extra: true },
+  { key: 'department', label: 'Department', extra: true }
 ];
 function openCreatedInvoiceExportModal(format){
   createdInvoiceExportFormat = format;
@@ -5431,6 +5433,7 @@ function createdInvoiceExportRow(it, columns){
   if(columns.previous_cost_price) row['Previous Cost'] = it.previous_cost_price === null || it.previous_cost_price === undefined ? '' : Number(it.previous_cost_price).toFixed(2);
   if(columns.barcode) row['Barcode'] = it.barcode || '';
   if(columns.supplier) row['Supplier'] = currentCreatedInvoice.header.supplier_name || '';
+  if(columns.department) row['Department'] = it.department_name || '';
   return row;
 }
 function exportCreatedInvoice(format, columns){
