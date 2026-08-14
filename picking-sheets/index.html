@@ -355,7 +355,7 @@
 
   /* ---- barcode scanner (hardware scanner — no camera) ---- */
   .scanmanual{display:flex;gap:8px;margin:4px 0 6px;}
-  .scanmanual input{flex:1;margin-bottom:0 !important;font-size:16px;color:var(--text-dim);} /* 16px avoids iOS zoom-on-focus */
+  .scanmanual input{flex:1;margin-bottom:0 !important;font-size:16px;} /* 16px avoids iOS zoom-on-focus */
   .scanname-toggle{margin:0 0 4px;}
   .scanname-toggle a{color:var(--accent-dim);font-size:12px;text-decoration:none;}
   .scanname-toggle a:hover{text-decoration:underline;}
@@ -1713,10 +1713,11 @@
     <h3>Scan barcode</h3>
     <p class="modal-sub" id="scannerSubtitle">Scan now — it looks up automatically</p>
     <!-- This field only exists to catch the hardware scanner's keystrokes (it types
-         into whatever's focused, then sends Enter). -->
+         into whatever's focused, then sends Enter) or a manual "Look up" tap. -->
     <div class="scanmanual">
       <input type="text" id="manualBarcodeInput" placeholder="Ready to scan…" autocomplete="off" autocapitalize="off"
         onkeydown="if(event.key==='Enter')submitManualBarcode()">
+      <button class="btn-ghost" onclick="submitManualBarcode()">Look up</button>
     </div>
     <div class="scanname-toggle">
       <a href="#" onclick="event.preventDefault(); toggleScannerNameSearch()" id="scannerNameSearchToggle">Search by name instead</a>
