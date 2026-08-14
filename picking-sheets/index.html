@@ -1713,11 +1713,10 @@
     <h3>Scan barcode</h3>
     <p class="modal-sub" id="scannerSubtitle">Scan now — it looks up automatically</p>
     <!-- This field only exists to catch the hardware scanner's keystrokes (it types
-         into whatever's focused, then sends Enter). inputmode="none" stops the on-screen
-         keyboard popping up when it's focused, since nobody types into it by hand. -->
+         into whatever's focused, then sends Enter). -->
     <div class="scanmanual">
       <input type="text" id="manualBarcodeInput" placeholder="Ready to scan…" autocomplete="off" autocapitalize="off"
-        inputmode="none" onkeydown="if(event.key==='Enter')submitManualBarcode()">
+        onkeydown="if(event.key==='Enter')submitManualBarcode()">
     </div>
     <div class="scanname-toggle">
       <a href="#" onclick="event.preventDefault(); toggleScannerNameSearch()" id="scannerNameSearchToggle">Search by name instead</a>
