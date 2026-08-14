@@ -383,6 +383,7 @@
   .pickrow .pname{font-size:14px;}
   .pickrow .pname.done{color:var(--text-dim);}
   .pickrow .pbarcode{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);}
+  .pickrow .ploc{font-size:11px;color:var(--accent-dim);font-weight:600;}
   .pickrow .pickqty{display:flex;align-items:center;gap:10px;flex:none;}
   .pickrow .preq{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-dim);white-space:nowrap;}
   .pickrow .stepper .qtyinput{
@@ -6556,6 +6557,7 @@ function renderPickingPrintTable(){
     <tr>
       <td>${escapeHtml(it.item_name)}</td>
       <td>${it.barcode ? escapeHtml(it.barcode) : '—'}</td>
+      <td>${it.location ? escapeHtml(it.location) : '—'}</td>
       <td class="qtycell">${it.stock_available === null || it.stock_available === undefined ? '—' : it.stock_available}</td>
       <td class="qtycell">${it.qty_added}</td>
       <td class="checkcell"><span class="tickbox"></span></td>
@@ -6564,7 +6566,7 @@ function renderPickingPrintTable(){
   table.innerHTML = `
     <thead>
       <tr>
-        <th>Item</th><th>Barcode</th><th class="qtycell">In Stock</th><th class="qtycell">Requested</th><th class="checkcell">✓</th>
+        <th>Item</th><th>Barcode</th><th>Location</th><th class="qtycell">In Stock</th><th class="qtycell">Requested</th><th class="checkcell">✓</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>
@@ -6586,6 +6588,7 @@ function renderPickingRow(it){
     <div class="pickinfo">
       <span class="pname${it.qty_added > 0 && it.qty_picked >= it.qty_added ? ' done' : ''}">${escapeHtml(it.item_name)}</span>
       ${it.barcode ? `<span class="pbarcode">#${escapeHtml(it.barcode)}</span>` : ''}
+      ${it.location ? `<span class="ploc">📍 ${escapeHtml(it.location)}</span>` : ''}
     </div>
     <div class="pickqty">
       <span class="preq">Req: ${it.qty_added}</span>
