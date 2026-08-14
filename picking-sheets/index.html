@@ -355,7 +355,10 @@
 
   /* ---- barcode scanner (hardware scanner — no camera) ---- */
   .scanmanual{display:flex;gap:8px;margin:4px 0 6px;}
-  .scanmanual input{flex:1;margin-bottom:0 !important;font-size:16px;} /* 16px avoids iOS zoom-on-focus */
+  .scanmanual input{flex:1;margin-bottom:0 !important;font-size:16px;color:var(--text-dim);} /* 16px avoids iOS zoom-on-focus */
+  .scanname-toggle{margin:0 0 4px;}
+  .scanname-toggle a{color:var(--accent-dim);font-size:12px;text-decoration:none;}
+  .scanname-toggle a:hover{text-decoration:underline;}
   .scanresult-card{
     background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:12px;
   }
@@ -414,6 +417,15 @@
   }
   .wsprintprice{display:none;}
   .wsprintmargin{display:none;}
+  /* ---- create-invoice: autosave indicator + sort toggle ---- */
+  .autosave-indicator{font-size:11px;color:var(--text-dim);transition:opacity .3s;opacity:.55;}
+  .createdinvoice-sortbar{display:flex;gap:8px;align-items:center;margin-bottom:10px;font-size:12px;color:var(--text-dim);flex-wrap:wrap;}
+  .createdinvoice-sortbar button{
+    background:transparent;border:1px solid var(--line);color:var(--text-dim);
+    padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;
+  }
+  .createdinvoice-sortbar button.active{border-color:var(--accent);color:var(--accent-dim);font-weight:600;}
+
   /* ---- invoice margin flag (below department minimum) ---- */
   .invmarginlow{background:rgba(220,38,38,.14);}
   .invmarginlow td{color:var(--danger) !important;}
@@ -1361,7 +1373,10 @@
       <div class="loading">Loading…</div>
     </div>
     <div class="restaurant-footer-bar">
-      <div style="font-size:13px;color:var(--text-dim);"><span id="createdInvoiceMatchedCount">0</span> of <span id="createdInvoiceTotalCount">0</span> items matched</div>
+      <div style="font-size:13px;color:var(--text-dim);display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <span><span id="createdInvoiceMatchedCount">0</span> of <span id="createdInvoiceTotalCount">0</span> items matched</span>
+        <span id="createdInvoiceSavedIndicator1" class="autosave-indicator"></span>
+      </div>
       <div style="display:flex;gap:10px;">
         <button class="btn-ghost" onclick="saveAndExitCreatedInvoice()">Save &amp; Exit</button>
         <button class="btn-amber" onclick="goToCreatedInvoicePrices()">Next: Prices</button>
@@ -1383,7 +1398,7 @@
       <p>Everything here is ready except Qty per Box — that's filled in by hand while physically checking each box. Cost/Unit, Total Qty, and Margin update automatically as you go. Previous Cost and Pack Size come from what's on file for <em>this exact supplier</em>. Margin turns red when it's below that department's minimum.</p>
     </div>
     <div class="actionbar">
-      <span></span>
+      <span id="createdInvoiceSavedIndicator2" class="autosave-indicator"></span>
       <div style="display:flex;gap:10px;">
         <button class="btn-ghost" onclick="openCreatedInvoiceExportModal('csv')">Download CSV</button>
         <button class="btn-amber" onclick="openCreatedInvoiceExportModal('pdf')">Download PDF</button>
@@ -1395,6 +1410,18 @@
     <div class="restaurant-review-actions">
       <button class="btn-ghost" onclick="backToCreatedInvoiceMatch()">Back</button>
       <button class="btn-amber" onclick="finishCreatedInvoice()">Mark Complete</button>
+    </div>
+    <div style="margin-top:24px;padding-top:18px;border-top:1px solid var(--line);">
+      <div style="font-weight:700;font-size:14px;margin-bottom:6px;">Send to Vector — no manual re-typing</div>
+      <p class="sub-text" style="font-size:13px;color:var(--text-dim);margin:0 0 12px;max-width:640px;">
+        Each of these saves a CSV under a fixed filename that the PowerShell watcher script (see
+        <code>vector_price_import.ps1</code>) picks up and imports into Vector automatically —
+        make sure your browser's download folder is the one the script is watching.
+      </p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn-ghost" onclick="completeRetailPriceUpdate()">Complete Retail Price Update</button>
+        <button class="btn-ghost" onclick="completeCsvUpdateProcess()">Complete CSV Update Process</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1685,10 +1712,20 @@
   <div class="modal" style="width:400px;">
     <h3>Scan barcode</h3>
     <p class="modal-sub" id="scannerSubtitle">Scan now — it looks up automatically</p>
+    <!-- This field only exists to catch the hardware scanner's keystrokes (it types
+         into whatever's focused, then sends Enter). inputmode="none" stops the on-screen
+         keyboard popping up when it's focused, since nobody types into it by hand. -->
     <div class="scanmanual">
-      <input type="text" id="manualBarcodeInput" placeholder="Waiting for scan…" autocomplete="off" autocapitalize="off"
-        onkeydown="if(event.key==='Enter')submitManualBarcode()">
-      <button class="btn-ghost" onclick="submitManualBarcode()">Look up</button>
+      <input type="text" id="manualBarcodeInput" placeholder="Ready to scan…" autocomplete="off" autocapitalize="off"
+        inputmode="none" onkeydown="if(event.key==='Enter')submitManualBarcode()">
+    </div>
+    <div class="scanname-toggle">
+      <a href="#" onclick="event.preventDefault(); toggleScannerNameSearch()" id="scannerNameSearchToggle">Search by name instead</a>
+    </div>
+    <div id="scannerNameSearchSlot" style="display:none;margin:8px 0;">
+      <input type="text" id="scannerNameSearchInput" placeholder="Search item name…" autocomplete="off"
+        oninput="onScannerNameSearch()" style="width:100%;">
+      <div id="scannerNameSearchResults" class="searchresults"></div>
     </div>
     <div id="scanFeedback"></div>
     <div class="modal-close-row">
@@ -4938,6 +4975,10 @@ function downloadInvoiceOcrPdf(){
 let currentCreatedInvoice = null; // { header, items } — items: {ocr_product_name, stockid, matched_name, qty_box, qty_per_box, box_price, retail_price, previous_cost_price, pack_size_previous, barcode, department_name, min_margin_pct}
 let newInvoiceChosenSupplier = null; // { suppid, name }
 let createdInvoiceExportFormat = null;
+// 'invoice' shows items in the order they appear on the actual supplier invoice
+// (the order LINE_ORDER is saved in). 'alpha' just changes what's displayed —
+// the underlying items array, and therefore the saved order, never changes.
+let createdInvoiceSortMode = 'invoice';
 
 function openCreatedInvoicesList(){
   showView('view-created-invoices-list');
@@ -4999,6 +5040,7 @@ async function openCreatedInvoice(id){
   try{
     const data = await apiGet('invoices/created/' + id + '/');
     currentCreatedInvoice = data;
+    createdInvoiceSortMode = 'invoice';
     const allQtyFilled = data.items.length > 0 && data.items.every(it => it.qty_box !== null && it.qty_box !== undefined && it.qty_box !== '');
     if(allQtyFilled) goToCreatedInvoicePrices();
     else openCreatedInvoiceMatchStep();
@@ -5103,6 +5145,7 @@ async function createNewInvoiceFromPdf(){
 
     closeModal('modalNewCreatedInvoice');
     currentCreatedInvoice = { header: { invoice_id: invoiceId, supplier_name: newInvoiceChosenSupplier.name, suppid: newInvoiceChosenSupplier.suppid, status: 'DRAFT' }, items };
+    createdInvoiceSortMode = 'invoice';
     openCreatedInvoiceMatchStep();
   }catch(e){
     err.textContent = e.message || 'Something went wrong';
@@ -5120,6 +5163,35 @@ function openCreatedInvoiceMatchStep(){
   showView('view-created-invoice-match');
   renderCreatedInvoiceMatchTable();
 }
+// Sorting only changes what order rows are DRAWN in — it never touches
+// currentCreatedInvoice.items itself, so every row keeps its real index (idx)
+// into that array for onchange handlers, per-row element IDs, and saving.
+// That also means the saved LINE_ORDER (the actual invoice order) is
+// unaffected by whichever sort the person happens to be looking at.
+function createdInvoiceSortedEntries(items){
+  const entries = items.map((it, idx) => ({ it, idx }));
+  if(createdInvoiceSortMode === 'alpha'){
+    entries.sort((a, b) => {
+      const an = (a.it.matched_name || a.it.ocr_product_name || '').toLowerCase();
+      const bn = (b.it.matched_name || b.it.ocr_product_name || '').toLowerCase();
+      return an.localeCompare(bn);
+    });
+  }
+  return entries;
+}
+function setCreatedInvoiceSortMode(mode){
+  if(createdInvoiceSortMode === mode) return;
+  createdInvoiceSortMode = mode;
+  if(document.getElementById('view-created-invoice-match').classList.contains('active')) renderCreatedInvoiceMatchTable();
+  else if(document.getElementById('view-created-invoice-prices').classList.contains('active')) renderCreatedInvoicePricesTable();
+}
+function createdInvoiceSortBarHtml(){
+  return `<div class="createdinvoice-sortbar">
+    <span>Order:</span>
+    <button class="${createdInvoiceSortMode==='invoice' ? 'active' : ''}" onclick="setCreatedInvoiceSortMode('invoice')">Actual invoice order</button>
+    <button class="${createdInvoiceSortMode==='alpha' ? 'active' : ''}" onclick="setCreatedInvoiceSortMode('alpha')">A–Z by Vector name</button>
+  </div>`;
+}
 function renderCreatedInvoiceMatchTable(){
   const content = document.getElementById('createdInvoiceMatchContent');
   const items = currentCreatedInvoice.items;
@@ -5132,7 +5204,7 @@ function renderCreatedInvoiceMatchTable(){
   table.className = 'finaltable';
   table.innerHTML = '<thead><tr><th>Name as per Invoice</th><th>Description as per Vector</th><th class="qtycell">Quantity as Box</th></tr></thead>';
   const tbody = document.createElement('tbody');
-  items.forEach((it, idx) => {
+  createdInvoiceSortedEntries(items).forEach(({ it, idx }) => {
     const matched = !!it.stockid;
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -5155,6 +5227,7 @@ function renderCreatedInvoiceMatchTable(){
   });
   table.appendChild(tbody);
   content.innerHTML = '';
+  content.insertAdjacentHTML('beforeend', createdInvoiceSortBarHtml());
   const scrollWrap = document.createElement('div');
   scrollWrap.className = 'restaurant-table-scroll';
   scrollWrap.appendChild(table);
@@ -5163,6 +5236,7 @@ function renderCreatedInvoiceMatchTable(){
 }
 function updateCreatedInvoiceQtyBox(idx, value){
   currentCreatedInvoice.items[idx].qty_box = value === '' ? null : Number(value);
+  scheduleCreatedInvoiceAutosave();
 }
 function updateCreatedInvoiceMatchedCount(){
   const items = currentCreatedInvoice.items;
@@ -5207,6 +5281,7 @@ function pickCreatedInvoiceMatch(idx, stockid, name){
   currentCreatedInvoice.items[idx].matched_name = name;
   currentCreatedInvoice.items[idx]._matchedVia = 'manual';
   renderCreatedInvoiceMatchTable();
+  scheduleCreatedInvoiceAutosave();
 }
 async function saveCreatedInvoiceItems(){
   await apiPut('invoices/created/' + currentCreatedInvoice.header.invoice_id + '/items/', {
@@ -5219,6 +5294,44 @@ async function saveCreatedInvoiceItems(){
       box_price: it.box_price,
       retail_price: it.retail_price
     }))
+  });
+}
+/* ---- Partial save: every edit on either step (a quantity, a price, a picked
+   match) schedules a debounced save a moment after typing stops, so values
+   are already on the server well before someone thinks to hit Save & Exit,
+   Next, or Mark Complete — nothing is lost to a closed tab or a lock screen. ---- */
+let createdInvoiceAutosaveTimer = null;
+let createdInvoiceAutosaveInFlight = false;
+let createdInvoiceAutosavePending = false;
+function scheduleCreatedInvoiceAutosave(){
+  if(!currentCreatedInvoice || !currentCreatedInvoice.header || !currentCreatedInvoice.header.invoice_id) return;
+  setCreatedInvoiceSavedIndicator('Saving…');
+  clearTimeout(createdInvoiceAutosaveTimer);
+  createdInvoiceAutosaveTimer = setTimeout(runCreatedInvoiceAutosave, 900);
+}
+async function runCreatedInvoiceAutosave(){
+  if(!currentCreatedInvoice) return;
+  if(createdInvoiceAutosaveInFlight){ createdInvoiceAutosavePending = true; return; }
+  createdInvoiceAutosaveInFlight = true;
+  try{
+    await saveCreatedInvoiceItems();
+    setCreatedInvoiceSavedIndicator('Saved ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+  }catch(e){
+    setCreatedInvoiceSavedIndicator('Could not save — will retry');
+    console.error(e);
+    createdInvoiceAutosavePending = true; // retry once things settle
+  }finally{
+    createdInvoiceAutosaveInFlight = false;
+    if(createdInvoiceAutosavePending){
+      createdInvoiceAutosavePending = false;
+      createdInvoiceAutosaveTimer = setTimeout(runCreatedInvoiceAutosave, 1500);
+    }
+  }
+}
+function setCreatedInvoiceSavedIndicator(text){
+  ['createdInvoiceSavedIndicator1', 'createdInvoiceSavedIndicator2'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.textContent = text;
   });
 }
 async function saveAndExitCreatedInvoice(){
@@ -5294,7 +5407,7 @@ function renderCreatedInvoicePricesTable(){
     <th class="qtycell">Previous Cost</th>
   </tr></thead>`;
   const tbody = document.createElement('tbody');
-  items.forEach((it, idx) => {
+  createdInvoiceSortedEntries(items).forEach(({ it, idx }) => {
     const margin = createdInvoiceMarginPct(it);
     const belowMin = margin !== null && margin < (it.min_margin_pct || 38);
     const totalQty = createdInvoiceTotalQty(it);
@@ -5334,6 +5447,7 @@ function renderCreatedInvoicePricesTable(){
   });
   table.appendChild(tbody);
   content.innerHTML = '';
+  content.insertAdjacentHTML('beforeend', createdInvoiceSortBarHtml());
   const scrollWrap = document.createElement('div');
   scrollWrap.className = 'restaurant-table-scroll';
   scrollWrap.appendChild(table);
@@ -5363,6 +5477,7 @@ function updateCreatedInvoiceField(idx, field, value){
     marginCell.style.color = belowMin ? 'var(--danger)' : '';
     marginCell.style.fontWeight = belowMin ? '700' : '';
   }
+  scheduleCreatedInvoiceAutosave();
 }
 async function finishCreatedInvoice(){
   try{
@@ -5377,10 +5492,9 @@ async function finishCreatedInvoice(){
 }
 
 /* ---- Export (CSV/PDF with a column picker, same idea as Wholesale Pricing).
-   Barcode, Supplier, and Department are checkboxes here but never appear in
-   the on-screen table — download-only extras, unchecked by default since
-   they're not needed day-to-day but should still be available when they
-   are. ---- */
+   Barcode and Supplier are checkboxes here but never appear in the on-screen
+   table — download-only extras, unchecked by default since they're not
+   needed day-to-day but should still be available when they are. ---- */
 const CREATED_INVOICE_EXPORT_COLUMNS = [
   { key: 'invoice_name', label: 'Name as per Invoice', always: true },
   { key: 'description', label: 'Description as per Vector' },
@@ -5394,8 +5508,7 @@ const CREATED_INVOICE_EXPORT_COLUMNS = [
   { key: 'pack_size_previous', label: 'Pack Size (Previous)' },
   { key: 'previous_cost_price', label: 'Previous Cost' },
   { key: 'barcode', label: 'Barcode', extra: true },
-  { key: 'supplier', label: 'Supplier', extra: true },
-  { key: 'department', label: 'Department', extra: true }
+  { key: 'supplier', label: 'Supplier', extra: true }
 ];
 function openCreatedInvoiceExportModal(format){
   createdInvoiceExportFormat = format;
@@ -5433,7 +5546,6 @@ function createdInvoiceExportRow(it, columns){
   if(columns.previous_cost_price) row['Previous Cost'] = it.previous_cost_price === null || it.previous_cost_price === undefined ? '' : Number(it.previous_cost_price).toFixed(2);
   if(columns.barcode) row['Barcode'] = it.barcode || '';
   if(columns.supplier) row['Supplier'] = currentCreatedInvoice.header.supplier_name || '';
-  if(columns.department) row['Department'] = it.department_name || '';
   return row;
 }
 function exportCreatedInvoice(format, columns){
@@ -5472,6 +5584,60 @@ function exportCreatedInvoice(format, columns){
     });
     doc.save(filenameBase + '.pdf');
   }
+}
+
+/* ---- Send to Vector: fixed-filename CSVs a PowerShell watcher script picks
+   up and imports automatically (see vector_price_import.ps1). The filename
+   is ALWAYS the same on purpose — the watcher looks for one exact name each
+   time rather than guessing at the latest timestamped file, and it deletes
+   the file once imported so a stale one is never picked up twice.
+
+   COLUMN LAYOUT — BEST GUESS, VERIFY BEFORE FULLY TRUSTING: Vector's File
+   Import "Standard file layout" expects specific column names/order that
+   aren't visible in the screenshots this was built from — only the on-screen
+   labels are. "Stock No" is used as the match key here because that's what
+   the File Import dialog's "Search By" dropdown shows by default. Do one
+   manual test import first and adjust downloadFixedNameCSV's headers below
+   if Vector rejects or misreads the file. ---- */
+function downloadFixedNameCSV(filename, headers, rows){
+  const csvLines = [headers.join(',')].concat(
+    rows.map(r => headers.map(h => '"' + String(r[h] ?? '').replace(/"/g, '""') + '"').join(','))
+  );
+  const blob = new Blob([csvLines.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+function completeRetailPriceUpdate(){
+  const items = currentCreatedInvoice.items.filter(it => it.stockid);
+  if(items.length === 0){ toast('No matched items to send'); return; }
+  const headers = ['Stock No', 'Retail Price'];
+  const rows = items.map(it => ({
+    'Stock No': it.stockid,
+    'Retail Price': it.retail_price === null || it.retail_price === undefined ? '' : Number(it.retail_price).toFixed(2)
+  }));
+  downloadFixedNameCSV('hallan_retail_price_update.csv', headers, rows);
+  toast('Retail price CSV saved — Vector import will pick it up automatically');
+}
+function completeCsvUpdateProcess(){
+  const items = currentCreatedInvoice.items.filter(it => it.stockid);
+  if(items.length === 0){ toast('No matched items to send'); return; }
+  const headers = ['Stock No', 'Description', 'Cost Price', 'Retail Price', 'Pack Size', 'Barcode'];
+  const rows = items.map(it => {
+    const costPerUnit = createdInvoiceCostPerUnit(it);
+    return {
+      'Stock No': it.stockid,
+      'Description': it.matched_name || it.ocr_product_name,
+      'Cost Price': costPerUnit === null ? '' : costPerUnit.toFixed(2),
+      'Retail Price': it.retail_price === null || it.retail_price === undefined ? '' : Number(it.retail_price).toFixed(2),
+      'Pack Size': it.qty_per_box === null || it.qty_per_box === undefined ? '' : it.qty_per_box,
+      'Barcode': it.barcode || ''
+    };
+  });
+  downloadFixedNameCSV('hallan_stock_update.csv', headers, rows);
+  toast('Stock update CSV saved — Vector import will pick it up automatically');
 }
 
 /* ============ TOAST ============ */
@@ -6071,6 +6237,9 @@ function openScanner(target){
   scannerListEl.innerHTML = '';
   const input = document.getElementById('manualBarcodeInput');
   input.value = '';
+  document.getElementById('scannerNameSearchSlot').style.display = 'none';
+  document.getElementById('scannerNameSearchInput').value = '';
+  document.getElementById('scannerNameSearchResults').innerHTML = '';
   const sub = document.getElementById('scannerSubtitle');
   if(scannerTarget === 'warehouse' && currentCategory){
     sub.textContent = 'Adding to "' + currentCategory.category_name + '" — scan now, it looks up automatically';
@@ -6095,6 +6264,54 @@ function submitManualBarcode(){
   const code = document.getElementById('manualBarcodeInput').value.trim();
   if(!code) return;
   handleScannedCode(code);
+}
+/* ---- Fallback for items with no working barcode: search by name instead.
+   Kept behind a toggle (not shown by default) so opening the scanner never
+   invites typing — staff only reach for it when a scan genuinely won't work. ---- */
+function toggleScannerNameSearch(){
+  const slot = document.getElementById('scannerNameSearchSlot');
+  const showing = slot.style.display !== 'none';
+  slot.style.display = showing ? 'none' : 'block';
+  document.getElementById('scannerNameSearchToggle').textContent = showing ? 'Search by name instead' : 'Hide name search';
+  if(!showing){
+    setTimeout(()=>document.getElementById('scannerNameSearchInput').focus(), 80);
+  }else{
+    document.getElementById('scannerNameSearchInput').value = '';
+    document.getElementById('scannerNameSearchResults').innerHTML = '';
+    document.getElementById('manualBarcodeInput').focus();
+  }
+}
+let scannerNameSearchDebounce = null;
+function onScannerNameSearch(){
+  clearTimeout(scannerNameSearchDebounce);
+  const q = document.getElementById('scannerNameSearchInput').value.trim();
+  const results = document.getElementById('scannerNameSearchResults');
+  if(q.length < 2){ results.innerHTML = ''; return; }
+  results.innerHTML = '<div class="empty-hint">Searching…</div>';
+  scannerNameSearchDebounce = setTimeout(async ()=>{
+    try{
+      const data = await apiGet('stock/search/?q=' + encodeURIComponent(q));
+      const items = data.items || [];
+      if(items.length === 0){ results.innerHTML = '<div class="empty-hint">No matches</div>'; return; }
+      results.innerHTML = '';
+      items.forEach(it=>{
+        const div = document.createElement('div');
+        div.className = 'searchresult';
+        div.innerHTML = `<div class="sname">${escapeHtml(it.name)}</div><div class="sstock">${it.quantity} in stock</div>`;
+        div.onclick = () => pickScannerNameSearchResult(it);
+        results.appendChild(div);
+      });
+    }catch(e){
+      results.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Search failed</div>';
+      console.error(e);
+    }
+  }, 300);
+}
+function pickScannerNameSearchResult(stock){
+  document.getElementById('scannerNameSearchInput').value = '';
+  document.getElementById('scannerNameSearchResults').innerHTML = '';
+  const box = document.getElementById('scanFeedback');
+  box.prepend(renderScanResultCard(stock, null));
 }
 async function handleScannedCode(code){
   const input = document.getElementById('manualBarcodeInput');
