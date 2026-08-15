@@ -356,9 +356,6 @@
   /* ---- barcode scanner (hardware scanner — no camera) ---- */
   .scanmanual{display:flex;gap:8px;margin:4px 0 6px;}
   .scanmanual input{flex:1;margin-bottom:0 !important;font-size:16px;} /* 16px avoids iOS zoom-on-focus */
-  .scanname-toggle{margin:0 0 4px;}
-  .scanname-toggle a{color:var(--accent-dim);font-size:12px;text-decoration:none;}
-  .scanname-toggle a:hover{text-decoration:underline;}
   .scanresult-card{
     background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:12px;
   }
@@ -383,7 +380,6 @@
   .pickrow .pname{font-size:14px;}
   .pickrow .pname.done{color:var(--text-dim);}
   .pickrow .pbarcode{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);}
-  .pickrow .ploc{font-size:11px;color:var(--accent-dim);font-weight:600;}
   .pickrow .pickqty{display:flex;align-items:center;gap:10px;flex:none;}
   .pickrow .preq{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-dim);white-space:nowrap;}
   .pickrow .stepper .qtyinput{
@@ -418,15 +414,6 @@
   }
   .wsprintprice{display:none;}
   .wsprintmargin{display:none;}
-  /* ---- create-invoice: autosave indicator + sort toggle ---- */
-  .autosave-indicator{font-size:11px;color:var(--text-dim);transition:opacity .3s;opacity:.55;}
-  .createdinvoice-sortbar{display:flex;gap:8px;align-items:center;margin-bottom:10px;font-size:12px;color:var(--text-dim);flex-wrap:wrap;}
-  .createdinvoice-sortbar button{
-    background:transparent;border:1px solid var(--line);color:var(--text-dim);
-    padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Inter',sans-serif;
-  }
-  .createdinvoice-sortbar button.active{border-color:var(--accent);color:var(--accent-dim);font-weight:600;}
-
   /* ---- invoice margin flag (below department minimum) ---- */
   .invmarginlow{background:rgba(220,38,38,.14);}
   .invmarginlow td{color:var(--danger) !important;}
@@ -1374,10 +1361,7 @@
       <div class="loading">Loading…</div>
     </div>
     <div class="restaurant-footer-bar">
-      <div style="font-size:13px;color:var(--text-dim);display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <span><span id="createdInvoiceMatchedCount">0</span> of <span id="createdInvoiceTotalCount">0</span> items matched</span>
-        <span id="createdInvoiceSavedIndicator1" class="autosave-indicator"></span>
-      </div>
+      <div style="font-size:13px;color:var(--text-dim);"><span id="createdInvoiceMatchedCount">0</span> of <span id="createdInvoiceTotalCount">0</span> items matched</div>
       <div style="display:flex;gap:10px;">
         <button class="btn-ghost" onclick="saveAndExitCreatedInvoice()">Save &amp; Exit</button>
         <button class="btn-amber" onclick="goToCreatedInvoicePrices()">Next: Prices</button>
@@ -1399,7 +1383,7 @@
       <p>Everything here is ready except Qty per Box — that's filled in by hand while physically checking each box. Cost/Unit, Total Qty, and Margin update automatically as you go. Previous Cost and Pack Size come from what's on file for <em>this exact supplier</em>. Margin turns red when it's below that department's minimum.</p>
     </div>
     <div class="actionbar">
-      <span id="createdInvoiceSavedIndicator2" class="autosave-indicator"></span>
+      <span></span>
       <div style="display:flex;gap:10px;">
         <button class="btn-ghost" onclick="openCreatedInvoiceExportModal('csv')">Download CSV</button>
         <button class="btn-amber" onclick="openCreatedInvoiceExportModal('pdf')">Download PDF</button>
@@ -1713,19 +1697,16 @@
   <div class="modal" style="width:400px;">
     <h3>Scan barcode</h3>
     <p class="modal-sub" id="scannerSubtitle">Scan now — it looks up automatically</p>
-    <!-- This field only exists to catch the hardware scanner's keystrokes (it types
-         into whatever's focused, then sends Enter) or a manual "Look up" tap. -->
     <div class="scanmanual">
-      <input type="text" id="manualBarcodeInput" placeholder="Ready to scan…" autocomplete="off" autocapitalize="off"
-        onkeydown="if(event.key==='Enter')submitManualBarcode()">
+      <input type="text" id="manualBarcodeInput" placeholder="Waiting for scan…" autocomplete="off" autocapitalize="off"
+        inputmode="none" onkeydown="if(event.key==='Enter')submitManualBarcode()">
       <button class="btn-ghost" onclick="submitManualBarcode()">Look up</button>
     </div>
-    <div class="scanname-toggle">
-      <a href="#" onclick="event.preventDefault(); toggleScannerNameSearch()" id="scannerNameSearchToggle">Search by name instead</a>
+    <div style="margin:2px 0 10px;">
+      <a href="#" onclick="event.preventDefault(); toggleScannerNameSearch()" style="font-size:13px;">Search by name instead</a>
     </div>
-    <div id="scannerNameSearchSlot" style="display:none;margin:8px 0;">
-      <input type="text" id="scannerNameSearchInput" placeholder="Search item name…" autocomplete="off"
-        oninput="onScannerNameSearch()" style="width:100%;">
+    <div id="scannerNameSearchBox" style="display:none;margin-bottom:10px;">
+      <input type="text" id="scannerNameSearchInput" placeholder="Search item name…" autocomplete="off" oninput="onScannerNameSearch()">
       <div id="scannerNameSearchResults" class="searchresults"></div>
     </div>
     <div id="scanFeedback"></div>
@@ -4976,10 +4957,6 @@ function downloadInvoiceOcrPdf(){
 let currentCreatedInvoice = null; // { header, items } — items: {ocr_product_name, stockid, matched_name, qty_box, qty_per_box, box_price, retail_price, previous_cost_price, pack_size_previous, barcode, department_name, min_margin_pct}
 let newInvoiceChosenSupplier = null; // { suppid, name }
 let createdInvoiceExportFormat = null;
-// 'invoice' shows items in the order they appear on the actual supplier invoice
-// (the order LINE_ORDER is saved in). 'alpha' just changes what's displayed —
-// the underlying items array, and therefore the saved order, never changes.
-let createdInvoiceSortMode = 'invoice';
 
 function openCreatedInvoicesList(){
   showView('view-created-invoices-list');
@@ -5041,7 +5018,6 @@ async function openCreatedInvoice(id){
   try{
     const data = await apiGet('invoices/created/' + id + '/');
     currentCreatedInvoice = data;
-    createdInvoiceSortMode = 'invoice';
     const allQtyFilled = data.items.length > 0 && data.items.every(it => it.qty_box !== null && it.qty_box !== undefined && it.qty_box !== '');
     if(allQtyFilled) goToCreatedInvoicePrices();
     else openCreatedInvoiceMatchStep();
@@ -5146,7 +5122,6 @@ async function createNewInvoiceFromPdf(){
 
     closeModal('modalNewCreatedInvoice');
     currentCreatedInvoice = { header: { invoice_id: invoiceId, supplier_name: newInvoiceChosenSupplier.name, suppid: newInvoiceChosenSupplier.suppid, status: 'DRAFT' }, items };
-    createdInvoiceSortMode = 'invoice';
     openCreatedInvoiceMatchStep();
   }catch(e){
     err.textContent = e.message || 'Something went wrong';
@@ -5164,35 +5139,6 @@ function openCreatedInvoiceMatchStep(){
   showView('view-created-invoice-match');
   renderCreatedInvoiceMatchTable();
 }
-// Sorting only changes what order rows are DRAWN in — it never touches
-// currentCreatedInvoice.items itself, so every row keeps its real index (idx)
-// into that array for onchange handlers, per-row element IDs, and saving.
-// That also means the saved LINE_ORDER (the actual invoice order) is
-// unaffected by whichever sort the person happens to be looking at.
-function createdInvoiceSortedEntries(items){
-  const entries = items.map((it, idx) => ({ it, idx }));
-  if(createdInvoiceSortMode === 'alpha'){
-    entries.sort((a, b) => {
-      const an = (a.it.matched_name || a.it.ocr_product_name || '').toLowerCase();
-      const bn = (b.it.matched_name || b.it.ocr_product_name || '').toLowerCase();
-      return an.localeCompare(bn);
-    });
-  }
-  return entries;
-}
-function setCreatedInvoiceSortMode(mode){
-  if(createdInvoiceSortMode === mode) return;
-  createdInvoiceSortMode = mode;
-  if(document.getElementById('view-created-invoice-match').classList.contains('active')) renderCreatedInvoiceMatchTable();
-  else if(document.getElementById('view-created-invoice-prices').classList.contains('active')) renderCreatedInvoicePricesTable();
-}
-function createdInvoiceSortBarHtml(){
-  return `<div class="createdinvoice-sortbar">
-    <span>Order:</span>
-    <button class="${createdInvoiceSortMode==='invoice' ? 'active' : ''}" onclick="setCreatedInvoiceSortMode('invoice')">Actual invoice order</button>
-    <button class="${createdInvoiceSortMode==='alpha' ? 'active' : ''}" onclick="setCreatedInvoiceSortMode('alpha')">A–Z by Vector name</button>
-  </div>`;
-}
 function renderCreatedInvoiceMatchTable(){
   const content = document.getElementById('createdInvoiceMatchContent');
   const items = currentCreatedInvoice.items;
@@ -5205,7 +5151,7 @@ function renderCreatedInvoiceMatchTable(){
   table.className = 'finaltable';
   table.innerHTML = '<thead><tr><th>Name as per Invoice</th><th>Description as per Vector</th><th class="qtycell">Quantity as Box</th></tr></thead>';
   const tbody = document.createElement('tbody');
-  createdInvoiceSortedEntries(items).forEach(({ it, idx }) => {
+  items.forEach((it, idx) => {
     const matched = !!it.stockid;
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -5228,7 +5174,6 @@ function renderCreatedInvoiceMatchTable(){
   });
   table.appendChild(tbody);
   content.innerHTML = '';
-  content.insertAdjacentHTML('beforeend', createdInvoiceSortBarHtml());
   const scrollWrap = document.createElement('div');
   scrollWrap.className = 'restaurant-table-scroll';
   scrollWrap.appendChild(table);
@@ -5237,7 +5182,6 @@ function renderCreatedInvoiceMatchTable(){
 }
 function updateCreatedInvoiceQtyBox(idx, value){
   currentCreatedInvoice.items[idx].qty_box = value === '' ? null : Number(value);
-  scheduleCreatedInvoiceAutosave();
 }
 function updateCreatedInvoiceMatchedCount(){
   const items = currentCreatedInvoice.items;
@@ -5282,7 +5226,6 @@ function pickCreatedInvoiceMatch(idx, stockid, name){
   currentCreatedInvoice.items[idx].matched_name = name;
   currentCreatedInvoice.items[idx]._matchedVia = 'manual';
   renderCreatedInvoiceMatchTable();
-  scheduleCreatedInvoiceAutosave();
 }
 async function saveCreatedInvoiceItems(){
   await apiPut('invoices/created/' + currentCreatedInvoice.header.invoice_id + '/items/', {
@@ -5295,44 +5238,6 @@ async function saveCreatedInvoiceItems(){
       box_price: it.box_price,
       retail_price: it.retail_price
     }))
-  });
-}
-/* ---- Partial save: every edit on either step (a quantity, a price, a picked
-   match) schedules a debounced save a moment after typing stops, so values
-   are already on the server well before someone thinks to hit Save & Exit,
-   Next, or Mark Complete — nothing is lost to a closed tab or a lock screen. ---- */
-let createdInvoiceAutosaveTimer = null;
-let createdInvoiceAutosaveInFlight = false;
-let createdInvoiceAutosavePending = false;
-function scheduleCreatedInvoiceAutosave(){
-  if(!currentCreatedInvoice || !currentCreatedInvoice.header || !currentCreatedInvoice.header.invoice_id) return;
-  setCreatedInvoiceSavedIndicator('Saving…');
-  clearTimeout(createdInvoiceAutosaveTimer);
-  createdInvoiceAutosaveTimer = setTimeout(runCreatedInvoiceAutosave, 900);
-}
-async function runCreatedInvoiceAutosave(){
-  if(!currentCreatedInvoice) return;
-  if(createdInvoiceAutosaveInFlight){ createdInvoiceAutosavePending = true; return; }
-  createdInvoiceAutosaveInFlight = true;
-  try{
-    await saveCreatedInvoiceItems();
-    setCreatedInvoiceSavedIndicator('Saved ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-  }catch(e){
-    setCreatedInvoiceSavedIndicator('Could not save — will retry');
-    console.error(e);
-    createdInvoiceAutosavePending = true; // retry once things settle
-  }finally{
-    createdInvoiceAutosaveInFlight = false;
-    if(createdInvoiceAutosavePending){
-      createdInvoiceAutosavePending = false;
-      createdInvoiceAutosaveTimer = setTimeout(runCreatedInvoiceAutosave, 1500);
-    }
-  }
-}
-function setCreatedInvoiceSavedIndicator(text){
-  ['createdInvoiceSavedIndicator1', 'createdInvoiceSavedIndicator2'].forEach(id => {
-    const el = document.getElementById(id);
-    if(el) el.textContent = text;
   });
 }
 async function saveAndExitCreatedInvoice(){
@@ -5408,7 +5313,7 @@ function renderCreatedInvoicePricesTable(){
     <th class="qtycell">Previous Cost</th>
   </tr></thead>`;
   const tbody = document.createElement('tbody');
-  createdInvoiceSortedEntries(items).forEach(({ it, idx }) => {
+  items.forEach((it, idx) => {
     const margin = createdInvoiceMarginPct(it);
     const belowMin = margin !== null && margin < (it.min_margin_pct || 38);
     const totalQty = createdInvoiceTotalQty(it);
@@ -5448,7 +5353,6 @@ function renderCreatedInvoicePricesTable(){
   });
   table.appendChild(tbody);
   content.innerHTML = '';
-  content.insertAdjacentHTML('beforeend', createdInvoiceSortBarHtml());
   const scrollWrap = document.createElement('div');
   scrollWrap.className = 'restaurant-table-scroll';
   scrollWrap.appendChild(table);
@@ -5478,7 +5382,6 @@ function updateCreatedInvoiceField(idx, field, value){
     marginCell.style.color = belowMin ? 'var(--danger)' : '';
     marginCell.style.fontWeight = belowMin ? '700' : '';
   }
-  scheduleCreatedInvoiceAutosave();
 }
 async function finishCreatedInvoice(){
   try{
@@ -6238,7 +6141,7 @@ function openScanner(target){
   scannerListEl.innerHTML = '';
   const input = document.getElementById('manualBarcodeInput');
   input.value = '';
-  document.getElementById('scannerNameSearchSlot').style.display = 'none';
+  document.getElementById('scannerNameSearchBox').style.display = 'none';
   document.getElementById('scannerNameSearchInput').value = '';
   document.getElementById('scannerNameSearchResults').innerHTML = '';
   const sub = document.getElementById('scannerSubtitle');
@@ -6266,20 +6169,17 @@ function submitManualBarcode(){
   if(!code) return;
   handleScannedCode(code);
 }
-/* ---- Fallback for items with no working barcode: search by name instead.
-   Kept behind a toggle (not shown by default) so opening the scanner never
-   invites typing — staff only reach for it when a scan genuinely won't work. ---- */
 function toggleScannerNameSearch(){
-  const slot = document.getElementById('scannerNameSearchSlot');
-  const showing = slot.style.display !== 'none';
-  slot.style.display = showing ? 'none' : 'block';
-  document.getElementById('scannerNameSearchToggle').textContent = showing ? 'Search by name instead' : 'Hide name search';
+  const box = document.getElementById('scannerNameSearchBox');
+  const showing = box.style.display !== 'none';
+  box.style.display = showing ? 'none' : 'block';
   if(!showing){
-    setTimeout(()=>document.getElementById('scannerNameSearchInput').focus(), 80);
-  }else{
+    // Opening the name search is a genuine typing action, unlike the barcode
+    // field (which only exists for the scanner to type into) — the on-screen
+    // keyboard popping up here is expected and wanted, so focus it normally.
     document.getElementById('scannerNameSearchInput').value = '';
     document.getElementById('scannerNameSearchResults').innerHTML = '';
-    document.getElementById('manualBarcodeInput').focus();
+    setTimeout(() => document.getElementById('scannerNameSearchInput').focus(), 80);
   }
 }
 let scannerNameSearchDebounce = null;
@@ -6289,17 +6189,22 @@ function onScannerNameSearch(){
   const results = document.getElementById('scannerNameSearchResults');
   if(q.length < 2){ results.innerHTML = ''; return; }
   results.innerHTML = '<div class="empty-hint">Searching…</div>';
-  scannerNameSearchDebounce = setTimeout(async ()=>{
+  scannerNameSearchDebounce = setTimeout(async () => {
     try{
       const data = await apiGet('stock/search/?q=' + encodeURIComponent(q));
       const items = data.items || [];
-      if(items.length === 0){ results.innerHTML = '<div class="empty-hint">No matches</div>'; return; }
+      if(items.length === 0){
+        results.innerHTML = '<div class="empty-hint">No matches in vestock</div>';
+        return;
+      }
       results.innerHTML = '';
-      items.forEach(it=>{
+      items.forEach(it => {
         const div = document.createElement('div');
         div.className = 'searchresult';
         div.innerHTML = `<div class="sname">${escapeHtml(it.name)}</div><div class="sstock">${it.quantity} in stock</div>`;
-        div.onclick = () => pickScannerNameSearchResult(it);
+        div.onclick = () => {
+          document.getElementById('scanFeedback').prepend(renderScanResultCard(it, null));
+        };
         results.appendChild(div);
       });
     }catch(e){
@@ -6307,12 +6212,6 @@ function onScannerNameSearch(){
       console.error(e);
     }
   }, 300);
-}
-function pickScannerNameSearchResult(stock){
-  document.getElementById('scannerNameSearchInput').value = '';
-  document.getElementById('scannerNameSearchResults').innerHTML = '';
-  const box = document.getElementById('scanFeedback');
-  box.prepend(renderScanResultCard(stock, null));
 }
 async function handleScannedCode(code){
   const input = document.getElementById('manualBarcodeInput');
@@ -6557,7 +6456,6 @@ function renderPickingPrintTable(){
     <tr>
       <td>${escapeHtml(it.item_name)}</td>
       <td>${it.barcode ? escapeHtml(it.barcode) : '—'}</td>
-      <td>${it.location ? escapeHtml(it.location) : '—'}</td>
       <td class="qtycell">${it.stock_available === null || it.stock_available === undefined ? '—' : it.stock_available}</td>
       <td class="qtycell">${it.qty_added}</td>
       <td class="checkcell"><span class="tickbox"></span></td>
@@ -6566,7 +6464,7 @@ function renderPickingPrintTable(){
   table.innerHTML = `
     <thead>
       <tr>
-        <th>Item</th><th>Barcode</th><th>Location</th><th class="qtycell">In Stock</th><th class="qtycell">Requested</th><th class="checkcell">✓</th>
+        <th>Item</th><th>Barcode</th><th class="qtycell">In Stock</th><th class="qtycell">Requested</th><th class="checkcell">✓</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>
@@ -6588,7 +6486,6 @@ function renderPickingRow(it){
     <div class="pickinfo">
       <span class="pname${it.qty_added > 0 && it.qty_picked >= it.qty_added ? ' done' : ''}">${escapeHtml(it.item_name)}</span>
       ${it.barcode ? `<span class="pbarcode">#${escapeHtml(it.barcode)}</span>` : ''}
-      ${it.location ? `<span class="ploc">📍 ${escapeHtml(it.location)}</span>` : ''}
     </div>
     <div class="pickqty">
       <span class="preq">Req: ${it.qty_added}</span>
