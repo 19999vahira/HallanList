@@ -1577,15 +1577,15 @@
     <p class="modal-sub" id="goodsInExpiryProduct"></p>
     <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px;">Expiry date</label>
     <div style="display:flex;gap:8px;margin-bottom:12px;">
-      <input type="number" id="goodsInExpiryDay" placeholder="DD" min="1" max="31" style="width:70px;padding:10px;text-align:center;">
-      <input type="number" id="goodsInExpiryMonth" placeholder="MM" min="1" max="12" style="width:70px;padding:10px;text-align:center;">
-      <input type="number" id="goodsInExpiryYear" placeholder="YYYY" min="2025" max="2099" style="width:90px;padding:10px;text-align:center;">
+      <select id="goodsInExpiryDay" style="width:70px;padding:10px;text-align:center;"><option value="">DD</option></select>
+      <select id="goodsInExpiryMonth" style="width:110px;padding:10px;text-align:center;"><option value="">MM</option></select>
+      <select id="goodsInExpiryYear" style="width:90px;padding:10px;text-align:center;"><option value="">YYYY</option></select>
     </div>
     <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px;">Quantity</label>
     <input type="number" id="goodsInQty" min="1" value="1" style="width:100%;padding:10px;margin-bottom:6px;">
     <div class="errdetail" id="goodsInExpiryErr" style="display:none;"></div>
     <div class="modal-close-row">
-      <button class="btn-ghost" onclick="closeModal('modalGoodsInExpiry')">Cancel</button>
+      <button class="btn-ghost" onclick="cancelGoodsInExpiry()">Cancel</button>
       <button class="btn-ghost" id="goodsInRemoveBtn" style="display:none;color:var(--danger);" onclick="removeGoodsInItem()">Remove</button>
       <button class="btn-amber" onclick="confirmGoodsInExpiry()">Add</button>
     </div>
@@ -5304,6 +5304,7 @@ let goodsInCurrentSession = null; // { session_id, supplier_name, scanned_by, st
 let goodsInCurrentItems = [];     // items in the active session
 let goodsInEditingItemId = null;  // set when the expiry modal is editing an existing item, not adding a new scan
 let goodsInPendingProduct = null; // { stockid, name, barcode, pack_size } — the just-scanned product awaiting expiry/qty
+let goodsInReturnToScanner = false; // true when the expiry modal was opened straight from a scan — reopen the scanner after Add so scanning continues without extra taps
 
 function openScanGoodsHub(){
   showView('view-scan-goods-hub');
@@ -5451,6 +5452,7 @@ function renderGoodsInSessionItems(){
 
 /* ---- Barcode scanning within a session (mirrors openScanner/handleScannedCode) ---- */
 function scanGoodsAddManually(){
+  goodsInReturnToScanner = false; // reset here — handleGoodsInScannedCode sets it true on an actual successful scan
   document.getElementById('goodsInBarcodeInput').value = '';
   document.getElementById('goodsInScanFeedback').innerHTML = '';
   openModal('modalGoodsInScanner');
@@ -5482,25 +5484,15 @@ async function handleGoodsInScannedCode(code){
       return;
     }
     const stock = data.item;
-    const card = document.createElement('div');
-    card.className = 'scanresult-card';
-    card.innerHTML = `
-      <div class="srname">${escapeHtml(stock.name)}</div>
-      <div class="srbarcode">Barcode: ${escapeHtml(stock.barcode || code)}</div>
-      <div class="srstock">Pack size: ${stock.pack_size ? escapeHtml(String(stock.pack_size)) : '—'}</div>
-      <div class="srrow">
-        <button class="btn-ghost srskip">Skip</button>
-        <button class="btn-amber">Add</button>
-      </div>
-    `;
-    card.querySelector('.srskip').onclick = () => { card.remove(); input.focus(); };
-    card.querySelector('.btn-amber').onclick = () => {
-      card.remove();
-      goodsInPendingProduct = { stockid: stock.stockid, name: stock.name, barcode: stock.barcode || code, pack_size: stock.pack_size || null };
-      openGoodsInExpiryModal(false);
-    };
-    box.prepend(card);
-    input.focus();
+    // Straight to expiry/quantity — no intermediate "Add" tap. The scanner
+    // modal is closed (not just hidden behind) so Enter-to-submit inside the
+    // expiry modal's own fields doesn't accidentally trigger the barcode
+    // input underneath. confirmGoodsInExpiry() reopens this scanner modal
+    // afterwards so scanning continues without extra taps.
+    goodsInPendingProduct = { stockid: stock.stockid, name: stock.name, barcode: stock.barcode || code, pack_size: stock.pack_size || null };
+    goodsInReturnToScanner = true;
+    closeModal('modalGoodsInScanner');
+    openGoodsInExpiryModal(false);
   }catch(e){
     loadingEl.remove();
     const fail = document.createElement('div');
@@ -5512,6 +5504,22 @@ async function handleGoodsInScannedCode(code){
   }
 }
 
+/* ---- Expiry date dropdowns: filled once per modal open so the year range
+   always starts from today rather than a hardcoded year that goes stale ---- */
+function goodsInPopulateExpirySelects(){
+  const daySel = document.getElementById('goodsInExpiryDay');
+  const monthSel = document.getElementById('goodsInExpiryMonth');
+  const yearSel = document.getElementById('goodsInExpiryYear');
+  daySel.innerHTML = '<option value="">DD</option>' +
+    Array.from({length: 31}, (_, i) => i + 1).map(d => `<option value="${d}">${String(d).padStart(2,'0')}</option>`).join('');
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  monthSel.innerHTML = '<option value="">MM</option>' +
+    monthNames.map((name, i) => `<option value="${i+1}">${String(i+1).padStart(2,'0')} - ${name}</option>`).join('');
+  const thisYear = new Date().getFullYear();
+  const years = [];
+  for(let y = thisYear - 1; y <= thisYear + 9; y++) years.push(y);
+  yearSel.innerHTML = '<option value="">YYYY</option>' + years.map(y => `<option value="${y}">${y}</option>`).join('');
+}
 /* ---- Expiry date (day/month/year blocks) + quantity — shared by add and edit ---- */
 function openGoodsInExpiryModal(isEdit, existingItem){
   goodsInEditingItemId = isEdit ? existingItem.item_id : null;
@@ -5520,6 +5528,7 @@ function openGoodsInExpiryModal(isEdit, existingItem){
   document.getElementById('goodsInExpiryProduct').textContent = productName;
   document.getElementById('goodsInRemoveBtn').style.display = isEdit ? 'inline-block' : 'none';
   document.querySelector('#modalGoodsInExpiry .btn-amber').textContent = isEdit ? 'Save' : 'Add';
+  goodsInPopulateExpirySelects();
   const existingDate = isEdit && existingItem.expiry_date ? new Date(existingItem.expiry_date) : null;
   document.getElementById('goodsInExpiryDay').value = existingDate ? existingDate.getDate() : '';
   document.getElementById('goodsInExpiryMonth').value = existingDate ? (existingDate.getMonth() + 1) : '';
@@ -5531,19 +5540,20 @@ function openGoodsInExpiryModal(isEdit, existingItem){
 function editGoodsInItem(itemId){
   const item = goodsInCurrentItems.find(i => i.item_id === itemId);
   if(!item) return;
+  goodsInReturnToScanner = false; // editing from the list — don't reopen the scanner after saving
   openGoodsInExpiryModal(true, item);
 }
 async function confirmGoodsInExpiry(){
   const err = document.getElementById('goodsInExpiryErr');
   err.style.display = 'none';
-  const day = document.getElementById('goodsInExpiryDay').value.trim();
-  const month = document.getElementById('goodsInExpiryMonth').value.trim();
-  const year = document.getElementById('goodsInExpiryYear').value.trim();
+  const day = document.getElementById('goodsInExpiryDay').value;
+  const month = document.getElementById('goodsInExpiryMonth').value;
+  const year = document.getElementById('goodsInExpiryYear').value;
   const qty = parseInt(document.getElementById('goodsInQty').value, 10);
   if(!qty || qty < 1){ err.textContent = 'Enter a valid quantity'; err.style.display = 'block'; return; }
   let expiryDate = null;
   if(day || month || year){
-    if(!day || !month || !year){ err.textContent = 'Fill in day, month, and year — or leave all three blank'; err.style.display = 'block'; return; }
+    if(!day || !month || !year){ err.textContent = 'Pick day, month, and year — or leave all three blank'; err.style.display = 'block'; return; }
     const d = String(day).padStart(2, '0'), m = String(month).padStart(2, '0');
     expiryDate = `${year}-${m}-${d}`; // YYYY-MM-DD, matches server's TO_DATE format
   }
@@ -5565,10 +5575,21 @@ async function confirmGoodsInExpiry(){
     }
     closeModal('modalGoodsInExpiry');
     renderGoodsInSessionItems();
+    if(goodsInReturnToScanner){
+      openModal('modalGoodsInScanner');
+      document.getElementById('goodsInBarcodeInput').focus();
+    }
   }catch(e){
     err.textContent = e.message || 'Could not save item';
     err.style.display = 'block';
     console.error(e);
+  }
+}
+function cancelGoodsInExpiry(){
+  closeModal('modalGoodsInExpiry');
+  if(goodsInReturnToScanner){
+    openModal('modalGoodsInScanner');
+    document.getElementById('goodsInBarcodeInput').focus();
   }
 }
 async function removeGoodsInItem(){
