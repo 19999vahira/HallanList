@@ -6041,20 +6041,24 @@ function renderCreatedInvoiceMenuItems(block){
     body.innerHTML = '<div class="empty-hint">No products in this range.</div>';
     return;
   }
-  body.innerHTML = '';
+  const grid = document.createElement('div');
+  grid.className = 'itemblocks';
   matches.forEach(({ it, idx }) => {
-    const row = document.createElement('div');
-    row.className = 'pickrow';
-    row.innerHTML = `
-      <div class="pickinfo">
-        <div class="pname">${escapeHtml(createdInvoiceMenuName(it))}</div>
-      </div>
-      <input type="number" min="0" step="0.001" class="restaurant-qty-input" style="width:90px;"
+    const block = document.createElement('div');
+    block.className = 'itemblock';
+    block.title = createdInvoiceMenuName(it);
+    block.innerHTML = `
+      <div class="ibname"></div>
+      <div class="ibstock">Qty per Box</div>
+      <input type="number" min="0" step="0.001" class="restaurant-qty-input" style="width:100%;text-align:center;"
         placeholder="check each" value="${it.qty_per_box === null || it.qty_per_box === undefined ? '' : it.qty_per_box}">
     `;
-    row.querySelector('input').onchange = (e) => updateCreatedInvoiceField(idx, 'qty_per_box', e.target.value);
-    body.appendChild(row);
+    block.querySelector('.ibname').textContent = createdInvoiceMenuName(it);
+    block.querySelector('input').onchange = (e) => updateCreatedInvoiceField(idx, 'qty_per_box', e.target.value);
+    grid.appendChild(block);
   });
+  body.innerHTML = '';
+  body.appendChild(grid);
 }
 async function finishCreatedInvoice(){
   try{
