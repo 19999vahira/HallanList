@@ -1560,7 +1560,8 @@
     <p class="modal-sub">Scan now — it looks up automatically</p>
     <div class="scanmanual">
       <input type="text" id="goodsInBarcodeInput" placeholder="Waiting for scan…" autocomplete="off" autocapitalize="off"
-        inputmode="none" onkeydown="if(event.key==='Enter')submitGoodsInBarcode()" style="flex:1;">
+        inputmode="none" onkeydown="if(event.key==='Enter')submitGoodsInBarcode()">
+      <button class="btn-ghost" onclick="submitGoodsInBarcode()">Look up</button>
     </div>
     <div id="goodsInScanFeedback"></div>
     <div class="modal-close-row">
