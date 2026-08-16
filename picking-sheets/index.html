@@ -1271,6 +1271,14 @@
         <h4>🧾 Create Invoice</h4>
         <div class="count">Build one from a supplier PDF</div>
       </div>
+      <div class="bincard" onclick="openNewItemsSheet()">
+        <h4>📋 New Items</h4>
+        <div class="count">Spreadsheet-style entry for brand new products</div>
+      </div>
+      <div class="bincard" onclick="openScanGoodsHub()">
+        <h4>📷 Scan Goods</h4>
+        <div class="count">Scan a delivery in, item by item, with expiry dates</div>
+      </div>
     </div>
   </div>
 
@@ -1296,6 +1304,69 @@
       </div>
     </div>
     <div id="invoicesListResults"></div>
+  </div>
+
+  <!-- SCAN GOODS: HUB (choose continue or start new) -->
+  <div id="view-scan-goods-hub" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openInvoices()">Invoices</button><span class="sep">/</span>
+      <span class="current">Scan Goods</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Receive</div>
+      <h2>Scan Goods</h2>
+      <p>Scan a delivery in item by item — expiry dates are saved as you go, so nothing is lost if you get interrupted.</p>
+    </div>
+    <div class="catgrid">
+      <div class="bincard" onclick="openScanGoodsExistingList()">
+        <h4>▶️ Continue Existing Scan</h4>
+        <div class="count" id="scanGoodsOpenCount">Checking…</div>
+      </div>
+      <div class="bincard" onclick="openNewGoodsInModal()">
+        <h4>➕ New Supplier Goods In</h4>
+        <div class="count">Start a fresh scan for a delivery</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCAN GOODS: LIST OF OPEN (UNFINISHED) SESSIONS -->
+  <div id="view-scan-goods-existing" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openInvoices()">Invoices</button><span class="sep">/</span>
+      <button onclick="openScanGoodsHub()">Scan Goods</button><span class="sep">/</span>
+      <span class="current">Continue Existing Scan</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Receive</div>
+      <h2>Continue Existing Scan</h2>
+      <p>Pick a scan that hasn't been finished yet.</p>
+    </div>
+    <div id="scanGoodsExistingList"><div class="loading">Loading…</div></div>
+  </div>
+
+  <!-- SCAN GOODS: ACTIVE SESSION (scan barcodes, add items, list, finish) -->
+  <div id="view-scan-goods-session" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openInvoices()">Invoices</button><span class="sep">/</span>
+      <button onclick="openScanGoodsHub()">Scan Goods</button><span class="sep">/</span>
+      <span class="current" id="scanGoodsSessionCrumb">Session</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow" id="scanGoodsSessionEyebrow">Supplier</div>
+      <h2 id="scanGoodsSessionTitle">Session</h2>
+      <p id="scanGoodsSessionSub"></p>
+    </div>
+    <div class="actionbar">
+      <span class="mono" id="scanGoodsSessionCount" style="color:var(--text-dim);font-size:12px;"></span>
+      <div style="display:flex;gap:10px;">
+        <button class="btn-ghost" onclick="scanGoodsAddManually()">Scan Barcode</button>
+        <button class="btn-amber" onclick="finishScanGoodsSession()">Finish &amp; Download CSV</button>
+      </div>
+    </div>
+    <div id="scanGoodsSessionResults"><div class="empty-hint">No items scanned yet. Tap "Scan Barcode" to start.</div></div>
   </div>
 
   <!-- INVOICES: NOTE DETAIL -->
@@ -1409,6 +1480,30 @@
       </div>
     </div>
   </div>
+
+  <!-- NEW ITEMS: SPREADSHEET ENTRY -->
+  <div id="view-new-items" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openInvoices()">Invoices</button><span class="sep">/</span>
+      <span class="current">New Items</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Not Yet In Vector</div>
+      <h2>New Items</h2>
+      <p>Fill in a row per new product. Margin calculates itself from Price and Selling Price. Nothing here is saved automatically — download when you're ready.</p>
+    </div>
+    <div class="actionbar">
+      <button class="btn-amber" onclick="addNewItemRow()">+ Add Row</button>
+      <div style="display:flex;gap:10px;">
+        <button class="btn-ghost" onclick="openNewItemsExportModal('csv')">Download CSV</button>
+        <button class="btn-ghost" onclick="openNewItemsExportModal('pdf')">Download PDF</button>
+      </div>
+    </div>
+    <div id="newItemsSheet"></div>
+    <datalist id="newItemsDeptDatalist"></datalist>
+    <datalist id="newItemsSuppDatalist"></datalist>
+  </div>
 </div>
 
 <!-- SUPPLIER ORDERS: CHANGE PASSWORD -->
@@ -1436,6 +1531,63 @@
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalSupplierDelivery')">Cancel</button>
       <button class="btn-amber" onclick="submitSupplierDelivery()">Set Date</button>
+    </div>
+  </div>
+</div>
+
+<!-- SCAN GOODS: NEW SESSION — pick supplier, name of scanner -->
+<div class="modal-backdrop" id="modalNewGoodsIn">
+  <div class="modal" style="width:460px;">
+    <h3>New Supplier Goods In</h3>
+    <p class="modal-sub">Pick the supplier this delivery is from and who's scanning it in. Date and time are recorded automatically.</p>
+    <input type="text" id="goodsInSupplierSearch" placeholder="Search supplier…" autocomplete="off"
+      oninput="onGoodsInSupplierSearch()" style="width:100%;padding:10px;margin-bottom:6px;">
+    <div id="goodsInSupplierResults" style="max-height:160px;overflow-y:auto;margin-bottom:6px;"></div>
+    <div id="goodsInSupplierChosen" style="display:none;margin-bottom:12px;font-size:13px;font-weight:600;color:var(--accent-dim);"></div>
+    <input type="text" id="goodsInScannedBy" placeholder="Your name" autocomplete="off" style="width:100%;padding:10px;margin-bottom:6px;">
+    <div class="errdetail" id="goodsInNewErr" style="display:none;"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalNewGoodsIn')">Cancel</button>
+      <button class="btn-amber" onclick="startNewGoodsInSession()">Start Scanning</button>
+    </div>
+  </div>
+</div>
+
+<!-- SCAN GOODS: BARCODE SCANNER (reuses the same hardware-scanner pattern) -->
+<div class="modal-backdrop" id="modalGoodsInScanner">
+  <div class="modal" style="width:400px;">
+    <h3>Scan barcode</h3>
+    <p class="modal-sub">Scan now — it looks up automatically</p>
+    <div class="scanmanual">
+      <input type="text" id="goodsInBarcodeInput" placeholder="Waiting for scan…" autocomplete="off" autocapitalize="off"
+        inputmode="none" onkeydown="if(event.key==='Enter')submitGoodsInBarcode()">
+      <button class="btn-ghost" onclick="submitGoodsInBarcode()">Look up</button>
+    </div>
+    <div id="goodsInScanFeedback"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalGoodsInScanner')">Done scanning</button>
+    </div>
+  </div>
+</div>
+
+<!-- SCAN GOODS: EXPIRY DATE + QUANTITY (add or edit) -->
+<div class="modal-backdrop" id="modalGoodsInExpiry">
+  <div class="modal" style="width:400px;">
+    <h3 id="goodsInExpiryTitle">Expiry &amp; Quantity</h3>
+    <p class="modal-sub" id="goodsInExpiryProduct"></p>
+    <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px;">Expiry date</label>
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <input type="number" id="goodsInExpiryDay" placeholder="DD" min="1" max="31" style="width:70px;padding:10px;text-align:center;">
+      <input type="number" id="goodsInExpiryMonth" placeholder="MM" min="1" max="12" style="width:70px;padding:10px;text-align:center;">
+      <input type="number" id="goodsInExpiryYear" placeholder="YYYY" min="2025" max="2099" style="width:90px;padding:10px;text-align:center;">
+    </div>
+    <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px;">Quantity</label>
+    <input type="number" id="goodsInQty" min="1" value="1" style="width:100%;padding:10px;margin-bottom:6px;">
+    <div class="errdetail" id="goodsInExpiryErr" style="display:none;"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalGoodsInExpiry')">Cancel</button>
+      <button class="btn-ghost" id="goodsInRemoveBtn" style="display:none;color:var(--danger);" onclick="removeGoodsInItem()">Remove</button>
+      <button class="btn-amber" onclick="confirmGoodsInExpiry()">Add</button>
     </div>
   </div>
 </div>
@@ -1468,6 +1620,19 @@
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalCreatedInvoiceExport')">Cancel</button>
       <button class="btn-amber" onclick="confirmCreatedInvoiceExport()">Export</button>
+    </div>
+  </div>
+</div>
+
+<!-- NEW ITEMS: EXPORT COLUMN PICKER -->
+<div class="modal-backdrop" id="modalNewItemsExport">
+  <div class="modal" style="width:360px;">
+    <h3>Choose columns</h3>
+    <p class="modal-sub">Pick which columns to include in the file.</p>
+    <div id="newItemsExportColumns"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalNewItemsExport')">Cancel</button>
+      <button class="btn-amber" onclick="confirmNewItemsExport()">Export</button>
     </div>
   </div>
 </div>
@@ -5133,7 +5298,310 @@ async function createNewInvoiceFromPdf(){
   }
 }
 
-/* ---- Step 1: Match & Quantity ---- */
+/* ============ SCAN GOODS (Goods In scanning) ============ */
+let goodsInChosenSupplier = null;
+let goodsInCurrentSession = null; // { session_id, supplier_name, scanned_by, started_at }
+let goodsInCurrentItems = [];     // items in the active session
+let goodsInEditingItemId = null;  // set when the expiry modal is editing an existing item, not adding a new scan
+let goodsInPendingProduct = null; // { stockid, name, barcode, pack_size } — the just-scanned product awaiting expiry/qty
+
+function openScanGoodsHub(){
+  showView('view-scan-goods-hub');
+  const countEl = document.getElementById('scanGoodsOpenCount');
+  countEl.textContent = 'Checking…';
+  apiGet('goods-in/sessions/?status=open').then(data => {
+    const n = (data.sessions || []).length;
+    countEl.textContent = n === 0 ? 'Nothing in progress' : (n + ' scan' + (n === 1 ? '' : 's') + ' in progress');
+  }).catch(() => { countEl.textContent = 'Continue a scan that hasn\'t been finished yet'; });
+}
+
+/* ---- Continue Existing Scan: list of open sessions ---- */
+async function openScanGoodsExistingList(){
+  showView('view-scan-goods-existing');
+  const box = document.getElementById('scanGoodsExistingList');
+  box.innerHTML = '<div class="loading">Loading…</div>';
+  try{
+    const data = await apiGet('goods-in/sessions/?status=open');
+    const sessions = data.sessions || [];
+    if(sessions.length === 0){
+      box.innerHTML = '<div class="empty-hint">No unfinished scans — start a new one from Scan Goods.</div>';
+      return;
+    }
+    box.innerHTML = sessions.map(s => `
+      <div class="pickrow" style="cursor:pointer;" onclick="resumeGoodsInSession(${s.session_id})">
+        <div class="pickinfo">
+          <div class="pname">${escapeHtml(s.supplier_name)}</div>
+          <div class="pbarcode">Scanned by ${escapeHtml(s.scanned_by)} — started ${new Date(s.started_at).toLocaleString()}</div>
+        </div>
+        <div class="preq">${s.item_count} item${s.item_count === 1 ? '' : 's'}</div>
+      </div>
+    `).join('');
+  }catch(e){
+    box.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not load scans</div>';
+    console.error(e);
+  }
+}
+async function resumeGoodsInSession(sessionId){
+  try{
+    const data = await apiGet('goods-in/sessions/' + sessionId + '/');
+    goodsInCurrentSession = data.session;
+    goodsInCurrentItems = data.items || [];
+    openScanGoodsSessionView();
+  }catch(e){
+    toast('Could not open that scan');
+    console.error(e);
+  }
+}
+
+/* ---- New Supplier Goods In: pick supplier + name, then start ---- */
+function openNewGoodsInModal(){
+  goodsInChosenSupplier = null;
+  document.getElementById('goodsInSupplierSearch').value = '';
+  document.getElementById('goodsInSupplierResults').innerHTML = '';
+  document.getElementById('goodsInSupplierChosen').style.display = 'none';
+  // Same convention as Create Invoice's "created_by" — remembers the last
+  // name typed so staff don't retype it every single delivery.
+  document.getElementById('goodsInScannedBy').value = localStorage.getItem('hallan_staff_name') || '';
+  document.getElementById('goodsInNewErr').style.display = 'none';
+  openModal('modalNewGoodsIn');
+}
+let goodsInSupplierDebounce = null;
+function onGoodsInSupplierSearch(){
+  clearTimeout(goodsInSupplierDebounce);
+  goodsInSupplierDebounce = setTimeout(runGoodsInSupplierSearch, 250);
+}
+async function runGoodsInSupplierSearch(){
+  const q = document.getElementById('goodsInSupplierSearch').value.trim();
+  const results = document.getElementById('goodsInSupplierResults');
+  if(q.length < 2){ results.innerHTML = ''; return; }
+  try{
+    const data = await apiGet('suppliers/search/?q=' + encodeURIComponent(q));
+    const items = data.items || [];
+    if(items.length === 0){ results.innerHTML = '<div class="empty-hint" style="font-size:12px;">No suppliers found.</div>'; return; }
+    results.innerHTML = items.map(s => `
+      <div style="padding:8px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px;"
+        onclick="chooseGoodsInSupplier(${s.suppid}, ${JSON.stringify(s.name).replace(/"/g,'&quot;')})">${escapeHtml(s.name)}</div>
+    `).join('');
+  }catch(e){ console.error(e); }
+}
+function chooseGoodsInSupplier(suppid, name){
+  goodsInChosenSupplier = { suppid, name };
+  document.getElementById('goodsInSupplierSearch').value = '';
+  document.getElementById('goodsInSupplierResults').innerHTML = '';
+  const chosen = document.getElementById('goodsInSupplierChosen');
+  chosen.style.display = 'block';
+  chosen.textContent = 'Supplier: ' + name;
+}
+async function startNewGoodsInSession(){
+  const err = document.getElementById('goodsInNewErr');
+  err.style.display = 'none';
+  if(!goodsInChosenSupplier){ err.textContent = 'Pick a supplier first'; err.style.display = 'block'; return; }
+  const scannedBy = document.getElementById('goodsInScannedBy').value.trim();
+  if(!scannedBy){ err.textContent = 'Enter your name'; err.style.display = 'block'; return; }
+  localStorage.setItem('hallan_staff_name', scannedBy);
+  try{
+    const created = await apiPost('goods-in/sessions/', {
+      suppid: goodsInChosenSupplier.suppid,
+      supplier_name: goodsInChosenSupplier.name,
+      scanned_by: scannedBy
+    });
+    closeModal('modalNewGoodsIn');
+    goodsInCurrentSession = {
+      session_id: created.session_id, suppid: goodsInChosenSupplier.suppid,
+      supplier_name: goodsInChosenSupplier.name, scanned_by: scannedBy, started_at: new Date().toISOString()
+    };
+    goodsInCurrentItems = [];
+    openScanGoodsSessionView();
+  }catch(e){
+    err.textContent = e.message || 'Could not start scan';
+    err.style.display = 'block';
+    console.error(e);
+  }
+}
+
+/* ---- Active session: header, item list, scanning ---- */
+function openScanGoodsSessionView(){
+  const s = goodsInCurrentSession;
+  document.getElementById('scanGoodsSessionCrumb').textContent = s.supplier_name;
+  document.getElementById('scanGoodsSessionEyebrow').textContent = 'Receive';
+  document.getElementById('scanGoodsSessionTitle').textContent = s.supplier_name;
+  document.getElementById('scanGoodsSessionSub').textContent =
+    'Scanned by ' + s.scanned_by + ' — started ' + new Date(s.started_at).toLocaleString();
+  showView('view-scan-goods-session');
+  renderGoodsInSessionItems();
+}
+function renderGoodsInSessionItems(){
+  document.getElementById('scanGoodsSessionCount').textContent =
+    goodsInCurrentItems.length + ' item' + (goodsInCurrentItems.length === 1 ? '' : 's') + ' scanned';
+  const box = document.getElementById('scanGoodsSessionResults');
+  if(goodsInCurrentItems.length === 0){
+    box.innerHTML = '<div class="empty-hint">No items scanned yet. Tap "Scan Barcode" to start.</div>';
+    return;
+  }
+  box.innerHTML = goodsInCurrentItems.map(it => `
+    <div class="pickrow" style="cursor:pointer;" onclick="editGoodsInItem(${it.item_id})">
+      <div class="pickinfo">
+        <div class="pname">${escapeHtml(it.item_name)}</div>
+        <div class="pbarcode">${it.barcode ? ('#' + escapeHtml(it.barcode)) : 'No barcode'}${it.pack_size ? (' — Pack: ' + escapeHtml(it.pack_size)) : ''} — Exp: ${it.expiry_date ? new Date(it.expiry_date).toLocaleDateString() : '—'}</div>
+      </div>
+      <div class="preq">Qty ${it.quantity}</div>
+    </div>
+  `).join('');
+}
+
+/* ---- Barcode scanning within a session (mirrors openScanner/handleScannedCode) ---- */
+function scanGoodsAddManually(){
+  document.getElementById('goodsInBarcodeInput').value = '';
+  document.getElementById('goodsInScanFeedback').innerHTML = '';
+  openModal('modalGoodsInScanner');
+  document.getElementById('goodsInBarcodeInput').focus();
+}
+function submitGoodsInBarcode(){
+  const code = document.getElementById('goodsInBarcodeInput').value.trim();
+  if(!code) return;
+  handleGoodsInScannedCode(code);
+}
+async function handleGoodsInScannedCode(code){
+  const input = document.getElementById('goodsInBarcodeInput');
+  input.value = '';
+  const box = document.getElementById('goodsInScanFeedback');
+  const loadingEl = document.createElement('div');
+  loadingEl.className = 'loading';
+  loadingEl.textContent = 'Looking up ' + code + '…';
+  box.prepend(loadingEl);
+  try{
+    const suppidParam = goodsInCurrentSession.suppid ? ('?suppid=' + goodsInCurrentSession.suppid) : '';
+    const data = await apiGet('goods-in/scan-lookup/' + encodeURIComponent(code) + '/' + suppidParam);
+    loadingEl.remove();
+    if(!data.item){
+      const fail = document.createElement('div');
+      fail.className = 'scanfail';
+      fail.textContent = 'No stock item found for barcode ' + code;
+      box.prepend(fail);
+      input.focus();
+      return;
+    }
+    const stock = data.item;
+    const card = document.createElement('div');
+    card.className = 'scanresult-card';
+    card.innerHTML = `
+      <div class="srname">${escapeHtml(stock.name)}</div>
+      <div class="srbarcode">Barcode: ${escapeHtml(stock.barcode || code)}</div>
+      <div class="srstock">Pack size: ${stock.pack_size ? escapeHtml(String(stock.pack_size)) : '—'}</div>
+      <div class="srrow">
+        <button class="btn-ghost srskip">Skip</button>
+        <button class="btn-amber">Add</button>
+      </div>
+    `;
+    card.querySelector('.srskip').onclick = () => { card.remove(); input.focus(); };
+    card.querySelector('.btn-amber').onclick = () => {
+      card.remove();
+      goodsInPendingProduct = { stockid: stock.stockid, name: stock.name, barcode: stock.barcode || code, pack_size: stock.pack_size || null };
+      openGoodsInExpiryModal(false);
+    };
+    box.prepend(card);
+    input.focus();
+  }catch(e){
+    loadingEl.remove();
+    const fail = document.createElement('div');
+    fail.className = 'scanfail';
+    fail.textContent = 'Lookup failed for ' + code;
+    box.prepend(fail);
+    console.error(e);
+    input.focus();
+  }
+}
+
+/* ---- Expiry date (day/month/year blocks) + quantity — shared by add and edit ---- */
+function openGoodsInExpiryModal(isEdit, existingItem){
+  goodsInEditingItemId = isEdit ? existingItem.item_id : null;
+  document.getElementById('goodsInExpiryTitle').textContent = isEdit ? 'Edit Item' : 'Expiry & Quantity';
+  const productName = isEdit ? existingItem.item_name : goodsInPendingProduct.name;
+  document.getElementById('goodsInExpiryProduct').textContent = productName;
+  document.getElementById('goodsInRemoveBtn').style.display = isEdit ? 'inline-block' : 'none';
+  document.querySelector('#modalGoodsInExpiry .btn-amber').textContent = isEdit ? 'Save' : 'Add';
+  const existingDate = isEdit && existingItem.expiry_date ? new Date(existingItem.expiry_date) : null;
+  document.getElementById('goodsInExpiryDay').value = existingDate ? existingDate.getDate() : '';
+  document.getElementById('goodsInExpiryMonth').value = existingDate ? (existingDate.getMonth() + 1) : '';
+  document.getElementById('goodsInExpiryYear').value = existingDate ? existingDate.getFullYear() : '';
+  document.getElementById('goodsInQty').value = isEdit ? existingItem.quantity : 1;
+  document.getElementById('goodsInExpiryErr').style.display = 'none';
+  openModal('modalGoodsInExpiry');
+}
+function editGoodsInItem(itemId){
+  const item = goodsInCurrentItems.find(i => i.item_id === itemId);
+  if(!item) return;
+  openGoodsInExpiryModal(true, item);
+}
+async function confirmGoodsInExpiry(){
+  const err = document.getElementById('goodsInExpiryErr');
+  err.style.display = 'none';
+  const day = document.getElementById('goodsInExpiryDay').value.trim();
+  const month = document.getElementById('goodsInExpiryMonth').value.trim();
+  const year = document.getElementById('goodsInExpiryYear').value.trim();
+  const qty = parseInt(document.getElementById('goodsInQty').value, 10);
+  if(!qty || qty < 1){ err.textContent = 'Enter a valid quantity'; err.style.display = 'block'; return; }
+  let expiryDate = null;
+  if(day || month || year){
+    if(!day || !month || !year){ err.textContent = 'Fill in day, month, and year — or leave all three blank'; err.style.display = 'block'; return; }
+    const d = String(day).padStart(2, '0'), m = String(month).padStart(2, '0');
+    expiryDate = `${year}-${m}-${d}`; // YYYY-MM-DD, matches server's TO_DATE format
+  }
+  try{
+    if(goodsInEditingItemId){
+      await apiPut('goods-in/items/' + goodsInEditingItemId + '/', { pack_size: null, expiry_date: expiryDate, quantity: qty });
+      const item = goodsInCurrentItems.find(i => i.item_id === goodsInEditingItemId);
+      if(item){ item.expiry_date = expiryDate; item.quantity = qty; }
+    } else {
+      const p = goodsInPendingProduct;
+      const created = await apiPost('goods-in/sessions/' + goodsInCurrentSession.session_id + '/items/', {
+        stockid: p.stockid, item_name: p.name, barcode: p.barcode, pack_size: p.pack_size,
+        expiry_date: expiryDate, quantity: qty
+      });
+      goodsInCurrentItems.push({
+        item_id: created.item_id, stockid: p.stockid, item_name: p.name, barcode: p.barcode,
+        pack_size: p.pack_size, expiry_date: expiryDate, quantity: qty
+      });
+    }
+    closeModal('modalGoodsInExpiry');
+    renderGoodsInSessionItems();
+  }catch(e){
+    err.textContent = e.message || 'Could not save item';
+    err.style.display = 'block';
+    console.error(e);
+  }
+}
+async function removeGoodsInItem(){
+  if(!goodsInEditingItemId) return;
+  try{
+    await apiDelete('goods-in/items/' + goodsInEditingItemId + '/');
+    goodsInCurrentItems = goodsInCurrentItems.filter(i => i.item_id !== goodsInEditingItemId);
+    closeModal('modalGoodsInExpiry');
+    renderGoodsInSessionItems();
+  }catch(e){
+    toast('Could not remove item');
+    console.error(e);
+  }
+}
+
+/* ---- Finish: mark session complete, download CSV (name/qty/barcode) ---- */
+async function finishScanGoodsSession(){
+  if(goodsInCurrentItems.length === 0){ toast('Scan at least one item first'); return; }
+  try{
+    await apiPost('goods-in/sessions/' + goodsInCurrentSession.session_id + '/complete/', {});
+    downloadCSV(
+      'goods-in-' + goodsInCurrentSession.supplier_name.replace(/[^a-z0-9]+/gi, '-') + '.csv',
+      ['Name', 'Quantity', 'Barcode'],
+      goodsInCurrentItems.map(it => [it.item_name, it.quantity, it.barcode || ''])
+    );
+    toast('Scan finished — CSV downloaded. Expiry dates are saved permanently.');
+    openScanGoodsHub();
+  }catch(e){
+    toast('Could not finish scan');
+    console.error(e);
+  }
+}
+
 function openCreatedInvoiceMatchStep(){
   document.getElementById('createdInvoiceMatchLabel').textContent = currentCreatedInvoice.header.supplier_name || 'Invoice';
   showView('view-created-invoice-match');
@@ -5542,6 +6010,200 @@ function completeCsvUpdateProcess(){
   });
   downloadFixedNameCSV('hallan_stock_update.csv', headers, rows);
   toast('Stock update CSV saved — Vector import will pick it up automatically');
+}
+
+/* ============ NEW ITEMS (spreadsheet entry for brand new products) ============
+   Purely in-browser — nothing here is saved to the database. Fill in rows,
+   export CSV/PDF when ready. Department and Supplier are typeahead fields
+   backed by real data (VEDEPTS / SUPPLIERS) via <datalist> so typing a
+   partial name surfaces the real ones instead of relying on free-typed
+   text staying consistent with what's actually in Vector. */
+let newItemsRows = []; // { name, barcode, catalogue_number, size, price, selling_price, department, supplier, pack_size, total_qty }
+let newItemsDeptLoaded = false;
+
+function openNewItemsSheet(){
+  showView('view-new-items');
+  if(newItemsRows.length === 0) addNewItemRow();
+  loadNewItemsDepartments();
+  renderNewItemsSheet();
+}
+async function loadNewItemsDepartments(){
+  if(newItemsDeptLoaded) return; // small, stable list — fetch once per visit
+  try{
+    const data = await apiGet('departments/margins/');
+    const departments = data.departments || [];
+    document.getElementById('newItemsDeptDatalist').innerHTML =
+      departments.map(d => `<option value="${escapeHtml(d.name)}">`).join('');
+    newItemsDeptLoaded = true;
+  }catch(e){ console.error(e); }
+}
+let newItemsSuppSearchDebounce = null;
+function onNewItemsSupplierInput(value){
+  clearTimeout(newItemsSuppSearchDebounce);
+  if(value.trim().length < 2) return;
+  newItemsSuppSearchDebounce = setTimeout(async () => {
+    try{
+      const data = await apiGet('suppliers/search/?q=' + encodeURIComponent(value.trim()));
+      const items = data.items || [];
+      // One shared datalist for every Supplier cell — updates to reflect
+      // whichever cell was most recently typed into, which is the only one
+      // that matters at any given moment.
+      document.getElementById('newItemsSuppDatalist').innerHTML =
+        items.map(s => `<option value="${escapeHtml(s.name)}">`).join('');
+    }catch(e){ console.error(e); }
+  }, 250);
+}
+function addNewItemRow(){
+  newItemsRows.push({
+    name: '', barcode: '', catalogue_number: '', size: '',
+    price: null, selling_price: null, department: '', supplier: '',
+    pack_size: '', total_qty: null
+  });
+  renderNewItemsSheet();
+}
+function removeNewItemRow(idx){
+  newItemsRows.splice(idx, 1);
+  if(newItemsRows.length === 0) addNewItemRow(); // never leave the sheet fully empty
+  else renderNewItemsSheet();
+}
+function updateNewItemField(idx, field, value, isNumber){
+  newItemsRows[idx][field] = (isNumber && value !== '') ? Number(value) : (isNumber ? null : value);
+  if(field === 'price' || field === 'selling_price'){
+    const margin = newItemMarginPct(newItemsRows[idx]);
+    const cell = document.getElementById('newItemMarginCell-' + idx);
+    if(cell) cell.textContent = margin === null ? '—' : margin.toFixed(1) + '%';
+  }
+}
+function newItemMarginPct(row){
+  if(row.price === null || row.price === undefined) return null;
+  if(row.selling_price === null || row.selling_price === undefined) return null;
+  if(Number(row.selling_price) === 0) return null;
+  return (Number(row.selling_price) - Number(row.price)) / Number(row.selling_price) * 100;
+}
+function renderNewItemsSheet(){
+  const box = document.getElementById('newItemsSheet');
+  const table = document.createElement('table');
+  table.className = 'finaltable';
+  table.innerHTML = `<thead><tr>
+    <th>Name</th><th>Barcode</th><th>Catalogue No.</th><th>Size</th>
+    <th class="qtycell">Price</th><th class="qtycell">Selling Price</th><th class="qtycell">Margin</th>
+    <th>Department</th><th>Supplier</th><th class="qtycell">Pack Size</th><th class="qtycell">Total Qty</th><th></th>
+  </tr></thead>`;
+  const tbody = document.createElement('tbody');
+  newItemsRows.forEach((row, idx) => {
+    const margin = newItemMarginPct(row);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><input type="text" style="width:150px;" value="${escapeHtml(row.name)}" onchange="updateNewItemField(${idx},'name',this.value)"></td>
+      <td><input type="text" style="width:110px;" value="${escapeHtml(row.barcode)}" onchange="updateNewItemField(${idx},'barcode',this.value)"></td>
+      <td><input type="text" style="width:100px;" value="${escapeHtml(row.catalogue_number)}" onchange="updateNewItemField(${idx},'catalogue_number',this.value)"></td>
+      <td><input type="text" style="width:80px;" value="${escapeHtml(row.size)}" onchange="updateNewItemField(${idx},'size',this.value)"></td>
+      <td class="qtycell"><input type="number" min="0" step="0.01" style="width:80px;" value="${row.price === null ? '' : row.price}" onchange="updateNewItemField(${idx},'price',this.value,true)"></td>
+      <td class="qtycell"><input type="number" min="0" step="0.01" style="width:80px;" value="${row.selling_price === null ? '' : row.selling_price}" onchange="updateNewItemField(${idx},'selling_price',this.value,true)"></td>
+      <td class="qtycell" id="newItemMarginCell-${idx}">${margin === null ? '—' : margin.toFixed(1) + '%'}</td>
+      <td><input type="text" list="newItemsDeptDatalist" style="width:140px;" value="${escapeHtml(row.department)}" onchange="updateNewItemField(${idx},'department',this.value)"></td>
+      <td><input type="text" list="newItemsSuppDatalist" style="width:140px;" value="${escapeHtml(row.supplier)}"
+            oninput="onNewItemsSupplierInput(this.value)" onchange="updateNewItemField(${idx},'supplier',this.value)"></td>
+      <td class="qtycell"><input type="text" style="width:80px;" value="${escapeHtml(row.pack_size)}" onchange="updateNewItemField(${idx},'pack_size',this.value)"></td>
+      <td class="qtycell"><input type="number" min="0" step="0.01" style="width:80px;" value="${row.total_qty === null ? '' : row.total_qty}" onchange="updateNewItemField(${idx},'total_qty',this.value,true)"></td>
+      <td><button class="btn-ghost" onclick="removeNewItemRow(${idx})">Remove</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  box.innerHTML = '';
+  const scrollWrap = document.createElement('div');
+  scrollWrap.className = 'restaurant-table-scroll';
+  scrollWrap.appendChild(table);
+  box.appendChild(scrollWrap);
+}
+
+/* ---- Export: same column-picker pattern as everywhere else ---- */
+const NEW_ITEMS_EXPORT_COLUMNS = [
+  { key: 'name', label: 'Name', always: true },
+  { key: 'barcode', label: 'Barcode' },
+  { key: 'catalogue_number', label: 'Catalogue No.' },
+  { key: 'size', label: 'Size' },
+  { key: 'price', label: 'Price' },
+  { key: 'selling_price', label: 'Selling Price' },
+  { key: 'margin', label: 'Margin' },
+  { key: 'department', label: 'Department' },
+  { key: 'supplier', label: 'Supplier' },
+  { key: 'pack_size', label: 'Pack Size' },
+  { key: 'total_qty', label: 'Total Qty' }
+];
+let newItemsExportFormat = null;
+function openNewItemsExportModal(format){
+  const rows = newItemsRows.filter(r => r.name.trim());
+  if(rows.length === 0){ toast('Add at least one named item first'); return; }
+  newItemsExportFormat = format;
+  const box = document.getElementById('newItemsExportColumns');
+  box.innerHTML = NEW_ITEMS_EXPORT_COLUMNS.map(c => `
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;">
+      <input type="checkbox" id="nieCol-${c.key}" ${c.always ? 'checked disabled' : 'checked'}> ${c.label}
+    </label>
+  `).join('');
+  openModal('modalNewItemsExport');
+}
+function confirmNewItemsExport(){
+  const columns = {};
+  NEW_ITEMS_EXPORT_COLUMNS.forEach(c => {
+    columns[c.key] = c.always || document.getElementById('nieCol-' + c.key).checked;
+  });
+  closeModal('modalNewItemsExport');
+  exportNewItems(newItemsExportFormat, columns);
+}
+function newItemExportRow(row, columns){
+  const margin = newItemMarginPct(row);
+  const out = {};
+  if(columns.name) out['Name'] = row.name;
+  if(columns.barcode) out['Barcode'] = row.barcode;
+  if(columns.catalogue_number) out['Catalogue No.'] = row.catalogue_number;
+  if(columns.size) out['Size'] = row.size;
+  if(columns.price) out['Price'] = row.price === null ? '' : Number(row.price).toFixed(2);
+  if(columns.selling_price) out['Selling Price'] = row.selling_price === null ? '' : Number(row.selling_price).toFixed(2);
+  if(columns.margin) out['Margin'] = margin === null ? '' : margin.toFixed(1) + '%';
+  if(columns.department) out['Department'] = row.department;
+  if(columns.supplier) out['Supplier'] = row.supplier;
+  if(columns.pack_size) out['Pack Size'] = row.pack_size;
+  if(columns.total_qty) out['Total Qty'] = row.total_qty === null ? '' : row.total_qty;
+  return out;
+}
+function exportNewItems(format, columns){
+  const rows = newItemsRows.filter(r => r.name.trim());
+  const filenameBase = 'new-items-' + new Date().toISOString().slice(0,10);
+  if(format === 'csv'){
+    const outRows = rows.map(r => newItemExportRow(r, columns));
+    const headers = Object.keys(outRows[0] || {});
+    const csvLines = [headers.join(',')].concat(
+      outRows.map(r => headers.map(h => '"' + String(r[h] ?? '').replace(/"/g, '""') + '"').join(','))
+    );
+    const blob = new Blob([csvLines.join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filenameBase + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }else{
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape' });
+    doc.setFontSize(16);
+    doc.text('New Items', 14, 18);
+    doc.setFontSize(9);
+    doc.setTextColor(120);
+    doc.text('Generated ' + ukDateTimeString(new Date()) + ' (UK time)', 14, 24);
+    const head = NEW_ITEMS_EXPORT_COLUMNS.filter(c => columns[c.key]).map(c => c.label);
+    const body = rows.map(r => {
+      const out = newItemExportRow(r, columns);
+      return head.map(h => out[h] ?? '');
+    });
+    doc.autoTable({
+      startY: 30, head: [head], body,
+      theme: 'grid', headStyles: { fillColor: [30,34,42] }, styles: { fontSize: 8 },
+      margin: { left: 14, right: 14 }
+    });
+    doc.save(filenameBase + '.pdf');
+  }
 }
 
 /* ============ TOAST ============ */
