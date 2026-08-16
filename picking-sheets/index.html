@@ -808,7 +808,7 @@
       </div>
       <div class="bincard" onclick="createNewWarehouseList()">
         <h4>🆕 Create New List</h4>
-        <div class="count">Empties every category's quantities and starts fresh</div>
+        <div class="count">Resets every quantity to 0 — items stay, ready to count again</div>
       </div>
     </div>
   </div>
@@ -2080,10 +2080,10 @@ function continueWarehouseList(){
   loadCategories();
 }
 async function createNewWarehouseList(){
-  if(!confirm('Start a new Warehouse List? This empties the quantities in every category — the categories themselves stay, only what\'s been added to them is cleared. This cannot be undone.')) return;
+  if(!confirm('Start a new Warehouse List? This sets every item\'s quantity back to 0 across all categories — the items and categories themselves stay exactly as they are, only the counts reset. This cannot be undone.')) return;
   try{
     await apiPost('categories/clear-warehouse-items/', {});
-    toast('New list started — all categories emptied');
+    toast('New list started — quantities reset to 0');
     showView('view-warehouse');
     loadCategories();
   }catch(e){
