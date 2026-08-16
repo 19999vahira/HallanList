@@ -1574,7 +1574,8 @@
 <div class="modal-backdrop" id="modalGoodsInExpiry">
   <div class="modal" style="width:400px;">
     <h3 id="goodsInExpiryTitle">Expiry &amp; Quantity</h3>
-    <p id="goodsInExpiryProduct" style="font-size:20px;font-weight:700;color:var(--text);margin:2px 0 14px;line-height:1.3;"></p>
+    <p id="goodsInExpiryProduct" style="font-size:20px;font-weight:700;color:var(--text);margin:2px 0 4px;line-height:1.3;"></p>
+    <p id="goodsInExpiryMeta" style="font-size:13px;color:var(--text-dim);margin:0 0 14px;"></p>
     <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px;">Expiry date</label>
     <div style="display:flex;gap:8px;margin-bottom:12px;">
       <select id="goodsInExpiryDay" style="width:70px;padding:10px;text-align:center;"><option value="">DD</option></select>
@@ -5489,7 +5490,7 @@ async function handleGoodsInScannedCode(code){
     // expiry modal's own fields doesn't accidentally trigger the barcode
     // input underneath. confirmGoodsInExpiry() reopens this scanner modal
     // afterwards so scanning continues without extra taps.
-    goodsInPendingProduct = { stockid: stock.stockid, name: stock.name, barcode: stock.barcode || code, pack_size: stock.pack_size || null };
+    goodsInPendingProduct = { stockid: stock.stockid, name: stock.name, barcode: stock.barcode || code, pack_size: stock.pack_size || null, current_stock: stock.current_stock };
     goodsInReturnToScanner = true;
     closeModal('modalGoodsInScanner');
     openGoodsInExpiryModal(false);
@@ -5526,6 +5527,16 @@ function openGoodsInExpiryModal(isEdit, existingItem){
   document.getElementById('goodsInExpiryTitle').textContent = isEdit ? 'Edit Item' : 'Expiry & Quantity';
   const productName = isEdit ? existingItem.item_name : goodsInPendingProduct.name;
   document.getElementById('goodsInExpiryProduct').textContent = productName;
+  const metaEl = document.getElementById('goodsInExpiryMeta');
+  if (isEdit) {
+    metaEl.textContent = existingItem.pack_size ? ('Pack size: ' + existingItem.pack_size) : '';
+  } else {
+    const p = goodsInPendingProduct;
+    const parts = [];
+    if (p.pack_size) parts.push('Pack size: ' + p.pack_size);
+    parts.push('Current stock: ' + (p.current_stock !== null && p.current_stock !== undefined ? p.current_stock : '—'));
+    metaEl.textContent = parts.join('  •  ');
+  }
   document.getElementById('goodsInRemoveBtn').style.display = isEdit ? 'inline-block' : 'none';
   document.querySelector('#modalGoodsInExpiry .btn-amber').textContent = isEdit ? 'Save' : 'Add';
   goodsInPopulateExpirySelects();
