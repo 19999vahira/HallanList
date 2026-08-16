@@ -791,10 +791,34 @@
     <div id="historyContent"></div>
   </div>
 
+  <!-- WAREHOUSE LIST HUB (continue current list or start a new one) -->
+  <div id="view-warehouse-hub" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span><span class="current">Warehouse List</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Bulk Storage</div>
+      <h2>Warehouse List</h2>
+      <p>Continue the list already in progress, or start a fresh one.</p>
+    </div>
+    <div class="catgrid">
+      <div class="bincard" onclick="continueWarehouseList()">
+        <h4>▶️ Continue Current List</h4>
+        <div class="count">Carry on where the list was left</div>
+      </div>
+      <div class="bincard" onclick="createNewWarehouseList()">
+        <h4>🆕 Create New List</h4>
+        <div class="count">Empties every category's quantities and starts fresh</div>
+      </div>
+    </div>
+  </div>
+
   <!-- WAREHOUSE (category grid) -->
   <div id="view-warehouse" class="view">
     <div class="crumbrow">
-      <button onclick="goHome()">Home</button><span class="sep">/</span><span class="current">Warehouse List</span>
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openListType('WAREHOUSE')">Warehouse List</button><span class="sep">/</span>
+      <span class="current">Categories</span>
     </div>
     <div class="hero">
       <div class="eyebrow">Bulk Storage</div>
@@ -2048,8 +2072,24 @@ function showView(id){
 }
 function goHome(){ showView('view-home'); }
 function openListType(type){
-  if(type==='WAREHOUSE'){ showView('view-warehouse'); loadCategories(); return; }
+  if(type==='WAREHOUSE'){ showView('view-warehouse-hub'); return; }
   if(type==='RETAIL'){ showView('view-retail-home'); return; }
+}
+function continueWarehouseList(){
+  showView('view-warehouse');
+  loadCategories();
+}
+async function createNewWarehouseList(){
+  if(!confirm('Start a new Warehouse List? This empties the quantities in every category — the categories themselves stay, only what\'s been added to them is cleared. This cannot be undone.')) return;
+  try{
+    await apiPost('categories/clear-warehouse-items/', {});
+    toast('New list started — all categories emptied');
+    showView('view-warehouse');
+    loadCategories();
+  }catch(e){
+    toast('Could not start a new list');
+    console.error(e);
+  }
 }
 async function openWholesalePricing(){
   const pw = prompt('This list is confidential.\nEnter the Wholesale Pricing password:');
@@ -6319,7 +6359,7 @@ async function loadCategories(){
   try{
     const data = await apiGet('categories/');
     let cats = (data.items || []).filter(c => c.list_type === 'WAREHOUSE');
-    cats = sortByStoredOrder(cats, getStoredOrder('hallan_cat_order'), c => c.category_id);
+    cats.sort((a,b) => a.category_name.localeCompare(b.category_name, undefined, {sensitivity:'base'}));
     categories = cats;
     renderCategoryGrid();
   }catch(e){
@@ -6333,7 +6373,6 @@ function renderCategoryGrid(){
   categories.forEach(c=>{
     const div = document.createElement('div');
     div.className = 'bincard';
-    div.draggable = true;
     div.dataset.catId = c.category_id;
     div.onclick = () => openCategory(c);
     div.innerHTML = `
@@ -6346,7 +6385,6 @@ function renderCategoryGrid(){
     `;
     div.querySelector('.cardicon.rename').onclick = (e) => { e.stopPropagation(); renameCategory(c); };
     div.querySelector('.cardicon.delete').onclick = (e) => { e.stopPropagation(); deleteCategoryConfirm(c); };
-    attachDragHandlers(div, saveCatOrder);
     grid.appendChild(div);
   });
   const addTile = document.createElement('div');
@@ -6418,7 +6456,7 @@ async function loadItemsForCategory(){
   try{
     const data = await apiGet('items/');
     let items = (data.items || []).filter(i => i.category_id === currentCategory.category_id);
-    items = sortByStoredOrder(items, getStoredOrder('hallan_item_order_' + currentCategory.category_id), it => it.item_row_id);
+    items.sort((a,b) => a.item_name.localeCompare(b.item_name, undefined, {sensitivity:'base'}));
     currentItems = items;
     updateToggleBtnLabel();
     list.innerHTML = '';
@@ -6440,7 +6478,6 @@ function stockClass(stock){
 function renderItemBlock(it){
   const block = document.createElement('div');
   block.className = 'itemblock';
-  block.draggable = true;
   block.dataset.rowId = it.item_row_id;
   block.title = it.item_name;
   block.innerHTML = `
@@ -6459,7 +6496,6 @@ function renderItemBlock(it){
   block.querySelector('.ibdel').onclick = () => removeItemBlock(it, block);
   block.querySelector('.ibminus').onclick = () => changeQtyBlock(it, block, -1);
   block.querySelector('.ibplus').onclick = () => changeQtyBlock(it, block, 1);
-  attachDragHandlers(block, saveItemOrder);
   return block;
 }
 function setStockDisplay(block, stock){
@@ -6512,7 +6548,6 @@ function removeItemBlock(item, block){
   block.remove();
   currentItems = currentItems.filter(i => i !== item);
   updateToggleBtnLabel();
-  saveItemOrder();
   apiDelete('items/' + item.item_row_id).catch(e=>{
     toast('Could not remove item, restoring');
     console.error(e);
@@ -6522,7 +6557,6 @@ function removeItemBlock(item, block){
     const tile = list.querySelector('.add-block-tile');
     const restored = renderItemBlock(item);
     if(tile) list.insertBefore(restored, tile); else list.appendChild(restored);
-    saveItemOrder();
   });
 }
 
@@ -6553,8 +6587,13 @@ function addItemOptimistic(name, stockGuess){
   if(list.querySelector('.loading')) list.innerHTML = '';
   const tile = list.querySelector('.add-block-tile');
   const block = renderItemBlock(tempItem);
-  if(tile) list.insertBefore(block, tile); else { list.appendChild(block); list.appendChild(renderAddBlockTile()); }
-  saveItemOrder();
+  // Insert alphabetically rather than always at the end — find the first
+  // existing block whose name sorts after this one, insert before it.
+  const existingBlocks = [...list.querySelectorAll('.itemblock')];
+  const insertBeforeBlock = existingBlocks.find(b => b.title.localeCompare(name, undefined, {sensitivity:'base'}) > 0);
+  if(insertBeforeBlock) list.insertBefore(block, insertBeforeBlock);
+  else if(tile) list.insertBefore(block, tile);
+  else { list.appendChild(block); list.appendChild(renderAddBlockTile()); }
 
   apiPost('items/', { category_id: currentCategory.category_id, item_name: name, qty_required: 1 })
     .then(()=> apiGet('items/'))
@@ -6566,7 +6605,6 @@ function addItemOptimistic(name, stockGuess){
         tempItem.stock_available = match.stock_available;
         block.dataset.rowId = match.item_row_id;
         setStockDisplay(block, match.stock_available);
-        saveItemOrder();
       }
     })
     .catch(e=>{
@@ -7046,8 +7084,11 @@ function addScannedItemToWarehouseCategory(stock, qty){
   if(list.querySelector('.loading')) list.innerHTML = '';
   const tile = list.querySelector('.add-block-tile');
   const block = renderItemBlock(tempItem);
-  if(tile) list.insertBefore(block, tile); else { list.appendChild(block); list.appendChild(renderAddBlockTile()); }
-  saveItemOrder();
+  const existingBlocks = [...list.querySelectorAll('.itemblock')];
+  const insertBeforeBlock = existingBlocks.find(b => b.title.localeCompare(stock.name, undefined, {sensitivity:'base'}) > 0);
+  if(insertBeforeBlock) list.insertBefore(block, insertBeforeBlock);
+  else if(tile) list.insertBefore(block, tile);
+  else { list.appendChild(block); list.appendChild(renderAddBlockTile()); }
 
   apiPost('items/', { category_id: currentCategory.category_id, item_name: stock.name, qty_required: qty })
     .then(()=> apiGet('items/'))
@@ -7059,7 +7100,6 @@ function addScannedItemToWarehouseCategory(stock, qty){
         tempItem.stock_available = match.stock_available;
         block.dataset.rowId = match.item_row_id;
         setStockDisplay(block, match.stock_available);
-        saveItemOrder();
       }
     })
     .catch(e=>{
@@ -7476,7 +7516,8 @@ async function showFinal(){
     const catMap = {};
     cats.forEach(c => catMap[c.category_id] = c);
 
-    const nonEmptyCatIds = Object.keys(grouped).filter(id => grouped[id].length > 0);
+    const nonEmptyCatIds = Object.keys(grouped).filter(id => grouped[id].length > 0)
+      .sort((a,b) => (catMap[a]?.category_name || '').localeCompare(catMap[b]?.category_name || '', undefined, {sensitivity:'base'}));
     document.getElementById('finalMeta').textContent =
       nonEmptyCatIds.length + ' categories · ' + items.length + ' line items';
 
@@ -7526,7 +7567,9 @@ async function buildFinalListPDFDoc(){
   doc.setTextColor(120);
   doc.text('Generated ' + new Date().toLocaleString(), 14, 24);
   let y = 32;
-  Object.keys(grouped).forEach(catId=>{
+  Object.keys(grouped)
+    .sort((a,b) => (catMap[a]?.category_name || '').localeCompare(catMap[b]?.category_name || '', undefined, {sensitivity:'base'}))
+    .forEach(catId=>{
     const cat = catMap[catId];
     const rows = grouped[catId].map(it => [
       it.item_name, String(it.qty_required),
