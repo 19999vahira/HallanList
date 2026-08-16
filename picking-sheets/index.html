@@ -1479,7 +1479,13 @@
     </div>
     <div class="actionbar">
       <span></span>
-      <div style="display:flex;gap:10px;">
+      <div style="display:flex;gap:10px;align-items:center;">
+        <select id="createdInvoiceSortSelect" onchange="setCreatedInvoiceSort(this.value)" style="padding:9px 10px;border-radius:6px;border:1px solid var(--line);background:#fff;">
+          <option value="default">Sort: Original order</option>
+          <option value="invoice">Sort by Invoice Name</option>
+          <option value="vector">Sort by Vector Name</option>
+        </select>
+        <button class="btn-ghost" onclick="openCreatedInvoiceMenu()">Menu</button>
         <button class="btn-ghost" onclick="openCreatedInvoiceExportModal('csv')">Download CSV</button>
         <button class="btn-amber" onclick="openCreatedInvoiceExportModal('pdf')">Download PDF</button>
       </div>
@@ -1613,6 +1619,18 @@
       <button class="btn-ghost" onclick="cancelGoodsInExpiry()">Cancel</button>
       <button class="btn-ghost" id="goodsInRemoveBtn" style="display:none;color:var(--danger);" onclick="removeGoodsInItem()">Remove</button>
       <button class="btn-amber" onclick="confirmGoodsInExpiry()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- CREATE INVOICE: STEP 2 — QUICK QUANTITY ENTRY MENU (alphabet blocks) -->
+<div class="modal-backdrop" id="modalCreatedInvoiceMenu">
+  <div class="modal" style="width:560px;max-height:80vh;overflow-y:auto;">
+    <h3 id="createdInvoiceMenuTitle">Quick Quantity Entry</h3>
+    <p class="modal-sub" id="createdInvoiceMenuSub">Pick a letter group to jump straight to those products.</p>
+    <div id="createdInvoiceMenuBody"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalCreatedInvoiceMenu')">Close</button>
     </div>
   </div>
 </div>
@@ -5698,7 +5716,8 @@ function renderCreatedInvoiceMatchTable(){
       <td>${escapeHtml(it.ocr_product_name)}</td>
       <td>
         ${matched
-          ? `${escapeHtml(it.matched_name)} <span style="font-size:10px;letter-spacing:.03em;text-transform:uppercase;color:var(--green);background:#eafaf0;border-radius:20px;padding:2px 8px;font-weight:700;margin-left:4px;">\u2713 Exact match</span>`
+          ? `${escapeHtml(it.matched_name)} <span style="font-size:10px;letter-spacing:.03em;text-transform:uppercase;color:var(--green);background:#eafaf0;border-radius:20px;padding:2px 8px;font-weight:700;margin-left:4px;">\u2713 Exact match</span>
+             <div style="font-size:12px;"><a href="#" onclick="event.preventDefault(); toggleCreatedInvoiceSearch(${idx})">wrong item? change match</a></div>`
           : `<div style="color:var(--danger);font-weight:600;">\u26a0 Not matched</div>
              <div style="font-size:12px;"><a href="#" onclick="event.preventDefault(); toggleCreatedInvoiceSearch(${idx})">search for the right product</a></div>`
         }
@@ -5835,6 +5854,25 @@ function createdInvoiceMarginPct(it){
   if(Number(it.retail_price) === 0) return null;
   return (Number(it.retail_price) - costPerUnit) / Number(it.retail_price) * 100;
 }
+let createdInvoiceSortMode = 'default';
+function setCreatedInvoiceSort(mode){
+  createdInvoiceSortMode = mode;
+  renderCreatedInvoicePricesTable();
+}
+// Sorting only changes DISPLAY order — it returns an array of indices into
+// the real currentCreatedInvoice.items array, never reorders that array
+// itself. Every input/cell below is still bound to the item's real index,
+// so editing a field, autosave, and the Menu all keep working correctly
+// regardless of which sort is currently showing.
+function getCreatedInvoiceDisplayOrder(items){
+  const order = items.map((_, i) => i);
+  if(createdInvoiceSortMode === 'invoice'){
+    order.sort((a,b) => (items[a].ocr_product_name || '').localeCompare(items[b].ocr_product_name || '', undefined, {sensitivity:'base'}));
+  } else if(createdInvoiceSortMode === 'vector'){
+    order.sort((a,b) => (items[a].matched_name || '').localeCompare(items[b].matched_name || '', undefined, {sensitivity:'base'}));
+  }
+  return order;
+}
 function renderCreatedInvoicePricesTable(){
   const content = document.getElementById('createdInvoicePricesContent');
   const items = currentCreatedInvoice.items;
@@ -5853,7 +5891,9 @@ function renderCreatedInvoicePricesTable(){
     <th class="qtycell">Previous Cost</th>
   </tr></thead>`;
   const tbody = document.createElement('tbody');
-  items.forEach((it, idx) => {
+  const displayOrder = getCreatedInvoiceDisplayOrder(items);
+  displayOrder.forEach(idx => {
+    const it = items[idx];
     const margin = createdInvoiceMarginPct(it);
     const belowMin = margin !== null && margin < (it.min_margin_pct || 38);
     const totalQty = createdInvoiceTotalQty(it);
@@ -5898,10 +5938,16 @@ function renderCreatedInvoicePricesTable(){
   scrollWrap.appendChild(table);
   content.appendChild(scrollWrap);
 }
-// One handler for every editable field on this step — recomputes whichever
-// derived cells depend on it (cost/unit depends on box_price + qty_per_box;
-// total qty depends on qty_box + qty_per_box; margin depends on cost/unit +
-// retail_price) rather than re-rendering the whole table on every keystroke.
+// One handler for every editable field on this step — used by both the main
+// table and the Menu's quick-entry rows (they edit the same underlying
+// currentCreatedInvoice.items array, just via different UI). Recomputes
+// whichever derived cells depend on it (cost/unit depends on box_price +
+// qty_per_box; total qty depends on qty_box + qty_per_box; margin depends on
+// cost/unit + retail_price) rather than re-rendering the whole table on
+// every keystroke. Also debounce-autosaves to Oracle a moment after the last
+// edit, so a quantity typed here is never only sitting in memory — closing
+// the tab, refreshing, or navigating away some other way won't lose it.
+let createdInvoiceAutosaveTimer = null;
 function updateCreatedInvoiceField(idx, field, value){
   currentCreatedInvoice.items[idx][field] = value === '' ? null : Number(value);
   const it = currentCreatedInvoice.items[idx];
@@ -5922,6 +5968,93 @@ function updateCreatedInvoiceField(idx, field, value){
     marginCell.style.color = belowMin ? 'var(--danger)' : '';
     marginCell.style.fontWeight = belowMin ? '700' : '';
   }
+
+  clearTimeout(createdInvoiceAutosaveTimer);
+  createdInvoiceAutosaveTimer = setTimeout(() => {
+    saveCreatedInvoiceItems().catch(e => console.error('Autosave failed', e));
+  }, 800);
+}
+
+/* ---- Menu: quick quantity entry via alphabet letter-blocks (Qty per Box) ----
+   Built from the items already on this invoice (their Vector-matched name,
+   or the invoice's own name if still unmatched), grouped by first letter —
+   lets staff jump straight to a product instead of scrolling/searching the
+   full table. Editing quantity here calls the exact same
+   updateCreatedInvoiceField() as the main table, so it's the same data,
+   same autosave, same derived-cell updates either way. ---- */
+const CREATED_INVOICE_MENU_BLOCKS = [
+  { label: 'A, B', letters: ['A','B'] },
+  { label: 'C, D, E', letters: ['C','D','E'] },
+  { label: 'F, G, H', letters: ['F','G','H'] },
+  { label: 'I, J, K', letters: ['I','J','K'] },
+  { label: 'L, M, N', letters: ['L','M','N'] },
+  { label: 'O, P, Q', letters: ['O','P','Q'] },
+  { label: 'R, S, T', letters: ['R','S','T'] },
+  { label: 'U, V, W', letters: ['U','V','W'] },
+  { label: 'X, Y, Z', letters: ['X','Y','Z'] }
+];
+function createdInvoiceMenuName(it){
+  return (it.matched_name || it.ocr_product_name || '').trim();
+}
+function openCreatedInvoiceMenu(){
+  renderCreatedInvoiceMenuBlocks();
+  openModal('modalCreatedInvoiceMenu');
+}
+function resetCreatedInvoiceMenuHeader(){
+  document.getElementById('createdInvoiceMenuTitle').textContent = 'Quick Quantity Entry';
+  document.getElementById('createdInvoiceMenuSub').textContent = 'Pick a letter group to jump straight to those products.';
+}
+function renderCreatedInvoiceMenuBlocks(){
+  resetCreatedInvoiceMenuHeader();
+  const body = document.getElementById('createdInvoiceMenuBody');
+  const items = currentCreatedInvoice.items;
+  const grid = document.createElement('div');
+  grid.className = 'catgrid';
+  CREATED_INVOICE_MENU_BLOCKS.forEach(block => {
+    const count = items.filter(it => {
+      const n = createdInvoiceMenuName(it);
+      return n && block.letters.includes(n[0].toUpperCase());
+    }).length;
+    const div = document.createElement('div');
+    div.className = 'bincard';
+    div.onclick = () => renderCreatedInvoiceMenuItems(block);
+    div.innerHTML = `<h4>${block.label}</h4><div class="count">${count} item${count === 1 ? '' : 's'}</div>`;
+    grid.appendChild(div);
+  });
+  body.innerHTML = '';
+  body.appendChild(grid);
+}
+function renderCreatedInvoiceMenuItems(block){
+  document.getElementById('createdInvoiceMenuTitle').textContent = block.label;
+  document.getElementById('createdInvoiceMenuSub').innerHTML =
+    '<a href="#" onclick="event.preventDefault(); renderCreatedInvoiceMenuBlocks();">&larr; Back to letters</a>';
+  const body = document.getElementById('createdInvoiceMenuBody');
+  const items = currentCreatedInvoice.items;
+  const matches = items
+    .map((it, idx) => ({ it, idx }))
+    .filter(({ it }) => {
+      const n = createdInvoiceMenuName(it);
+      return n && block.letters.includes(n[0].toUpperCase());
+    })
+    .sort((a, b) => createdInvoiceMenuName(a.it).localeCompare(createdInvoiceMenuName(b.it), undefined, {sensitivity:'base'}));
+  if(matches.length === 0){
+    body.innerHTML = '<div class="empty-hint">No products in this range.</div>';
+    return;
+  }
+  body.innerHTML = '';
+  matches.forEach(({ it, idx }) => {
+    const row = document.createElement('div');
+    row.className = 'pickrow';
+    row.innerHTML = `
+      <div class="pickinfo">
+        <div class="pname">${escapeHtml(createdInvoiceMenuName(it))}</div>
+      </div>
+      <input type="number" min="0" step="0.001" class="restaurant-qty-input" style="width:90px;"
+        placeholder="check each" value="${it.qty_per_box === null || it.qty_per_box === undefined ? '' : it.qty_per_box}">
+    `;
+    row.querySelector('input').onchange = (e) => updateCreatedInvoiceField(idx, 'qty_per_box', e.target.value);
+    body.appendChild(row);
+  });
 }
 async function finishCreatedInvoice(){
   try{
