@@ -948,7 +948,7 @@
     <div id="rowItemList"></div>
   </div>
 
-  <!-- STOCK INFO -->
+  <!-- STOCK INFO: HUB -->
   <div id="view-stock-info" class="view">
     <div class="crumbrow">
       <button onclick="goHome()">Home</button><span class="sep">/</span><span class="current">Stock Info</span>
@@ -956,6 +956,30 @@
     <div class="hero">
       <div class="eyebrow">Lookup</div>
       <h2>Stock Info</h2>
+      <p>Look up where a product is stocked, or check what's coming up to expiry.</p>
+    </div>
+    <div class="catgrid">
+      <div class="bincard" onclick="openStockDataSearch()">
+        <h4>📦 Stock Data</h4>
+        <div class="count">Search by barcode or item name</div>
+      </div>
+      <div class="bincard" onclick="openStockInfoDate()">
+        <h4>📅 Date</h4>
+        <div class="count">See what's expiring, and when</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STOCK INFO: STOCK DATA (the original search) -->
+  <div id="view-stock-data" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="showView('view-stock-info')">Stock Info</button><span class="sep">/</span>
+      <span class="current">Stock Data</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Lookup</div>
+      <h2>Stock Data</h2>
       <p>Search by barcode or item name to see where it's stocked and how much is on hand.</p>
     </div>
     <div class="actionbar">
@@ -965,6 +989,33 @@
     <div id="stockInfoResults">
       <div class="empty-hint">Start typing a barcode or item name.</div>
     </div>
+  </div>
+
+  <!-- STOCK INFO: DATE (expiry browsing) -->
+  <div id="view-stock-info-date" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="showView('view-stock-info')">Stock Info</button><span class="sep">/</span>
+      <span class="current">Date</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Lookup</div>
+      <h2>Expiry Dates</h2>
+      <p>Everything scanned in with an expiry date, soonest first, across every supplier.</p>
+    </div>
+    <div class="actionbar">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn-ghost" id="expiryFilterAllBtn" onclick="setStockInfoExpiryFilter(null)">All</button>
+        <button class="btn-ghost" style="background:#fdecea;border-color:#f5b8b0;color:var(--danger);font-weight:700;" onclick="toggleStockInfoSoonExpiryMenu()">🔴 Soon Expiry ▾</button>
+      </div>
+      <button class="btn-amber" onclick="openStockInfoQuickAdd()">+ Add Product &amp; Expiry Date</button>
+    </div>
+    <div id="stockInfoSoonExpiryMenu" style="display:none;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+      <button class="btn-ghost" onclick="setStockInfoExpiryFilter(7)">Within 1 week</button>
+      <button class="btn-ghost" onclick="setStockInfoExpiryFilter(30)">Within 1 month</button>
+      <button class="btn-ghost" onclick="setStockInfoExpiryFilter(182)">Within 6 months</button>
+    </div>
+    <div id="stockInfoExpiryResults"><div class="loading">Loading…</div></div>
   </div>
 
   <!-- RESTAURANT ORDERS: PASSCODE -->
@@ -1387,7 +1438,8 @@
       <span class="mono" id="scanGoodsSessionCount" style="color:var(--text-dim);font-size:12px;"></span>
       <div style="display:flex;gap:10px;">
         <button class="btn-ghost" onclick="scanGoodsAddManually()">Scan Barcode</button>
-        <button class="btn-amber" onclick="finishScanGoodsSession()">Finish &amp; Download CSV</button>
+        <button class="btn-ghost" onclick="downloadScanGoodsCsv()">Download CSV</button>
+        <button class="btn-amber" onclick="finishScanGoodsSession()">Finish</button>
       </div>
     </div>
     <div id="scanGoodsSessionResults"><div class="empty-hint">No items scanned yet. Tap "Scan Barcode" to start.</div></div>
@@ -1579,6 +1631,45 @@
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalNewGoodsIn')">Cancel</button>
       <button class="btn-amber" onclick="startNewGoodsInSession()">Start Scanning</button>
+    </div>
+  </div>
+</div>
+
+<!-- STOCK INFO > DATE: QUICK ADD — scan barcode, no supplier needed (auto-detected) -->
+<div class="modal-backdrop" id="modalStockInfoQuickAddScanner">
+  <div class="modal" style="width:400px;">
+    <h3>Add Product &amp; Expiry Date</h3>
+    <p class="modal-sub">Scan the product — the correct supplier is worked out automatically.</p>
+    <div class="scanmanual">
+      <input type="text" id="stockInfoQuickAddBarcodeInput" placeholder="Waiting for scan…" autocomplete="off" autocapitalize="off"
+        inputmode="none" onkeydown="if(event.key==='Enter')submitStockInfoQuickAddBarcode()">
+      <button class="btn-ghost" onclick="submitStockInfoQuickAddBarcode()">Look up</button>
+    </div>
+    <div id="stockInfoQuickAddFeedback"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalStockInfoQuickAddScanner')">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- STOCK INFO > DATE: QUICK ADD — expiry date + quantity -->
+<div class="modal-backdrop" id="modalStockInfoQuickAddExpiry">
+  <div class="modal" style="width:400px;">
+    <h3>Expiry &amp; Quantity</h3>
+    <p id="stockInfoQuickAddProduct" style="font-size:20px;font-weight:700;color:var(--text);margin:2px 0 4px;line-height:1.3;"></p>
+    <p id="stockInfoQuickAddSupplier" style="font-size:13px;color:var(--text-dim);margin:0 0 14px;"></p>
+    <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px;">Expiry date</label>
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <select id="stockInfoQuickAddDay" style="width:70px;padding:10px;text-align:center;"><option value="">DD</option></select>
+      <select id="stockInfoQuickAddMonth" style="width:110px;padding:10px;text-align:center;"><option value="">MM</option></select>
+      <select id="stockInfoQuickAddYear" style="width:90px;padding:10px;text-align:center;"><option value="">YYYY</option></select>
+    </div>
+    <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px;">Quantity</label>
+    <input type="number" id="stockInfoQuickAddQty" min="1" value="1" style="width:100%;padding:10px;margin-bottom:6px;">
+    <div class="errdetail" id="stockInfoQuickAddErr" style="display:none;"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalStockInfoQuickAddExpiry')">Cancel</button>
+      <button class="btn-amber" onclick="confirmStockInfoQuickAdd()">Add</button>
     </div>
   </div>
 </div>
@@ -2851,10 +2942,131 @@ function addScannedItemToRow(stock){
   addProductToRow({ item_name: stock.name, stockid: stock.stockid || null, barcode: stock.barcode || null });
 }
 
+/* ============ STOCK INFO: DATE (expiry browsing + quick add) ============ */
+let stockInfoExpiryFilterDays = null;
+function openStockInfoDate(){
+  showView('view-stock-info-date');
+  document.getElementById('stockInfoSoonExpiryMenu').style.display = 'none';
+  setStockInfoExpiryFilter(null);
+}
+function toggleStockInfoSoonExpiryMenu(){
+  const menu = document.getElementById('stockInfoSoonExpiryMenu');
+  menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
+}
+async function setStockInfoExpiryFilter(days){
+  stockInfoExpiryFilterDays = days;
+  const box = document.getElementById('stockInfoExpiryResults');
+  box.innerHTML = '<div class="loading">Loading…</div>';
+  try{
+    const path = 'goods-in/expiry-list/' + (days !== null ? ('?within_days=' + days) : '');
+    const data = await apiGet(path);
+    renderStockInfoExpiryResults(data.items || []);
+  }catch(e){
+    box.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load expiry dates.</div>';
+    console.error(e);
+  }
+}
+function renderStockInfoExpiryResults(items){
+  const box = document.getElementById('stockInfoExpiryResults');
+  if(items.length === 0){
+    box.innerHTML = '<div class="empty-hint">Nothing in this range.</div>';
+    return;
+  }
+  const now = new Date();
+  box.innerHTML = items.map(it => {
+    const expiry = new Date(it.expiry_date);
+    const expired = expiry < now;
+    return `
+      <div class="pickrow">
+        <div class="pickinfo">
+          <div class="pname">${escapeHtml(it.item_name)}</div>
+          <div class="pbarcode">${escapeHtml(it.supplier_name || 'Unknown Supplier')}${it.barcode ? (' — #' + escapeHtml(it.barcode)) : ''}</div>
+          <div style="font-size:13px;font-weight:700;color:${expired ? 'var(--danger)' : 'var(--text)'};margin-top:2px;">
+            ${expired ? 'EXPIRED — ' : 'Exp: '}${expiry.toLocaleDateString('en-GB')}
+          </div>
+        </div>
+        <div class="preq">Qty ${it.quantity}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+/* ---- Quick Add: scan a barcode, no supplier picker — the backend works
+   out the correct supplier from prior scan history / SUPPLIER_STOCK. ---- */
+let stockInfoQuickAddPending = null; // { barcode, quantity } collected before the expiry step confirms it
+function openStockInfoQuickAdd(){
+  document.getElementById('stockInfoQuickAddBarcodeInput').value = '';
+  document.getElementById('stockInfoQuickAddFeedback').innerHTML = '';
+  openModal('modalStockInfoQuickAddScanner');
+  document.getElementById('stockInfoQuickAddBarcodeInput').focus();
+}
+function submitStockInfoQuickAddBarcode(){
+  const code = document.getElementById('stockInfoQuickAddBarcodeInput').value.trim();
+  if(!code) return;
+  document.getElementById('stockInfoQuickAddBarcodeInput').value = '';
+  stockInfoQuickAddPending = { barcode: code };
+  closeModal('modalStockInfoQuickAddScanner');
+  stockInfoPopulateExpirySelects();
+  document.getElementById('stockInfoQuickAddProduct').textContent = code;
+  document.getElementById('stockInfoQuickAddSupplier').textContent = 'Supplier will be assigned automatically once added.';
+  document.getElementById('stockInfoQuickAddDay').value = '';
+  document.getElementById('stockInfoQuickAddMonth').value = '';
+  document.getElementById('stockInfoQuickAddYear').value = '';
+  document.getElementById('stockInfoQuickAddQty').value = 1;
+  document.getElementById('stockInfoQuickAddErr').style.display = 'none';
+  openModal('modalStockInfoQuickAddExpiry');
+}
+function stockInfoPopulateExpirySelects(){
+  const daySel = document.getElementById('stockInfoQuickAddDay');
+  const monthSel = document.getElementById('stockInfoQuickAddMonth');
+  const yearSel = document.getElementById('stockInfoQuickAddYear');
+  daySel.innerHTML = '<option value="">DD</option>' +
+    Array.from({length: 31}, (_, i) => i + 1).map(d => `<option value="${d}">${String(d).padStart(2,'0')}</option>`).join('');
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  monthSel.innerHTML = '<option value="">MM</option>' +
+    monthNames.map((name, i) => `<option value="${i+1}">${String(i+1).padStart(2,'0')} - ${name}</option>`).join('');
+  const thisYear = new Date().getFullYear();
+  const years = [];
+  for(let y = thisYear - 1; y <= thisYear + 9; y++) years.push(y);
+  yearSel.innerHTML = '<option value="">YYYY</option>' + years.map(y => `<option value="${y}">${y}</option>`).join('');
+}
+async function confirmStockInfoQuickAdd(){
+  const err = document.getElementById('stockInfoQuickAddErr');
+  err.style.display = 'none';
+  const day = document.getElementById('stockInfoQuickAddDay').value;
+  const month = document.getElementById('stockInfoQuickAddMonth').value;
+  const year = document.getElementById('stockInfoQuickAddYear').value;
+  const qty = parseInt(document.getElementById('stockInfoQuickAddQty').value, 10);
+  if(!qty || qty < 1){ err.textContent = 'Enter a valid quantity'; err.style.display = 'block'; return; }
+  let expiryDate = null;
+  if(day || month || year){
+    if(!day || !month || !year){ err.textContent = 'Pick day, month, and year — or leave all three blank'; err.style.display = 'block'; return; }
+    expiryDate = `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  }
+  try{
+    const data = await apiPost('goods-in/quick-add/', { barcode: stockInfoQuickAddPending.barcode, expiry_date: expiryDate, quantity: qty });
+    if(!data.item){
+      err.textContent = 'No stock item found for that barcode';
+      err.style.display = 'block';
+      return;
+    }
+    closeModal('modalStockInfoQuickAddExpiry');
+    toast(data.item.item_name + ' added — assigned to ' + data.item.supplier_name);
+    if(stockInfoExpiryFilterDays !== undefined) setStockInfoExpiryFilter(stockInfoExpiryFilterDays);
+  }catch(e){
+    err.textContent = e.message || 'Could not add item';
+    err.style.display = 'block';
+    console.error(e);
+  }
+}
+
 /* ============ STOCK INFO: search by barcode or name ============ */
 let stockInfoDebounce = null;
 function openStockInfo(){
   showView('view-stock-info');
+}
+function openStockDataSearch(){
+  showView('view-stock-data');
   document.getElementById('stockInfoSearchInput').value = '';
   document.getElementById('stockInfoResults').innerHTML = '<div class="empty-hint">Start typing a barcode or item name.</div>';
   setTimeout(()=>document.getElementById('stockInfoSearchInput').focus(), 80);
@@ -5502,7 +5714,10 @@ function renderGoodsInSessionItems(){
     <div class="pickrow" style="cursor:pointer;" onclick="editGoodsInItem(${it.item_id})">
       <div class="pickinfo">
         <div class="pname">${escapeHtml(it.item_name)}</div>
-        <div class="pbarcode">${it.barcode ? ('#' + escapeHtml(it.barcode)) : 'No barcode'}${it.pack_size ? (' — Pack: ' + escapeHtml(it.pack_size)) : ''} — Exp: ${it.expiry_date ? new Date(it.expiry_date).toLocaleDateString() : '—'}</div>
+        <div class="pbarcode">${it.barcode ? ('#' + escapeHtml(it.barcode)) : 'No barcode'}${it.pack_size ? (' — Pack: ' + escapeHtml(it.pack_size)) : ''}</div>
+        <div style="font-size:13px;font-weight:700;color:${it.expiry_date ? 'var(--text)' : 'var(--text-dim)'};margin-top:2px;">
+          Exp: ${it.expiry_date ? new Date(it.expiry_date).toLocaleDateString('en-GB') : 'Not set'}
+        </div>
       </div>
       <div class="preq">Qty ${it.quantity}</div>
     </div>
@@ -5674,17 +5889,24 @@ async function removeGoodsInItem(){
   }
 }
 
-/* ---- Finish: mark session complete, download CSV (name/qty/barcode) ---- */
+/* ---- Download CSV: can be done any time, as many times as needed — doesn't
+   touch the session's status, so downloading doesn't count as finishing. ---- */
+function downloadScanGoodsCsv(){
+  if(goodsInCurrentItems.length === 0){ toast('Scan at least one item first'); return; }
+  downloadCSV(
+    'goods-in-' + goodsInCurrentSession.supplier_name.replace(/[^a-z0-9]+/gi, '-') + '.csv',
+    ['Name', 'Quantity', 'Barcode'],
+    goodsInCurrentItems.map(it => [it.item_name, it.quantity, it.barcode || ''])
+  );
+}
+/* ---- Finish: marks the session complete only. Separate from downloading —
+   you can download the CSV as a check any time, then finish separately
+   once you're actually done. ---- */
 async function finishScanGoodsSession(){
   if(goodsInCurrentItems.length === 0){ toast('Scan at least one item first'); return; }
   try{
     await apiPost('goods-in/sessions/' + goodsInCurrentSession.session_id + '/complete/', {});
-    downloadCSV(
-      'goods-in-' + goodsInCurrentSession.supplier_name.replace(/[^a-z0-9]+/gi, '-') + '.csv',
-      ['Name', 'Quantity', 'Barcode'],
-      goodsInCurrentItems.map(it => [it.item_name, it.quantity, it.barcode || ''])
-    );
-    toast('Scan finished — CSV downloaded. Expiry dates are saved permanently.');
+    toast('Scan finished — expiry dates are saved permanently.');
     openScanGoodsHub();
   }catch(e){
     toast('Could not finish scan');
