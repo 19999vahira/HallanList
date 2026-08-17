@@ -2977,7 +2977,7 @@ function renderStockInfoExpiryResults(items){
     const expiry = new Date(it.expiry_date);
     const expired = expiry < now;
     return `
-      <div class="pickrow">
+      <div class="pickrow" data-item-id="${it.item_id}">
         <div class="pickinfo">
           <div class="pname">${escapeHtml(it.item_name)}</div>
           <div class="pbarcode">${escapeHtml(it.supplier_name || 'Unknown Supplier')}${it.barcode ? (' — #' + escapeHtml(it.barcode)) : ''}</div>
@@ -2985,10 +2985,27 @@ function renderStockInfoExpiryResults(items){
             ${expired ? 'EXPIRED — ' : 'Exp: '}${expiry.toLocaleDateString('en-GB')}
           </div>
         </div>
-        <div class="preq">Qty ${it.quantity}</div>
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div class="preq">Qty ${it.quantity}</div>
+          <button class="cardicon delete" type="button" title="Delete" onclick="deleteStockInfoExpiryItem(${it.item_id})">&#10005;</button>
+        </div>
       </div>
     `;
   }).join('');
+}
+async function deleteStockInfoExpiryItem(itemId){
+  if(!confirm('Delete this entry? This cannot be undone.')) return;
+  const row = document.querySelector('#stockInfoExpiryResults .pickrow[data-item-id="' + itemId + '"]');
+  try{
+    await apiDelete('goods-in/items/' + itemId);
+    if(row) row.remove();
+    if(document.querySelectorAll('#stockInfoExpiryResults .pickrow').length === 0){
+      document.getElementById('stockInfoExpiryResults').innerHTML = '<div class="empty-hint">Nothing in this range.</div>';
+    }
+  }catch(e){
+    toast('Could not delete item');
+    console.error(e);
+  }
 }
 
 /* ---- Quick Add: scan a barcode, no supplier picker — the backend works
