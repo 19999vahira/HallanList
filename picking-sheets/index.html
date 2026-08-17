@@ -1540,6 +1540,8 @@
         <button class="btn-ghost" onclick="openCreatedInvoiceMenu()">Menu</button>
         <button class="btn-ghost" onclick="openCreatedInvoiceExportModal('csv')">Download CSV</button>
         <button class="btn-amber" onclick="openCreatedInvoiceExportModal('pdf')">Download PDF</button>
+        <button class="btn-ghost" onclick="downloadCreatedInvoiceRetailCSV()">Retail CSV</button>
+        <button class="btn-ghost" onclick="downloadCreatedInvoiceQuantityCSV()">Quantity CSV</button>
       </div>
     </div>
     <div id="createdInvoicePricesContent">
@@ -6474,6 +6476,46 @@ function completeCsvUpdateProcess(){
   });
   downloadFixedNameCSV('hallan_stock_update.csv', headers, rows);
   toast('Stock update CSV saved — Vector import will pick it up automatically');
+}
+/* ---- Retail CSV: fixed column set/order, separate from the column-picker
+   export above — Description, Qty per Box, Cost/Unit, Selling Price,
+   Barcode, Department, Supplier. ---- */
+function downloadCreatedInvoiceRetailCSV(){
+  const items = currentCreatedInvoice.items;
+  if(items.length === 0){ toast('No items on this invoice'); return; }
+  const supplierName = currentCreatedInvoice.header.supplier_name || '';
+  const headers = ['Description as per Vector', 'Qty per Box', 'Cost / Unit', 'Selling Price', 'Barcode', 'Department', 'Supplier'];
+  const rows = items.map(it => {
+    const costPerUnit = createdInvoiceCostPerUnit(it);
+    return {
+      'Description as per Vector': it.matched_name || it.ocr_product_name,
+      'Qty per Box': it.qty_per_box === null || it.qty_per_box === undefined ? '' : it.qty_per_box,
+      'Cost / Unit': costPerUnit === null ? '' : costPerUnit.toFixed(2),
+      'Selling Price': it.retail_price === null || it.retail_price === undefined ? '' : Number(it.retail_price).toFixed(2),
+      'Barcode': it.barcode || '',
+      'Department': it.department_name || 'Other',
+      'Supplier': supplierName
+    };
+  });
+  const supplierSlug = supplierName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  downloadFixedNameCSV('invoice-retail-' + supplierSlug + '-' + new Date().toISOString().slice(0,10) + '.csv', headers, rows);
+}
+/* ---- Quantity CSV: fixed column set/order — Name, Total Quantity, Barcode. ---- */
+function downloadCreatedInvoiceQuantityCSV(){
+  const items = currentCreatedInvoice.items;
+  if(items.length === 0){ toast('No items on this invoice'); return; }
+  const supplierName = currentCreatedInvoice.header.supplier_name || '';
+  const headers = ['Name', 'Total Quantity', 'Barcode'];
+  const rows = items.map(it => {
+    const totalQty = createdInvoiceTotalQty(it);
+    return {
+      'Name': it.matched_name || it.ocr_product_name,
+      'Total Quantity': totalQty === null ? '' : totalQty,
+      'Barcode': it.barcode || ''
+    };
+  });
+  const supplierSlug = supplierName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  downloadFixedNameCSV('invoice-quantity-' + supplierSlug + '-' + new Date().toISOString().slice(0,10) + '.csv', headers, rows);
 }
 
 /* ============ NEW ITEMS (spreadsheet entry for brand new products) ============
