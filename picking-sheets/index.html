@@ -1660,9 +1660,12 @@
     <p id="stockInfoQuickAddSupplier" style="font-size:13px;color:var(--text-dim);margin:0 0 14px;"></p>
     <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px;">Expiry date</label>
     <div style="display:flex;gap:8px;margin-bottom:12px;">
-      <select id="stockInfoQuickAddDay" style="width:70px;padding:10px;text-align:center;"><option value="">DD</option></select>
-      <select id="stockInfoQuickAddMonth" style="width:110px;padding:10px;text-align:center;"><option value="">MM</option></select>
-      <select id="stockInfoQuickAddYear" style="width:90px;padding:10px;text-align:center;"><option value="">YYYY</option></select>
+      <input type="text" inputmode="numeric" id="stockInfoQuickAddDay" placeholder="DD" autocomplete="off"
+        style="width:70px;padding:10px;text-align:center;" onkeydown="expiryFieldAdvance(event, 'stockInfoQuickAddMonth')">
+      <input type="text" inputmode="numeric" id="stockInfoQuickAddMonth" placeholder="MM" autocomplete="off"
+        style="width:70px;padding:10px;text-align:center;" onkeydown="expiryFieldAdvance(event, 'stockInfoQuickAddYear')">
+      <input type="text" inputmode="numeric" id="stockInfoQuickAddYear" placeholder="YYYY" autocomplete="off"
+        style="width:90px;padding:10px;text-align:center;" onkeydown="expiryFieldAdvance(event, 'stockInfoQuickAddQty')">
     </div>
     <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px;">Quantity</label>
     <input type="number" id="stockInfoQuickAddQty" min="1" value="1" style="width:100%;padding:10px;margin-bottom:6px;">
@@ -1699,9 +1702,12 @@
     <p id="goodsInExpiryMeta" style="font-size:13px;color:var(--text-dim);margin:0 0 14px;"></p>
     <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px;">Expiry date</label>
     <div style="display:flex;gap:8px;margin-bottom:12px;">
-      <select id="goodsInExpiryDay" style="width:70px;padding:10px;text-align:center;"><option value="">DD</option></select>
-      <select id="goodsInExpiryMonth" style="width:110px;padding:10px;text-align:center;"><option value="">MM</option></select>
-      <select id="goodsInExpiryYear" style="width:90px;padding:10px;text-align:center;"><option value="">YYYY</option></select>
+      <input type="text" inputmode="numeric" id="goodsInExpiryDay" placeholder="DD" autocomplete="off"
+        style="width:70px;padding:10px;text-align:center;" onkeydown="expiryFieldAdvance(event, 'goodsInExpiryMonth')">
+      <input type="text" inputmode="numeric" id="goodsInExpiryMonth" placeholder="MM" autocomplete="off"
+        style="width:70px;padding:10px;text-align:center;" onkeydown="expiryFieldAdvance(event, 'goodsInExpiryYear')">
+      <input type="text" inputmode="numeric" id="goodsInExpiryYear" placeholder="YYYY" autocomplete="off"
+        style="width:90px;padding:10px;text-align:center;" onkeydown="expiryFieldAdvance(event, 'goodsInQty')">
     </div>
     <label style="font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px;">Quantity</label>
     <input type="number" id="goodsInQty" min="1" value="1" style="width:100%;padding:10px;margin-bottom:6px;">
@@ -3023,7 +3029,6 @@ function submitStockInfoQuickAddBarcode(){
   document.getElementById('stockInfoQuickAddBarcodeInput').value = '';
   stockInfoQuickAddPending = { barcode: code };
   closeModal('modalStockInfoQuickAddScanner');
-  stockInfoPopulateExpirySelects();
   document.getElementById('stockInfoQuickAddProduct').textContent = code;
   document.getElementById('stockInfoQuickAddSupplier').textContent = 'Supplier will be assigned automatically once added.';
   document.getElementById('stockInfoQuickAddDay').value = '';
@@ -3032,20 +3037,7 @@ function submitStockInfoQuickAddBarcode(){
   document.getElementById('stockInfoQuickAddQty').value = 1;
   document.getElementById('stockInfoQuickAddErr').style.display = 'none';
   openModal('modalStockInfoQuickAddExpiry');
-}
-function stockInfoPopulateExpirySelects(){
-  const daySel = document.getElementById('stockInfoQuickAddDay');
-  const monthSel = document.getElementById('stockInfoQuickAddMonth');
-  const yearSel = document.getElementById('stockInfoQuickAddYear');
-  daySel.innerHTML = '<option value="">DD</option>' +
-    Array.from({length: 31}, (_, i) => i + 1).map(d => `<option value="${d}">${String(d).padStart(2,'0')}</option>`).join('');
-  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  monthSel.innerHTML = '<option value="">MM</option>' +
-    monthNames.map((name, i) => `<option value="${i+1}">${String(i+1).padStart(2,'0')} - ${name}</option>`).join('');
-  const thisYear = new Date().getFullYear();
-  const years = [];
-  for(let y = thisYear - 1; y <= thisYear + 9; y++) years.push(y);
-  yearSel.innerHTML = '<option value="">YYYY</option>' + years.map(y => `<option value="${y}">${y}</option>`).join('');
+  setTimeout(() => document.getElementById('stockInfoQuickAddDay').focus(), 80);
 }
 async function confirmStockInfoQuickAdd(){
   const err = document.getElementById('stockInfoQuickAddErr');
@@ -5795,21 +5787,17 @@ async function handleGoodsInScannedCode(code){
   }
 }
 
-/* ---- Expiry date dropdowns: filled once per modal open so the year range
-   always starts from today rather than a hardcoded year that goes stale ---- */
-function goodsInPopulateExpirySelects(){
-  const daySel = document.getElementById('goodsInExpiryDay');
-  const monthSel = document.getElementById('goodsInExpiryMonth');
-  const yearSel = document.getElementById('goodsInExpiryYear');
-  daySel.innerHTML = '<option value="">DD</option>' +
-    Array.from({length: 31}, (_, i) => i + 1).map(d => `<option value="${d}">${String(d).padStart(2,'0')}</option>`).join('');
-  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  monthSel.innerHTML = '<option value="">MM</option>' +
-    monthNames.map((name, i) => `<option value="${i+1}">${String(i+1).padStart(2,'0')} - ${name}</option>`).join('');
-  const thisYear = new Date().getFullYear();
-  const years = [];
-  for(let y = thisYear - 1; y <= thisYear + 9; y++) years.push(y);
-  yearSel.innerHTML = '<option value="">YYYY</option>' + years.map(y => `<option value="${y}">${y}</option>`).join('');
+/* ---- Shared by both expiry entry screens (Goods Scan and Stock Info Quick
+   Add): moves focus to the next field the instant Enter arrives — which is
+   exactly what a barcode scanner sends right after typing a scanned code.
+   So scanning the Day barcode, then Month, then Year lands you straight in
+   Quantity with zero taps on the screen in between. Doesn't interfere with
+   manual typing either — pressing Enter by hand does the same thing. ---- */
+function expiryFieldAdvance(event, nextFieldId){
+  if(event.key !== 'Enter') return;
+  event.preventDefault();
+  const next = document.getElementById(nextFieldId);
+  if(next){ next.focus(); if(next.select) next.select(); }
 }
 /* ---- Expiry date (day/month/year blocks) + quantity — shared by add and edit ---- */
 function openGoodsInExpiryModal(isEdit, existingItem){
@@ -5829,7 +5817,6 @@ function openGoodsInExpiryModal(isEdit, existingItem){
   }
   document.getElementById('goodsInRemoveBtn').style.display = isEdit ? 'inline-block' : 'none';
   document.querySelector('#modalGoodsInExpiry .btn-amber').textContent = isEdit ? 'Save' : 'Add';
-  goodsInPopulateExpirySelects();
   const existingDate = isEdit && existingItem.expiry_date ? new Date(existingItem.expiry_date) : null;
   document.getElementById('goodsInExpiryDay').value = existingDate ? existingDate.getDate() : '';
   document.getElementById('goodsInExpiryMonth').value = existingDate ? (existingDate.getMonth() + 1) : '';
@@ -5837,6 +5824,7 @@ function openGoodsInExpiryModal(isEdit, existingItem){
   document.getElementById('goodsInQty').value = isEdit ? existingItem.quantity : 1;
   document.getElementById('goodsInExpiryErr').style.display = 'none';
   openModal('modalGoodsInExpiry');
+  setTimeout(() => document.getElementById('goodsInExpiryDay').focus(), 80);
 }
 function editGoodsInItem(itemId){
   const item = goodsInCurrentItems.find(i => i.item_id === itemId);
