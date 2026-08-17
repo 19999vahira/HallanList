@@ -6047,10 +6047,9 @@ function renderCreatedInvoiceMenuItems(block){
     const block = document.createElement('div');
     block.className = 'itemblock';
     block.title = createdInvoiceMenuName(it);
-    const packSize = (it.pack_size_previous === null || it.pack_size_previous === undefined) ? '—' : it.pack_size_previous;
+    const totalQty = createdInvoiceTotalQty(it);
     block.innerHTML = `
       <div class="ibname"></div>
-      <div class="ibstock">Pack size: <span class="val">${escapeHtml(String(packSize))}</span></div>
       <div style="display:flex;gap:4px;margin-top:4px;">
         <div style="flex:1;">
           <div style="font-size:9px;color:var(--text-dim);text-align:center;">Boxes</div>
@@ -6063,10 +6062,25 @@ function renderCreatedInvoiceMenuItems(block){
             value="${it.qty_per_box === null || it.qty_per_box === undefined ? '' : it.qty_per_box}">
         </div>
       </div>
+      <div class="ibstock" style="text-align:center;">Total: <span class="val menu-total-qty">${totalQty === null ? '—' : totalQty}</span></div>
     `;
     block.querySelector('.ibname').textContent = createdInvoiceMenuName(it);
-    block.querySelector('.qty-box-input').onchange = (e) => updateCreatedInvoiceField(idx, 'qty_box', e.target.value);
-    block.querySelector('.qty-per-box-input').onchange = (e) => updateCreatedInvoiceField(idx, 'qty_per_box', e.target.value);
+    const boxInput = block.querySelector('.qty-box-input');
+    const perBoxInput = block.querySelector('.qty-per-box-input');
+    const totalEl = block.querySelector('.menu-total-qty');
+    // Live-recalculate the Total as-you-type (oninput), so the person can
+    // check the math immediately without waiting to click away from the
+    // field. The actual save (and syncing the main table's cells behind
+    // this modal) still happens via updateCreatedInvoiceField on change.
+    const refreshMenuTotal = () => {
+      const b = boxInput.value === '' ? null : Number(boxInput.value);
+      const p = perBoxInput.value === '' ? null : Number(perBoxInput.value);
+      totalEl.textContent = (b === null || p === null) ? '—' : (b * p);
+    };
+    boxInput.oninput = refreshMenuTotal;
+    perBoxInput.oninput = refreshMenuTotal;
+    boxInput.onchange = (e) => updateCreatedInvoiceField(idx, 'qty_box', e.target.value);
+    perBoxInput.onchange = (e) => updateCreatedInvoiceField(idx, 'qty_per_box', e.target.value);
     grid.appendChild(block);
   });
   body.innerHTML = '';
