@@ -5909,7 +5909,7 @@ function renderCreatedInvoicePricesTable(){
       </td>
       <td class="qtycell">
         <input type="number" min="0" step="0.001" class="restaurant-qty-input" style="width:80px;"
-          placeholder="check each box"
+          placeholder="amount in each box"
           value="${it.qty_per_box === null || it.qty_per_box === undefined ? '' : it.qty_per_box}"
           onchange="updateCreatedInvoiceField(${idx}, 'qty_per_box', this.value)">
       </td>
@@ -6047,14 +6047,26 @@ function renderCreatedInvoiceMenuItems(block){
     const block = document.createElement('div');
     block.className = 'itemblock';
     block.title = createdInvoiceMenuName(it);
+    const packSize = (it.pack_size_previous === null || it.pack_size_previous === undefined) ? '—' : it.pack_size_previous;
     block.innerHTML = `
       <div class="ibname"></div>
-      <div class="ibstock">Qty per Box</div>
-      <input type="number" min="0" step="0.001" class="restaurant-qty-input" style="width:100%;text-align:center;"
-        placeholder="check each" value="${it.qty_per_box === null || it.qty_per_box === undefined ? '' : it.qty_per_box}">
+      <div class="ibstock">Pack size: <span class="val">${escapeHtml(String(packSize))}</span></div>
+      <div style="display:flex;gap:4px;margin-top:4px;">
+        <div style="flex:1;">
+          <div style="font-size:9px;color:var(--text-dim);text-align:center;">Boxes</div>
+          <input type="number" min="0" step="1" class="restaurant-qty-input qty-box-input" style="width:100%;text-align:center;"
+            value="${it.qty_box === null || it.qty_box === undefined ? '' : it.qty_box}">
+        </div>
+        <div style="flex:1;">
+          <div style="font-size:9px;color:var(--text-dim);text-align:center;">Per Box</div>
+          <input type="number" min="0" step="0.001" class="restaurant-qty-input qty-per-box-input" style="width:100%;text-align:center;"
+            value="${it.qty_per_box === null || it.qty_per_box === undefined ? '' : it.qty_per_box}">
+        </div>
+      </div>
     `;
     block.querySelector('.ibname').textContent = createdInvoiceMenuName(it);
-    block.querySelector('input').onchange = (e) => updateCreatedInvoiceField(idx, 'qty_per_box', e.target.value);
+    block.querySelector('.qty-box-input').onchange = (e) => updateCreatedInvoiceField(idx, 'qty_box', e.target.value);
+    block.querySelector('.qty-per-box-input').onchange = (e) => updateCreatedInvoiceField(idx, 'qty_per_box', e.target.value);
     grid.appendChild(block);
   });
   body.innerHTML = '';
@@ -6077,7 +6089,7 @@ async function finishCreatedInvoice(){
    table — download-only extras, unchecked by default since they're not
    needed day-to-day but should still be available when they are. ---- */
 const CREATED_INVOICE_EXPORT_COLUMNS = [
-  { key: 'invoice_name', label: 'Name as per Invoice', always: true },
+  { key: 'invoice_name', label: 'Name as per Invoice' },
   { key: 'description', label: 'Description as per Vector' },
   { key: 'qty_box', label: 'Qty as Box' },
   { key: 'qty_per_box', label: 'Qty per Box' },
