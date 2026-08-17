@@ -6332,6 +6332,7 @@ async function finishCreatedInvoice(){
 const CREATED_INVOICE_EXPORT_COLUMNS = [
   { key: 'invoice_name', label: 'Name as per Invoice' },
   { key: 'description', label: 'Description as per Vector' },
+  { key: 'department', label: 'Department' },
   { key: 'qty_box', label: 'Qty as Box' },
   { key: 'qty_per_box', label: 'Qty per Box' },
   { key: 'box_price', label: 'Box Price' },
@@ -6369,6 +6370,7 @@ function createdInvoiceExportRow(it, columns){
   const row = {};
   if(columns.invoice_name) row['Name as per Invoice'] = it.ocr_product_name;
   if(columns.description) row['Description as per Vector'] = it.matched_name || '';
+  if(columns.department) row['Department'] = it.department_name || 'Other';
   if(columns.qty_box) row['Qty as Box'] = it.qty_box === null || it.qty_box === undefined ? '' : it.qty_box;
   if(columns.qty_per_box) row['Qty per Box'] = it.qty_per_box === null || it.qty_per_box === undefined ? '' : it.qty_per_box;
   if(columns.box_price) row['Box Price'] = it.box_price === null || it.box_price === undefined ? '' : Number(it.box_price).toFixed(2);
