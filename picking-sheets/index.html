@@ -6221,6 +6221,13 @@ function createdInvoiceTotalQty(it){
   if(it.qty_per_box === null || it.qty_per_box === undefined) return null;
   return Number(it.qty_box) * Number(it.qty_per_box);
 }
+// Total money spent on this line — box price × number of boxes. Independent
+// of qty_per_box (that only affects how the total splits into units).
+function createdInvoiceTotalCost(it){
+  if(it.box_price === null || it.box_price === undefined) return null;
+  if(it.qty_box === null || it.qty_box === undefined) return null;
+  return Number(it.box_price) * Number(it.qty_box);
+}
 function createdInvoiceMarginPct(it){
   const costPerUnit = createdInvoiceCostPerUnit(it);
   if(costPerUnit === null) return null;
@@ -6299,6 +6306,7 @@ function renderCreatedInvoicePricesTable(){
     <th class="qtycell">Qty as Box</th><th class="qtycell">Qty per Box</th>
     <th class="qtycell">Box Price</th><th class="qtycell">Cost / Unit</th>
     <th class="qtycell">Retail Price</th><th class="qtycell">Total Qty</th>
+    <th class="qtycell">Total Cost</th>
     <th class="qtycell">Margin</th><th class="qtycell">Pack Size (Prev)</th>
     <th class="qtycell">Previous Cost</th><th class="qtycell"></th>
   </tr></thead>`;
@@ -6309,6 +6317,7 @@ function renderCreatedInvoicePricesTable(){
     const margin = createdInvoiceMarginPct(it);
     const belowMin = margin !== null && margin < (it.min_margin_pct || 38);
     const totalQty = createdInvoiceTotalQty(it);
+    const totalCost = createdInvoiceTotalCost(it);
     const costPerUnit = createdInvoiceCostPerUnit(it);
     const tr = document.createElement('tr');
     tr.innerHTML = `
@@ -6341,6 +6350,7 @@ function renderCreatedInvoicePricesTable(){
           onchange="updateCreatedInvoiceField(${idx}, 'retail_price', this.value)">
       </td>
       <td class="qtycell" id="createdInvoiceTotalQtyCell-${idx}">${totalQty === null ? '—' : totalQty}</td>
+      <td class="qtycell" id="createdInvoiceTotalCostCell-${idx}">${totalCost === null ? '—' : totalCost.toFixed(2)}</td>
       <td class="qtycell" id="createdInvoiceMarginCell-${idx}" style="${belowMin ? 'color:var(--danger);font-weight:700;' : ''}">${margin === null ? '—' : margin.toFixed(1) + '%'}</td>
       <td class="qtycell">${it.pack_size_previous === null || it.pack_size_previous === undefined ? '—' : it.pack_size_previous}</td>
       <td class="qtycell">${it.previous_cost_price === null || it.previous_cost_price === undefined ? '—' : Number(it.previous_cost_price).toFixed(2)}</td>
@@ -6349,6 +6359,17 @@ function renderCreatedInvoicePricesTable(){
     tbody.appendChild(tr);
   });
   table.appendChild(tbody);
+  const tfoot = document.createElement('tfoot');
+  const totalCostSum = items.reduce((sum, it) => sum + (createdInvoiceTotalCost(it) || 0), 0);
+  const footTr = document.createElement('tr');
+  footTr.innerHTML = `
+    <td colspan="7" style="text-align:right;font-weight:700;">Total Cost</td>
+    <td class="qtycell"></td>
+    <td class="qtycell" id="createdInvoicePricesFooterTotal" style="font-weight:700;">${totalCostSum.toFixed(2)}</td>
+    <td class="qtycell" colspan="4"></td>
+  `;
+  tfoot.appendChild(footTr);
+  table.appendChild(tfoot);
   content.innerHTML = '';
   const scrollWrap = document.createElement('div');
   scrollWrap.className = 'restaurant-table-scroll';
@@ -6382,6 +6403,15 @@ function updateCreatedInvoiceField(idx, field, value){
   const totalQty = createdInvoiceTotalQty(it);
   const totalCell = document.getElementById('createdInvoiceTotalQtyCell-' + idx);
   if(totalCell) totalCell.textContent = totalQty === null ? '—' : totalQty;
+
+  const totalCost = createdInvoiceTotalCost(it);
+  const totalCostCell = document.getElementById('createdInvoiceTotalCostCell-' + idx);
+  if(totalCostCell) totalCostCell.textContent = totalCost === null ? '—' : totalCost.toFixed(2);
+  const footerTotal = document.getElementById('createdInvoicePricesFooterTotal');
+  if(footerTotal){
+    const sum = currentCreatedInvoice.items.reduce((s, row) => s + (createdInvoiceTotalCost(row) || 0), 0);
+    footerTotal.textContent = sum.toFixed(2);
+  }
 
   const margin = createdInvoiceMarginPct(it);
   const belowMin = margin !== null && margin < (it.min_margin_pct || 38);
