@@ -6120,19 +6120,32 @@ async function runCreatedInvoiceSearch(idx, q){
     console.error(e);
   }
 }
-function pickCreatedInvoiceMatch(idx, stockid, name){
+async function pickCreatedInvoiceMatch(idx, stockid, name){
   currentCreatedInvoice.items[idx].stockid = stockid;
   currentCreatedInvoice.items[idx].matched_name = name;
   currentCreatedInvoice.items[idx]._matchedVia = 'manual';
   // This picker is shared between the Match step and the Pricing step (staff
   // can re-point an item to a different product from either screen) — re-render
   // whichever one is actually on screen, and autosave the change either way.
-  if(document.getElementById('view-created-invoice-prices').classList.contains('active')){
+  const onPricesView = document.getElementById('view-created-invoice-prices').classList.contains('active');
+  if(onPricesView){
     renderCreatedInvoicePricesTable();
   } else {
     renderCreatedInvoiceMatchTable();
   }
   scheduleCreatedInvoiceAutosave();
+  // Retail Price is per-product, so switching the match to a different
+  // product means the old price no longer applies — pull the newly-matched
+  // product's current retail price and use it instead.
+  try{
+    const data = await apiGet('stock/' + stockid + '/retail-price/');
+    if(currentCreatedInvoice.items[idx].stockid !== stockid) return; // match changed again before this returned
+    currentCreatedInvoice.items[idx].retail_price = data.retail_price;
+    if(onPricesView) renderCreatedInvoicePricesTable();
+    scheduleCreatedInvoiceAutosave();
+  }catch(e){
+    console.error('Could not fetch retail price for new match', e);
+  }
 }
 function deleteCreatedInvoiceLine(idx){
   if(!confirm('Remove "' + (currentCreatedInvoice.items[idx].ocr_product_name || 'this line') + '" from the invoice?')) return;
