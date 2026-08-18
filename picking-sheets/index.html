@@ -6124,27 +6124,30 @@ async function pickCreatedInvoiceMatch(idx, stockid, name){
   currentCreatedInvoice.items[idx].stockid = stockid;
   currentCreatedInvoice.items[idx].matched_name = name;
   currentCreatedInvoice.items[idx]._matchedVia = 'manual';
-  // This picker is shared between the Match step and the Pricing step (staff
-  // can re-point an item to a different product from either screen) — re-render
-  // whichever one is actually on screen, and autosave the change either way.
   const onPricesView = document.getElementById('view-created-invoice-prices').classList.contains('active');
-  if(onPricesView){
-    renderCreatedInvoicePricesTable();
-  } else {
+  if(!onPricesView){
+    // Match step: no price on screen here yet, just re-render as normal.
     renderCreatedInvoiceMatchTable();
-  }
-  scheduleCreatedInvoiceAutosave();
-  // Retail Price is per-product, so switching the match to a different
-  // product means the old price no longer applies — pull the newly-matched
-  // product's current retail price and use it instead.
-  try{
-    const data = await apiGet('stock/' + stockid + '/retail-price/');
-    if(currentCreatedInvoice.items[idx].stockid !== stockid) return; // match changed again before this returned
-    currentCreatedInvoice.items[idx].retail_price = data.retail_price;
-    if(onPricesView) renderCreatedInvoicePricesTable();
     scheduleCreatedInvoiceAutosave();
+    return;
+  }
+  // Pricing step: Retail Price is per-product, so switching the match means
+  // the old price no longer applies. Clear it, save immediately, then reload
+  // the invoice from the server the same way opening the pricing step does —
+  // that reload is what correctly fills Retail Price from the newly-matched
+  // product's current Vector price (or keeps a price staff already typed for
+  // this line, since the server only fills in a price when the field is
+  // still empty).
+  currentCreatedInvoice.items[idx].retail_price = null;
+  renderCreatedInvoicePricesTable();
+  try{
+    await saveCreatedInvoiceItems();
+    const data = await apiGet('invoices/created/' + currentCreatedInvoice.header.invoice_id + '/');
+    currentCreatedInvoice = data;
+    renderCreatedInvoicePricesTable();
   }catch(e){
-    console.error('Could not fetch retail price for new match', e);
+    toast('Could not refresh retail price for new match');
+    console.error(e);
   }
 }
 function deleteCreatedInvoiceLine(idx){
