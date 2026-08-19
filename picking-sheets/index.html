@@ -6724,8 +6724,7 @@ function downloadCreatedInvoiceRetailCSV(){
       'Supplier': supplierName
     };
   });
-  const supplierSlug = supplierName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-  downloadFixedNameCSV('invoice-retail-' + supplierSlug + '-' + new Date().toISOString().slice(0,10) + '.csv', headers, rows);
+  downloadFixedNameCSV('Hallan_Price_Updates.csv', headers, rows);
 }
 /* ---- Quantity CSV: fixed column set/order — Name, Total Quantity, Barcode. ---- */
 function downloadCreatedInvoiceQuantityCSV(){
