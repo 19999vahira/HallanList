@@ -6664,11 +6664,14 @@ function exportCreatedInvoice(format, columns){
    the File Import dialog's "Search By" dropdown shows by default. Do one
    manual test import first and adjust downloadFixedNameCSV's headers below
    if Vector rejects or misreads the file. ---- */
-function downloadFixedNameCSV(filename, headers, rows){
+function buildCSVText(headers, rows){
   const csvLines = [headers.join(',')].concat(
     rows.map(r => headers.map(h => '"' + String(r[h] ?? '').replace(/"/g, '""') + '"').join(','))
   );
-  const blob = new Blob([csvLines.join('\n')], { type: 'text/csv' });
+  return csvLines.join('\n');
+}
+function downloadFixedNameCSV(filename, headers, rows){
+  const blob = new Blob([buildCSVText(headers, rows)], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename;
@@ -6724,7 +6727,13 @@ function downloadCreatedInvoiceRetailCSV(){
       'Supplier': supplierName
     };
   });
-  downloadFixedNameCSV('invoice-retail-veg.csv', headers, rows);
+  const fileName = 'invoice-retail-veg.csv'; // fixed name — the Vector machine's watcher looks for this exact filename
+  downloadFixedNameCSV(fileName, headers, rows);
+  // Also queue the same file server-side so the Vector machine's poller can
+  // pull it even when someone downloads from a different computer — see
+  // GET /api/vector-import/next on the server.
+  apiPost('vector-import/queue', { file_name: fileName, csv_content: buildCSVText(headers, rows) })
+    .catch(e => console.error('Could not queue retail CSV for remote import', e));
 }
 /* ---- Quantity CSV: fixed column set/order — Name, Total Quantity, Barcode. ---- */
 function downloadCreatedInvoiceQuantityCSV(){
