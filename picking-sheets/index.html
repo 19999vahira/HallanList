@@ -834,7 +834,7 @@
   <div id="view-category" class="view">
     <div class="crumbrow">
       <button onclick="goHome()">Home</button><span class="sep">/</span>
-      <button onclick="openListType('WAREHOUSE')">Warehouse List</button><span class="sep">/</span>
+      <button onclick="continueWarehouseList()">Warehouse List</button><span class="sep">/</span>
       <span class="current" id="catCrumb">Category</span>
     </div>
     <div class="hero">
@@ -5580,7 +5580,7 @@ async function createNewInvoiceFromPdf(){
         ocr_product_name: oi.product_name || '',
         stockid: m.stockid || null,
         matched_name: m.item_name || null,
-        qty_box: (oi.qty === undefined || oi.qty === null) ? null : oi.qty, // from the invoice, editable
+        qty_box: (oi.case_qty === undefined || oi.case_qty === null) ? null : oi.case_qty, // number of boxes/cases only — never multiplied by units_per_case, editable
         qty_per_box: null, // the ONE field left blank on purpose — filled in by hand while checking each box
         box_price: (oi.unit_price === undefined || oi.unit_price === null) ? null : oi.unit_price, // cost for one whole box, editable
         retail_price: null, // editable, set by staff on the pricing step
@@ -6228,6 +6228,43 @@ function createdInvoiceTotalCost(it){
   if(it.qty_box === null || it.qty_box === undefined) return null;
   return Number(it.box_price) * Number(it.qty_box);
 }
+// Total Quantity as it should appear in a DOWNLOADED file only — the on-screen
+// table always shows the exact calculated total. When that total has a
+// decimal (e.g. 11.95), exports shave 0.01 off it (11.94); a whole-number
+// total is left exactly as it is.
+function createdInvoiceExportTotalQty(it){
+  const totalQty = createdInvoiceTotalQty(it);
+  if(totalQty === null) return null;
+  if(Number.isInteger(totalQty)) return totalQty;
+  return Math.round((totalQty - 0.01) * 100) / 100;
+}
+// Checked before every Create Invoice download (main export, Retail CSV,
+// Quantity CSV) — a blank Qty as Box, Qty per Box, Box Price, or Retail
+// Price on any line means that line's numbers aren't ready yet, so the
+// whole download is blocked until it's filled in. Returns the first
+// problem found, naming the exact item, or null when everything's ready.
+function createdInvoiceExportBlocker(){
+  const items = currentCreatedInvoice.items;
+  if(items.length === 0) return 'This invoice has no items to download.';
+  const requiredFields = [
+    ['qty_box', 'Qty as Box'],
+    ['qty_per_box', 'Qty per Box'],
+    ['box_price', 'Box Price'],
+    ['retail_price', 'Retail Price']
+  ];
+  for(const it of items){
+    const label = it.matched_name || it.ocr_product_name || 'an item';
+    if(!it.matched_name){
+      return '"' + label + '" hasn\'t been matched to a product yet — please match it before downloading.';
+    }
+    for(const [field, fieldLabel] of requiredFields){
+      if(it[field] === null || it[field] === undefined || it[field] === ''){
+        return '"' + label + '" is missing ' + fieldLabel + ' — please fill that in before downloading.';
+      }
+    }
+  }
+  return null;
+}
 function createdInvoiceMarginPct(it){
   const costPerUnit = createdInvoiceCostPerUnit(it);
   if(costPerUnit === null) return null;
@@ -6569,6 +6606,8 @@ const CREATED_INVOICE_EXPORT_COLUMNS = [
   { key: 'supplier', label: 'Supplier', extra: true }
 ];
 function openCreatedInvoiceExportModal(format){
+  const blocker = createdInvoiceExportBlocker();
+  if(blocker){ toast(blocker); return; }
   createdInvoiceExportFormat = format;
   const box = document.getElementById('createdInvoiceExportColumns');
   box.innerHTML = CREATED_INVOICE_EXPORT_COLUMNS.map(c => `
@@ -6594,7 +6633,7 @@ function firstBarcode(barcodeStr){
 }
 function createdInvoiceExportRow(it, columns){
   const margin = createdInvoiceMarginPct(it);
-  const totalQty = createdInvoiceTotalQty(it);
+  const totalQty = createdInvoiceExportTotalQty(it);
   const costPerUnit = createdInvoiceCostPerUnit(it);
   const row = {};
   if(columns.invoice_name) row['Name as per Invoice'] = it.ocr_product_name;
@@ -6711,8 +6750,9 @@ function completeCsvUpdateProcess(){
    export above — Description, Qty per Box, Cost/Unit, Selling Price,
    Barcode, Department, Supplier. ---- */
 function downloadCreatedInvoiceRetailCSV(){
+  const blocker = createdInvoiceExportBlocker();
+  if(blocker){ toast(blocker); return; }
   const items = currentCreatedInvoice.items;
-  if(items.length === 0){ toast('No items on this invoice'); return; }
   const supplierName = currentCreatedInvoice.header.supplier_name || '';
   const headers = ['Description as per Vector', 'Qty per Box', 'Cost / Unit', 'Selling Price', 'Barcode', 'Department', 'Supplier'];
   const rows = items.map(it => {
@@ -6737,12 +6777,13 @@ function downloadCreatedInvoiceRetailCSV(){
 }
 /* ---- Quantity CSV: fixed column set/order — Name, Total Quantity, Barcode. ---- */
 function downloadCreatedInvoiceQuantityCSV(){
+  const blocker = createdInvoiceExportBlocker();
+  if(blocker){ toast(blocker); return; }
   const items = currentCreatedInvoice.items;
-  if(items.length === 0){ toast('No items on this invoice'); return; }
   const supplierName = currentCreatedInvoice.header.supplier_name || '';
   const headers = ['Name', 'Total Quantity', 'Barcode'];
   const rows = items.map(it => {
-    const totalQty = createdInvoiceTotalQty(it);
+    const totalQty = createdInvoiceExportTotalQty(it);
     return {
       'Name': it.matched_name || it.ocr_product_name,
       'Total Quantity': totalQty === null ? '' : totalQty,
