@@ -2932,7 +2932,7 @@ function onRowProductSearch(){
         const div = document.createElement('div');
         div.className = 'searchresult';
         div.innerHTML = `<div class="sname">${escapeHtml(it.name)}</div><div class="sstock">${it.quantity} in stock</div>`;
-        div.onclick = () => addRowProductFromSearch(it.name);
+        div.onclick = () => addRowProductFromSearch(it);
         results.appendChild(div);
       });
     }catch(e){
@@ -2941,9 +2941,9 @@ function onRowProductSearch(){
     }
   }, 300);
 }
-function addRowProductFromSearch(name){
+function addRowProductFromSearch(stock){
   closeModal('modalAddRowProduct');
-  addProductToRow({ item_name: name });
+  addProductToRow({ item_name: stock.name, stockid: stock.stockid || null, barcode: stock.barcode || null });
 }
 async function addProductToRow(payload){
   if(!currentRow) return;
