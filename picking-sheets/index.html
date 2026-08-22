@@ -6830,8 +6830,8 @@ function downloadCreatedInvoiceRetailCSV(){
   // us show the person a live status of what the till is doing with it,
   // instead of leaving them staring at a downloaded file wondering if
   // anything actually happened.
-  apiPost('vector-import/queue', { file_name: fileName, csv_content: buildCSVText(headers, rows) })
-    .then(res => { if(res && res.queue_id) trackVectorImportStatus(res.queue_id); })
+  apiPost('vector-import/queue', { file_name: fileName, csv_content: buildCSVText(headers, rows), type: 'RETAIL' })
+    .then(res => { if(res && res.queue_id) trackVectorImportStatus(res.queue_id, 'RETAIL'); })
     .catch(e => console.error('Could not queue retail CSV for remote import', e));
 }
 
@@ -6842,10 +6842,28 @@ function downloadCreatedInvoiceRetailCSV(){
    anything happened after the file downloaded. */
 let vimportPollTimer = null;
 const VIMPORT_STEP_ORDER = ['QUEUED', 'PULLED', 'IMPORTING', 'COMPLETED'];
+// Status copy differs slightly depending on what the till is actually doing —
+// RETAIL updates prices via File Import, RECEIPT raises a goods-in receipt
+// note via Buying > Receipts > New. Same steps, different words.
 const VIMPORT_STATUS_TEXT = {
-  QUEUED: 'Waiting for the till to pick this up...',
-  PULLED: 'Received by the till...',
-  IMPORTING: 'Updating prices in Vector...'
+  RETAIL: {
+    QUEUED: 'Waiting for the till to pick this up...',
+    PULLED: 'Received by the till...',
+    IMPORTING: 'Updating prices in Vector...',
+    done_title: 'Retail invoice updated',
+    done_msg: 'Vector has been updated with the new prices.',
+    sending_title: 'Sending to the till...',
+    sending_msg: 'This updates prices in Vector — usually takes a few minutes.'
+  },
+  RECEIPT: {
+    QUEUED: 'Waiting for the till to pick this up...',
+    PULLED: 'Received by the till...',
+    IMPORTING: 'Creating the goods receipt in Vector...',
+    done_title: 'Receipt created',
+    done_msg: 'The goods receipt has been raised in Vector and left pending for you to check.',
+    sending_title: 'Sending to the till...',
+    sending_msg: 'This raises a goods receipt in Vector — usually takes a few minutes.'
+  }
 };
 function vimportSetSteps(currentStatus, failed){
   const currentIdx = VIMPORT_STEP_ORDER.indexOf(currentStatus);
@@ -6857,7 +6875,9 @@ function vimportSetSteps(currentStatus, failed){
     else if(idx === currentIdx){ el.classList.add('step-active'); }
   });
 }
-function trackVectorImportStatus(queueId){
+function trackVectorImportStatus(queueId, importType){
+  const kind = VIMPORT_STATUS_TEXT[importType] ? importType : 'RETAIL';
+  const copy = VIMPORT_STATUS_TEXT[kind];
   clearInterval(vimportPollTimer);
   const modalWrap = document.getElementById('vimportModal');
   const icon = document.getElementById('vimportIcon');
@@ -6867,8 +6887,8 @@ function trackVectorImportStatus(queueId){
   modalWrap.className = 'modal vimport-modal';
   icon.className = 'vimport-icon';
   icon.innerHTML = '<div class="spin"></div>';
-  title.textContent = 'Sending to the till...';
-  msg.textContent = 'This updates prices in Vector — usually takes a few minutes.';
+  title.textContent = copy.sending_title;
+  msg.textContent = copy.sending_msg;
   vimportSetSteps('QUEUED', false);
   openModal('modalVectorImport');
 
@@ -6889,8 +6909,8 @@ function trackVectorImportStatus(queueId){
       modalWrap.className = 'modal vimport-modal state-done';
       icon.className = 'vimport-icon state-done';
       icon.innerHTML = '&#10003;';
-      title.textContent = 'Retail invoice updated';
-      msg.textContent = status.status_message || 'Vector has been updated with the new prices.';
+      title.textContent = copy.done_title;
+      msg.textContent = status.status_message || copy.done_msg;
       vimportSetSteps('COMPLETED', false);
       setTimeout(()=>{ if(modalWrap.classList.contains('state-done')) dismissVectorImportBanner(); }, 6000);
       return;
@@ -6907,7 +6927,7 @@ function trackVectorImportStatus(queueId){
     }
 
     title.textContent = 'Updating Vector...';
-    msg.textContent = VIMPORT_STATUS_TEXT[status.status] || status.status_message || 'Working on it...';
+    msg.textContent = copy[status.status] || status.status_message || 'Working on it...';
     vimportSetSteps(status.status, false);
 
     if(Date.now() - startedAt > TIMEOUT_MS){
@@ -6943,7 +6963,21 @@ function downloadCreatedInvoiceQuantityCSV(){
     };
   });
   const supplierSlug = supplierName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-  downloadFixedNameCSV('invoice-quantity-' + supplierSlug + '-' + new Date().toISOString().slice(0,10) + '.csv', headers, rows);
+  const fileName = 'invoice-quantity-' + supplierSlug + '-' + new Date().toISOString().slice(0,10) + '.csv';
+  downloadFixedNameCSV(fileName, headers, rows);
+  // Also queue this as a RECEIPT import so the till's poller can pick it up
+  // and raise the goods receipt in Vector (Buying > Receipts > New > Add
+  // Items from CSV) automatically — mirrors the Retail CSV -> RETAIL queue
+  // flow above, just against a different Vector screen. supplier_name is
+  // required server-side so the till script knows which row to pick in the
+  // Supplier List search.
+  if(!supplierName){
+    toast('Quantity CSV saved — no supplier on this invoice, so it was not queued for auto-import');
+    return;
+  }
+  apiPost('vector-import/queue', { file_name: fileName, csv_content: buildCSVText(headers, rows), type: 'RECEIPT', supplier_name: supplierName })
+    .then(res => { if(res && res.queue_id) trackVectorImportStatus(res.queue_id, 'RECEIPT'); })
+    .catch(e => console.error('Could not queue quantity CSV for remote receipt import', e));
 }
 
 /* ============ NEW ITEMS (spreadsheet entry for brand new products) ============
