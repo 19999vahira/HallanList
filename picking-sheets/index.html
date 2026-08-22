@@ -456,6 +456,34 @@
     z-index:200;display:none;
   }
 
+  /* ---- Vector import status banner: shows the till working through a
+     queued Retail CSV so the person who clicked the button isn't left
+     wondering whether anything happened. ---- */
+  .vimport-banner{
+    position:fixed;bottom:24px;right:24px;max-width:320px;background:var(--panel);
+    border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:8px;
+    padding:14px 16px;box-shadow:0 10px 24px -12px rgba(0,0,0,.3);z-index:210;display:none;
+  }
+  .vimport-banner.active{display:block;}
+  .vimport-banner.state-done{border-left-color:var(--green);}
+  .vimport-banner.state-failed{border-left-color:var(--danger);}
+  .vimport-banner-head{display:flex;align-items:center;gap:8px;margin-bottom:4px;}
+  .vimport-banner-spinner{
+    width:13px;height:13px;border-radius:50%;border:2px solid var(--line);
+    border-top-color:var(--accent);animation:vimport-spin .7s linear infinite;flex-shrink:0;
+  }
+  .vimport-banner.state-done .vimport-banner-spinner,
+  .vimport-banner.state-failed .vimport-banner-spinner{animation:none;border-top-color:transparent;border-color:transparent;}
+  @keyframes vimport-spin{to{transform:rotate(360deg);}}
+  .vimport-banner-title{font-size:13px;font-weight:600;}
+  .vimport-banner-msg{font-size:12px;color:var(--text-dim);line-height:1.4;}
+  .vimport-banner-close{
+    position:absolute;top:8px;right:10px;background:none;border:none;color:var(--text-dim);
+    cursor:pointer;font-size:14px;line-height:1;display:none;
+  }
+  .vimport-banner.state-done .vimport-banner-close,
+  .vimport-banner.state-failed .vimport-banner-close{display:block;}
+
   .pickprinttable{display:none;}
 
   @media print{
@@ -495,6 +523,15 @@
 <body>
 
 <div id="toast" class="toast"></div>
+
+<div id="vimportBanner" class="vimport-banner">
+  <button class="vimport-banner-close" onclick="dismissVectorImportBanner()">&times;</button>
+  <div class="vimport-banner-head">
+    <div class="vimport-banner-spinner"></div>
+    <div class="vimport-banner-title" id="vimportBannerTitle">Sending to the till...</div>
+  </div>
+  <div class="vimport-banner-msg" id="vimportBannerMsg"></div>
+</div>
 
 <!-- LOGIN -->
 <div id="view-login" class="view active">
@@ -6771,9 +6808,80 @@ function downloadCreatedInvoiceRetailCSV(){
   downloadFixedNameCSV(fileName, headers, rows);
   // Also queue the same file server-side so the Vector machine's poller can
   // pull it even when someone downloads from a different computer — see
-  // GET /api/vector-import/next on the server.
+  // GET /api/vector-import/next on the server. The returned queue_id lets
+  // us show the person a live status of what the till is doing with it,
+  // instead of leaving them staring at a downloaded file wondering if
+  // anything actually happened.
   apiPost('vector-import/queue', { file_name: fileName, csv_content: buildCSVText(headers, rows) })
+    .then(res => { if(res && res.queue_id) trackVectorImportStatus(res.queue_id); })
     .catch(e => console.error('Could not queue retail CSV for remote import', e));
+}
+
+/* ============ VECTOR IMPORT STATUS BANNER ============
+   Polls GET /api/vector-import/:id/status after a Retail CSV is queued, so
+   the person who clicked the button can see it move through the till
+   (queued -> picked up -> importing -> done) instead of wondering whether
+   anything happened after the file downloaded. */
+let vimportPollTimer = null;
+const VIMPORT_STATUS_TEXT = {
+  QUEUED: 'Waiting for the till to pick this up...',
+  PULLED: 'Received by the till...',
+  IMPORTING: 'Updating prices in Vector...'
+};
+function trackVectorImportStatus(queueId){
+  clearInterval(vimportPollTimer);
+  const banner = document.getElementById('vimportBanner');
+  const title = document.getElementById('vimportBannerTitle');
+  const msg = document.getElementById('vimportBannerMsg');
+  banner.className = 'vimport-banner active';
+  title.textContent = 'Sending to the till...';
+  msg.textContent = 'This updates prices in Vector — usually takes a few minutes.';
+
+  const startedAt = Date.now();
+  const TIMEOUT_MS = 15 * 60 * 1000; // 15 min — well beyond a normal import; something's stuck by then
+
+  const poll = async () => {
+    let status;
+    try{
+      status = await apiGet('vector-import/' + queueId + '/status');
+    }catch(e){
+      console.error('Could not fetch import status', e);
+      return; // try again on the next tick rather than giving up on one blip
+    }
+
+    if(status.status === 'COMPLETED'){
+      clearInterval(vimportPollTimer);
+      banner.className = 'vimport-banner active state-done';
+      title.textContent = 'Retail invoice updated';
+      msg.textContent = status.status_message || 'Vector has been updated with the new prices.';
+      setTimeout(()=>{ if(banner.classList.contains('state-done')) dismissVectorImportBanner(); }, 6000);
+      return;
+    }
+    if(status.status === 'FAILED'){
+      clearInterval(vimportPollTimer);
+      banner.className = 'vimport-banner active state-failed';
+      title.textContent = 'Import failed';
+      msg.textContent = status.error_message || status.status_message || 'Something went wrong updating Vector — check the till or try again.';
+      return;
+    }
+
+    title.textContent = 'Updating Vector...';
+    msg.textContent = VIMPORT_STATUS_TEXT[status.status] || status.status_message || 'Working on it...';
+
+    if(Date.now() - startedAt > TIMEOUT_MS){
+      clearInterval(vimportPollTimer);
+      banner.className = 'vimport-banner active state-failed';
+      title.textContent = 'Still not done';
+      msg.textContent = "This is taking much longer than usual — check that the till's import script is running.";
+    }
+  };
+
+  poll();
+  vimportPollTimer = setInterval(poll, 4000);
+}
+function dismissVectorImportBanner(){
+  clearInterval(vimportPollTimer);
+  document.getElementById('vimportBanner').className = 'vimport-banner';
 }
 /* ---- Quantity CSV: fixed column set/order — Name, Total Quantity, Barcode. ---- */
 function downloadCreatedInvoiceQuantityCSV(){
