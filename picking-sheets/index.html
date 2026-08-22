@@ -456,33 +456,43 @@
     z-index:200;display:none;
   }
 
-  /* ---- Vector import status banner: shows the till working through a
+  /* ---- Vector import status modal: shows the till working through a
      queued Retail CSV so the person who clicked the button isn't left
      wondering whether anything happened. ---- */
-  .vimport-banner{
-    position:fixed;bottom:24px;right:24px;max-width:320px;background:var(--panel);
-    border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:8px;
-    padding:14px 16px;box-shadow:0 10px 24px -12px rgba(0,0,0,.3);z-index:210;display:none;
+  .vimport-modal{width:400px;text-align:center;}
+  .vimport-icon{
+    width:56px;height:56px;border-radius:50%;background:var(--panel2);border:2px solid var(--accent);
+    display:flex;align-items:center;justify-content:center;margin:0 auto 18px;position:relative;
   }
-  .vimport-banner.active{display:block;}
-  .vimport-banner.state-done{border-left-color:var(--green);}
-  .vimport-banner.state-failed{border-left-color:var(--danger);}
-  .vimport-banner-head{display:flex;align-items:center;gap:8px;margin-bottom:4px;}
-  .vimport-banner-spinner{
-    width:13px;height:13px;border-radius:50%;border:2px solid var(--line);
-    border-top-color:var(--accent);animation:vimport-spin .7s linear infinite;flex-shrink:0;
+  .vimport-icon .spin{
+    width:26px;height:26px;border-radius:50%;border:3px solid var(--line);
+    border-top-color:var(--accent);animation:vimport-spin .7s linear infinite;
   }
-  .vimport-banner.state-done .vimport-banner-spinner,
-  .vimport-banner.state-failed .vimport-banner-spinner{animation:none;border-top-color:transparent;border-color:transparent;}
+  .vimport-icon.state-done{border-color:var(--green);}
+  .vimport-icon.state-done .spin{animation:none;border-color:var(--green);border-top-color:var(--green);}
+  .vimport-icon.state-failed{border-color:var(--danger);}
+  .vimport-icon.state-failed .spin{animation:none;border-color:var(--danger);border-top-color:var(--danger);}
   @keyframes vimport-spin{to{transform:rotate(360deg);}}
-  .vimport-banner-title{font-size:13px;font-weight:600;}
-  .vimport-banner-msg{font-size:12px;color:var(--text-dim);line-height:1.4;}
-  .vimport-banner-close{
-    position:absolute;top:8px;right:10px;background:none;border:none;color:var(--text-dim);
-    cursor:pointer;font-size:14px;line-height:1;display:none;
+  .vimport-modal h3{margin:0 0 6px;font-size:20px;}
+  .vimport-modal .vimport-msg{color:var(--text-dim);font-size:13px;margin:0 0 22px;min-height:18px;}
+  .vimport-steps{display:flex;flex-direction:column;gap:0;text-align:left;margin-bottom:6px;}
+  .vimport-step{
+    display:flex;align-items:center;gap:12px;padding:10px 4px;font-size:13px;color:var(--text-dim);
+    border-left:2px solid var(--line);margin-left:10px;padding-left:20px;position:relative;
   }
-  .vimport-banner.state-done .vimport-banner-close,
-  .vimport-banner.state-failed .vimport-banner-close{display:block;}
+  .vimport-step:last-child{border-left-color:transparent;}
+  .vimport-step::before{
+    content:'';position:absolute;left:-7px;top:14px;width:12px;height:12px;border-radius:50%;
+    background:var(--panel);border:2px solid var(--line);
+  }
+  .vimport-step.step-active{color:var(--text);font-weight:600;}
+  .vimport-step.step-active::before{border-color:var(--accent);background:var(--accent);}
+  .vimport-step.step-done{color:var(--text);}
+  .vimport-step.step-done::before{border-color:var(--green);background:var(--green);}
+  .vimport-step.step-failed::before{border-color:var(--danger);background:var(--danger);}
+  .vimport-close-row{margin-top:18px;display:none;}
+  .vimport-modal.state-done .vimport-close-row,
+  .vimport-modal.state-failed .vimport-close-row{display:block;}
 
   .pickprinttable{display:none;}
 
@@ -524,13 +534,21 @@
 
 <div id="toast" class="toast"></div>
 
-<div id="vimportBanner" class="vimport-banner">
-  <button class="vimport-banner-close" onclick="dismissVectorImportBanner()">&times;</button>
-  <div class="vimport-banner-head">
-    <div class="vimport-banner-spinner"></div>
-    <div class="vimport-banner-title" id="vimportBannerTitle">Sending to the till...</div>
+<div class="modal-backdrop" id="modalVectorImport">
+  <div class="modal vimport-modal" id="vimportModal">
+    <div class="vimport-icon" id="vimportIcon"><div class="spin"></div></div>
+    <h3 id="vimportTitle">Sending to the till...</h3>
+    <p class="vimport-msg" id="vimportMsg">This updates prices in Vector.</p>
+    <div class="vimport-steps">
+      <div class="vimport-step" data-step="QUEUED">Queued</div>
+      <div class="vimport-step" data-step="PULLED">Received by the till</div>
+      <div class="vimport-step" data-step="IMPORTING">Updating prices in Vector</div>
+      <div class="vimport-step" data-step="COMPLETED">Retail invoice updated</div>
+    </div>
+    <div class="vimport-close-row">
+      <button class="btn-amber" onclick="dismissVectorImportBanner()" style="width:100%;">Close</button>
+    </div>
   </div>
-  <div class="vimport-banner-msg" id="vimportBannerMsg"></div>
 </div>
 
 <!-- LOGIN -->
@@ -6817,25 +6835,42 @@ function downloadCreatedInvoiceRetailCSV(){
     .catch(e => console.error('Could not queue retail CSV for remote import', e));
 }
 
-/* ============ VECTOR IMPORT STATUS BANNER ============
+/* ============ VECTOR IMPORT STATUS MODAL ============
    Polls GET /api/vector-import/:id/status after a Retail CSV is queued, so
    the person who clicked the button can see it move through the till
    (queued -> picked up -> importing -> done) instead of wondering whether
    anything happened after the file downloaded. */
 let vimportPollTimer = null;
+const VIMPORT_STEP_ORDER = ['QUEUED', 'PULLED', 'IMPORTING', 'COMPLETED'];
 const VIMPORT_STATUS_TEXT = {
   QUEUED: 'Waiting for the till to pick this up...',
   PULLED: 'Received by the till...',
   IMPORTING: 'Updating prices in Vector...'
 };
+function vimportSetSteps(currentStatus, failed){
+  const currentIdx = VIMPORT_STEP_ORDER.indexOf(currentStatus);
+  document.querySelectorAll('#vimportModal .vimport-step').forEach(el=>{
+    const idx = VIMPORT_STEP_ORDER.indexOf(el.dataset.step);
+    el.classList.remove('step-active', 'step-done', 'step-failed');
+    if(failed && idx === currentIdx){ el.classList.add('step-failed'); }
+    else if(idx < currentIdx || (idx === currentIdx && currentStatus === 'COMPLETED')){ el.classList.add('step-done'); }
+    else if(idx === currentIdx){ el.classList.add('step-active'); }
+  });
+}
 function trackVectorImportStatus(queueId){
   clearInterval(vimportPollTimer);
-  const banner = document.getElementById('vimportBanner');
-  const title = document.getElementById('vimportBannerTitle');
-  const msg = document.getElementById('vimportBannerMsg');
-  banner.className = 'vimport-banner active';
+  const modalWrap = document.getElementById('vimportModal');
+  const icon = document.getElementById('vimportIcon');
+  const title = document.getElementById('vimportTitle');
+  const msg = document.getElementById('vimportMsg');
+
+  modalWrap.className = 'modal vimport-modal';
+  icon.className = 'vimport-icon';
+  icon.innerHTML = '<div class="spin"></div>';
   title.textContent = 'Sending to the till...';
   msg.textContent = 'This updates prices in Vector — usually takes a few minutes.';
+  vimportSetSteps('QUEUED', false);
+  openModal('modalVectorImport');
 
   const startedAt = Date.now();
   const TIMEOUT_MS = 15 * 60 * 1000; // 15 min — well beyond a normal import; something's stuck by then
@@ -6851,26 +6886,35 @@ function trackVectorImportStatus(queueId){
 
     if(status.status === 'COMPLETED'){
       clearInterval(vimportPollTimer);
-      banner.className = 'vimport-banner active state-done';
+      modalWrap.className = 'modal vimport-modal state-done';
+      icon.className = 'vimport-icon state-done';
+      icon.innerHTML = '&#10003;';
       title.textContent = 'Retail invoice updated';
       msg.textContent = status.status_message || 'Vector has been updated with the new prices.';
-      setTimeout(()=>{ if(banner.classList.contains('state-done')) dismissVectorImportBanner(); }, 6000);
+      vimportSetSteps('COMPLETED', false);
+      setTimeout(()=>{ if(modalWrap.classList.contains('state-done')) dismissVectorImportBanner(); }, 6000);
       return;
     }
     if(status.status === 'FAILED'){
       clearInterval(vimportPollTimer);
-      banner.className = 'vimport-banner active state-failed';
+      modalWrap.className = 'modal vimport-modal state-failed';
+      icon.className = 'vimport-icon state-failed';
+      icon.innerHTML = '&#10007;';
       title.textContent = 'Import failed';
       msg.textContent = status.error_message || status.status_message || 'Something went wrong updating Vector — check the till or try again.';
+      vimportSetSteps('IMPORTING', true);
       return;
     }
 
     title.textContent = 'Updating Vector...';
     msg.textContent = VIMPORT_STATUS_TEXT[status.status] || status.status_message || 'Working on it...';
+    vimportSetSteps(status.status, false);
 
     if(Date.now() - startedAt > TIMEOUT_MS){
       clearInterval(vimportPollTimer);
-      banner.className = 'vimport-banner active state-failed';
+      modalWrap.className = 'modal vimport-modal state-failed';
+      icon.className = 'vimport-icon state-failed';
+      icon.innerHTML = '&#10007;';
       title.textContent = 'Still not done';
       msg.textContent = "This is taking much longer than usual — check that the till's import script is running.";
     }
@@ -6881,7 +6925,7 @@ function trackVectorImportStatus(queueId){
 }
 function dismissVectorImportBanner(){
   clearInterval(vimportPollTimer);
-  document.getElementById('vimportBanner').className = 'vimport-banner';
+  closeModal('modalVectorImport');
 }
 /* ---- Quantity CSV: fixed column set/order — Name, Total Quantity, Barcode. ---- */
 function downloadCreatedInvoiceQuantityCSV(){
