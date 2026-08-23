@@ -174,7 +174,7 @@
   // /api/staff/login (see rota/index.html). No separate rota login exists
   // on the backend; this page just requires that token to be present.
   // ---------------------------------------------------------------
-  const API_BASE = ''; // same value as in rota/index.html
+  const API_BASE = 'https://hallan-picking-backend.onrender.com'; // same value as in rota/index.html
   const token = localStorage.getItem('rota_token');
   if (!token) {
     window.location.href = 'index.html';
