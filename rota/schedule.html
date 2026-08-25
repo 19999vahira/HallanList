@@ -29,30 +29,48 @@
   .avatar-pill{width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;}
   .logout-btn{background:none;border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:6px;padding:6px 12px;font-size:12.5px;}
 
+  .tabpage{display:none;}
+  .tabpage.active{display:block;}
+
+  /* ---- toolbar ---- */
   .toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fff;border-bottom:1px solid var(--line);padding:12px 24px;}
-  .weeklabel{font-weight:700;color:var(--nav-blue);font-size:15px;border:none;background:none;font-family:inherit;padding:4px 6px;border-radius:6px;}
-  .weeklabel:focus{outline:1px solid var(--nav-blue);}
   .toolbar .spacer{flex:1;}
-  .btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:9px 16px;font-size:13.5px;color:var(--ink);}
+  .btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:9px 14px;font-size:13.5px;color:var(--ink);white-space:nowrap;}
   .btn:hover{border-color:#c7cfd6;}
   .btn-primary{background:var(--nav-blue);color:#fff;border:none;font-weight:600;}
   .btn-primary:hover{background:var(--nav-blue-dark);}
+  .navbtn{width:30px;height:30px;border:1px solid var(--line);background:#fff;border-radius:6px;color:var(--slate);}
+  .weeklabel{font-weight:700;color:var(--nav-blue);font-size:15px;min-width:190px;text-align:center;}
+  .weeknav{display:flex;align-items:center;gap:6px;}
+  input[type=date].jumpdate{border:1px solid var(--line);border-radius:6px;padding:8px;font-size:13px;color:var(--slate);}
 
+  /* ---- filter dropdown ---- */
+  .filterwrap{position:relative;}
+  .filter-panel{
+    display:none;position:absolute;top:calc(100% + 6px);left:0;background:#fff;border:1px solid var(--line);
+    border-radius:8px;box-shadow:0 14px 30px -16px rgba(14,30,51,.28);padding:10px;min-width:220px;z-index:30;
+    max-height:260px;overflow-y:auto;
+  }
+  .filter-panel.show{display:block;}
+  .filter-panel label{display:flex;align-items:center;gap:8px;font-size:13px;padding:6px 4px;color:var(--ink);}
+  .filter-panel .clear{font-size:12px;color:var(--nav-blue);background:none;border:none;padding:6px 4px;text-align:left;width:100%;}
+
+  /* ---- schedule grid ---- */
   .gridwrap{overflow-x:auto;background:#fff;}
-  table.schedule{border-collapse:collapse;width:100%;min-width:1040px;}
+  table.schedule{border-collapse:collapse;width:100%;min-width:1080px;}
   table.schedule th, table.schedule td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);}
   table.schedule thead th{background:#FAFBFC;color:var(--slate);font-size:11.5px;letter-spacing:.6px;text-transform:uppercase;padding:12px 10px;text-align:left;font-weight:700;}
+  table.schedule thead th .sub{display:block;text-transform:none;font-size:12.5px;color:var(--ink);font-weight:700;margin-top:2px;letter-spacing:0;}
   table.schedule thead th.namecol{position:sticky;left:0;z-index:2;background:#FAFBFC;min-width:220px;}
   table.schedule tbody td.namecol{position:sticky;left:0;background:#fff;z-index:1;padding:10px 14px;min-width:220px;}
   .employee{display:flex;align-items:center;gap:10px;}
   .employee .initials{width:32px;height:32px;border-radius:50%;background:#E7ECF0;color:var(--slate);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none;}
   .employee .meta .n{font-size:13.5px;font-weight:600;color:var(--ink);}
   .employee .meta .h{font-size:11.5px;color:var(--slate);margin-top:1px;}
-  .employee .remove{margin-left:auto;background:none;border:none;color:#C4433F;font-size:16px;line-height:1;opacity:.5;flex:none;}
-  .employee .remove:hover{opacity:1;}
 
   table.schedule td.daycell{padding:6px;vertical-align:top;min-width:140px;height:66px;cursor:pointer;}
   table.schedule td.daycell:hover{background:#F8FAFB;}
+  table.schedule td.daycell.copy-source{outline:2px dashed var(--nav-blue);outline-offset:-2px;}
   .chip{border-radius:5px;padding:6px 8px;font-size:11.5px;line-height:1.35;}
   .chip .t{font-weight:700;}
   .chip .l{opacity:.9;}
@@ -61,34 +79,51 @@
   tfoot td{background:#FAFBFC;font-size:11.5px;color:var(--slate);font-weight:700;padding:10px;}
   tfoot td.namecol{position:sticky;left:0;background:#FAFBFC;}
 
-  .addrow td{padding:14px;text-align:left;}
-  .addrow button{color:var(--nav-blue);background:none;border:none;font-size:13.5px;font-weight:600;padding:0;}
-  .addrow button:hover{text-decoration:underline;}
+  .paste-banner{
+    position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;
+    padding:10px 18px;border-radius:24px;font-size:13.5px;display:none;align-items:center;gap:14px;z-index:60;
+    box-shadow:0 14px 30px -10px rgba(0,0,0,.3);
+  }
+  .paste-banner.show{display:flex;}
+  .paste-banner button{background:none;border:none;color:#9FCBF4;font-weight:600;font-size:13px;}
+
+  /* ---- employees / shifts tabs ---- */
+  .tabbody{padding:24px;max-width:960px;margin:0 auto;}
+  table.simple{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;}
+  table.simple th, table.simple td{padding:12px 16px;text-align:left;font-size:13.5px;border-bottom:1px solid var(--line);}
+  table.simple th{background:#FAFBFC;color:var(--slate);font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;}
+  table.simple tr:last-child td{border-bottom:none;}
+  .badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;margin:2px 3px 2px 0;}
+  .rowactions button{background:none;border:none;font-size:12.5px;font-weight:600;cursor:pointer;margin-right:10px;}
+  .rowactions .edit{color:var(--nav-blue);}
+  .rowactions .del{color:#C4433F;}
+  .tabbody-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+  .tabbody-head h2{font-size:18px;margin:0;}
+
+  .shifttype-row{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#fff;margin-bottom:8px;}
+  .shifttype-row input[type=text]{border:none;font-size:14px;flex:1;padding:2px;}
+  .shifttype-row input[type=color]{width:28px;height:28px;border:none;padding:0;border-radius:6px;flex:none;}
+  .shifttype-row .del{background:none;border:none;color:#C4433F;opacity:.5;font-size:16px;}
+  .shifttype-row .del:hover{opacity:1;}
 
   /* ---- modal ---- */
   .overlay{position:fixed;inset:0;background:rgba(20,30,40,.35);display:none;align-items:center;justify-content:center;z-index:50;}
   .overlay.show{display:flex;}
-  .modal{background:#fff;border-radius:10px;padding:26px 26px 22px;width:360px;max-width:92vw;box-shadow:0 20px 50px -20px rgba(20,30,40,.4);}
+  .modal{background:#fff;border-radius:10px;padding:26px 26px 22px;width:400px;max-width:92vw;box-shadow:0 20px 50px -20px rgba(20,30,40,.4);max-height:88vh;overflow-y:auto;}
   .modal h3{margin:0 0 18px;font-size:17px;}
   .modal label{display:block;font-size:11.5px;font-weight:700;letter-spacing:.5px;color:#8992A0;text-transform:uppercase;margin:14px 0 6px;}
   .modal label:first-of-type{margin-top:0;}
-  .modal input[type=text], .modal input[type=time], .modal select{
+  .modal input[type=text], .modal input[type=time], .modal input[type=date], .modal input[type=number], .modal select{
     width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:6px;font-size:14px;color:var(--ink);
   }
   .modal .row2{display:flex;gap:10px;}
   .modal .row2 > div{flex:1;}
-  .modal .timeoff-toggle{display:flex;align-items:center;gap:8px;margin-top:16px;font-size:13.5px;}
+  .modal .checkgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px;}
+  .modal .checkgrid label{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--ink);margin:0;}
   .modal-actions{display:flex;justify-content:space-between;align-items:center;margin-top:22px;gap:8px;}
-  .modal-actions .left{display:flex;gap:8px;}
   .link-danger{background:none;border:none;color:#C4433F;font-size:13px;font-weight:600;padding:8px 0;}
   .link-danger:hover{text-decoration:underline;}
-
-  .roles-list{display:flex;flex-direction:column;gap:8px;margin-bottom:16px;max-height:260px;overflow-y:auto;}
-  .role-row{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:6px;padding:8px 10px;}
-  .role-row input[type=text]{border:none;font-size:13.5px;flex:1;padding:2px;}
-  .role-row input[type=color]{width:26px;height:26px;border:none;padding:0;border-radius:5px;flex:none;}
-  .role-row .del{background:none;border:none;color:#C4433F;opacity:.5;font-size:15px;}
-  .role-row .del:hover{opacity:1;}
+  .checkbox-row{display:flex;align-items:center;gap:8px;margin-top:16px;font-size:13.5px;}
 </style>
 </head>
 <body>
@@ -102,7 +137,9 @@
     ROTA
   </div>
   <nav>
-    <a href="#" class="active">Schedule</a>
+    <a href="#" data-tab="schedule" class="active">Schedule</a>
+    <a href="#" data-tab="employees">Employees</a>
+    <a href="#" data-tab="shifts">Shifts</a>
     <a href="../timesheet/">Time Clock</a>
   </nav>
   <div class="right">
@@ -112,39 +149,92 @@
   </div>
 </div>
 
-<div class="toolbar">
-  <input class="weeklabel" id="week-label" value="Week of 02 – 08 Mar" />
-  <div class="spacer"></div>
-  <button class="btn" id="manage-roles-btn">Manage Roles</button>
-  <button class="btn btn-primary" id="add-employee-btn">+ Add Employee</button>
+<!-- ===================== SCHEDULE TAB ===================== -->
+<div class="tabpage active" id="tab-schedule">
+  <div class="toolbar">
+    <div class="weeknav">
+      <button class="navbtn" id="prev-week">&lsaquo;</button>
+      <div class="weeklabel" id="week-label">—</div>
+      <button class="navbtn" id="next-week">&rsaquo;</button>
+    </div>
+    <button class="btn" id="today-btn">Today</button>
+    <input type="date" class="jumpdate" id="jump-date" title="Jump to week">
+
+    <div class="filterwrap">
+      <button class="btn" id="shift-filter-btn">🏷️ Shifts</button>
+      <div class="filter-panel" id="shift-filter-panel"></div>
+    </div>
+    <div class="filterwrap">
+      <button class="btn" id="emp-filter-btn">👤 Employees</button>
+      <div class="filter-panel" id="emp-filter-panel"></div>
+    </div>
+
+    <div class="spacer"></div>
+    <button class="btn" id="timeoff-btn">+ Time Off</button>
+    <button class="btn" id="download-btn">⬇ Download</button>
+  </div>
+
+  <div class="gridwrap">
+    <table class="schedule" id="schedule-table">
+      <thead><tr id="schedule-head"></tr></thead>
+      <tbody id="grid-body"></tbody>
+      <tfoot><tr id="totals-row"></tr></tfoot>
+    </table>
+  </div>
 </div>
 
-<div class="gridwrap">
-  <table class="schedule">
-    <thead>
-      <tr>
-        <th class="namecol">Scheduled shifts</th>
-        <th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th>
-      </tr>
-    </thead>
-    <tbody id="grid-body"></tbody>
-    <tfoot><tr id="totals-row"><td class="namecol">Scheduled hours</td></tr></tfoot>
-  </table>
+<!-- ===================== EMPLOYEES TAB ===================== -->
+<div class="tabpage" id="tab-employees">
+  <div class="tabbody">
+    <div class="tabbody-head">
+      <h2>Employees</h2>
+      <button class="btn btn-primary" id="add-employee-btn">+ Add employee</button>
+    </div>
+    <table class="simple">
+      <thead><tr><th>Name</th><th>Department</th><th>Shifts covered</th><th>Login ID</th><th></th></tr></thead>
+      <tbody id="employees-body"></tbody>
+    </table>
+  </div>
 </div>
 
-<!-- Add employee modal -->
+<!-- ===================== SHIFTS TAB ===================== -->
+<div class="tabpage" id="tab-shifts">
+  <div class="tabbody" style="max-width:560px;">
+    <div class="tabbody-head">
+      <h2>Shift types</h2>
+    </div>
+    <div id="shifttypes-list"></div>
+    <button class="btn" id="add-shifttype-btn" style="width:100%;">+ Add shift type</button>
+  </div>
+</div>
+
+<!-- ===================== MODALS ===================== -->
+
+<!-- Employee modal -->
 <div class="overlay" id="employee-overlay">
   <div class="modal">
-    <h3>Add employee</h3>
+    <h3 id="employee-modal-title">Add employee</h3>
     <label for="emp-name">Name</label>
     <input type="text" id="emp-name" placeholder="e.g. Priya Nair">
-    <label for="emp-role">Default role</label>
-    <select id="emp-role"></select>
+    <label for="emp-dept">Department</label>
+    <input type="text" id="emp-dept" placeholder="e.g. Front of House">
+    <label>Shifts this employee can cover</label>
+    <div class="checkgrid" id="emp-shifts-checkgrid"></div>
+    <div class="row2">
+      <div>
+        <label for="emp-login">Login ID</label>
+        <input type="text" id="emp-login" placeholder="e.g. 2001">
+      </div>
+      <div>
+        <label for="emp-pin">Time clock PIN</label>
+        <input type="text" id="emp-pin" placeholder="4 digits" maxlength="4">
+      </div>
+    </div>
     <div class="modal-actions">
-      <div class="left"></div>
+      <div><button class="link-danger" id="emp-delete" style="display:none;">Delete employee</button></div>
       <div>
         <button class="btn" id="emp-cancel">Cancel</button>
-        <button class="btn btn-primary" id="emp-save">Add</button>
+        <button class="btn btn-primary" id="emp-save">Save</button>
       </div>
     </div>
   </div>
@@ -153,10 +243,10 @@
 <!-- Shift edit modal -->
 <div class="overlay" id="shift-overlay">
   <div class="modal">
-    <h3 id="shift-modal-title">Edit shift</h3>
-    <label for="shift-role">Role</label>
+    <h3 id="shift-modal-title">Add shift</h3>
+    <label for="shift-role">Shift</label>
     <select id="shift-role"></select>
-    <div class="row2" id="time-fields">
+    <div class="row2">
       <div>
         <label for="shift-start">Start</label>
         <input type="time" id="shift-start" value="09:00">
@@ -166,11 +256,10 @@
         <input type="time" id="shift-end" value="17:00">
       </div>
     </div>
-    <label class="timeoff-toggle">
-      <input type="checkbox" id="shift-timeoff"> Mark as time off (whole day)
-    </label>
+    <label for="shift-break">Break (minutes)</label>
+    <input type="number" id="shift-break" value="0" min="0" step="5">
     <div class="modal-actions">
-      <div class="left"><button class="link-danger" id="shift-delete" style="display:none;">Remove shift</button></div>
+      <div><button class="link-danger" id="shift-delete" style="display:none;">Remove shift</button></div>
       <div>
         <button class="btn" id="shift-cancel">Cancel</button>
         <button class="btn btn-primary" id="shift-save">Save</button>
@@ -179,17 +268,54 @@
   </div>
 </div>
 
-<!-- Manage roles modal -->
-<div class="overlay" id="roles-overlay">
-  <div class="modal" style="width:380px;">
-    <h3>Manage roles</h3>
-    <div class="roles-list" id="roles-list"></div>
-    <button class="btn" id="add-role-btn" style="width:100%;">+ Add role</button>
+<!-- Time off modal -->
+<div class="overlay" id="timeoff-overlay">
+  <div class="modal">
+    <h3 id="timeoff-modal-title">Add time off</h3>
+    <label for="to-employee">Employee</label>
+    <select id="to-employee"></select>
+    <div class="row2">
+      <div>
+        <label for="to-from">From</label>
+        <input type="date" id="to-from">
+      </div>
+      <div>
+        <label for="to-to">To</label>
+        <input type="date" id="to-to">
+      </div>
+    </div>
+    <label for="to-reason">Reason (optional)</label>
+    <input type="text" id="to-reason" placeholder="e.g. Annual leave">
     <div class="modal-actions">
-      <div class="left"></div>
-      <div><button class="btn btn-primary" id="roles-done">Done</button></div>
+      <div><button class="link-danger" id="to-delete" style="display:none;">Remove time off</button></div>
+      <div>
+        <button class="btn" id="to-cancel">Cancel</button>
+        <button class="btn btn-primary" id="to-save">Save</button>
+      </div>
     </div>
   </div>
+</div>
+
+<!-- Download modal -->
+<div class="overlay" id="download-overlay">
+  <div class="modal">
+    <h3>Download this week</h3>
+    <div class="checkbox-row"><input type="checkbox" id="dl-hours" checked> <label style="margin:0;text-transform:none;font-weight:500;font-size:13.5px;">Include scheduled hours totals</label></div>
+    <div class="checkbox-row"><input type="checkbox" id="dl-filtered" checked> <label style="margin:0;text-transform:none;font-weight:500;font-size:13.5px;">Only include currently filtered employees/shifts</label></div>
+    <div class="modal-actions">
+      <div></div>
+      <div>
+        <button class="btn" id="dl-cancel">Cancel</button>
+        <button class="btn" id="dl-print">Print</button>
+        <button class="btn btn-primary" id="dl-csv">Download CSV</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="paste-banner" id="paste-banner">
+  <span>Shift copied — click a cell to paste</span>
+  <button id="paste-cancel">Cancel</button>
 </div>
 
 <script>
@@ -211,90 +337,211 @@
     .catch(() => { window.location.href = 'index.html'; });
 
   /* =================================================================
-     DATA LAYER
-     Everything below is stored in this browser's localStorage under
-     the key 'hallan_rota_v1'. This is a fully working, editable rota
-     maker right now. To make it sync across devices/users later, swap
-     `loadState()` / `saveState()` for real fetch()/POST calls against
-     a new backend (e.g. GET/PUT /api/rota/week/:weekLabel) — the shape
-     of `state` below is already designed to map cleanly onto that.
+     DATA LAYER — localStorage for now (see note in chat: swap loadState/
+     saveState for real fetch()/POST calls against a backend when ready;
+     the shape of `state` is already designed to map onto that cleanly).
+     This is a SEPARATE employee list from Staff Portal on purpose — the
+     Rota app owns its own employees/shifts/logins, no shared IDs.
      ================================================================= */
-  const STORAGE_KEY = 'hallan_rota_v1';
-  const DAYS = ['mon','tue','wed','thu','fri','sat','sun'];
+  const STORAGE_KEY = 'hallan_rota_v2';
 
-  const DEFAULT_ROLES = [
-    { id: 'cashier1', name: 'Cashier 1', bg: '#F0A868', fg: '#5A3B12' },
-    { id: 'cashier2', name: 'Cashier 2', bg: '#F6C38A', fg: '#5A3B12' },
-    { id: 'shopfloor', name: 'Shop Floor Manager', bg: '#EE8686', fg: '#5D1717' },
-    { id: 'warehouse', name: 'Warehouse', bg: '#B97A55', fg: '#3B230F' },
+  const DEFAULT_SHIFT_TYPES = [
+    { id: 'cashier1',  name: 'Cashier 1',           bg: '#F0A868', fg: '#5A3B12' },
+    { id: 'cashier2',  name: 'Cashier 2',           bg: '#F6C38A', fg: '#5A3B12' },
+    { id: 'shopfloor', name: 'Shop Floor',          bg: '#EE8686', fg: '#5D1717' },
+    { id: 'warehouse', name: 'Warehouse',           bg: '#B97A55', fg: '#3B230F' },
+    { id: 'facingup',  name: 'Facing Up',           bg: '#8FC1E3', fg: '#1B3C52' },
+    { id: 'manager',   name: 'Manager',             bg: '#A9D6A1', fg: '#234A1E' },
   ];
 
   function defaultState(){
     return {
-      weekLabel: 'Week of 02 – 08 Mar',
-      roles: DEFAULT_ROLES.map(r => ({...r})),
-      employees: [],       // { id, name, defaultRoleId }
-      shifts: {}           // shifts[employeeId][day] = { roleId, start, end, timeoff }
+      shiftTypes: DEFAULT_SHIFT_TYPES.map(r => ({...r})),
+      employees: [],   // { id, name, department, shiftTypeIds:[], loginId, pin }
+      shifts: {},      // shifts[employeeId][dateStr] = { shiftTypeId, start, end, breakMins }
+      timeOff: []       // [{ id, employeeId, from: dateStr, to: dateStr, reason }]
     };
   }
-
   function loadState(){
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return defaultState();
-      const parsed = JSON.parse(raw);
-      return { ...defaultState(), ...parsed };
-    } catch (e) {
-      return defaultState();
-    }
+      return { ...defaultState(), ...JSON.parse(raw) };
+    } catch (e) { return defaultState(); }
   }
   function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 
   let state = loadState();
-
-  function roleById(id){ return state.roles.find(r => r.id === id); }
+  function shiftTypeById(id){ return state.shiftTypes.find(r => r.id === id); }
+  function employeeById(id){ return state.employees.find(e => e.id === id); }
   function uid(prefix){ return prefix + '_' + Math.random().toString(36).slice(2, 9); }
 
-  function hoursBetween(start, end){
+  /* ---- date helpers ---- */
+  function toDateStr(d){ return d.toISOString().slice(0,10); }
+  function fromDateStr(s){ const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
+  function getMonday(d){
+    const date = new Date(d);
+    const day = date.getDay(); // 0 = Sun
+    const diff = day === 0 ? -6 : 1 - day;
+    date.setDate(date.getDate() + diff);
+    date.setHours(0,0,0,0);
+    return date;
+  }
+  function addDays(d, n){ const r = new Date(d); r.setDate(r.getDate()+n); return r; }
+  const DAY_NAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  let currentWeekStart = getMonday(new Date());
+
+  function weekDates(){
+    return Array.from({length:7}, (_, i) => addDays(currentWeekStart, i));
+  }
+  function weekLabelText(){
+    const dates = weekDates();
+    const first = dates[0], last = dates[6];
+    if (first.getMonth() === last.getMonth()) {
+      return `${first.getDate()} – ${last.getDate()} ${MONTH_NAMES[first.getMonth()]} ${first.getFullYear()}`;
+    }
+    return `${first.getDate()} ${MONTH_NAMES[first.getMonth()]} – ${last.getDate()} ${MONTH_NAMES[last.getMonth()]} ${last.getFullYear()}`;
+  }
+
+  function hoursMinusBreak(start, end, breakMins){
     const [sh, sm] = start.split(':').map(Number);
     const [eh, em] = end.split(':').map(Number);
     let mins = (eh * 60 + em) - (sh * 60 + sm);
-    if (mins < 0) mins += 24 * 60; // overnight shift
-    return mins;
+    if (mins < 0) mins += 24 * 60;
+    mins -= (breakMins || 0);
+    return Math.max(0, mins);
   }
   function fmtMins(mins){
     const h = Math.floor(mins / 60), m = mins % 60;
     return m ? `${h}h ${String(m).padStart(2,'0')}m` : `${h}h`;
   }
-
-  /* =================================================================
-     RENDER
-     ================================================================= */
   function initials(name){ return name.split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase(); }
 
-  function render(){
-    document.getElementById('week-label').value = state.weekLabel;
+  function timeOffFor(employeeId, dateStr){
+    return state.timeOff.find(t => t.employeeId === employeeId && dateStr >= t.from && dateStr <= t.to);
+  }
 
+  /* =================================================================
+     TAB SWITCHING
+     ================================================================= */
+  document.querySelectorAll('nav a[data-tab]').forEach(a => {
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      document.querySelectorAll('nav a[data-tab]').forEach(x => x.classList.remove('active'));
+      a.classList.add('active');
+      document.querySelectorAll('.tabpage').forEach(p => p.classList.remove('active'));
+      document.getElementById('tab-' + a.dataset.tab).classList.add('active');
+      if (a.dataset.tab === 'employees') renderEmployeesTab();
+      if (a.dataset.tab === 'shifts') renderShiftTypesTab();
+      if (a.dataset.tab === 'schedule') renderSchedule();
+    });
+  });
+
+  /* =================================================================
+     FILTERS
+     ================================================================= */
+  let filterShiftTypeIds = new Set();
+  let filterEmployeeIds = new Set();
+
+  function renderShiftFilterPanel(){
+    const panel = document.getElementById('shift-filter-panel');
+    panel.innerHTML = `<button class="clear" id="clear-shift-filter">Show all shifts</button>` +
+      state.shiftTypes.map(st => `
+        <label><input type="checkbox" data-filter-shift="${st.id}" ${filterShiftTypeIds.has(st.id) ? 'checked' : ''}>
+          <span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${st.bg};"></span> ${st.name}
+        </label>`).join('');
+    panel.querySelectorAll('[data-filter-shift]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        if (cb.checked) filterShiftTypeIds.add(cb.dataset.filterShift);
+        else filterShiftTypeIds.delete(cb.dataset.filterShift);
+        renderSchedule();
+      });
+    });
+    document.getElementById('clear-shift-filter').addEventListener('click', () => {
+      filterShiftTypeIds.clear(); renderShiftFilterPanel(); renderSchedule();
+    });
+  }
+  function renderEmpFilterPanel(){
+    const panel = document.getElementById('emp-filter-panel');
+    panel.innerHTML = `<button class="clear" id="clear-emp-filter">Show all employees</button>` +
+      state.employees.map(emp => `
+        <label><input type="checkbox" data-filter-emp="${emp.id}" ${filterEmployeeIds.has(emp.id) ? 'checked' : ''}> ${emp.name}</label>
+      `).join('') || '<div style="font-size:12.5px;color:var(--slate);padding:6px 4px;">No employees yet</div>';
+    panel.querySelectorAll('[data-filter-emp]').forEach(cb => {
+      cb.addEventListener('change', () => {
+        if (cb.checked) filterEmployeeIds.add(cb.dataset.filterEmp);
+        else filterEmployeeIds.delete(cb.dataset.filterEmp);
+        renderSchedule();
+      });
+    });
+    document.getElementById('clear-emp-filter').addEventListener('click', () => {
+      filterEmployeeIds.clear(); renderEmpFilterPanel(); renderSchedule();
+    });
+  }
+  function toggleFilterPanel(btnId, panelId, renderFn){
+    document.getElementById(btnId).addEventListener('click', (e) => {
+      e.stopPropagation();
+      renderFn();
+      document.querySelectorAll('.filter-panel').forEach(p => { if (p.id !== panelId) p.classList.remove('show'); });
+      document.getElementById(panelId).classList.toggle('show');
+    });
+  }
+  toggleFilterPanel('shift-filter-btn', 'shift-filter-panel', renderShiftFilterPanel);
+  toggleFilterPanel('emp-filter-btn', 'emp-filter-panel', renderEmpFilterPanel);
+  document.addEventListener('click', () => document.querySelectorAll('.filter-panel').forEach(p => p.classList.remove('show')));
+  document.querySelectorAll('.filter-panel').forEach(p => p.addEventListener('click', e => e.stopPropagation()));
+
+  function visibleEmployees(){
+    return state.employees.filter(emp => {
+      if (filterEmployeeIds.size && !filterEmployeeIds.has(emp.id)) return false;
+      if (filterShiftTypeIds.size && !emp.shiftTypeIds.some(id => filterShiftTypeIds.has(id))) return false;
+      return true;
+    });
+  }
+
+  /* =================================================================
+     SCHEDULE RENDER
+     ================================================================= */
+  function renderScheduleHead(){
+    const dates = weekDates();
+    const head = document.getElementById('schedule-head');
+    head.innerHTML = `<th class="namecol">Scheduled shifts</th>` +
+      dates.map(d => `<th>${DAY_NAMES[d.getDay()===0?6:d.getDay()-1]}<span class="sub">${d.getDate()} ${MONTH_NAMES[d.getMonth()]}</span></th>`).join('');
+  }
+
+  let clipboardShift = null;
+
+  function renderSchedule(){
+    document.getElementById('week-label').textContent = weekLabelText();
+    renderScheduleHead();
+    const dates = weekDates();
+    const dateStrs = dates.map(toDateStr);
     const body = document.getElementById('grid-body');
     body.innerHTML = '';
 
-    state.employees.forEach(emp => {
+    visibleEmployees().forEach(emp => {
       const empShifts = state.shifts[emp.id] || {};
       let totalMins = 0;
-      const dayCellsHtml = DAYS.map(day => {
-        const s = empShifts[day];
-        if (!s) return `<td class="daycell" data-emp="${emp.id}" data-day="${day}"><div class="empty-cell">+</div></td>`;
-        if (s.timeoff) {
-          return `<td class="daycell" data-emp="${emp.id}" data-day="${day}">
+
+      const cellsHtml = dateStrs.map(dateStr => {
+        const off = timeOffFor(emp.id, dateStr);
+        if (off) {
+          return `<td class="daycell" data-emp="${emp.id}" data-date="${dateStr}" data-timeoff="${off.id}">
             <div class="chip" style="background:var(--timeoff-bg);color:var(--timeoff-fg);">
-              <div class="t">All day</div><div class="l">Time off</div>
+              <div class="t">Time off</div><div class="l">${off.reason || ''}</div>
             </div></td>`;
         }
-        const role = roleById(s.roleId) || { name: 'Unassigned', bg: '#E7ECF0', fg: '#37424A' };
-        totalMins += hoursBetween(s.start, s.end);
-        return `<td class="daycell" data-emp="${emp.id}" data-day="${day}">
-          <div class="chip" style="background:${role.bg};color:${role.fg};">
-            <div class="t">${s.start}–${s.end}</div><div class="l">${role.name}</div>
+        const s = empShifts[dateStr];
+        if (!s) return `<td class="daycell" data-emp="${emp.id}" data-date="${dateStr}"><div class="empty-cell">+</div></td>`;
+        const st = shiftTypeById(s.shiftTypeId) || { name: 'Unassigned', bg: '#E7ECF0', fg: '#37424A' };
+        const mins = hoursMinusBreak(s.start, s.end, s.breakMins);
+        totalMins += mins;
+        const breakNote = s.breakMins ? ` · ${s.breakMins}m break` : '';
+        return `<td class="daycell" data-emp="${emp.id}" data-date="${dateStr}">
+          <div class="chip" style="background:${st.bg};color:${st.fg};">
+            <div class="t">${s.start}–${s.end}</div><div class="l">${st.name}${breakNote}</div>
           </div></td>`;
       }).join('');
 
@@ -303,32 +550,20 @@
         <td class="namecol">
           <div class="employee">
             <div class="initials">${initials(emp.name)}</div>
-            <div class="meta">
-              <div class="n">${emp.name}</div>
-              <div class="h">${fmtMins(totalMins)} scheduled</div>
-            </div>
-            <button class="remove" data-remove-emp="${emp.id}" title="Remove employee">✕</button>
+            <div class="meta"><div class="n">${emp.name}</div><div class="h">${fmtMins(totalMins)} scheduled</div></div>
           </div>
         </td>
-        ${dayCellsHtml}
-      `;
+        ${cellsHtml}`;
       body.appendChild(tr);
     });
 
-    // Add-employee row inside the table for convenience
-    const addRow = document.createElement('tr');
-    addRow.className = 'addrow';
-    addRow.innerHTML = `<td colspan="${DAYS.length + 1}"><button id="inline-add-emp">+ Add employee</button></td>`;
-    body.appendChild(addRow);
-
-    // Per-day totals footer
     const totalsRow = document.getElementById('totals-row');
     totalsRow.innerHTML = '<td class="namecol">Scheduled hours</td>';
-    DAYS.forEach(day => {
+    dateStrs.forEach(dateStr => {
       let mins = 0;
-      state.employees.forEach(emp => {
-        const s = (state.shifts[emp.id] || {})[day];
-        if (s && !s.timeoff) mins += hoursBetween(s.start, s.end);
+      visibleEmployees().forEach(emp => {
+        const s = (state.shifts[emp.id] || {})[dateStr];
+        if (s && !timeOffFor(emp.id, dateStr)) mins += hoursMinusBreak(s.start, s.end, s.breakMins);
       });
       const td = document.createElement('td');
       td.textContent = mins ? fmtMins(mins) : '—';
@@ -340,166 +575,334 @@
 
   function wireGridEvents(){
     document.querySelectorAll('.daycell').forEach(td => {
-      td.addEventListener('click', () => openShiftModal(td.dataset.emp, td.dataset.day));
-    });
-    document.querySelectorAll('[data-remove-emp]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (!confirm('Remove this employee from the rota?')) return;
-        state.employees = state.employees.filter(x => x.id !== btn.dataset.removeEmp);
-        delete state.shifts[btn.dataset.removeEmp];
-        saveState(); render();
+      td.addEventListener('click', (e) => {
+        const empId = td.dataset.emp, dateStr = td.dataset.date;
+
+        // Ctrl/Cmd+click on a filled shift cell = copy
+        if ((e.ctrlKey || e.metaKey) && state.shifts[empId] && state.shifts[empId][dateStr] && !td.dataset.timeoff) {
+          clipboardShift = { ...state.shifts[empId][dateStr] };
+          document.querySelectorAll('.daycell').forEach(x => x.classList.remove('copy-source'));
+          td.classList.add('copy-source');
+          document.getElementById('paste-banner').classList.add('show');
+          return;
+        }
+
+        // Time off cell -> edit that range
+        if (td.dataset.timeoff) { openTimeOffModal(td.dataset.timeoff); return; }
+
+        // Paste mode active -> paste into this cell
+        if (clipboardShift) {
+          assignShift(empId, dateStr, { ...clipboardShift });
+          clipboardShift = null;
+          document.getElementById('paste-banner').classList.remove('show');
+          document.querySelectorAll('.daycell').forEach(x => x.classList.remove('copy-source'));
+          return;
+        }
+
+        openShiftModal(empId, dateStr);
       });
     });
-    const inlineAdd = document.getElementById('inline-add-emp');
-    if (inlineAdd) inlineAdd.addEventListener('click', openEmployeeModal);
   }
 
-  document.getElementById('week-label').addEventListener('change', (e) => {
-    state.weekLabel = e.target.value; saveState();
+  document.getElementById('paste-cancel').addEventListener('click', () => {
+    clipboardShift = null;
+    document.getElementById('paste-banner').classList.remove('show');
+    document.querySelectorAll('.daycell').forEach(x => x.classList.remove('copy-source'));
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      clipboardShift = null;
+      document.getElementById('paste-banner').classList.remove('show');
+      document.querySelectorAll('.daycell').forEach(x => x.classList.remove('copy-source'));
+    }
   });
 
-  /* =================================================================
-     ADD EMPLOYEE MODAL
-     ================================================================= */
-  function populateRoleSelect(select, includeUnassigned){
-    select.innerHTML = (includeUnassigned ? '<option value="">Unassigned</option>' : '') +
-      state.roles.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+  // Cross-shift-type confirmation, shared by the shift modal AND paste.
+  function assignShift(empId, dateStr, shiftData){
+    const emp = employeeById(empId);
+    const st = shiftTypeById(shiftData.shiftTypeId);
+    if (emp && st && emp.shiftTypeIds.length && !emp.shiftTypeIds.includes(st.id)) {
+      const ok = confirm(`${emp.name} doesn't usually cover ${st.name} shifts. Assign this shift anyway?`);
+      if (!ok) return false;
+      emp.shiftTypeIds.push(st.id); // remembered for next time, per your request
+    }
+    if (!state.shifts[empId]) state.shifts[empId] = {};
+    state.shifts[empId][dateStr] = shiftData;
+    saveState(); renderSchedule();
+    return true;
   }
 
-  const employeeOverlay = document.getElementById('employee-overlay');
-  function openEmployeeModal(){
-    document.getElementById('emp-name').value = '';
-    populateRoleSelect(document.getElementById('emp-role'), false);
-    employeeOverlay.classList.add('show');
-    document.getElementById('emp-name').focus();
-  }
-  document.getElementById('add-employee-btn').addEventListener('click', openEmployeeModal);
-  document.getElementById('emp-cancel').addEventListener('click', () => employeeOverlay.classList.remove('show'));
-  document.getElementById('emp-save').addEventListener('click', () => {
-    const name = document.getElementById('emp-name').value.trim();
-    if (!name) return;
-    const defaultRoleId = document.getElementById('emp-role').value;
-    state.employees.push({ id: uid('emp'), name, defaultRoleId });
-    saveState(); render();
-    employeeOverlay.classList.remove('show');
+  /* ---- week navigation ---- */
+  document.getElementById('prev-week').addEventListener('click', () => { currentWeekStart = addDays(currentWeekStart, -7); renderSchedule(); });
+  document.getElementById('next-week').addEventListener('click', () => { currentWeekStart = addDays(currentWeekStart, 7); renderSchedule(); });
+  document.getElementById('today-btn').addEventListener('click', () => { currentWeekStart = getMonday(new Date()); renderSchedule(); });
+  document.getElementById('jump-date').addEventListener('change', (e) => {
+    if (!e.target.value) return;
+    currentWeekStart = getMonday(fromDateStr(e.target.value));
+    renderSchedule();
   });
 
   /* =================================================================
      SHIFT EDIT MODAL
      ================================================================= */
   const shiftOverlay = document.getElementById('shift-overlay');
-  let editingEmpId = null, editingDay = null;
+  let editingEmpId = null, editingDate = null;
 
-  function openShiftModal(empId, day){
-    editingEmpId = empId; editingDay = day;
-    const emp = state.employees.find(e => e.id === empId);
-    const existing = (state.shifts[empId] || {})[day];
+  function populateShiftTypeSelect(select){
+    select.innerHTML = state.shiftTypes.map(st => `<option value="${st.id}">${st.name}</option>`).join('');
+  }
+
+  function openShiftModal(empId, dateStr){
+    editingEmpId = empId; editingDate = dateStr;
+    const emp = employeeById(empId);
+    const existing = (state.shifts[empId] || {})[dateStr];
 
     document.getElementById('shift-modal-title').textContent = existing ? `Edit shift — ${emp.name}` : `Add shift — ${emp.name}`;
-    populateRoleSelect(document.getElementById('shift-role'), true);
+    populateShiftTypeSelect(document.getElementById('shift-role'));
 
-    const timeoffBox = document.getElementById('shift-timeoff');
-    const timeFields = document.getElementById('time-fields');
-
-    if (existing && existing.timeoff) {
-      timeoffBox.checked = true;
-      timeFields.style.display = 'none';
-      document.getElementById('shift-role').value = '';
-    } else if (existing) {
-      timeoffBox.checked = false;
-      timeFields.style.display = 'flex';
-      document.getElementById('shift-role').value = existing.roleId || '';
+    if (existing) {
+      document.getElementById('shift-role').value = existing.shiftTypeId;
       document.getElementById('shift-start').value = existing.start;
       document.getElementById('shift-end').value = existing.end;
+      document.getElementById('shift-break').value = existing.breakMins || 0;
     } else {
-      timeoffBox.checked = false;
-      timeFields.style.display = 'flex';
-      document.getElementById('shift-role').value = emp.defaultRoleId || '';
+      document.getElementById('shift-role').value = emp.shiftTypeIds[0] || state.shiftTypes[0].id;
       document.getElementById('shift-start').value = '09:00';
       document.getElementById('shift-end').value = '17:00';
+      document.getElementById('shift-break').value = 0;
     }
-
     document.getElementById('shift-delete').style.display = existing ? 'inline' : 'none';
     shiftOverlay.classList.add('show');
   }
-
-  document.getElementById('shift-timeoff').addEventListener('change', (e) => {
-    document.getElementById('time-fields').style.display = e.target.checked ? 'none' : 'flex';
-  });
   document.getElementById('shift-cancel').addEventListener('click', () => shiftOverlay.classList.remove('show'));
   document.getElementById('shift-delete').addEventListener('click', () => {
-    if (state.shifts[editingEmpId]) delete state.shifts[editingEmpId][editingDay];
-    saveState(); render();
+    if (state.shifts[editingEmpId]) delete state.shifts[editingEmpId][editingDate];
+    saveState(); renderSchedule();
     shiftOverlay.classList.remove('show');
   });
   document.getElementById('shift-save').addEventListener('click', () => {
-    if (!state.shifts[editingEmpId]) state.shifts[editingEmpId] = {};
-    const timeoff = document.getElementById('shift-timeoff').checked;
-    if (timeoff) {
-      state.shifts[editingEmpId][editingDay] = { timeoff: true };
-    } else {
-      const roleId = document.getElementById('shift-role').value;
-      const start = document.getElementById('shift-start').value;
-      const end = document.getElementById('shift-end').value;
-      state.shifts[editingEmpId][editingDay] = { timeoff: false, roleId, start, end };
-    }
-    saveState(); render();
-    shiftOverlay.classList.remove('show');
+    const shiftData = {
+      shiftTypeId: document.getElementById('shift-role').value,
+      start: document.getElementById('shift-start').value,
+      end: document.getElementById('shift-end').value,
+      breakMins: Number(document.getElementById('shift-break').value) || 0
+    };
+    if (assignShift(editingEmpId, editingDate, shiftData)) shiftOverlay.classList.remove('show');
   });
 
   /* =================================================================
-     MANAGE ROLES MODAL
+     TIME OFF MODAL (date range)
      ================================================================= */
-  const rolesOverlay = document.getElementById('roles-overlay');
-  const PALETTE = ['#F0A868','#F6C38A','#EE8686','#B97A55','#8FC1E3','#A9D6A1','#D6A9E3','#E3C5A9'];
+  const timeoffOverlay = document.getElementById('timeoff-overlay');
+  let editingTimeOffId = null;
 
-  function renderRolesList(){
-    const list = document.getElementById('roles-list');
-    list.innerHTML = state.roles.map(r => `
-      <div class="role-row" data-role="${r.id}">
-        <input type="color" value="${r.bg}" data-field="bg">
-        <input type="text" value="${r.name}" data-field="name">
-        <button class="del" data-role-delete="${r.id}">✕</button>
-      </div>
-    `).join('');
+  function openTimeOffModal(timeOffId){
+    editingTimeOffId = timeOffId || null;
+    const sel = document.getElementById('to-employee');
+    sel.innerHTML = state.employees.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
 
-    list.querySelectorAll('.role-row').forEach(row => {
-      const id = row.dataset.role;
-      row.querySelector('[data-field=name]').addEventListener('change', (e) => {
-        roleById(id).name = e.target.value; saveState(); render();
-      });
-      row.querySelector('[data-field=bg]').addEventListener('input', (e) => {
-        roleById(id).bg = e.target.value; saveState(); render();
+    if (timeOffId) {
+      const t = state.timeOff.find(x => x.id === timeOffId);
+      document.getElementById('timeoff-modal-title').textContent = 'Edit time off';
+      sel.value = t.employeeId;
+      document.getElementById('to-from').value = t.from;
+      document.getElementById('to-to').value = t.to;
+      document.getElementById('to-reason').value = t.reason || '';
+      document.getElementById('to-delete').style.display = 'inline';
+    } else {
+      document.getElementById('timeoff-modal-title').textContent = 'Add time off';
+      document.getElementById('to-from').value = toDateStr(new Date());
+      document.getElementById('to-to').value = toDateStr(new Date());
+      document.getElementById('to-reason').value = '';
+      document.getElementById('to-delete').style.display = 'none';
+    }
+    timeoffOverlay.classList.add('show');
+  }
+  document.getElementById('timeoff-btn').addEventListener('click', () => {
+    if (!state.employees.length) { alert('Add an employee first.'); return; }
+    openTimeOffModal(null);
+  });
+  document.getElementById('to-cancel').addEventListener('click', () => timeoffOverlay.classList.remove('show'));
+  document.getElementById('to-delete').addEventListener('click', () => {
+    state.timeOff = state.timeOff.filter(t => t.id !== editingTimeOffId);
+    saveState(); renderSchedule();
+    timeoffOverlay.classList.remove('show');
+  });
+  document.getElementById('to-save').addEventListener('click', () => {
+    const employeeId = document.getElementById('to-employee').value;
+    const from = document.getElementById('to-from').value;
+    const to = document.getElementById('to-to').value;
+    const reason = document.getElementById('to-reason').value.trim();
+    if (!from || !to || from > to) { alert('Check the from/to dates.'); return; }
+    if (editingTimeOffId) {
+      const t = state.timeOff.find(x => x.id === editingTimeOffId);
+      Object.assign(t, { employeeId, from, to, reason });
+    } else {
+      state.timeOff.push({ id: uid('to'), employeeId, from, to, reason });
+    }
+    saveState(); renderSchedule();
+    timeoffOverlay.classList.remove('show');
+  });
+
+  /* =================================================================
+     DOWNLOAD (CSV + Print)
+     ================================================================= */
+  const downloadOverlay = document.getElementById('download-overlay');
+  document.getElementById('download-btn').addEventListener('click', () => downloadOverlay.classList.add('show'));
+  document.getElementById('dl-cancel').addEventListener('click', () => downloadOverlay.classList.remove('show'));
+  document.getElementById('dl-print').addEventListener('click', () => { window.print(); });
+
+  document.getElementById('dl-csv').addEventListener('click', () => {
+    const includeHours = document.getElementById('dl-hours').checked;
+    const onlyFiltered = document.getElementById('dl-filtered').checked;
+    const emps = onlyFiltered ? visibleEmployees() : state.employees;
+    const dates = weekDates();
+    const rows = [['Employee','Department','Date','Day','Shift','Start','End','Break (min)', ...(includeHours ? ['Hours'] : [])]];
+
+    emps.forEach(emp => {
+      dates.forEach(d => {
+        const dateStr = toDateStr(d);
+        const off = timeOffFor(emp.id, dateStr);
+        const dayName = DAY_NAMES[d.getDay()===0?6:d.getDay()-1];
+        if (off) {
+          rows.push([emp.name, emp.department, dateStr, dayName, 'Time Off', '', '', '', ...(includeHours ? [''] : [])]);
+          return;
+        }
+        const s = (state.shifts[emp.id] || {})[dateStr];
+        if (!s) return;
+        const st = shiftTypeById(s.shiftTypeId);
+        const mins = hoursMinusBreak(s.start, s.end, s.breakMins);
+        rows.push([emp.name, emp.department, dateStr, dayName, st ? st.name : 'Unassigned', s.start, s.end, s.breakMins || 0, ...(includeHours ? [fmtMins(mins)] : [])]);
       });
     });
-    list.querySelectorAll('[data-role-delete]').forEach(btn => {
+
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `hallan-rota-${toDateStr(currentWeekStart)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    downloadOverlay.classList.remove('show');
+  });
+
+  /* =================================================================
+     EMPLOYEES TAB
+     ================================================================= */
+  function renderEmployeesTab(){
+    const body = document.getElementById('employees-body');
+    body.innerHTML = state.employees.map(emp => `
+      <tr>
+        <td>${emp.name}</td>
+        <td>${emp.department || '—'}</td>
+        <td>${emp.shiftTypeIds.map(id => {
+          const st = shiftTypeById(id);
+          return st ? `<span class="badge" style="background:${st.bg};color:${st.fg};">${st.name}</span>` : '';
+        }).join('') || '—'}</td>
+        <td>${emp.loginId || '—'}</td>
+        <td class="rowactions">
+          <button class="edit" data-edit-emp="${emp.id}">Edit</button>
+          <button class="del" data-del-emp="${emp.id}">Delete</button>
+        </td>
+      </tr>
+    `).join('') || `<tr><td colspan="5" style="color:var(--slate);">No employees yet — click "Add employee" to create the first one.</td></tr>`;
+
+    body.querySelectorAll('[data-edit-emp]').forEach(btn => btn.addEventListener('click', () => openEmployeeModal(btn.dataset.editEmp)));
+    body.querySelectorAll('[data-del-emp]').forEach(btn => btn.addEventListener('click', () => {
+      if (!confirm('Delete this employee? Their shifts and time off will also be removed.')) return;
+      state.employees = state.employees.filter(e => e.id !== btn.dataset.delEmp);
+      delete state.shifts[btn.dataset.delEmp];
+      state.timeOff = state.timeOff.filter(t => t.employeeId !== btn.dataset.delEmp);
+      saveState(); renderEmployeesTab();
+    }));
+  }
+
+  const employeeOverlay = document.getElementById('employee-overlay');
+  let editingEmployeeId = null;
+
+  function openEmployeeModal(empId){
+    editingEmployeeId = empId || null;
+    const emp = empId ? employeeById(empId) : null;
+
+    document.getElementById('employee-modal-title').textContent = emp ? 'Edit employee' : 'Add employee';
+    document.getElementById('emp-name').value = emp ? emp.name : '';
+    document.getElementById('emp-dept').value = emp ? emp.department : '';
+    document.getElementById('emp-login').value = emp ? emp.loginId : '';
+    document.getElementById('emp-pin').value = emp ? emp.pin : '';
+
+    const grid = document.getElementById('emp-shifts-checkgrid');
+    grid.innerHTML = state.shiftTypes.map(st => `
+      <label><input type="checkbox" value="${st.id}" ${emp && emp.shiftTypeIds.includes(st.id) ? 'checked' : ''}> ${st.name}</label>
+    `).join('');
+
+    document.getElementById('emp-delete').style.display = emp ? 'inline' : 'none';
+    employeeOverlay.classList.add('show');
+  }
+  document.getElementById('add-employee-btn').addEventListener('click', () => openEmployeeModal(null));
+  document.getElementById('emp-cancel').addEventListener('click', () => employeeOverlay.classList.remove('show'));
+  document.getElementById('emp-delete').addEventListener('click', () => {
+    if (!confirm('Delete this employee?')) return;
+    state.employees = state.employees.filter(e => e.id !== editingEmployeeId);
+    delete state.shifts[editingEmployeeId];
+    state.timeOff = state.timeOff.filter(t => t.employeeId !== editingEmployeeId);
+    saveState(); renderEmployeesTab();
+    employeeOverlay.classList.remove('show');
+  });
+  document.getElementById('emp-save').addEventListener('click', () => {
+    const name = document.getElementById('emp-name').value.trim();
+    if (!name) { alert('Enter a name.'); return; }
+    const department = document.getElementById('emp-dept').value.trim();
+    const loginId = document.getElementById('emp-login').value.trim();
+    const pin = document.getElementById('emp-pin').value.trim();
+    const shiftTypeIds = Array.from(document.querySelectorAll('#emp-shifts-checkgrid input:checked')).map(cb => cb.value);
+
+    if (editingEmployeeId) {
+      Object.assign(employeeById(editingEmployeeId), { name, department, loginId, pin, shiftTypeIds });
+    } else {
+      state.employees.push({ id: uid('emp'), name, department, loginId, pin, shiftTypeIds });
+    }
+    saveState(); renderEmployeesTab();
+    employeeOverlay.classList.remove('show');
+  });
+
+  /* =================================================================
+     SHIFTS TAB (shift types)
+     ================================================================= */
+  function renderShiftTypesTab(){
+    const list = document.getElementById('shifttypes-list');
+    list.innerHTML = state.shiftTypes.map(st => `
+      <div class="shifttype-row" data-shifttype="${st.id}">
+        <input type="color" value="${st.bg}" data-field="bg">
+        <input type="text" value="${st.name}" data-field="name">
+        <button class="del" data-shifttype-delete="${st.id}">✕</button>
+      </div>
+    `).join('');
+    list.querySelectorAll('.shifttype-row').forEach(row => {
+      const id = row.dataset.shifttype;
+      row.querySelector('[data-field=name]').addEventListener('change', (e) => { shiftTypeById(id).name = e.target.value; saveState(); renderShiftTypesTab(); });
+      row.querySelector('[data-field=bg]').addEventListener('input', (e) => { shiftTypeById(id).bg = e.target.value; saveState(); });
+    });
+    list.querySelectorAll('[data-shifttype-delete]').forEach(btn => {
       btn.addEventListener('click', () => {
-        const id = btn.dataset.roleDelete;
-        if (!confirm('Delete this role? Shifts using it will show as Unassigned.')) return;
-        state.roles = state.roles.filter(r => r.id !== id);
-        saveState(); renderRolesList(); render();
+        if (!confirm('Delete this shift type? Existing shifts using it will show as Unassigned.')) return;
+        state.shiftTypes = state.shiftTypes.filter(r => r.id !== btn.dataset.shifttypeDelete);
+        state.employees.forEach(e => { e.shiftTypeIds = e.shiftTypeIds.filter(id => id !== btn.dataset.shifttypeDelete); });
+        saveState(); renderShiftTypesTab();
       });
     });
   }
-
-  document.getElementById('manage-roles-btn').addEventListener('click', () => {
-    renderRolesList();
-    rolesOverlay.classList.add('show');
-  });
-  document.getElementById('roles-done').addEventListener('click', () => rolesOverlay.classList.remove('show'));
-  document.getElementById('add-role-btn').addEventListener('click', () => {
-    const color = PALETTE[state.roles.length % PALETTE.length];
-    state.roles.push({ id: uid('role'), name: 'New role', bg: color, fg: '#37424A' });
-    saveState(); renderRolesList(); render();
+  document.getElementById('add-shifttype-btn').addEventListener('click', () => {
+    const palette = ['#8FC1E3','#A9D6A1','#D6A9E3','#E3C5A9','#F0A868','#EE8686'];
+    state.shiftTypes.push({ id: uid('st'), name: 'New shift', bg: palette[state.shiftTypes.length % palette.length], fg: '#37424A' });
+    saveState(); renderShiftTypesTab();
   });
 
-  // Close any modal by clicking its overlay background
-  [employeeOverlay, shiftOverlay, rolesOverlay].forEach(ov => {
+  // Close modals by clicking the overlay background
+  [employeeOverlay, shiftOverlay, timeoffOverlay, downloadOverlay].forEach(ov => {
     ov.addEventListener('click', (e) => { if (e.target === ov) ov.classList.remove('show'); });
   });
 
-  render();
+  renderSchedule();
 </script>
 </body>
 </html>
