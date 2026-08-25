@@ -8,108 +8,87 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --nav-blue:#3E97E8;
-    --nav-blue-dark:#2E7FD1;
-    --ink:#37424A;
-    --slate:#6B7684;
-    --line:#E3E7EB;
-    --panel:#ffffff;
-    --page-bg:#F5F7F8;
-
-    /* shift-block palette, lifted from the Sling schedule screenshot */
-    --chip-timeoff-bg:#9AA3AC;
-    --chip-timeoff-fg:#ffffff;
-    --chip-shift-bg:#F0A868;
-    --chip-shift-fg:#5A3B12;
-    --chip-highlight-bg:#EE8686;
-    --chip-highlight-fg:#5D1717;
-    --chip-invoice-bg:#B97A55;
-    --chip-invoice-fg:#3B230F;
+    --nav-blue:#3E97E8; --nav-blue-dark:#2E7FD1;
+    --ink:#37424A; --slate:#6B7684; --line:#E3E7EB;
+    --page-bg:#F5F7F8; --timeoff-bg:#9AA3AC; --timeoff-fg:#ffffff;
   }
   *{box-sizing:border-box;}
   body{margin:0;font-family:'Inter',sans-serif;color:var(--ink);background:var(--page-bg);}
   a{color:inherit;text-decoration:none;}
-  button{font-family:inherit;}
+  button{font-family:inherit;cursor:pointer;}
+  input,select{font-family:inherit;}
 
-  /* ---- top nav ---- */
-  .topnav{
-    background:var(--nav-blue);color:#fff;display:flex;align-items:center;
-    gap:26px;padding:0 24px;height:56px;flex-wrap:wrap;
-  }
+  .topnav{background:var(--nav-blue);color:#fff;display:flex;align-items:center;gap:26px;padding:0 24px;height:56px;flex-wrap:wrap;}
   .topnav .brand{font-weight:700;letter-spacing:.4px;font-size:15px;margin-right:8px;display:flex;align-items:center;gap:8px;}
   .topnav .brand svg{width:20px;height:20px;}
   .topnav nav{display:flex;gap:22px;flex:1;}
-  .topnav nav a{
-    font-size:13.5px;font-weight:600;letter-spacing:.3px;color:rgba(255,255,255,.85);
-    padding:18px 2px;border-bottom:2px solid transparent;
-  }
+  .topnav nav a{font-size:13.5px;font-weight:600;letter-spacing:.3px;color:rgba(255,255,255,.85);padding:18px 2px;border-bottom:2px solid transparent;}
   .topnav nav a.active{color:#fff;border-bottom-color:#fff;}
   .topnav nav a:hover{color:#fff;}
-  .topnav .right{display:flex;align-items:center;gap:16px;font-size:13px;color:rgba(255,255,255,.9);}
-  .avatar-pill{
-    width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.25);
-    display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;
-  }
+  .topnav .right{display:flex;align-items:center;gap:14px;font-size:13px;color:rgba(255,255,255,.9);}
+  .avatar-pill{width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;}
+  .logout-btn{background:none;border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:6px;padding:6px 12px;font-size:12.5px;}
 
-  /* ---- toolbar ---- */
-  .toolbar{
-    display:flex;align-items:center;gap:12px;flex-wrap:wrap;
-    background:#fff;border-bottom:1px solid var(--line);padding:12px 24px;
-  }
-  .toolbar .weeknav{display:flex;align-items:center;gap:8px;}
-  .toolbar button.navbtn{
-    width:30px;height:30px;border:1px solid var(--line);background:#fff;border-radius:6px;cursor:pointer;color:var(--slate);
-  }
-  .toolbar .weeklabel{font-weight:700;color:var(--nav-blue);font-size:15px;min-width:110px;text-align:center;}
-  .toolbar .todaybtn{
-    border:1px solid var(--line);background:#fff;border-radius:6px;padding:7px 14px;font-size:13px;color:var(--ink);cursor:pointer;
-  }
+  .toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#fff;border-bottom:1px solid var(--line);padding:12px 24px;}
+  .weeklabel{font-weight:700;color:var(--nav-blue);font-size:15px;border:none;background:none;font-family:inherit;padding:4px 6px;border-radius:6px;}
+  .weeklabel:focus{outline:1px solid var(--nav-blue);}
   .toolbar .spacer{flex:1;}
-  .toolbar .filter-chip{
-    border:1px solid var(--line);background:#fff;border-radius:6px;padding:7px 14px;font-size:13px;
-    color:var(--slate);display:flex;align-items:center;gap:6px;
-  }
-  .toolbar .create-shift{
-    background:var(--nav-blue);color:#fff;border:none;border-radius:6px;padding:9px 18px;
-    font-size:13.5px;font-weight:600;cursor:pointer;
-  }
-  .toolbar .create-shift:hover{background:var(--nav-blue-dark);}
+  .btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:9px 16px;font-size:13.5px;color:var(--ink);}
+  .btn:hover{border-color:#c7cfd6;}
+  .btn-primary{background:var(--nav-blue);color:#fff;border:none;font-weight:600;}
+  .btn-primary:hover{background:var(--nav-blue-dark);}
 
-  /* ---- schedule grid ---- */
   .gridwrap{overflow-x:auto;background:#fff;}
-  table.schedule{border-collapse:collapse;width:100%;min-width:980px;}
+  table.schedule{border-collapse:collapse;width:100%;min-width:1040px;}
   table.schedule th, table.schedule td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);}
-  table.schedule thead th{
-    background:#FAFBFC;color:var(--slate);font-size:11.5px;letter-spacing:.6px;text-transform:uppercase;
-    padding:12px 10px;text-align:left;font-weight:700;position:sticky;top:0;
-  }
-  table.schedule thead th.namecol{position:sticky;left:0;z-index:2;background:#FAFBFC;min-width:200px;}
-  table.schedule tbody td.namecol{
-    position:sticky;left:0;background:#fff;z-index:1;padding:12px 14px;min-width:200px;
-  }
+  table.schedule thead th{background:#FAFBFC;color:var(--slate);font-size:11.5px;letter-spacing:.6px;text-transform:uppercase;padding:12px 10px;text-align:left;font-weight:700;}
+  table.schedule thead th.namecol{position:sticky;left:0;z-index:2;background:#FAFBFC;min-width:220px;}
+  table.schedule tbody td.namecol{position:sticky;left:0;background:#fff;z-index:1;padding:10px 14px;min-width:220px;}
   .employee{display:flex;align-items:center;gap:10px;}
-  .employee .initials{
-    width:32px;height:32px;border-radius:50%;background:#E7ECF0;color:var(--slate);
-    display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none;
-  }
+  .employee .initials{width:32px;height:32px;border-radius:50%;background:#E7ECF0;color:var(--slate);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none;}
   .employee .meta .n{font-size:13.5px;font-weight:600;color:var(--ink);}
   .employee .meta .h{font-size:11.5px;color:var(--slate);margin-top:1px;}
+  .employee .remove{margin-left:auto;background:none;border:none;color:#C4433F;font-size:16px;line-height:1;opacity:.5;flex:none;}
+  .employee .remove:hover{opacity:1;}
 
-  table.schedule td.daycell{padding:6px;vertical-align:top;min-width:130px;height:64px;}
-  .chip{
-    border-radius:5px;padding:6px 8px;font-size:11.5px;line-height:1.35;cursor:pointer;
-  }
+  table.schedule td.daycell{padding:6px;vertical-align:top;min-width:140px;height:66px;cursor:pointer;}
+  table.schedule td.daycell:hover{background:#F8FAFB;}
+  .chip{border-radius:5px;padding:6px 8px;font-size:11.5px;line-height:1.35;}
   .chip .t{font-weight:700;}
   .chip .l{opacity:.9;}
-  .chip.timeoff{background:var(--chip-timeoff-bg);color:var(--chip-timeoff-fg);}
-  .chip.shift{background:var(--chip-shift-bg);color:var(--chip-shift-fg);}
-  .chip.highlight{background:var(--chip-highlight-bg);color:var(--chip-highlight-fg);}
-  .chip.invoice{background:var(--chip-invoice-bg);color:var(--chip-invoice-fg);}
+  .empty-cell{display:flex;align-items:center;justify-content:center;height:100%;color:#C7CFD6;font-size:18px;}
 
-  tfoot td{
-    background:#FAFBFC;font-size:11.5px;color:var(--slate);font-weight:700;padding:10px;
-  }
+  tfoot td{background:#FAFBFC;font-size:11.5px;color:var(--slate);font-weight:700;padding:10px;}
   tfoot td.namecol{position:sticky;left:0;background:#FAFBFC;}
+
+  .addrow td{padding:14px;text-align:left;}
+  .addrow button{color:var(--nav-blue);background:none;border:none;font-size:13.5px;font-weight:600;padding:0;}
+  .addrow button:hover{text-decoration:underline;}
+
+  /* ---- modal ---- */
+  .overlay{position:fixed;inset:0;background:rgba(20,30,40,.35);display:none;align-items:center;justify-content:center;z-index:50;}
+  .overlay.show{display:flex;}
+  .modal{background:#fff;border-radius:10px;padding:26px 26px 22px;width:360px;max-width:92vw;box-shadow:0 20px 50px -20px rgba(20,30,40,.4);}
+  .modal h3{margin:0 0 18px;font-size:17px;}
+  .modal label{display:block;font-size:11.5px;font-weight:700;letter-spacing:.5px;color:#8992A0;text-transform:uppercase;margin:14px 0 6px;}
+  .modal label:first-of-type{margin-top:0;}
+  .modal input[type=text], .modal input[type=time], .modal select{
+    width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:6px;font-size:14px;color:var(--ink);
+  }
+  .modal .row2{display:flex;gap:10px;}
+  .modal .row2 > div{flex:1;}
+  .modal .timeoff-toggle{display:flex;align-items:center;gap:8px;margin-top:16px;font-size:13.5px;}
+  .modal-actions{display:flex;justify-content:space-between;align-items:center;margin-top:22px;gap:8px;}
+  .modal-actions .left{display:flex;gap:8px;}
+  .link-danger{background:none;border:none;color:#C4433F;font-size:13px;font-weight:600;padding:8px 0;}
+  .link-danger:hover{text-decoration:underline;}
+
+  .roles-list{display:flex;flex-direction:column;gap:8px;margin-bottom:16px;max-height:260px;overflow-y:auto;}
+  .role-row{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:6px;padding:8px 10px;}
+  .role-row input[type=text]{border:none;font-size:13.5px;flex:1;padding:2px;}
+  .role-row input[type=color]{width:26px;height:26px;border:none;padding:0;border-radius:5px;flex:none;}
+  .role-row .del{background:none;border:none;color:#C4433F;opacity:.5;font-size:15px;}
+  .role-row .del:hover{opacity:1;}
 </style>
 </head>
 <body>
@@ -123,32 +102,21 @@
     ROTA
   </div>
   <nav>
-    <a href="#">Dashboard</a>
     <a href="#" class="active">Schedule</a>
-    <a href="#">Tasks</a>
-    <a href="#">Messages</a>
-    <a href="#">Newsfeed</a>
-    <a href="#">Reports</a>
     <a href="../timesheet/">Time Clock</a>
   </nav>
   <div class="right">
     <span id="user-name">Hallan Cash &amp; Carry</span>
-    <button id="logout-btn" style="background:none;border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:6px;padding:6px 12px;font-size:12.5px;cursor:pointer;">Log out</button>
+    <button class="logout-btn" id="logout-btn">Log out</button>
     <div class="avatar-pill" id="avatar-pill">HC</div>
   </div>
 </div>
 
 <div class="toolbar">
-  <div class="weeknav">
-    <button class="navbtn" id="prev-week">&lsaquo;</button>
-    <div class="weeklabel" id="week-label">02 – 08 Mar</div>
-    <button class="navbtn" id="next-week">&rsaquo;</button>
-  </div>
-  <button class="todaybtn">Today</button>
+  <input class="weeklabel" id="week-label" value="Week of 02 – 08 Mar" />
   <div class="spacer"></div>
-  <div class="filter-chip">📍 All departments</div>
-  <div class="filter-chip">👤 All staff</div>
-  <button class="create-shift">+ Create shift</button>
+  <button class="btn" id="manage-roles-btn">Manage Roles</button>
+  <button class="btn btn-primary" id="add-employee-btn">+ Add Employee</button>
 </div>
 
 <div class="gridwrap">
@@ -156,99 +124,382 @@
     <thead>
       <tr>
         <th class="namecol">Scheduled shifts</th>
-        <th>Mon 2</th><th>Tue 3</th><th>Wed 4</th><th>Thu 5</th><th>Fri 6</th><th>Sat 7</th><th>Sun 8</th>
+        <th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th><th>Sun</th>
       </tr>
     </thead>
     <tbody id="grid-body"></tbody>
-    <tfoot>
-      <tr id="totals-row">
-        <td class="namecol">Scheduled hours</td>
-      </tr>
-    </tfoot>
+    <tfoot><tr id="totals-row"><td class="namecol">Scheduled hours</td></tr></tfoot>
   </table>
 </div>
 
+<!-- Add employee modal -->
+<div class="overlay" id="employee-overlay">
+  <div class="modal">
+    <h3>Add employee</h3>
+    <label for="emp-name">Name</label>
+    <input type="text" id="emp-name" placeholder="e.g. Priya Nair">
+    <label for="emp-role">Default role</label>
+    <select id="emp-role"></select>
+    <div class="modal-actions">
+      <div class="left"></div>
+      <div>
+        <button class="btn" id="emp-cancel">Cancel</button>
+        <button class="btn btn-primary" id="emp-save">Add</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Shift edit modal -->
+<div class="overlay" id="shift-overlay">
+  <div class="modal">
+    <h3 id="shift-modal-title">Edit shift</h3>
+    <label for="shift-role">Role</label>
+    <select id="shift-role"></select>
+    <div class="row2" id="time-fields">
+      <div>
+        <label for="shift-start">Start</label>
+        <input type="time" id="shift-start" value="09:00">
+      </div>
+      <div>
+        <label for="shift-end">End</label>
+        <input type="time" id="shift-end" value="17:00">
+      </div>
+    </div>
+    <label class="timeoff-toggle">
+      <input type="checkbox" id="shift-timeoff"> Mark as time off (whole day)
+    </label>
+    <div class="modal-actions">
+      <div class="left"><button class="link-danger" id="shift-delete" style="display:none;">Remove shift</button></div>
+      <div>
+        <button class="btn" id="shift-cancel">Cancel</button>
+        <button class="btn btn-primary" id="shift-save">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Manage roles modal -->
+<div class="overlay" id="roles-overlay">
+  <div class="modal" style="width:380px;">
+    <h3>Manage roles</h3>
+    <div class="roles-list" id="roles-list"></div>
+    <button class="btn" id="add-role-btn" style="width:100%;">+ Add role</button>
+    <div class="modal-actions">
+      <div class="left"></div>
+      <div><button class="btn btn-primary" id="roles-done">Done</button></div>
+    </div>
+  </div>
+</div>
+
 <script>
-  // ---------------------------------------------------------------
-  // Auth guard — reuses the same JWT the Staff Portal login issues via
-  // /api/staff/login (see rota/index.html). No separate rota login exists
-  // on the backend; this page just requires that token to be present.
-  // ---------------------------------------------------------------
-  const API_BASE = 'https://hallan-picking-backend.onrender.com'; // same value as in rota/index.html
+  /* =================================================================
+     AUTH GUARD — reuses the Staff Portal login (see rota/index.html).
+     ================================================================= */
+  const API_BASE = 'https://hallan-picking-backend.onrender.com';
   const token = localStorage.getItem('rota_token');
-  if (!token) {
-    window.location.href = 'index.html';
-  }
+  if (!token) window.location.href = 'index.html';
   document.getElementById('user-name').textContent = localStorage.getItem('rota_name') || 'Hallan Cash & Carry';
   const initialsFromName = (localStorage.getItem('rota_name') || 'HC').split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase();
   document.getElementById('avatar-pill').textContent = initialsFromName;
   document.getElementById('logout-btn').addEventListener('click', () => {
-    localStorage.removeItem('rota_token');
-    localStorage.removeItem('rota_name');
-    localStorage.removeItem('rota_role');
+    localStorage.removeItem('rota_token'); localStorage.removeItem('rota_name'); localStorage.removeItem('rota_role');
     window.location.href = 'index.html';
   });
-  // Optional: confirm the token is still valid by calling /api/staff/me.
-  // If it's expired, bounce back to login rather than showing a broken page.
   fetch(`${API_BASE}/api/staff/me`, { headers: { Authorization: `Bearer ${token}` } })
     .then(r => { if (!r.ok) throw new Error('expired'); })
     .catch(() => { window.location.href = 'index.html'; });
 
-  // ---------------------------------------------------------------
-  // Static mock data for now — swap `employees` below for a real fetch
-  // to your rota backend, e.g. GET /api/rota/weeks/:weekStart
-  // ---------------------------------------------------------------
-  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  /* =================================================================
+     DATA LAYER
+     Everything below is stored in this browser's localStorage under
+     the key 'hallan_rota_v1'. This is a fully working, editable rota
+     maker right now. To make it sync across devices/users later, swap
+     `loadState()` / `saveState()` for real fetch()/POST calls against
+     a new backend (e.g. GET/PUT /api/rota/week/:weekLabel) — the shape
+     of `state` below is already designed to map cleanly onto that.
+     ================================================================= */
+  const STORAGE_KEY = 'hallan_rota_v1';
+  const DAYS = ['mon','tue','wed','thu','fri','sat','sun'];
 
-  const employees = [
-    { name:'Aditi Rao',      role:'Cashier',        hours:'20h', shifts:[null,{t:'9:00 AM–1:30 PM',l:'Facing Up',type:'shift'},{t:'2:30 PM–7:00 PM',l:'Cashier 2 PM',type:'shift'},null,{t:'2:00 PM–7:00 PM',l:'Cashier 1 PM',type:'shift'},{t:'8:00 AM–2:00 PM',l:'Cashier 1 AM',type:'shift'},null] },
-    { name:'Ben Coley',      role:'Warehouse',      hours:'0h',  shifts:[null,{t:'All day',l:'Time off',type:'timeoff'},{t:'All day',l:'Time off',type:'timeoff'},{t:'All day',l:'Time off',type:'timeoff'},null,null,{t:'All day',l:'Time off',type:'timeoff'}] },
-    { name:'Priya Nair',     role:'Facing Up',      hours:'23h', shifts:[{t:'9:00 AM–2:00 PM',l:'Facing Up',type:'highlight'},{t:'2:00 PM–7:00 PM',l:'Cashier 1 PM',type:'shift'},{t:'All day',l:'Time off',type:'timeoff'},{t:'All day',l:'Time off',type:'timeoff'},{t:'8:00 AM–2:00 PM',l:'Cashier 1 AM',type:'shift'},{t:'11:00 AM–7:00 PM',l:'Cashier 3',type:'shift'},{t:'All day',l:'Time off',type:'timeoff'}] },
-    { name:'Grace Oduya',    role:'Cashier',        hours:'29h', shifts:[{t:'2:30 PM–7:00 PM',l:'Cashier 2 PM',type:'shift'},{t:'All day',l:'Time off',type:'timeoff'},{t:'9:00 AM–2:00 PM',l:'Facing Up',type:'highlight'},{t:'2:00 PM–7:00 PM',l:'Cashier 1 PM',type:'shift'},{t:'12:00 PM–7:00 PM',l:'Cashier 3',type:'shift'},{t:'2:30 PM–7:00 PM',l:'Cashier 2 PM',type:'shift'},{t:'9:00 AM–1:00 PM',l:'Cashier 1 AM',type:'shift'}] },
-    { name:'Tomasz Wojcik',  role:'Invoicing',      hours:'53h', shifts:[{t:'All day',l:'Time off',type:'timeoff'},{t:'8:00 AM–5:00 PM',l:'Invoicing',type:'invoice'},{t:'8:00 AM–7:00 PM',l:'Invoicing',type:'invoice'},{t:'8:00 AM–7:00 PM',l:'Invoicing',type:'invoice'},{t:'10:00 AM–7:00 PM',l:'Invoicing',type:'invoice'},{t:'8:00 AM–7:00 PM',l:'Invoicing',type:'invoice'},{t:'9:00 AM–5:00 PM',l:'Invoicing',type:'invoice'}] },
-    { name:'Simran Kaur',    role:'Warehouse',      hours:'0h',  shifts:[null,null,null,null,null,null,null] },
+  const DEFAULT_ROLES = [
+    { id: 'cashier1', name: 'Cashier 1', bg: '#F0A868', fg: '#5A3B12' },
+    { id: 'cashier2', name: 'Cashier 2', bg: '#F6C38A', fg: '#5A3B12' },
+    { id: 'shopfloor', name: 'Shop Floor Manager', bg: '#EE8686', fg: '#5D1717' },
+    { id: 'warehouse', name: 'Warehouse', bg: '#B97A55', fg: '#3B230F' },
   ];
 
-  function initials(name){
-    return name.split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase();
+  function defaultState(){
+    return {
+      weekLabel: 'Week of 02 – 08 Mar',
+      roles: DEFAULT_ROLES.map(r => ({...r})),
+      employees: [],       // { id, name, defaultRoleId }
+      shifts: {}           // shifts[employeeId][day] = { roleId, start, end, timeoff }
+    };
   }
 
-  function chipHtml(shift){
-    if (!shift) return '';
-    return `<div class="chip ${shift.type}"><div class="t">${shift.t}</div><div class="l">${shift.l}</div></div>`;
+  function loadState(){
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return defaultState();
+      const parsed = JSON.parse(raw);
+      return { ...defaultState(), ...parsed };
+    } catch (e) {
+      return defaultState();
+    }
+  }
+  function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+  let state = loadState();
+
+  function roleById(id){ return state.roles.find(r => r.id === id); }
+  function uid(prefix){ return prefix + '_' + Math.random().toString(36).slice(2, 9); }
+
+  function hoursBetween(start, end){
+    const [sh, sm] = start.split(':').map(Number);
+    const [eh, em] = end.split(':').map(Number);
+    let mins = (eh * 60 + em) - (sh * 60 + sm);
+    if (mins < 0) mins += 24 * 60; // overnight shift
+    return mins;
+  }
+  function fmtMins(mins){
+    const h = Math.floor(mins / 60), m = mins % 60;
+    return m ? `${h}h ${String(m).padStart(2,'0')}m` : `${h}h`;
   }
 
-  const body = document.getElementById('grid-body');
-  employees.forEach(emp => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td class="namecol">
-        <div class="employee">
-          <div class="initials">${initials(emp.name)}</div>
-          <div class="meta">
-            <div class="n">${emp.name}</div>
-            <div class="h">${emp.hours} scheduled</div>
+  /* =================================================================
+     RENDER
+     ================================================================= */
+  function initials(name){ return name.split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase(); }
+
+  function render(){
+    document.getElementById('week-label').value = state.weekLabel;
+
+    const body = document.getElementById('grid-body');
+    body.innerHTML = '';
+
+    state.employees.forEach(emp => {
+      const empShifts = state.shifts[emp.id] || {};
+      let totalMins = 0;
+      const dayCellsHtml = DAYS.map(day => {
+        const s = empShifts[day];
+        if (!s) return `<td class="daycell" data-emp="${emp.id}" data-day="${day}"><div class="empty-cell">+</div></td>`;
+        if (s.timeoff) {
+          return `<td class="daycell" data-emp="${emp.id}" data-day="${day}">
+            <div class="chip" style="background:var(--timeoff-bg);color:var(--timeoff-fg);">
+              <div class="t">All day</div><div class="l">Time off</div>
+            </div></td>`;
+        }
+        const role = roleById(s.roleId) || { name: 'Unassigned', bg: '#E7ECF0', fg: '#37424A' };
+        totalMins += hoursBetween(s.start, s.end);
+        return `<td class="daycell" data-emp="${emp.id}" data-day="${day}">
+          <div class="chip" style="background:${role.bg};color:${role.fg};">
+            <div class="t">${s.start}–${s.end}</div><div class="l">${role.name}</div>
+          </div></td>`;
+      }).join('');
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="namecol">
+          <div class="employee">
+            <div class="initials">${initials(emp.name)}</div>
+            <div class="meta">
+              <div class="n">${emp.name}</div>
+              <div class="h">${fmtMins(totalMins)} scheduled</div>
+            </div>
+            <button class="remove" data-remove-emp="${emp.id}" title="Remove employee">✕</button>
           </div>
-        </div>
-      </td>
-      ${emp.shifts.map(s => `<td class="daycell">${chipHtml(s)}</td>`).join('')}
-    `;
-    body.appendChild(tr);
+        </td>
+        ${dayCellsHtml}
+      `;
+      body.appendChild(tr);
+    });
+
+    // Add-employee row inside the table for convenience
+    const addRow = document.createElement('tr');
+    addRow.className = 'addrow';
+    addRow.innerHTML = `<td colspan="${DAYS.length + 1}"><button id="inline-add-emp">+ Add employee</button></td>`;
+    body.appendChild(addRow);
+
+    // Per-day totals footer
+    const totalsRow = document.getElementById('totals-row');
+    totalsRow.innerHTML = '<td class="namecol">Scheduled hours</td>';
+    DAYS.forEach(day => {
+      let mins = 0;
+      state.employees.forEach(emp => {
+        const s = (state.shifts[emp.id] || {})[day];
+        if (s && !s.timeoff) mins += hoursBetween(s.start, s.end);
+      });
+      const td = document.createElement('td');
+      td.textContent = mins ? fmtMins(mins) : '—';
+      totalsRow.appendChild(td);
+    });
+
+    wireGridEvents();
+  }
+
+  function wireGridEvents(){
+    document.querySelectorAll('.daycell').forEach(td => {
+      td.addEventListener('click', () => openShiftModal(td.dataset.emp, td.dataset.day));
+    });
+    document.querySelectorAll('[data-remove-emp]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!confirm('Remove this employee from the rota?')) return;
+        state.employees = state.employees.filter(x => x.id !== btn.dataset.removeEmp);
+        delete state.shifts[btn.dataset.removeEmp];
+        saveState(); render();
+      });
+    });
+    const inlineAdd = document.getElementById('inline-add-emp');
+    if (inlineAdd) inlineAdd.addEventListener('click', openEmployeeModal);
+  }
+
+  document.getElementById('week-label').addEventListener('change', (e) => {
+    state.weekLabel = e.target.value; saveState();
   });
 
-  // Simple non-functional per-day totals row for visual completeness
-  const totalsRow = document.getElementById('totals-row');
-  const dailyTotals = ['14h 30m','22h 45m','25h 30m','20h 15m','25h','27h 30m','11h'];
-  dailyTotals.forEach(t => {
-    const td = document.createElement('td');
-    td.textContent = t;
-    totalsRow.appendChild(td);
+  /* =================================================================
+     ADD EMPLOYEE MODAL
+     ================================================================= */
+  function populateRoleSelect(select, includeUnassigned){
+    select.innerHTML = (includeUnassigned ? '<option value="">Unassigned</option>' : '') +
+      state.roles.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
+  }
+
+  const employeeOverlay = document.getElementById('employee-overlay');
+  function openEmployeeModal(){
+    document.getElementById('emp-name').value = '';
+    populateRoleSelect(document.getElementById('emp-role'), false);
+    employeeOverlay.classList.add('show');
+    document.getElementById('emp-name').focus();
+  }
+  document.getElementById('add-employee-btn').addEventListener('click', openEmployeeModal);
+  document.getElementById('emp-cancel').addEventListener('click', () => employeeOverlay.classList.remove('show'));
+  document.getElementById('emp-save').addEventListener('click', () => {
+    const name = document.getElementById('emp-name').value.trim();
+    if (!name) return;
+    const defaultRoleId = document.getElementById('emp-role').value;
+    state.employees.push({ id: uid('emp'), name, defaultRoleId });
+    saveState(); render();
+    employeeOverlay.classList.remove('show');
   });
 
-  // Prev/Next week buttons are visual-only placeholders here — wire them to
-  // reload this page with a ?week=YYYY-MM-DD param against the real backend.
-  document.getElementById('prev-week').addEventListener('click', () => {});
-  document.getElementById('next-week').addEventListener('click', () => {});
+  /* =================================================================
+     SHIFT EDIT MODAL
+     ================================================================= */
+  const shiftOverlay = document.getElementById('shift-overlay');
+  let editingEmpId = null, editingDay = null;
+
+  function openShiftModal(empId, day){
+    editingEmpId = empId; editingDay = day;
+    const emp = state.employees.find(e => e.id === empId);
+    const existing = (state.shifts[empId] || {})[day];
+
+    document.getElementById('shift-modal-title').textContent = existing ? `Edit shift — ${emp.name}` : `Add shift — ${emp.name}`;
+    populateRoleSelect(document.getElementById('shift-role'), true);
+
+    const timeoffBox = document.getElementById('shift-timeoff');
+    const timeFields = document.getElementById('time-fields');
+
+    if (existing && existing.timeoff) {
+      timeoffBox.checked = true;
+      timeFields.style.display = 'none';
+      document.getElementById('shift-role').value = '';
+    } else if (existing) {
+      timeoffBox.checked = false;
+      timeFields.style.display = 'flex';
+      document.getElementById('shift-role').value = existing.roleId || '';
+      document.getElementById('shift-start').value = existing.start;
+      document.getElementById('shift-end').value = existing.end;
+    } else {
+      timeoffBox.checked = false;
+      timeFields.style.display = 'flex';
+      document.getElementById('shift-role').value = emp.defaultRoleId || '';
+      document.getElementById('shift-start').value = '09:00';
+      document.getElementById('shift-end').value = '17:00';
+    }
+
+    document.getElementById('shift-delete').style.display = existing ? 'inline' : 'none';
+    shiftOverlay.classList.add('show');
+  }
+
+  document.getElementById('shift-timeoff').addEventListener('change', (e) => {
+    document.getElementById('time-fields').style.display = e.target.checked ? 'none' : 'flex';
+  });
+  document.getElementById('shift-cancel').addEventListener('click', () => shiftOverlay.classList.remove('show'));
+  document.getElementById('shift-delete').addEventListener('click', () => {
+    if (state.shifts[editingEmpId]) delete state.shifts[editingEmpId][editingDay];
+    saveState(); render();
+    shiftOverlay.classList.remove('show');
+  });
+  document.getElementById('shift-save').addEventListener('click', () => {
+    if (!state.shifts[editingEmpId]) state.shifts[editingEmpId] = {};
+    const timeoff = document.getElementById('shift-timeoff').checked;
+    if (timeoff) {
+      state.shifts[editingEmpId][editingDay] = { timeoff: true };
+    } else {
+      const roleId = document.getElementById('shift-role').value;
+      const start = document.getElementById('shift-start').value;
+      const end = document.getElementById('shift-end').value;
+      state.shifts[editingEmpId][editingDay] = { timeoff: false, roleId, start, end };
+    }
+    saveState(); render();
+    shiftOverlay.classList.remove('show');
+  });
+
+  /* =================================================================
+     MANAGE ROLES MODAL
+     ================================================================= */
+  const rolesOverlay = document.getElementById('roles-overlay');
+  const PALETTE = ['#F0A868','#F6C38A','#EE8686','#B97A55','#8FC1E3','#A9D6A1','#D6A9E3','#E3C5A9'];
+
+  function renderRolesList(){
+    const list = document.getElementById('roles-list');
+    list.innerHTML = state.roles.map(r => `
+      <div class="role-row" data-role="${r.id}">
+        <input type="color" value="${r.bg}" data-field="bg">
+        <input type="text" value="${r.name}" data-field="name">
+        <button class="del" data-role-delete="${r.id}">✕</button>
+      </div>
+    `).join('');
+
+    list.querySelectorAll('.role-row').forEach(row => {
+      const id = row.dataset.role;
+      row.querySelector('[data-field=name]').addEventListener('change', (e) => {
+        roleById(id).name = e.target.value; saveState(); render();
+      });
+      row.querySelector('[data-field=bg]').addEventListener('input', (e) => {
+        roleById(id).bg = e.target.value; saveState(); render();
+      });
+    });
+    list.querySelectorAll('[data-role-delete]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.roleDelete;
+        if (!confirm('Delete this role? Shifts using it will show as Unassigned.')) return;
+        state.roles = state.roles.filter(r => r.id !== id);
+        saveState(); renderRolesList(); render();
+      });
+    });
+  }
+
+  document.getElementById('manage-roles-btn').addEventListener('click', () => {
+    renderRolesList();
+    rolesOverlay.classList.add('show');
+  });
+  document.getElementById('roles-done').addEventListener('click', () => rolesOverlay.classList.remove('show'));
+  document.getElementById('add-role-btn').addEventListener('click', () => {
+    const color = PALETTE[state.roles.length % PALETTE.length];
+    state.roles.push({ id: uid('role'), name: 'New role', bg: color, fg: '#37424A' });
+    saveState(); renderRolesList(); render();
+  });
+
+  // Close any modal by clicking its overlay background
+  [employeeOverlay, shiftOverlay, rolesOverlay].forEach(ov => {
+    ov.addEventListener('click', (e) => { if (e.target === ov) ov.classList.remove('show'); });
+  });
+
+  render();
 </script>
 </body>
 </html>
