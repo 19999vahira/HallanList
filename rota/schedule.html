@@ -188,8 +188,14 @@
   <div class="tabbody">
     <div class="tabbody-head">
       <h2>Employees</h2>
-      <button class="btn btn-primary" id="add-employee-btn">+ Add employee</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" id="csv-template-btn">Download CSV template</button>
+        <button class="btn" id="upload-csv-btn">⬆ Upload CSV</button>
+        <input type="file" id="csv-file-input" accept=".csv" style="display:none;">
+        <button class="btn btn-primary" id="add-employee-btn">+ Add employee</button>
+      </div>
     </div>
+    <div id="csv-upload-summary" style="display:none;background:#EEF6EC;border:1px solid #CFE7C7;color:#2C6B22;font-size:13px;padding:10px 14px;border-radius:6px;margin-bottom:14px;"></div>
     <table class="simple">
       <thead><tr><th>Name</th><th>Department</th><th>Shifts covered</th><th>Login ID</th><th></th></tr></thead>
       <tbody id="employees-body"></tbody>
@@ -839,6 +845,85 @@
     employeeOverlay.classList.add('show');
   }
   document.getElementById('add-employee-btn').addEventListener('click', () => openEmployeeModal(null));
+
+  /* ---- CSV upload: Name, Department -> new employees, shifts left blank to set manually ---- */
+  function parseCsv(text){
+    // Minimal CSV parser: handles quoted fields with embedded commas, strips \r, skips blank lines.
+    return text.split(/\r?\n/)
+      .filter(line => line.trim().length)
+      .map(line => {
+        const cells = [];
+        let cur = '', inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const c = line[i];
+          if (c === '"') {
+            if (inQuotes && line[i+1] === '"') { cur += '"'; i++; }
+            else inQuotes = !inQuotes;
+          } else if (c === ',' && !inQuotes) {
+            cells.push(cur); cur = '';
+          } else {
+            cur += c;
+          }
+        }
+        cells.push(cur);
+        return cells.map(c => c.trim());
+      });
+  }
+
+  document.getElementById('csv-template-btn').addEventListener('click', () => {
+    const csv = 'Name,Department\nAditi Rao,Front of House\nBen Coley,Warehouse\n';
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'hallan-rota-employee-template.csv'; a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  document.getElementById('upload-csv-btn').addEventListener('click', () => document.getElementById('csv-file-input').click());
+
+  document.getElementById('csv-file-input').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const rows = parseCsv(String(reader.result));
+      if (!rows.length) { alert('That file looks empty.'); e.target.value = ''; return; }
+
+      // Skip a header row if the first cell looks like a header rather than a real name.
+      let startIdx = 0;
+      const firstCell = (rows[0][0] || '').toLowerCase();
+      if (firstCell === 'name' || firstCell.includes('employee')) startIdx = 1;
+
+      const existingNames = new Set(state.employees.map(emp => emp.name.trim().toLowerCase()));
+      let added = 0, skippedDupes = 0, skippedBlank = 0;
+
+      for (let i = startIdx; i < rows.length; i++) {
+        const [rawName, rawDept] = rows[i];
+        const name = (rawName || '').trim();
+        const department = (rawDept || '').trim();
+        if (!name) { skippedBlank++; continue; }
+        if (existingNames.has(name.toLowerCase())) { skippedDupes++; continue; }
+        state.employees.push({ id: uid('emp'), name, department, loginId: '', pin: '', shiftTypeIds: [] });
+        existingNames.add(name.toLowerCase());
+        added++;
+      }
+
+      saveState();
+      renderEmployeesTab();
+
+      const summary = document.getElementById('csv-upload-summary');
+      const bits = [`Added ${added} employee${added === 1 ? '' : 's'}.`];
+      if (skippedDupes) bits.push(`Skipped ${skippedDupes} already on the list.`);
+      if (skippedBlank) bits.push(`Skipped ${skippedBlank} blank row${skippedBlank === 1 ? '' : 's'}.`);
+      bits.push('Click "Edit" on each to set which shifts they cover.');
+      summary.textContent = bits.join(' ');
+      summary.style.display = 'block';
+
+      e.target.value = ''; // allow re-uploading the same file later if needed
+    };
+    reader.readAsText(file);
+  });
+
   document.getElementById('emp-cancel').addEventListener('click', () => employeeOverlay.classList.remove('show'));
   document.getElementById('emp-delete').addEventListener('click', () => {
     if (!confirm('Delete this employee?')) return;
