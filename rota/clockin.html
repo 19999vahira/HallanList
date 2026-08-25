@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Time Clock — Hallan Cash &amp; Carry</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --blue:#3E97E8; --blue-dark:#2E7FD1;
+    --ink:#37424A; --slate:#6B7684; --line:#E3E7EB;
+    --page-bg:#F5F7F8; --green:#2FA86B; --red:#D9534F; --amber:#D9A02F;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;min-height:100vh;font-family:'Inter',sans-serif;color:var(--ink);background:var(--page-bg);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;}
+  button{font-family:inherit;cursor:pointer;}
+  input{font-family:inherit;}
+
+  .brand{display:flex;align-items:center;gap:10px;margin-bottom:28px;}
+  .brand svg{width:26px;height:26px;}
+  .brand .name{font-size:18px;font-weight:700;color:var(--blue);letter-spacing:.4px;}
+  .brand .by{font-size:13px;color:var(--slate);margin-left:4px;}
+
+  .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:40px 36px;
+    width:100%;max-width:400px;text-align:center;box-shadow:0 20px 50px -30px rgba(20,30,40,.35);}
+
+  .clock{font-family:'JetBrains Mono',monospace;font-size:34px;font-weight:700;color:var(--ink);margin-bottom:4px;}
+  .date{color:var(--slate);font-size:13.5px;margin-bottom:26px;}
+
+  /* ---- login step ---- */
+  label.f{display:block;font-size:11.5px;font-weight:700;letter-spacing:.6px;color:#8992A0;
+    text-transform:uppercase;margin:0 0 8px;text-align:left;}
+  input.f{width:100%;padding:13px 14px;border:1px solid var(--line);border-radius:8px;
+    background:#fff;font-size:15px;color:var(--ink);margin-bottom:18px;text-align:center;letter-spacing:.5px;}
+  input.f:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(62,151,232,.15);}
+  .btn-primary{width:100%;padding:14px;border:none;border-radius:8px;background:var(--blue);
+    color:#fff;font-size:15.5px;font-weight:600;transition:.15s;}
+  .btn-primary:hover{background:var(--blue-dark);}
+  .err{display:none;background:#FDEEEE;border:1px solid #F3C4C4;color:#B23A3A;
+    font-size:13px;padding:10px 12px;border-radius:6px;margin-bottom:16px;text-align:left;}
+
+  /* ---- status step ---- */
+  .who{font-size:19px;font-weight:700;margin-bottom:2px;}
+  .who-dept{color:var(--slate);font-size:13px;margin-bottom:20px;}
+  .status-pill{display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:20px;
+    font-size:13px;font-weight:600;background:#EEF2F4;color:var(--slate);margin-bottom:24px;}
+  .status-pill.in{background:#E5F6ED;color:var(--green);}
+  .status-pill.break{background:#FBF2E1;color:var(--amber);}
+  .status-pill .dot{width:8px;height:8px;border-radius:50%;background:currentColor;}
+
+  .actions{display:flex;flex-direction:column;gap:10px;}
+  .actbtn{padding:15px;border:none;border-radius:8px;font-size:15.5px;font-weight:700;color:#fff;transition:.15s;}
+  .actbtn.in{background:var(--green);} .actbtn.in:hover{background:#26955D;}
+  .actbtn.breakstart{background:var(--amber);} .actbtn.breakstart:hover{background:#C48E22;}
+  .actbtn.breakend{background:var(--blue);} .actbtn.breakend:hover{background:var(--blue-dark);}
+  .actbtn.out{background:var(--red);} .actbtn.out:hover{background:#C4433F;}
+  .linkbtn{background:none;border:none;color:var(--slate);font-size:12.5px;margin-top:18px;text-decoration:underline;}
+
+  .confirm-icon{width:52px;height:52px;border-radius:50%;background:#E5F6ED;color:var(--green);
+    display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 14px;}
+  .confirm-text{font-size:15px;font-weight:600;margin-bottom:4px;}
+  .confirm-sub{color:var(--slate);font-size:13px;}
+
+  .done-note{color:var(--slate);font-size:13.5px;line-height:1.5;}
+
+  .step{display:none;} .step.active{display:block;}
+</style>
+</head>
+<body>
+
+<div class="brand">
+  <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M20 2 L34 20 L20 38 L6 20 Z" stroke="#3E97E8" stroke-width="2.6" fill="none"/>
+    <path d="M20 10 L28 20 L20 30 L12 20 Z" fill="#3E97E8"/>
+  </svg>
+  <span class="name">ROTA</span>
+  <span class="by">Time Clock — Hallan Cash &amp; Carry</span>
+</div>
+
+<div class="card">
+  <div class="clock" id="clock">--:--:--</div>
+  <div class="date" id="date">—</div>
+
+  <!-- STEP 1: Login ID + PIN -->
+  <div class="step active" id="step-login">
+    <div class="err" id="login-err"></div>
+    <label class="f" for="login-id">Login ID</label>
+    <input class="f" id="login-id" type="text" placeholder="e.g. 2001" autocomplete="off">
+    <label class="f" for="login-pin">PIN</label>
+    <input class="f" id="login-pin" type="password" placeholder="••••" maxlength="8" autocomplete="off">
+    <button class="btn-primary" id="login-continue-btn">Continue</button>
+  </div>
+
+  <!-- STEP 2: today's status + action buttons -->
+  <div class="step" id="step-status">
+    <div class="who" id="status-name">—</div>
+    <div class="who-dept" id="status-dept">—</div>
+    <div class="status-pill" id="status-pill"><span class="dot"></span> <span id="status-pill-text">Not clocked in</span></div>
+    <div class="actions" id="status-actions"></div>
+    <button class="linkbtn" id="status-back-btn">Not you? Go back</button>
+  </div>
+
+  <!-- STEP 3: confirmation, auto-resets after a few seconds -->
+  <div class="step" id="step-confirm">
+    <div class="confirm-icon">✓</div>
+    <div class="confirm-text" id="confirm-text">Clocked in</div>
+    <div class="confirm-sub" id="confirm-sub">—</div>
+  </div>
+</div>
+
+<script>
+  /* ---------------------------------------------------------------
+     This file must be served from the SAME origin/folder as the Rota
+     app (schedule.html) — it reads employees from the 'hallan_rota_v2'
+     localStorage key that schedule.html already writes (Employees tab
+     -> Login ID / PIN fields), and writes punches to a separate
+     'hallan_timesheet_v1' key that schedule.html's Timesheet tab reads.
+
+     This is a shared/kiosk screen on purpose — it does NOT use the
+     rota_token login from index.html. Anyone standing at the device
+     identifies themselves with their own Login ID + PIN per punch.
+     --------------------------------------------------------------- */
+  const ROTA_KEY = 'hallan_rota_v2';
+  const TIMESHEET_KEY = 'hallan_timesheet_v1';
+
+  function loadRota(){
+    try {
+      const raw = localStorage.getItem(ROTA_KEY);
+      return raw ? JSON.parse(raw) : { employees: [] };
+    } catch (e) { return { employees: [] }; }
+  }
+  function loadTimesheet(){
+    try {
+      const raw = localStorage.getItem(TIMESHEET_KEY);
+      return raw ? { days: {}, ...JSON.parse(raw) } : { days: {} };
+    } catch (e) { return { days: {} }; }
+  }
+  function saveTimesheet(ts){ localStorage.setItem(TIMESHEET_KEY, JSON.stringify(ts)); }
+
+  function toDateStr(d){ return d.toISOString().slice(0,10); }
+  function nowHHMM(){
+    const d = new Date();
+    return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  }
+  function fmtDisplayTime(hhmm){
+    const [h,m] = hhmm.split(':').map(Number);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const h12 = ((h + 11) % 12) + 1;
+    return `${h12}:${String(m).padStart(2,'0')} ${ampm}`;
+  }
+
+  /* ---- live clock ---- */
+  function tick(){
+    const now = new Date();
+    document.getElementById('clock').textContent = now.toLocaleTimeString('en-GB');
+    document.getElementById('date').textContent = now.toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  }
+  tick(); setInterval(tick, 1000);
+
+  const stepLogin = document.getElementById('step-login');
+  const stepStatus = document.getElementById('step-status');
+  const stepConfirm = document.getElementById('step-confirm');
+
+  function showStep(step){
+    [stepLogin, stepStatus, stepConfirm].forEach(s => s.classList.remove('active'));
+    step.classList.add('active');
+  }
+
+  function resetToLogin(){
+    document.getElementById('login-id').value = '';
+    document.getElementById('login-pin').value = '';
+    document.getElementById('login-err').style.display = 'none';
+    showStep(stepLogin);
+    document.getElementById('login-id').focus();
+  }
+
+  let currentEmployee = null;
+
+  document.getElementById('login-continue-btn').addEventListener('click', () => {
+    const loginId = document.getElementById('login-id').value.trim();
+    const pin = document.getElementById('login-pin').value.trim();
+    const errBox = document.getElementById('login-err');
+
+    if (!loginId || !pin) {
+      errBox.textContent = 'Enter both your Login ID and PIN.';
+      errBox.style.display = 'block';
+      return;
+    }
+
+    const rota = loadRota();
+    const emp = (rota.employees || []).find(e =>
+      (e.loginId || '').trim() === loginId && (e.pin || '').trim() === pin
+    );
+
+    if (!emp) {
+      errBox.textContent = 'Login ID or PIN not recognised. Check with your manager if this keeps happening.';
+      errBox.style.display = 'block';
+      return;
+    }
+
+    errBox.style.display = 'none';
+    currentEmployee = emp;
+    showStatusStep();
+  });
+
+  document.getElementById('login-pin').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('login-continue-btn').click();
+  });
+
+  document.getElementById('status-back-btn').addEventListener('click', resetToLogin);
+
+  function todayRecord(){
+    const ts = loadTimesheet();
+    const dateStr = toDateStr(new Date());
+    return (ts.days[currentEmployee.id] || {})[dateStr] || {};
+  }
+
+  function showStatusStep(){
+    document.getElementById('status-name').textContent = currentEmployee.name;
+    document.getElementById('status-dept').textContent = currentEmployee.department || '';
+
+    const rec = todayRecord();
+    const pill = document.getElementById('status-pill');
+    const pillText = document.getElementById('status-pill-text');
+    const actions = document.getElementById('status-actions');
+
+    pill.classList.remove('in','break');
+    actions.innerHTML = '';
+
+    if (!rec.in) {
+      pillText.textContent = 'Not clocked in yet';
+      actions.innerHTML = `<button class="actbtn in" data-action="in">Clock In</button>`;
+    } else if (rec.in && !rec.breakStart) {
+      pill.classList.add('in');
+      pillText.textContent = `Clocked in at ${fmtDisplayTime(rec.in)}`;
+      actions.innerHTML = `
+        <button class="actbtn breakstart" data-action="breakstart">Start Break</button>
+        <button class="actbtn out" data-action="out">Clock Out</button>`;
+    } else if (rec.breakStart && !rec.breakEnd) {
+      pill.classList.add('break');
+      pillText.textContent = `On break since ${fmtDisplayTime(rec.breakStart)}`;
+      actions.innerHTML = `<button class="actbtn breakend" data-action="breakend">End Break</button>`;
+    } else if (rec.breakEnd && !rec.out) {
+      pill.classList.add('in');
+      pillText.textContent = `Back from break at ${fmtDisplayTime(rec.breakEnd)}`;
+      actions.innerHTML = `<button class="actbtn out" data-action="out">Clock Out</button>`;
+    } else if (rec.out) {
+      pillText.textContent = `Clocked out at ${fmtDisplayTime(rec.out)}`;
+      actions.innerHTML = `<div class="done-note">You're all done for today — thanks for your hard work! If this is wrong, ask a manager to correct it on the Timesheet.</div>`;
+    }
+
+    actions.querySelectorAll('[data-action]').forEach(btn => {
+      btn.addEventListener('click', () => recordPunch(btn.dataset.action));
+    });
+
+    showStep(stepStatus);
+  }
+
+  function recordPunch(action){
+    const ts = loadTimesheet();
+    const dateStr = toDateStr(new Date());
+    if (!ts.days[currentEmployee.id]) ts.days[currentEmployee.id] = {};
+    const rec = ts.days[currentEmployee.id][dateStr] || {};
+
+    const time = nowHHMM();
+    let confirmText = '', confirmSub = '';
+
+    if (action === 'in') { rec.in = time; confirmText = 'Clocked in'; confirmSub = `${currentEmployee.name} at ${fmtDisplayTime(time)}`; }
+    if (action === 'breakstart') { rec.breakStart = time; confirmText = 'Break started'; confirmSub = `Enjoy your break, ${currentEmployee.name.split(' ')[0]}!`; }
+    if (action === 'breakend') { rec.breakEnd = time; confirmText = 'Break ended'; confirmSub = `Welcome back, ${currentEmployee.name.split(' ')[0]}.`; }
+    if (action === 'out') { rec.out = time; confirmText = 'Clocked out'; confirmSub = `See you next time, ${currentEmployee.name.split(' ')[0]}!`; }
+
+    ts.days[currentEmployee.id][dateStr] = rec;
+    saveTimesheet(ts);
+
+    document.getElementById('confirm-text').textContent = confirmText;
+    document.getElementById('confirm-sub').textContent = confirmSub;
+    showStep(stepConfirm);
+
+    // Kiosk-style auto-reset so the next person can use the screen.
+    setTimeout(resetToLogin, 2500);
+  }
+
+  resetToLogin();
+</script>
+</body>
+</html>
