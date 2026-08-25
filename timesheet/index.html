@@ -117,7 +117,7 @@
 
   <div class="section-head">
     <h2>This week's hours</h2>
-    <span class="weeklabel">02 – 08 Mar</span>
+    <span class="weeklabel" id="week-label">—</span>
   </div>
   <table class="hours">
     <thead>
@@ -164,15 +164,35 @@
     }
   });
 
-  const rows = [
-    ['Mon 2', '8:58 AM', '5:02 PM', '8h 04m'],
-    ['Tue 3', '8:55 AM', '7:01 PM', '10h 06m'],
-    ['Wed 4', '9:02 AM', '7:00 PM', '9h 58m'],
-    ['Thu 5', '—', '—', '—'],
-    ['Fri 6', '—', '—', '—'],
-    ['Sat 7', '—', '—', '—'],
-    ['Sun 8', '—', '—', '—'],
-  ];
+  // ---- Compute the REAL current week (Mon–Sun) instead of a hardcoded date ----
+  function getMonday(d){
+    const date = new Date(d);
+    const day = date.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    date.setDate(date.getDate() + diff);
+    date.setHours(0,0,0,0);
+    return date;
+  }
+  function addDays(d, n){ const r = new Date(d); r.setDate(r.getDate()+n); return r; }
+  const DAY_NAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const monday = getMonday(new Date());
+  const sunday = addDays(monday, 6);
+  document.getElementById('week-label').textContent =
+    monday.getMonth() === sunday.getMonth()
+      ? `${monday.getDate()} – ${sunday.getDate()} ${MONTH_NAMES[monday.getMonth()]}`
+      : `${monday.getDate()} ${MONTH_NAMES[monday.getMonth()]} – ${sunday.getDate()} ${MONTH_NAMES[sunday.getMonth()]}`;
+
+  // Mock rows for now — swap for a real GET /api/timesheet/week fetch when that's wired up.
+  // Placeholder times shown on the first 3 real days of this week, rest blank.
+  const rows = Array.from({length:7}, (_, i) => {
+    const d = addDays(monday, i);
+    const label = `${DAY_NAMES[i]} ${d.getDate()}`;
+    if (i === 0) return [label, '8:58 AM', '5:02 PM', '8h 04m'];
+    if (i === 1) return [label, '8:55 AM', '7:01 PM', '10h 06m'];
+    if (i === 2) return [label, '9:02 AM', '7:00 PM', '9h 58m'];
+    return [label, '—', '—', '—'];
+  });
   const body = document.getElementById('hours-body');
   rows.forEach(r => {
     const tr = document.createElement('tr');
