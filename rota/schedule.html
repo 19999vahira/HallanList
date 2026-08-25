@@ -124,6 +124,12 @@
   .link-danger{background:none;border:none;color:#C4433F;font-size:13px;font-weight:600;padding:8px 0;}
   .link-danger:hover{text-decoration:underline;}
   .checkbox-row{display:flex;align-items:center;gap:8px;margin-top:16px;font-size:13.5px;}
+  nav a[data-tab="timesheet"]{display:none;}
+  .ts-time-input{width:98px;padding:7px 8px;border:1px solid var(--line);border-radius:6px;font-size:12.5px;color:var(--ink);}
+  .ts-comment-input{width:130px;padding:7px 8px;border:1px solid var(--line);border-radius:6px;font-size:12.5px;color:var(--ink);}
+  table.simple.ts-detail th, table.simple.ts-detail td{padding:8px 10px;font-size:12.5px;}
+  .rangebtns{display:flex;gap:6px;}
+  .rangebtns .btn.active{background:var(--nav-blue);color:#fff;border-color:var(--nav-blue);font-weight:600;}
 </style>
 </head>
 <body>
@@ -140,7 +146,8 @@
     <a href="#" data-tab="schedule" class="active">Schedule</a>
     <a href="#" data-tab="employees">Employees</a>
     <a href="#" data-tab="shifts">Shifts</a>
-    <a href="../timesheet/">Time Clock</a>
+    <a href="#" data-tab="timesheet" id="nav-timesheet">Timesheet</a>
+    <a href="clockin.html">Time Clock</a>
   </nav>
   <div class="right">
     <span id="user-name">Hallan Cash &amp; Carry</span>
@@ -171,6 +178,7 @@
 
     <div class="spacer"></div>
     <button class="btn" id="timeoff-btn">+ Time Off</button>
+    <button class="btn" id="bulkcopy-btn">📋 Copy shifts</button>
     <button class="btn" id="download-btn">⬇ Download</button>
   </div>
 
@@ -211,6 +219,31 @@
     </div>
     <div id="shifttypes-list"></div>
     <button class="btn" id="add-shifttype-btn" style="width:100%;">+ Add shift type</button>
+  </div>
+</div>
+
+<!-- ===================== TIMESHEET TAB (HR only) ===================== -->
+<div class="tabpage" id="tab-timesheet">
+  <div class="toolbar">
+    <div class="weeknav">
+      <button class="navbtn" id="ts-prev">&lsaquo;</button>
+      <div class="weeklabel" id="ts-period-label" style="min-width:230px;">—</div>
+      <button class="navbtn" id="ts-next">&rsaquo;</button>
+    </div>
+    <div class="rangebtns">
+      <button class="btn" data-ts-range="1">Today</button>
+      <button class="btn" data-ts-range="7">Last 7 days</button>
+      <button class="btn" data-ts-range="28">Last 28 days</button>
+      <button class="btn active" data-ts-range="period">Pay period (24th–23rd)</button>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn" id="ts-csv-btn">⬇ Download CSV</button>
+  </div>
+  <div class="tabbody" style="max-width:1080px;">
+    <table class="simple">
+      <thead><tr><th>Employee</th><th>Department</th><th>Total hours</th><th></th></tr></thead>
+      <tbody id="timesheet-body"></tbody>
+    </table>
   </div>
 </div>
 
@@ -319,8 +352,51 @@
   </div>
 </div>
 
+<!-- Bulk copy modal (Sling-style "Copy" button) -->
+<div class="overlay" id="bulkcopy-overlay">
+  <div class="modal" style="width:460px;">
+    <h3>Copy shifts — <span id="bulkcopy-week-label"></span></h3>
+    <div class="checkbox-row" style="margin-top:0;">
+      <input type="checkbox" id="bulkcopy-selectall">
+      <label style="margin:0;text-transform:none;font-weight:600;font-size:13.5px;">Select all shifts this week</label>
+    </div>
+    <div id="bulkcopy-list" style="max-height:320px;overflow-y:auto;margin-top:12px;border-top:1px solid var(--line);padding-top:4px;"></div>
+    <div class="modal-actions">
+      <div style="font-size:12.5px;color:var(--slate);" id="bulkcopy-count">0 selected</div>
+      <div>
+        <button class="btn" id="bulkcopy-cancel">Cancel</button>
+        <button class="btn btn-primary" id="bulkcopy-copy">Copy selected</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Timesheet day-by-day detail / edit modal (HR only) -->
+<div class="overlay" id="ts-detail-overlay">
+  <div class="modal" style="width:700px;max-width:95vw;">
+    <h3 id="ts-detail-title">Timesheet</h3>
+    <div style="font-size:12.5px;color:var(--slate);margin:-10px 0 14px;" id="ts-detail-range"></div>
+    <div style="max-height:420px;overflow-y:auto;">
+      <table class="simple ts-detail" style="border:none;">
+        <thead>
+          <tr>
+            <th>Date</th><th>Clock in</th><th>Break start</th><th>Break end</th>
+            <th>Clock out</th><th>Hours</th><th>Comment</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="ts-detail-body"></tbody>
+      </table>
+    </div>
+    <div class="modal-actions">
+      <div style="font-size:12px;color:var(--slate);">Times can be edited directly — click Save on a row after changing it.</div>
+      <div><button class="btn" id="ts-detail-close">Close</button></div>
+    </div>
+  </div>
+</div>
+
 <div class="paste-banner" id="paste-banner">
-  <span>Shift copied — click a cell to paste</span>
+  <span id="paste-banner-text">Shift copied — click a cell to paste</span>
+  <button id="paste-here-btn" style="display:none;">Paste to this week</button>
   <button id="paste-cancel">Cancel</button>
 </div>
 
@@ -334,6 +410,8 @@
   document.getElementById('user-name').textContent = localStorage.getItem('rota_name') || 'Hallan Cash & Carry';
   const initialsFromName = (localStorage.getItem('rota_name') || 'HC').split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase();
   document.getElementById('avatar-pill').textContent = initialsFromName;
+  const currentRole = localStorage.getItem('rota_role') || 'staff';
+  if (currentRole === 'hr') document.getElementById('nav-timesheet').style.display = '';
   document.getElementById('logout-btn').addEventListener('click', () => {
     localStorage.removeItem('rota_token'); localStorage.removeItem('rota_name'); localStorage.removeItem('rota_role');
     window.location.href = 'index.html';
@@ -442,6 +520,7 @@
       if (a.dataset.tab === 'employees') renderEmployeesTab();
       if (a.dataset.tab === 'shifts') renderShiftTypesTab();
       if (a.dataset.tab === 'schedule') renderSchedule();
+      if (a.dataset.tab === 'timesheet') renderTimesheetTab();
     });
   });
 
@@ -518,6 +597,7 @@
   }
 
   let clipboardShift = null;
+  let bulkClipboard = []; // [{ empId, dayOffset, shiftData }] — from the bulk "Copy shifts" modal
 
   function renderSchedule(){
     document.getElementById('week-label').textContent = weekLabelText();
@@ -587,6 +667,9 @@
         // Ctrl/Cmd+click on a filled shift cell = copy
         if ((e.ctrlKey || e.metaKey) && state.shifts[empId] && state.shifts[empId][dateStr] && !td.dataset.timeoff) {
           clipboardShift = { ...state.shifts[empId][dateStr] };
+          bulkClipboard = [];
+          document.getElementById('paste-here-btn').style.display = 'none';
+          document.getElementById('paste-banner-text').textContent = 'Shift copied — click a cell to paste';
           document.querySelectorAll('.daycell').forEach(x => x.classList.remove('copy-source'));
           td.classList.add('copy-source');
           document.getElementById('paste-banner').classList.add('show');
@@ -612,25 +695,37 @@
 
   document.getElementById('paste-cancel').addEventListener('click', () => {
     clipboardShift = null;
+    bulkClipboard = [];
+    document.getElementById('paste-here-btn').style.display = 'none';
     document.getElementById('paste-banner').classList.remove('show');
     document.querySelectorAll('.daycell').forEach(x => x.classList.remove('copy-source'));
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       clipboardShift = null;
+      bulkClipboard = [];
+      document.getElementById('paste-here-btn').style.display = 'none';
       document.getElementById('paste-banner').classList.remove('show');
       document.querySelectorAll('.daycell').forEach(x => x.classList.remove('copy-source'));
     }
   });
 
   // Cross-shift-type confirmation, shared by the shift modal AND paste.
-  function assignShift(empId, dateStr, shiftData){
+  // opts.skipConfirm = true is used for bulk paste, so pasting many shifts
+  // doesn't pop up a confirm() dialog for every single one — it just
+  // silently remembers the shift type against the employee, same as
+  // confirming "yes" would have done.
+  function assignShift(empId, dateStr, shiftData, opts = {}){
     const emp = employeeById(empId);
     const st = shiftTypeById(shiftData.shiftTypeId);
     if (emp && st && emp.shiftTypeIds.length && !emp.shiftTypeIds.includes(st.id)) {
-      const ok = confirm(`${emp.name} doesn't usually cover ${st.name} shifts. Assign this shift anyway?`);
-      if (!ok) return false;
-      emp.shiftTypeIds.push(st.id); // remembered for next time, per your request
+      if (opts.skipConfirm) {
+        emp.shiftTypeIds.push(st.id);
+      } else {
+        const ok = confirm(`${emp.name} doesn't usually cover ${st.name} shifts. Assign this shift anyway?`);
+        if (!ok) return false;
+        emp.shiftTypeIds.push(st.id); // remembered for next time, per your request
+      }
     }
     if (!state.shifts[empId]) state.shifts[empId] = {};
     state.shifts[empId][dateStr] = shiftData;
@@ -646,6 +741,98 @@
     if (!e.target.value) return;
     currentWeekStart = getMonday(fromDateStr(e.target.value));
     renderSchedule();
+  });
+
+  /* =================================================================
+     BULK COPY — "Copy shifts" button (Sling-style): pick any number of
+     shifts from the currently displayed week (or Select all), then
+     navigate to whatever week you want and click "Paste to this week".
+     Each copied shift remembers its weekday offset (0=Mon..6=Sun) so it
+     lands on the same weekday in the target week.
+     ================================================================= */
+  const bulkcopyOverlay = document.getElementById('bulkcopy-overlay');
+  let bulkCopySourceItems = [];
+
+  function collectWeekShiftsForCopy(){
+    const dateStrs = weekDates().map(toDateStr);
+    const items = [];
+    visibleEmployees().forEach(emp => {
+      dateStrs.forEach((dateStr, dayOffset) => {
+        const s = (state.shifts[emp.id] || {})[dateStr];
+        if (s && !timeOffFor(emp.id, dateStr)) {
+          items.push({ empId: emp.id, empName: emp.name, dayOffset, shiftData: { ...s } });
+        }
+      });
+    });
+    return items;
+  }
+
+  function updateBulkCopyCount(){
+    const checked = document.querySelectorAll('.bulkcopy-item:checked').length;
+    document.getElementById('bulkcopy-count').textContent = `${checked} selected`;
+  }
+
+  function openBulkCopyModal(){
+    bulkCopySourceItems = collectWeekShiftsForCopy();
+    document.getElementById('bulkcopy-week-label').textContent = weekLabelText();
+    const list = document.getElementById('bulkcopy-list');
+
+    if (!bulkCopySourceItems.length) {
+      list.innerHTML = '<div style="color:var(--slate);font-size:13px;padding:10px 2px;">No shifts scheduled this week to copy.</div>';
+    } else {
+      list.innerHTML = bulkCopySourceItems.map((it, idx) => {
+        const st = shiftTypeById(it.shiftData.shiftTypeId) || { name: 'Unassigned' };
+        return `<label style="display:flex;align-items:center;gap:9px;padding:8px 4px;font-size:13px;border-bottom:1px solid var(--line);">
+          <input type="checkbox" class="bulkcopy-item" data-idx="${idx}" checked>
+          <span style="flex:1;">${it.empName} — ${DAY_NAMES[it.dayOffset]}
+            <span style="color:var(--slate);">${it.shiftData.start}–${it.shiftData.end} · ${st.name}</span>
+          </span>
+        </label>`;
+      }).join('');
+    }
+
+    document.getElementById('bulkcopy-selectall').checked = bulkCopySourceItems.length > 0;
+    updateBulkCopyCount();
+    bulkcopyOverlay.classList.add('show');
+  }
+
+  document.getElementById('bulkcopy-btn').addEventListener('click', openBulkCopyModal);
+  document.getElementById('bulkcopy-cancel').addEventListener('click', () => bulkcopyOverlay.classList.remove('show'));
+
+  document.getElementById('bulkcopy-selectall').addEventListener('change', (e) => {
+    document.querySelectorAll('.bulkcopy-item').forEach(cb => cb.checked = e.target.checked);
+    updateBulkCopyCount();
+  });
+  document.getElementById('bulkcopy-list').addEventListener('change', (e) => {
+    if (e.target.classList.contains('bulkcopy-item')) updateBulkCopyCount();
+  });
+
+  document.getElementById('bulkcopy-copy').addEventListener('click', () => {
+    const checkedIdxs = Array.from(document.querySelectorAll('.bulkcopy-item:checked')).map(cb => Number(cb.dataset.idx));
+    bulkClipboard = checkedIdxs.map(i => ({
+      empId: bulkCopySourceItems[i].empId,
+      dayOffset: bulkCopySourceItems[i].dayOffset,
+      shiftData: { ...bulkCopySourceItems[i].shiftData }
+    }));
+    bulkcopyOverlay.classList.remove('show');
+    if (!bulkClipboard.length) return;
+
+    clipboardShift = null; // bulk mode replaces single-shift copy mode
+    document.querySelectorAll('.daycell').forEach(x => x.classList.remove('copy-source'));
+    document.getElementById('paste-banner-text').textContent =
+      `${bulkClipboard.length} shift${bulkClipboard.length === 1 ? '' : 's'} copied — go to the week you want and click "Paste to this week"`;
+    document.getElementById('paste-here-btn').style.display = 'inline-block';
+    document.getElementById('paste-banner').classList.add('show');
+  });
+
+  document.getElementById('paste-here-btn').addEventListener('click', () => {
+    bulkClipboard.forEach(item => {
+      const targetDateStr = toDateStr(addDays(currentWeekStart, item.dayOffset));
+      assignShift(item.empId, targetDateStr, { ...item.shiftData }, { skipConfirm: true });
+    });
+    bulkClipboard = [];
+    document.getElementById('paste-here-btn').style.display = 'none';
+    document.getElementById('paste-banner').classList.remove('show');
   });
 
   /* =================================================================
@@ -982,8 +1169,197 @@
     saveState(); renderShiftTypesTab();
   });
 
+  /* =================================================================
+     TIMESHEET TAB (HR only)
+     ------------------------------------------------------------------
+     Reads/writes a SEPARATE localStorage key so the PIN-based Time
+     Clock kiosk (clockin.html) can write to it without needing to know
+     anything about the Rota's own state. Both files must be served
+     from the same origin/folder for localStorage to be shared.
+
+     Record shape:
+       timesheetState.days[employeeId][dateStr] =
+         { in, breakStart, breakEnd, out, comment }
+       (all four times are 'HH:MM' 24hr strings or null)
+
+     Pay period: 24th of a month through the 23rd of the next month,
+     per your spec.
+     ================================================================= */
+  const TIMESHEET_KEY = 'hallan_timesheet_v1';
+  function loadTimesheet(){
+    try {
+      const raw = localStorage.getItem(TIMESHEET_KEY);
+      return raw ? { days: {}, ...JSON.parse(raw) } : { days: {} };
+    } catch (e) { return { days: {} }; }
+  }
+  function saveTimesheet(){ localStorage.setItem(TIMESHEET_KEY, JSON.stringify(timesheetState)); }
+  let timesheetState = loadTimesheet();
+
+  function timeToMins(t){ const [h,m] = t.split(':').map(Number); return h*60+m; }
+  function dayMinutes(rec){
+    if (!rec || !rec.in || !rec.out) return 0;
+    let mins = timeToMins(rec.out) - timeToMins(rec.in);
+    if (mins < 0) mins += 24*60;
+    if (rec.breakStart && rec.breakEnd) {
+      let b = timeToMins(rec.breakEnd) - timeToMins(rec.breakStart);
+      if (b < 0) b += 24*60;
+      mins -= b;
+    }
+    return Math.max(0, mins);
+  }
+
+  function payPeriodContaining(date){
+    const d = new Date(date);
+    const start = d.getDate() >= 24
+      ? new Date(d.getFullYear(), d.getMonth(), 24)
+      : new Date(d.getFullYear(), d.getMonth()-1, 24);
+    const end = new Date(start.getFullYear(), start.getMonth()+1, 23);
+    return { start, end };
+  }
+
+  let tsRangeMode = 'period'; // '1' | '7' | '28' | 'period'
+  let tsAnchorDate = new Date();
+
+  function currentTsRange(){
+    if (tsRangeMode === 'period') return payPeriodContaining(tsAnchorDate);
+    const end = new Date(tsAnchorDate);
+    const days = Number(tsRangeMode);
+    const start = addDays(end, -(days-1));
+    return { start, end };
+  }
+  function tsDateStrsInRange(){
+    const { start, end } = currentTsRange();
+    const out = [];
+    for (let d = new Date(start); d <= end; d = addDays(d,1)) out.push(toDateStr(d));
+    return out;
+  }
+  function tsRangeLabel(){
+    const { start, end } = currentTsRange();
+    return start.getMonth() === end.getMonth()
+      ? `${start.getDate()} – ${end.getDate()} ${MONTH_NAMES[start.getMonth()]} ${end.getFullYear()}`
+      : `${start.getDate()} ${MONTH_NAMES[start.getMonth()]} – ${end.getDate()} ${MONTH_NAMES[end.getMonth()]} ${end.getFullYear()}`;
+  }
+
+  document.querySelectorAll('[data-ts-range]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      tsRangeMode = btn.dataset.tsRange;
+      tsAnchorDate = new Date();
+      document.querySelectorAll('[data-ts-range]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderTimesheetTab();
+    });
+  });
+  document.getElementById('ts-prev').addEventListener('click', () => {
+    if (tsRangeMode === 'period') {
+      const { start } = currentTsRange();
+      tsAnchorDate = addDays(start, -1); // lands in the previous period
+    } else {
+      tsAnchorDate = addDays(tsAnchorDate, -Number(tsRangeMode));
+    }
+    renderTimesheetTab();
+  });
+  document.getElementById('ts-next').addEventListener('click', () => {
+    if (tsRangeMode === 'period') {
+      const { end } = currentTsRange();
+      tsAnchorDate = addDays(end, 1); // lands in the next period
+    } else {
+      tsAnchorDate = addDays(tsAnchorDate, Number(tsRangeMode));
+    }
+    renderTimesheetTab();
+  });
+
+  function renderTimesheetTab(){
+    document.getElementById('ts-period-label').textContent = tsRangeLabel();
+    const dateStrs = tsDateStrsInRange();
+
+    const body = document.getElementById('timesheet-body');
+    body.innerHTML = state.employees.map(emp => {
+      let mins = 0;
+      dateStrs.forEach(ds => { mins += dayMinutes((timesheetState.days[emp.id] || {})[ds]); });
+      return `<tr>
+        <td>${emp.name}</td>
+        <td>${emp.department || '—'}</td>
+        <td style="font-weight:700;">${mins ? fmtMins(mins) : '0h'}</td>
+        <td class="rowactions"><button class="edit" data-ts-open="${emp.id}">View / edit days</button></td>
+      </tr>`;
+    }).join('') || `<tr><td colspan="4" style="color:var(--slate);">No employees yet.</td></tr>`;
+
+    body.querySelectorAll('[data-ts-open]').forEach(btn => {
+      btn.addEventListener('click', () => openTsDetail(btn.dataset.tsOpen));
+    });
+  }
+
+  const tsDetailOverlay = document.getElementById('ts-detail-overlay');
+
+  function openTsDetail(empId){
+    const emp = employeeById(empId);
+    const dateStrs = tsDateStrsInRange();
+    document.getElementById('ts-detail-title').textContent = `Timesheet — ${emp.name}`;
+    document.getElementById('ts-detail-range').textContent = tsRangeLabel();
+
+    const body = document.getElementById('ts-detail-body');
+    body.innerHTML = dateStrs.slice().reverse().map(dateStr => {
+      const d = fromDateStr(dateStr);
+      const dayLabel = `${DAY_NAMES[d.getDay()===0?6:d.getDay()-1]} ${d.getDate()} ${MONTH_NAMES[d.getMonth()]}`;
+      const rec = (timesheetState.days[empId] || {})[dateStr] || {};
+      const mins = dayMinutes(rec);
+      return `<tr data-ts-row="${dateStr}">
+        <td>${dayLabel}</td>
+        <td><input type="time" class="ts-time-input ts-in" value="${rec.in || ''}"></td>
+        <td><input type="time" class="ts-time-input ts-breakstart" value="${rec.breakStart || ''}"></td>
+        <td><input type="time" class="ts-time-input ts-breakend" value="${rec.breakEnd || ''}"></td>
+        <td><input type="time" class="ts-time-input ts-out" value="${rec.out || ''}"></td>
+        <td class="ts-hours-cell" style="font-weight:700;">${mins ? fmtMins(mins) : '—'}</td>
+        <td><input type="text" class="ts-comment-input ts-comment" value="${(rec.comment || '').replace(/"/g,'&quot;')}" placeholder="Comment"></td>
+        <td><button class="btn" data-ts-save="${dateStr}">Save</button></td>
+      </tr>`;
+    }).join('');
+
+    body.querySelectorAll('[data-ts-save]').forEach(saveBtn => {
+      saveBtn.addEventListener('click', () => {
+        const dateStr = saveBtn.dataset.tsSave;
+        const row = body.querySelector(`tr[data-ts-row="${dateStr}"]`);
+        const rec = {
+          in: row.querySelector('.ts-in').value || null,
+          breakStart: row.querySelector('.ts-breakstart').value || null,
+          breakEnd: row.querySelector('.ts-breakend').value || null,
+          out: row.querySelector('.ts-out').value || null,
+          comment: row.querySelector('.ts-comment').value.trim()
+        };
+        if (!timesheetState.days[empId]) timesheetState.days[empId] = {};
+        timesheetState.days[empId][dateStr] = rec;
+        saveTimesheet();
+        row.querySelector('.ts-hours-cell').textContent = dayMinutes(rec) ? fmtMins(dayMinutes(rec)) : '—';
+        renderTimesheetTab(); // refresh the total-hours list behind the modal
+      });
+    });
+
+    tsDetailOverlay.classList.add('show');
+  }
+  document.getElementById('ts-detail-close').addEventListener('click', () => tsDetailOverlay.classList.remove('show'));
+
+  document.getElementById('ts-csv-btn').addEventListener('click', () => {
+    const dateStrs = tsDateStrsInRange();
+    const rows = [['Employee','Department','Date','Clock in','Break start','Break end','Clock out','Hours','Comment']];
+    state.employees.forEach(emp => {
+      dateStrs.forEach(dateStr => {
+        const rec = (timesheetState.days[emp.id] || {})[dateStr];
+        if (!rec) return;
+        rows.push([emp.name, emp.department, dateStr, rec.in||'', rec.breakStart||'', rec.breakEnd||'', rec.out||'', fmtMins(dayMinutes(rec)), rec.comment||'']);
+      });
+    });
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const { start, end } = currentTsRange();
+    a.href = url; a.download = `hallan-timesheet-${toDateStr(start)}-to-${toDateStr(end)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
   // Close modals by clicking the overlay background
-  [employeeOverlay, shiftOverlay, timeoffOverlay, downloadOverlay].forEach(ov => {
+  [employeeOverlay, shiftOverlay, timeoffOverlay, downloadOverlay, bulkcopyOverlay, tsDetailOverlay].forEach(ov => {
     ov.addEventListener('click', (e) => { if (e.target === ov) ov.classList.remove('show'); });
   });
 
