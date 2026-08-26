@@ -230,17 +230,14 @@
   });
 
   /* ---- sign up ----
-     NOTE: this posts to a guessed endpoint, /api/staff/signup, with the
-     same shape the login call uses plus name/password2. Confirm the real
-     route and field names on your backend and adjust this fetch if they
-     differ — I don't have visibility into that server code.
-
-     SECURITY NOTE: letting someone pick their own role (Staff / Rota
-     editor / Manager / HR) at sign-up only works safely if the backend
-     enforces who's actually allowed to claim "HR" or "Manager" — e.g. by
-     checking an invite code, or only accepting the role HR pre-assigned
-     to that Employee ID. If the backend just accepts whatever role is
-     sent, anyone could sign up as HR. Worth checking before this goes live.
+     Posts to /api/staff/signup: { employeeId, name, password, role }.
+     The backend only creates a password for an employeeId that already
+     exists (active) in staff_employees, and only if the typed name matches
+     what HR has on file for that ID — so this can't be used to create a
+     brand-new employee, and Manager/HR can only be claimed by someone
+     actually in that department (checked server-side, not by what this
+     form sends). If a password already exists for that ID, signup is
+     refused and the person is told to log in / contact HR instead.
   ---- */
   const signupForm = document.getElementById('signup-form');
   const signupErr = document.getElementById('signup-err');
