@@ -35,7 +35,10 @@
   .testimonial .who .n{color:var(--blue);font-weight:700;font-size:16px;}
   .testimonial .who .r{color:var(--slate);font-size:15px;margin-top:2px;}
   .loginbox{max-width:400px;width:100%;justify-self:end;}
-  .loginbox h1{font-size:30px;margin:0 0 26px;font-weight:700;}
+  .loginbox h1{font-size:30px;margin:0 0 6px;font-weight:700;}
+  .switchline{font-size:13.5px;color:var(--slate);margin:0 0 26px;}
+  .switchline button{background:none;border:none;padding:0;color:var(--blue);font-weight:600;font-size:13.5px;cursor:pointer;font-family:inherit;}
+  .switchline button:hover{text-decoration:underline;}
   label.field-label{display:block;font-size:11.5px;font-weight:700;letter-spacing:.6px;color:#8992A0;
     text-transform:uppercase;margin-bottom:8px;}
   input.field, select.field{
@@ -51,6 +54,10 @@
   button.btn-primary:hover:not(:disabled){background:var(--blue-btn-hover);}
   .err{display:none;background:#FDEEEE;border:1px solid #F3C4C4;color:#B23A3A;
     font-size:13.5px;padding:11px 14px;border-radius:6px;margin-bottom:18px;}
+  .ok{display:none;background:#E5F6ED;border:1px solid #CFE7C7;color:#2C6B22;
+    font-size:13.5px;padding:11px 14px;border-radius:6px;margin-bottom:18px;}
+  .authform{display:none;}
+  .authform.active{display:block;}
   footer.note{max-width:1180px;margin:0 auto;padding:0 40px 40px;color:#A9B1BC;font-size:12px;text-align:center;}
   @media (max-width:880px){
     main{grid-template-columns:1fr;gap:44px;padding:40px 24px;}
@@ -89,24 +96,66 @@
   </div>
 
   <div class="loginbox">
-    <div class="err" id="err"></div>
-    <h1>Log in</h1>
-    <form id="login-form">
-      <label class="field-label" for="employeeId">Employee ID (your email)</label>
-      <input class="field" id="employeeId" name="employeeId" type="text" placeholder="you@hallancashandcarry.co.uk" autocomplete="username" required>
 
-      <label class="field-label" for="password">Password</label>
-      <input class="field" id="password" name="password" type="password" placeholder="••••••••" autocomplete="current-password" required>
+    <!-- ===================== LOG IN ===================== -->
+    <div class="authform active" id="form-login">
+      <h1>Log in</h1>
+      <div class="switchline">New here, or have an ID but no password yet?
+        <button type="button" id="go-signup">Sign up</button>
+      </div>
+      <div class="err" id="login-err"></div>
+      <form id="login-form">
+        <label class="field-label" for="employeeId">Employee ID</label>
+        <input class="field" id="employeeId" name="employeeId" type="text" placeholder="e.g. 94" autocomplete="username" required>
 
-      <label class="field-label" for="role">Signing in as</label>
-      <select class="field" id="role" name="role">
-        <option value="staff">Staff</option>
-        <option value="manager" selected>Manager</option>
-        <option value="hr">HR</option>
-      </select>
+        <label class="field-label" for="password">Password</label>
+        <input class="field" id="password" name="password" type="password" placeholder="••••••••" autocomplete="current-password" required>
 
-      <button class="btn-primary" type="submit" id="login-btn">Log in</button>
-    </form>
+        <label class="field-label" for="role">Signing in as</label>
+        <select class="field" id="role" name="role">
+          <option value="staff">Staff</option>
+          <option value="rota_editor">Rota editor</option>
+          <option value="manager" selected>Manager</option>
+          <option value="hr">HR</option>
+        </select>
+
+        <button class="btn-primary" type="submit" id="login-btn">Log in</button>
+      </form>
+    </div>
+
+    <!-- ===================== SIGN UP ===================== -->
+    <div class="authform" id="form-signup">
+      <h1>Sign up</h1>
+      <div class="switchline">Already set a password?
+        <button type="button" id="go-login">Log in instead</button>
+      </div>
+      <div class="err" id="signup-err"></div>
+      <div class="ok" id="signup-ok">Account created — logging you in…</div>
+      <form id="signup-form">
+        <label class="field-label" for="su-employeeId">Employee ID</label>
+        <input class="field" id="su-employeeId" name="employeeId" type="text" placeholder="e.g. 94 — the ID HR gave you" autocomplete="username" required>
+
+        <label class="field-label" for="su-name">Full name</label>
+        <input class="field" id="su-name" name="name" type="text" placeholder="e.g. Shyamanth Kota" autocomplete="name" required>
+
+        <label class="field-label" for="su-password">Create a password</label>
+        <input class="field" id="su-password" name="password" type="password" placeholder="At least 6 characters" autocomplete="new-password" required>
+
+        <label class="field-label" for="su-password2">Confirm password</label>
+        <input class="field" id="su-password2" name="password2" type="password" placeholder="••••••••" autocomplete="new-password" required>
+
+        <label class="field-label" for="su-role">Signing up as</label>
+        <select class="field" id="su-role" name="role">
+          <option value="staff">Staff</option>
+          <option value="rota_editor">Rota editor</option>
+          <option value="manager">Manager</option>
+          <option value="hr">HR</option>
+        </select>
+
+        <button class="btn-primary" type="submit" id="signup-btn">Create account</button>
+      </form>
+    </div>
+
   </div>
 </main>
 
@@ -120,18 +169,40 @@
   // ---------------------------------------------------------------
   const API_BASE = 'https://hallan-picking-backend.onrender.com';
 
-  const form = document.getElementById('login-form');
-  const errBox = document.getElementById('err');
-  const btn = document.getElementById('login-btn');
+  /* ---- switch between Log in / Sign up ---- */
+  const formLogin = document.getElementById('form-login');
+  const formSignup = document.getElementById('form-signup');
+  document.getElementById('go-signup').addEventListener('click', () => {
+    formLogin.classList.remove('active'); formSignup.classList.add('active');
+  });
+  document.getElementById('go-login').addEventListener('click', () => {
+    formSignup.classList.remove('active'); formLogin.classList.add('active');
+  });
 
-  function showError(msg){ errBox.textContent = msg; errBox.style.display = 'block'; }
-  function clearError(){ errBox.style.display = 'none'; }
+  /* ---- log in ---- */
+  const loginForm = document.getElementById('login-form');
+  const loginErr = document.getElementById('login-err');
+  const loginBtn = document.getElementById('login-btn');
 
-  form.addEventListener('submit', async (e) => {
+  function showErr(box, msg){ box.textContent = msg; box.style.display = 'block'; }
+  function clearErr(box){ box.style.display = 'none'; }
+
+  function goToRota(data, employeeId){
+    localStorage.setItem('rota_token', data.token);
+    localStorage.setItem('rota_name', data.emp.name);
+    localStorage.setItem('rota_role', data.role);
+    // rota_login_id is what schedule.html matches against the Access-tab
+    // grants (rota editors / managers scoped by department) — it's just
+    // the ID they typed in, since that's what HR will use to grant access.
+    localStorage.setItem('rota_login_id', employeeId);
+    window.location.href = 'schedule.html';
+  }
+
+  loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    clearError();
-    btn.disabled = true;
-    btn.textContent = 'Logging in…';
+    clearErr(loginErr);
+    loginBtn.disabled = true;
+    loginBtn.textContent = 'Logging in…';
 
     const employeeId = document.getElementById('employeeId').value.trim();
     const password = document.getElementById('password').value;
@@ -145,20 +216,83 @@
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
-        showError(data.error || 'Login failed — check your details and try again.');
-        btn.disabled = false;
-        btn.textContent = 'Log in';
+        showErr(loginErr, data.error || 'Login failed — check your details and try again.');
+        loginBtn.disabled = false;
+        loginBtn.textContent = 'Log in';
         return;
       }
-      // Reuses the exact same JWT the Staff Portal issues.
-      localStorage.setItem('rota_token', data.token);
-      localStorage.setItem('rota_name', data.emp.name);
-      localStorage.setItem('rota_role', data.role);
-      window.location.href = 'schedule.html';
+      goToRota(data, employeeId);
     } catch (err) {
-      showError('Could not reach the server. Check your connection and try again.');
-      btn.disabled = false;
-      btn.textContent = 'Log in';
+      showErr(loginErr, 'Could not reach the server. Check your connection and try again.');
+      loginBtn.disabled = false;
+      loginBtn.textContent = 'Log in';
+    }
+  });
+
+  /* ---- sign up ----
+     NOTE: this posts to a guessed endpoint, /api/staff/signup, with the
+     same shape the login call uses plus name/password2. Confirm the real
+     route and field names on your backend and adjust this fetch if they
+     differ — I don't have visibility into that server code.
+
+     SECURITY NOTE: letting someone pick their own role (Staff / Rota
+     editor / Manager / HR) at sign-up only works safely if the backend
+     enforces who's actually allowed to claim "HR" or "Manager" — e.g. by
+     checking an invite code, or only accepting the role HR pre-assigned
+     to that Employee ID. If the backend just accepts whatever role is
+     sent, anyone could sign up as HR. Worth checking before this goes live.
+  ---- */
+  const signupForm = document.getElementById('signup-form');
+  const signupErr = document.getElementById('signup-err');
+  const signupOk = document.getElementById('signup-ok');
+  const signupBtn = document.getElementById('signup-btn');
+
+  signupForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearErr(signupErr);
+    signupOk.style.display = 'none';
+
+    const employeeId = document.getElementById('su-employeeId').value.trim();
+    const name = document.getElementById('su-name').value.trim();
+    const password = document.getElementById('su-password').value;
+    const password2 = document.getElementById('su-password2').value;
+    const role = document.getElementById('su-role').value;
+
+    if (password.length < 6) { showErr(signupErr, 'Password must be at least 6 characters.'); return; }
+    if (password !== password2) { showErr(signupErr, "Passwords don't match."); return; }
+
+    signupBtn.disabled = true;
+    signupBtn.textContent = 'Creating account…';
+
+    try {
+      const res = await fetch(`${API_BASE}/api/staff/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId, name, password, role })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        showErr(signupErr, data.error || "Couldn't create that account — check your Employee ID with HR and try again.");
+        signupBtn.disabled = false;
+        signupBtn.textContent = 'Create account';
+        return;
+      }
+      signupOk.style.display = 'block';
+      if (data.token) {
+        // Backend logged them in immediately on signup.
+        setTimeout(() => goToRota(data, employeeId), 700);
+      } else {
+        // Backend just created the account — send them to log in with it.
+        setTimeout(() => {
+          formSignup.classList.remove('active'); formLogin.classList.add('active');
+          document.getElementById('employeeId').value = employeeId;
+          document.getElementById('password').focus();
+        }, 900);
+      }
+    } catch (err) {
+      showErr(signupErr, 'Could not reach the server. Check your connection and try again.');
+      signupBtn.disabled = false;
+      signupBtn.textContent = 'Create account';
     }
   });
 </script>
