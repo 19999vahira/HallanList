@@ -124,7 +124,7 @@
   .link-danger{background:none;border:none;color:#C4433F;font-size:13px;font-weight:600;padding:8px 0;}
   .link-danger:hover{text-decoration:underline;}
   .checkbox-row{display:flex;align-items:center;gap:8px;margin-top:16px;font-size:13.5px;}
-  nav a[data-tab="timesheet"].nav-hidden{display:none;}
+  nav a.nav-hidden{display:none;}
   .ts-time-input{width:98px;padding:7px 8px;border:1px solid var(--line);border-radius:6px;font-size:12.5px;color:var(--ink);}
   .ts-comment-input{width:130px;padding:7px 8px;border:1px solid var(--line);border-radius:6px;font-size:12.5px;color:var(--ink);}
   table.simple.ts-detail th, table.simple.ts-detail td{padding:8px 10px;font-size:12.5px;}
@@ -138,6 +138,62 @@
   .analysis-head{display:flex;align-items:center;justify-content:space-between;margin:34px 0 14px;}
   .analysis-head h2{font-size:16px;margin:0;}
   .analysis-head .sub{font-size:12.5px;color:var(--slate);}
+
+  /* ---- profile menu ---- */
+  .profilewrap{position:relative;}
+  .avatar-pill{border:none;}
+  .profile-menu{
+    display:none;position:absolute;top:calc(100% + 10px);right:0;background:#fff;color:var(--ink);
+    border:1px solid var(--line);border-radius:10px;box-shadow:0 16px 34px -16px rgba(14,30,51,.35);
+    min-width:220px;padding:8px;z-index:80;
+  }
+  .profile-menu.show{display:block;}
+  .profile-menu .pm-head{padding:10px 12px 12px;border-bottom:1px solid var(--line);margin-bottom:6px;}
+  .profile-menu .pm-name{font-size:13.5px;font-weight:700;color:var(--ink);}
+  .profile-menu .pm-role{font-size:11.5px;color:var(--slate);text-transform:capitalize;margin-top:2px;}
+  .profile-menu button{display:flex;align-items:center;gap:9px;width:100%;background:none;border:none;
+    text-align:left;padding:9px 12px;font-size:13.5px;color:var(--ink);border-radius:6px;}
+  .profile-menu button:hover{background:#F0F3F5;}
+  .profile-menu button.pm-danger{color:#C4433F;}
+  .profile-menu hr{border:none;border-top:1px solid var(--line);margin:6px 0;}
+
+  /* ---- access tab ---- */
+  .access-card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:20px 22px;margin-bottom:22px;}
+  .access-card h3{margin:0 0 3px;font-size:15.5px;}
+  .access-card .sub{font-size:12.5px;color:var(--slate);margin-bottom:14px;}
+  .dept-chip{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;
+    background:#EDF4FB;color:var(--nav-blue-dark);margin:2px 3px 2px 0;}
+
+  /* ---- full-screen timesheet detail (TimeMoto style) ---- */
+  .ts-full{display:flex;align-items:stretch;min-height:calc(100vh - 56px);}
+  .ts-sidebar{width:220px;flex:none;background:#fff;border-right:1px solid var(--line);padding:20px 16px;}
+  .ts-sidebar h4{font-size:13px;margin:0 0 14px;}
+  .ts-filter-group{margin-bottom:20px;}
+  .ts-filter-group > .lbl{font-size:11.5px;font-weight:700;color:var(--ink);margin-bottom:6px;}
+  .ts-filter-group .val{font-size:12.5px;color:var(--nav-blue);cursor:pointer;padding:2px 0;}
+  .ts-filter-group select, .ts-filter-group input[type=date]{width:100%;padding:7px 8px;border:1px solid var(--line);
+    border-radius:6px;font-size:12.5px;margin-top:4px;}
+  .ts-clear-link{font-size:12.5px;color:var(--nav-blue);background:none;border:none;padding:0;margin-top:6px;}
+  .ts-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+  .ts-full-head{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--line);background:#fff;}
+  .ts-full-head .title{font-size:14.5px;}
+  .ts-full-head .title b{font-weight:700;}
+  .ts-full-head .title span{color:var(--slate);}
+  .ts-table-wrap{flex:1;overflow:auto;background:#fff;}
+  table.ts-full-table{width:100%;border-collapse:collapse;min-width:1100px;}
+  table.ts-full-table th, table.ts-full-table td{border-bottom:1px solid var(--line);padding:11px 12px;font-size:12.5px;white-space:nowrap;}
+  table.ts-full-table th{background:#FAFBFC;color:var(--slate);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.4px;text-align:left;}
+  table.ts-full-table tbody tr:hover{background:#FAFBFC;}
+  table.ts-full-table .ts-flag-dot{width:9px;height:9px;border-radius:50%;background:#D9D9D9;display:inline-block;}
+  table.ts-full-table .ts-flag-dot.warn{background:var(--amber,#D9A02F);}
+  table.ts-full-table .ts-flag-dot.bad{background:#D9534F;}
+  table.ts-full-table input[type=time]{width:82px;padding:5px 6px;border:1px solid var(--line);border-radius:5px;font-size:12px;}
+  table.ts-full-table input[type=text]{width:120px;padding:5px 6px;border:1px solid var(--line);border-radius:5px;font-size:12px;}
+  .ts-full-foot{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-top:1px solid var(--line);background:#fff;}
+  .ts-full-foot .iconbtns{display:flex;gap:22px;}
+  .ts-full-foot .iconbtns button{background:none;border:none;color:var(--slate);font-size:11.5px;display:flex;flex-direction:column;align-items:center;gap:4px;}
+  .ts-full-foot .iconbtns button:hover{color:var(--nav-blue);}
+  .ts-full-foot .iconcircle{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:15px;}
 </style>
 </head>
 <body>
@@ -151,16 +207,29 @@
     ROTA
   </div>
   <nav>
-    <a href="#" data-tab="schedule" class="active">Schedule</a>
-    <a href="#" data-tab="employees">Employees</a>
-    <a href="#" data-tab="shifts">Shifts</a>
+    <a href="#" data-tab="schedule" id="nav-schedule" class="active">Schedule</a>
+    <a href="#" data-tab="employees" id="nav-employees">Employees</a>
+    <a href="#" data-tab="shifts" id="nav-shifts">Shifts</a>
     <a href="#" data-tab="timesheet" id="nav-timesheet" class="nav-hidden">Timesheet</a>
-    <a href="clockin.html">Time Clock</a>
+    <a href="#" data-tab="analytics" id="nav-analytics" class="nav-hidden">Analytics</a>
+    <a href="#" data-tab="access" id="nav-access" class="nav-hidden">Access</a>
+    <a href="clockin.html" id="nav-clockin">Time Clock</a>
   </nav>
   <div class="right">
     <span id="user-name">Hallan Cash &amp; Carry</span>
-    <button class="logout-btn" id="logout-btn">Log out</button>
-    <div class="avatar-pill" id="avatar-pill">HC</div>
+    <div class="profilewrap">
+      <button class="avatar-pill" id="avatar-pill">HC</button>
+      <div class="profile-menu" id="profile-menu">
+        <div class="pm-head">
+          <div class="pm-name" id="pm-name">—</div>
+          <div class="pm-role" id="pm-role">—</div>
+        </div>
+        <button id="pm-password-btn">🔒 Change password</button>
+        <button id="pm-access-btn" style="display:none;">🔑 Give access</button>
+        <hr>
+        <button class="pm-danger" id="pm-logout-btn">↪ Log out</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -213,7 +282,7 @@
     </div>
     <div id="csv-upload-summary" style="display:none;background:#EEF6EC;border:1px solid #CFE7C7;color:#2C6B22;font-size:13px;padding:10px 14px;border-radius:6px;margin-bottom:14px;"></div>
     <table class="simple">
-      <thead><tr><th>Name</th><th>Department</th><th>Shifts covered</th><th>Login ID</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>Department</th><th>Personnel #</th><th>Shifts covered</th><th>Login ID</th><th></th></tr></thead>
       <tbody id="employees-body"></tbody>
     </table>
   </div>
@@ -230,7 +299,7 @@
   </div>
 </div>
 
-<!-- ===================== TIMESHEET TAB (HR only) ===================== -->
+<!-- ===================== TIMESHEET TAB (HR / scoped rota editors) ===================== -->
 <div class="tabpage" id="tab-timesheet">
   <div class="toolbar">
     <div class="weeknav">
@@ -252,17 +321,119 @@
       <thead><tr><th>Employee</th><th>Department</th><th>Total hours</th><th>Issues vs rota</th><th></th></tr></thead>
       <tbody id="timesheet-body"></tbody>
     </table>
+  </div>
+</div>
 
-    <div class="analysis-head">
+<!-- ===================== ANALYTICS TAB (HR + scoped managers) ===================== -->
+<div class="tabpage" id="tab-analytics">
+  <div class="toolbar">
+    <div class="weeknav">
+      <button class="navbtn" id="an-prev">&lsaquo;</button>
+      <div class="weeklabel" id="an-period-label" style="min-width:230px;">—</div>
+      <button class="navbtn" id="an-next">&rsaquo;</button>
+    </div>
+    <div class="rangebtns">
+      <button class="btn" data-an-range="1">Today</button>
+      <button class="btn" data-an-range="7">Last 7 days</button>
+      <button class="btn" data-an-range="28">Last 28 days</button>
+      <button class="btn active" data-an-range="period">Pay period (24th–23rd)</button>
+    </div>
+  </div>
+  <div class="tabbody" style="max-width:1080px;">
+    <div class="analysis-head" style="margin-top:8px;">
       <div>
         <h2>Attendance analysis</h2>
-        <div class="sub">Compared against the Rota for the range selected above.</div>
+        <div class="sub" id="analysis-scope-note">Compared against the Rota for the range selected above.</div>
       </div>
     </div>
     <table class="simple">
-      <thead><tr><th>Employee</th><th>Late arrivals</th><th>Avg. mins late</th><th>Left early</th><th>Break overages</th><th>No-shows</th></tr></thead>
+      <thead><tr><th>Employee</th><th>Department</th><th>Late arrivals</th><th>Avg. mins late</th><th>Left early</th><th>Break overages</th><th>No-shows</th></tr></thead>
       <tbody id="analysis-body"></tbody>
     </table>
+  </div>
+</div>
+
+<!-- ===================== ACCESS TAB (HR only) ===================== -->
+<div class="tabpage" id="tab-access">
+  <div class="tabbody" style="max-width:900px;">
+    <div class="tabbody-head">
+      <h2>Access</h2>
+    </div>
+
+    <div class="access-card">
+      <h3>Rota editors</h3>
+      <div class="sub">Give someone permission to build/edit the Rota for specific departments only — e.g. give Shyamanth access to just the Cashier rota. They'll only see and edit the departments checked below.</div>
+      <table class="simple">
+        <thead><tr><th>Name</th><th>Login ID</th><th>Departments they can edit</th><th></th></tr></thead>
+        <tbody id="access-editors-body"></tbody>
+      </table>
+      <button class="btn" id="add-access-editor-btn" style="margin-top:12px;">+ Add rota editor</button>
+    </div>
+
+    <div class="access-card">
+      <h3>Manager analytics access</h3>
+      <div class="sub">Managers only see the Analytics screen (attendance vs rota) — never Schedule, Employees or raw Timesheet. Pick which departments' analytics each manager can view.</div>
+      <table class="simple">
+        <thead><tr><th>Name</th><th>Login ID</th><th>Departments they can view</th><th></th></tr></thead>
+        <tbody id="access-managers-body"></tbody>
+      </table>
+      <button class="btn" id="add-access-manager-btn" style="margin-top:12px;">+ Add manager</button>
+    </div>
+
+    <div style="font-size:12px;color:var(--slate);">Access is matched by Login ID at sign-in. If someone doesn't have a Rota login yet, add them on the Employees tab first (or just set one here) so their Login ID matches what they use to sign in.</div>
+  </div>
+</div>
+
+<!-- ===================== FULL-SCREEN TIMESHEET DETAIL (TimeMoto-style) ===================== -->
+<div class="tabpage" id="tab-ts-detail">
+  <div class="ts-full">
+    <div class="ts-sidebar">
+      <h4>Filters</h4>
+      <div class="ts-filter-group">
+        <div class="lbl">Range</div>
+        <div class="val" id="tsd-range-label">—</div>
+      </div>
+      <div class="ts-filter-group">
+        <div class="lbl">Department</div>
+        <select id="tsd-dept-filter"><option value="">All</option></select>
+      </div>
+      <div class="ts-filter-group">
+        <div class="lbl">User</div>
+        <select id="tsd-user-filter"><option value="">All</option></select>
+      </div>
+      <div class="ts-filter-group">
+        <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink);font-weight:500;">
+          <input type="checkbox" id="tsd-show-empty" checked> Show empty lines
+        </label>
+      </div>
+      <button class="ts-clear-link" id="tsd-clear-filters">Clear filters</button>
+    </div>
+    <div class="ts-main">
+      <div class="ts-full-head">
+        <div class="title"><b>Timesheet</b> &nbsp;|&nbsp; <span id="tsd-scope-label">All employees</span> &nbsp;|&nbsp; <span id="tsd-range-text">—</span></div>
+        <button class="btn" id="tsd-back-btn">← Back to Timesheet</button>
+      </div>
+      <div class="ts-table-wrap">
+        <table class="ts-full-table">
+          <thead>
+            <tr>
+              <th></th><th>User Name</th><th>Personnel Number</th><th>Date</th><th>In</th><th>Out</th>
+              <th>Breaks</th><th>Scheduled</th><th>Duration</th><th>Absence Duration</th><th>Balance</th><th>Absences</th><th>Remarks</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="tsd-body"></tbody>
+          <tfoot><tr id="tsd-totals-row"></tr></tfoot>
+        </table>
+      </div>
+      <div class="ts-full-foot">
+        <div style="font-size:12px;color:var(--slate);">Click Save on a row after changing its times.</div>
+        <div class="iconbtns">
+          <button id="tsd-mail-btn"><span class="iconcircle">✉</span> Mail</button>
+          <button id="tsd-print-btn"><span class="iconcircle">🖨</span> Print</button>
+          <button id="tsd-export-btn"><span class="iconcircle">⬇</span> Export</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -276,6 +447,8 @@
     <input type="text" id="emp-name" placeholder="e.g. Priya Nair">
     <label for="emp-dept">Department</label>
     <input type="text" id="emp-dept" placeholder="e.g. Front of House">
+    <label for="emp-personnel">Personnel number</label>
+    <input type="text" id="emp-personnel" placeholder="e.g. 00124">
     <label>Shifts this employee can cover</label>
     <div class="checkgrid" id="emp-shifts-checkgrid"></div>
     <div class="row2">
@@ -390,25 +563,64 @@
   </div>
 </div>
 
-<!-- Timesheet day-by-day detail / edit modal (HR only) -->
-<div class="overlay" id="ts-detail-overlay">
-  <div class="modal" style="width:700px;max-width:95vw;">
-    <h3 id="ts-detail-title">Timesheet</h3>
-    <div style="font-size:12.5px;color:var(--slate);margin:-10px 0 14px;" id="ts-detail-range"></div>
-    <div style="max-height:420px;overflow-y:auto;">
-      <table class="simple ts-detail" style="border:none;">
-        <thead>
-          <tr>
-            <th>Date</th><th>Clock in</th><th>Break start</th><th>Break end</th>
-            <th>Clock out</th><th>Hours</th><th>Comment</th><th></th>
-          </tr>
-        </thead>
-        <tbody id="ts-detail-body"></tbody>
-      </table>
-    </div>
+<!-- Change password modal -->
+<div class="overlay" id="password-overlay">
+  <div class="modal">
+    <h3>Change password</h3>
+    <div class="err" id="pw-err" style="display:none;background:#FDEEEE;border:1px solid #F3C4C4;color:#B23A3A;font-size:13px;padding:10px 12px;border-radius:6px;margin-bottom:14px;"></div>
+    <div id="pw-ok" style="display:none;background:#E5F6ED;border:1px solid #CFE7C7;color:#2C6B22;font-size:13px;padding:10px 12px;border-radius:6px;margin-bottom:14px;">Password updated.</div>
+    <label for="pw-current">Current password</label>
+    <input type="password" id="pw-current" placeholder="Current password">
+    <label for="pw-new">New password</label>
+    <input type="password" id="pw-new" placeholder="New password">
+    <label for="pw-confirm">Confirm new password</label>
+    <input type="password" id="pw-confirm" placeholder="Confirm new password">
     <div class="modal-actions">
-      <div style="font-size:12px;color:var(--slate);">Times can be edited directly — click Save on a row after changing it.</div>
-      <div><button class="btn" id="ts-detail-close">Close</button></div>
+      <div></div>
+      <div>
+        <button class="btn" id="pw-cancel">Cancel</button>
+        <button class="btn btn-primary" id="pw-save">Save password</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Access — rota editor modal -->
+<div class="overlay" id="access-editor-overlay">
+  <div class="modal">
+    <h3 id="access-editor-title">Add rota editor</h3>
+    <label for="ae-name">Name</label>
+    <input type="text" id="ae-name" placeholder="e.g. Shyamanth Kota">
+    <label for="ae-login">Login ID</label>
+    <input type="text" id="ae-login" placeholder="e.g. 3005">
+    <label>Departments this person can edit</label>
+    <div class="checkgrid" id="ae-dept-checkgrid"></div>
+    <div class="modal-actions">
+      <div><button class="link-danger" id="ae-delete" style="display:none;">Remove access</button></div>
+      <div>
+        <button class="btn" id="ae-cancel">Cancel</button>
+        <button class="btn btn-primary" id="ae-save">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Access — manager modal -->
+<div class="overlay" id="access-manager-overlay">
+  <div class="modal">
+    <h3 id="access-manager-title">Add manager</h3>
+    <label for="am-name">Name</label>
+    <input type="text" id="am-name" placeholder="e.g. Julia Parish">
+    <label for="am-login">Login ID</label>
+    <input type="text" id="am-login" placeholder="e.g. 4010">
+    <label>Departments this manager can view analytics for</label>
+    <div class="checkgrid" id="am-dept-checkgrid"></div>
+    <div class="modal-actions">
+      <div><button class="link-danger" id="am-delete" style="display:none;">Remove access</button></div>
+      <div>
+        <button class="btn" id="am-cancel">Cancel</button>
+        <button class="btn btn-primary" id="am-save">Save</button>
+      </div>
     </div>
   </div>
 </div>
@@ -429,12 +641,31 @@
   document.getElementById('user-name').textContent = localStorage.getItem('rota_name') || 'Hallan Cash & Carry';
   const initialsFromName = (localStorage.getItem('rota_name') || 'HC').split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase();
   document.getElementById('avatar-pill').textContent = initialsFromName;
+  /* currentRole: 'hr' | 'manager' | 'rota_editor' | 'staff'.
+     currentLoginId: NOTE — index.html doesn't currently save this; add
+     `localStorage.setItem('rota_login_id', <their login id>)` at login
+     time so manager/rota_editor scoping below can match a person to the
+     grants created on the Access tab. Until then, 'manager' and
+     'rota_editor' roles will show as "no departments granted yet". */
   const currentRole = localStorage.getItem('rota_role') || 'staff';
-  if (currentRole === 'hr') document.getElementById('nav-timesheet').classList.remove('nav-hidden');
-  document.getElementById('logout-btn').addEventListener('click', () => {
-    localStorage.removeItem('rota_token'); localStorage.removeItem('rota_name'); localStorage.removeItem('rota_role');
+  const currentLoginId = localStorage.getItem('rota_login_id') || '';
+  document.getElementById('pm-name').textContent = localStorage.getItem('rota_name') || 'Hallan Cash & Carry';
+  document.getElementById('pm-role').textContent = currentRole.replace('_', ' ');
+  if (currentRole === 'hr') document.getElementById('pm-access-btn').style.display = 'flex';
+
+  document.getElementById('pm-logout-btn').addEventListener('click', () => {
+    localStorage.removeItem('rota_token'); localStorage.removeItem('rota_name'); localStorage.removeItem('rota_role'); localStorage.removeItem('rota_login_id');
     window.location.href = 'index.html';
   });
+
+  /* ---- profile dropdown ---- */
+  const profileMenu = document.getElementById('profile-menu');
+  document.getElementById('avatar-pill').addEventListener('click', (e) => {
+    e.stopPropagation();
+    profileMenu.classList.toggle('show');
+  });
+  document.addEventListener('click', () => profileMenu.classList.remove('show'));
+  profileMenu.addEventListener('click', e => e.stopPropagation());
   fetch(`${API_BASE}/api/staff/me`, { headers: { Authorization: `Bearer ${token}` } })
     .then(r => { if (!r.ok) throw new Error('expired'); })
     .catch(() => { window.location.href = 'index.html'; });
@@ -460,9 +691,13 @@
   function defaultState(){
     return {
       shiftTypes: DEFAULT_SHIFT_TYPES.map(r => ({...r})),
-      employees: [],   // { id, name, department, shiftTypeIds:[], loginId, pin }
+      employees: [],   // { id, name, department, personnelNumber, shiftTypeIds:[], loginId, pin }
       shifts: {},      // shifts[employeeId][dateStr] = { shiftTypeId, start, end, breakMins }
-      timeOff: []       // [{ id, employeeId, from: dateStr, to: dateStr, reason }]
+      timeOff: [],      // [{ id, employeeId, from: dateStr, to: dateStr, reason }]
+      accessGrants: {
+        editors: [],    // [{ id, name, loginId, departments: [] }] — rota editors, scoped by department
+        managers: []    // [{ id, name, loginId, departments: [] }] — manager analytics access, scoped by department
+      }
     };
   }
   function loadState(){
@@ -527,21 +762,78 @@
   }
 
   /* =================================================================
-     TAB SWITCHING
+     ACCESS SCOPE — resolves the current person's department restriction
+     from the grants created on the Access tab (matched by Login ID).
+     scopedDepartments === null  -> no restriction (HR / staff)
+     scopedDepartments === []    -> restricted role but no grant found yet
+     scopedDepartments === [...] -> restricted to just these departments
      ================================================================= */
+  function findAccessGrant(list){
+    return (list || []).find(g => currentLoginId && g.loginId === currentLoginId) || null;
+  }
+  let scopedDepartments = null;
+  if (currentRole === 'rota_editor') {
+    const g = findAccessGrant(state.accessGrants.editors);
+    scopedDepartments = g ? g.departments : [];
+  } else if (currentRole === 'manager') {
+    const g = findAccessGrant(state.accessGrants.managers);
+    scopedDepartments = g ? g.departments : [];
+  }
+  function inScope(department){
+    if (scopedDepartments === null) return true;
+    return scopedDepartments.includes(department || '');
+  }
+  function scopedEmployees(){
+    return state.employees.filter(e => inScope(e.department));
+  }
+
+  function applyRoleNav(){
+    const nav = id => document.getElementById(id);
+    [nav('nav-timesheet'), nav('nav-analytics'), nav('nav-access')].forEach(n => n.classList.add('nav-hidden'));
+    [nav('nav-schedule'), nav('nav-employees'), nav('nav-shifts')].forEach(n => n.classList.remove('nav-hidden'));
+
+    if (currentRole === 'hr') {
+      nav('nav-timesheet').classList.remove('nav-hidden');
+      nav('nav-analytics').classList.remove('nav-hidden');
+      nav('nav-access').classList.remove('nav-hidden');
+    } else if (currentRole === 'manager') {
+      nav('nav-schedule').classList.add('nav-hidden');
+      nav('nav-employees').classList.add('nav-hidden');
+      nav('nav-shifts').classList.add('nav-hidden');
+      nav('nav-analytics').classList.remove('nav-hidden');
+    } else if (currentRole === 'rota_editor') {
+      nav('nav-employees').classList.add('nav-hidden');
+      nav('nav-shifts').classList.add('nav-hidden');
+    }
+  }
+  applyRoleNav();
+
+  /* =================================================================
+     TAB SWITCHING — activateTab() is the single entry point so buttons
+     elsewhere (e.g. "View / edit days", the profile menu's "Give access")
+     can jump tabs the same way the top nav does.
+     ================================================================= */
+  function activateTab(tabName){
+    document.querySelectorAll('nav a[data-tab]').forEach(x => x.classList.remove('active'));
+    const navLink = document.querySelector(`nav a[data-tab="${tabName}"]`);
+    if (navLink) navLink.classList.add('active');
+    document.querySelectorAll('.tabpage').forEach(p => p.classList.remove('active'));
+    document.getElementById('tab-' + tabName).classList.add('active');
+    if (tabName === 'employees') renderEmployeesTab();
+    if (tabName === 'shifts') renderShiftTypesTab();
+    if (tabName === 'schedule') renderSchedule();
+    if (tabName === 'timesheet') renderTimesheetTab();
+    if (tabName === 'analytics') renderAnalyticsTab();
+    if (tabName === 'access') renderAccessTab();
+    if (tabName === 'ts-detail') renderTsDetail();
+  }
   document.querySelectorAll('nav a[data-tab]').forEach(a => {
     a.addEventListener('click', (e) => {
       e.preventDefault();
-      document.querySelectorAll('nav a[data-tab]').forEach(x => x.classList.remove('active'));
-      a.classList.add('active');
-      document.querySelectorAll('.tabpage').forEach(p => p.classList.remove('active'));
-      document.getElementById('tab-' + a.dataset.tab).classList.add('active');
-      if (a.dataset.tab === 'employees') renderEmployeesTab();
-      if (a.dataset.tab === 'shifts') renderShiftTypesTab();
-      if (a.dataset.tab === 'schedule') renderSchedule();
-      if (a.dataset.tab === 'timesheet') renderTimesheetTab();
+      activateTab(a.dataset.tab);
     });
   });
+  document.getElementById('pm-access-btn').addEventListener('click', () => { profileMenu.classList.remove('show'); activateTab('access'); });
 
   /* =================================================================
      FILTERS
@@ -599,6 +891,7 @@
 
   function visibleEmployees(){
     return state.employees.filter(emp => {
+      if (!inScope(emp.department)) return false;
       if (filterEmployeeIds.size && !filterEmployeeIds.has(emp.id)) return false;
       if (filterShiftTypeIds.size && !emp.shiftTypeIds.some(id => filterShiftTypeIds.has(id))) return false;
       return true;
@@ -1007,6 +1300,7 @@
       <tr>
         <td>${emp.name}</td>
         <td>${emp.department || '—'}</td>
+        <td>${emp.personnelNumber || '—'}</td>
         <td>${emp.shiftTypeIds.map(id => {
           const st = shiftTypeById(id);
           return st ? `<span class="badge" style="background:${st.bg};color:${st.fg};">${st.name}</span>` : '';
@@ -1017,7 +1311,7 @@
           <button class="del" data-del-emp="${emp.id}">Delete</button>
         </td>
       </tr>
-    `).join('') || `<tr><td colspan="5" style="color:var(--slate);">No employees yet — click "Add employee" to create the first one.</td></tr>`;
+    `).join('') || `<tr><td colspan="6" style="color:var(--slate);">No employees yet — click "Add employee" to create the first one.</td></tr>`;
 
     body.querySelectorAll('[data-edit-emp]').forEach(btn => btn.addEventListener('click', () => openEmployeeModal(btn.dataset.editEmp)));
     body.querySelectorAll('[data-del-emp]').forEach(btn => btn.addEventListener('click', () => {
@@ -1039,6 +1333,7 @@
     document.getElementById('employee-modal-title').textContent = emp ? 'Edit employee' : 'Add employee';
     document.getElementById('emp-name').value = emp ? emp.name : '';
     document.getElementById('emp-dept').value = emp ? emp.department : '';
+    document.getElementById('emp-personnel').value = emp ? (emp.personnelNumber || '') : '';
     document.getElementById('emp-login').value = emp ? emp.loginId : '';
     document.getElementById('emp-pin').value = emp ? emp.pin : '';
 
@@ -1143,14 +1438,15 @@
     const name = document.getElementById('emp-name').value.trim();
     if (!name) { alert('Enter a name.'); return; }
     const department = document.getElementById('emp-dept').value.trim();
+    const personnelNumber = document.getElementById('emp-personnel').value.trim();
     const loginId = document.getElementById('emp-login').value.trim();
     const pin = document.getElementById('emp-pin').value.trim();
     const shiftTypeIds = Array.from(document.querySelectorAll('#emp-shifts-checkgrid input:checked')).map(cb => cb.value);
 
     if (editingEmployeeId) {
-      Object.assign(employeeById(editingEmployeeId), { name, department, loginId, pin, shiftTypeIds });
+      Object.assign(employeeById(editingEmployeeId), { name, department, personnelNumber, loginId, pin, shiftTypeIds });
     } else {
-      state.employees.push({ id: uid('emp'), name, department, loginId, pin, shiftTypeIds });
+      state.employees.push({ id: uid('emp'), name, department, personnelNumber, loginId, pin, shiftTypeIds });
     }
     saveState(); renderEmployeesTab();
     employeeOverlay.classList.remove('show');
@@ -1333,40 +1629,48 @@
       : `${start.getDate()} ${MONTH_NAMES[start.getMonth()]} – ${end.getDate()} ${MONTH_NAMES[end.getMonth()]} ${end.getFullYear()}`;
   }
 
-  document.querySelectorAll('[data-ts-range]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      tsRangeMode = btn.dataset.tsRange;
-      tsAnchorDate = new Date();
-      document.querySelectorAll('[data-ts-range]').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      renderTimesheetTab();
+  function wireRangeButtons(btnSelector, prevBtnId, nextBtnId, onChange){
+    document.querySelectorAll(btnSelector).forEach(btn => {
+      btn.addEventListener('click', () => {
+        tsRangeMode = btn.dataset.tsRange || btn.dataset.anRange;
+        tsAnchorDate = new Date();
+        document.querySelectorAll('[data-ts-range], [data-an-range]').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll(`[data-ts-range="${tsRangeMode}"], [data-an-range="${tsRangeMode}"]`).forEach(b => b.classList.add('active'));
+        onChange();
+      });
     });
-  });
-  document.getElementById('ts-prev').addEventListener('click', () => {
-    if (tsRangeMode === 'period') {
-      const { start } = currentTsRange();
-      tsAnchorDate = addDays(start, -1); // lands in the previous period
-    } else {
-      tsAnchorDate = addDays(tsAnchorDate, -Number(tsRangeMode));
-    }
-    renderTimesheetTab();
-  });
-  document.getElementById('ts-next').addEventListener('click', () => {
-    if (tsRangeMode === 'period') {
-      const { end } = currentTsRange();
-      tsAnchorDate = addDays(end, 1); // lands in the next period
-    } else {
-      tsAnchorDate = addDays(tsAnchorDate, Number(tsRangeMode));
-    }
-    renderTimesheetTab();
-  });
+    document.getElementById(prevBtnId).addEventListener('click', () => {
+      if (tsRangeMode === 'period') {
+        const { start } = currentTsRange();
+        tsAnchorDate = addDays(start, -1);
+      } else {
+        tsAnchorDate = addDays(tsAnchorDate, -Number(tsRangeMode));
+      }
+      onChange();
+    });
+    document.getElementById(nextBtnId).addEventListener('click', () => {
+      if (tsRangeMode === 'period') {
+        const { end } = currentTsRange();
+        tsAnchorDate = addDays(end, 1);
+      } else {
+        tsAnchorDate = addDays(tsAnchorDate, Number(tsRangeMode));
+      }
+      onChange();
+    });
+  }
+  // Timesheet and Analytics share the same range state (tsRangeMode /
+  // tsAnchorDate) — they're just two views on the same period — so
+  // changing the range on one screen keeps the other in sync too.
+  wireRangeButtons('[data-ts-range]', 'ts-prev', 'ts-next', () => { renderTimesheetTab(); renderAnalyticsTab(); });
+  wireRangeButtons('[data-an-range]', 'an-prev', 'an-next', () => { renderTimesheetTab(); renderAnalyticsTab(); });
 
   function renderTimesheetTab(){
     document.getElementById('ts-period-label').textContent = tsRangeLabel();
     const dateStrs = tsDateStrsInRange();
+    const emps = scopedEmployees();
 
     const body = document.getElementById('timesheet-body');
-    body.innerHTML = state.employees.map(emp => {
+    body.innerHTML = emps.map(emp => {
       let mins = 0;
       dateStrs.forEach(ds => { mins += dayMinutes((timesheetState.days[emp.id] || {})[ds]); });
 
@@ -1396,13 +1700,18 @@
     body.querySelectorAll('[data-ts-open]').forEach(btn => {
       btn.addEventListener('click', () => openTsDetail(btn.dataset.tsOpen));
     });
-
-    renderAttendanceAnalysis(dateStrs);
   }
 
-  function renderAttendanceAnalysis(dateStrs){
+  function renderAnalyticsTab(){
+    document.getElementById('an-period-label').textContent = tsRangeLabel();
+    const dateStrs = tsDateStrsInRange();
+    const emps = scopedEmployees();
+    document.getElementById('analysis-scope-note').textContent = scopedDepartments === null
+      ? 'Compared against the Rota for the range selected above.'
+      : `Compared against the Rota — showing ${scopedDepartments.length ? scopedDepartments.join(', ') : 'no departments granted yet'}.`;
+
     const abody = document.getElementById('analysis-body');
-    const rows = state.employees.map(emp => {
+    const rows = emps.map(emp => {
       const s = rangeAttendanceSummary(emp.id, dateStrs);
       const avgLate = s.late ? Math.round(s.lateMinsSum / s.late) : 0;
       return { emp, s, avgLate };
@@ -1411,75 +1720,171 @@
     abody.innerHTML = rows.map(({ emp, s, avgLate }) => `
       <tr>
         <td>${emp.name}</td>
+        <td>${emp.department || '—'}</td>
         <td>${s.late || '—'}</td>
         <td>${s.late ? avgLate + 'm' : '—'}</td>
         <td>${s.earlyLeave || '—'}</td>
         <td>${s.breakOver || '—'}</td>
         <td>${s.noShow ? `<span class="issue-badge bad">${s.noShow}</span>` : '—'}</td>
       </tr>
-    `).join('') || `<tr><td colspan="6" style="color:var(--slate);">No employees yet.</td></tr>`;
+    `).join('') || `<tr><td colspan="7" style="color:var(--slate);">No employees yet.</td></tr>`;
   }
 
-  const tsDetailOverlay = document.getElementById('ts-detail-overlay');
+  /* =================================================================
+     FULL-SCREEN TIMESHEET DETAIL (TimeMoto-style)
+     ================================================================= */
+  function fmtHM(mins){
+    const sign = mins < 0 ? '-' : '';
+    const abs = Math.abs(mins);
+    return `${sign}${Math.floor(abs/60)}:${String(abs%60).padStart(2,'0')}`;
+  }
+
+  let tsdFocusEmpId = null; // set when opened via "View / edit days"; '' = all employees
 
   function openTsDetail(empId){
-    const emp = employeeById(empId);
+    tsdFocusEmpId = empId;
+    activateTab('ts-detail');
+  }
+  document.getElementById('tsd-back-btn').addEventListener('click', () => activateTab('timesheet'));
+
+  function renderTsDetailFilters(){
+    const emps = scopedEmployees();
+    const depts = Array.from(new Set(emps.map(e => e.department).filter(Boolean)));
+    const deptSel = document.getElementById('tsd-dept-filter');
+    const userSel = document.getElementById('tsd-user-filter');
+    const prevDept = deptSel.value, prevUser = userSel.value;
+    deptSel.innerHTML = '<option value="">All</option>' + depts.map(d => `<option value="${d}">${d}</option>`).join('');
+    userSel.innerHTML = '<option value="">All</option>' + emps.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
+    deptSel.value = depts.includes(prevDept) ? prevDept : '';
+    userSel.value = (tsdFocusEmpId && emps.some(e => e.id === tsdFocusEmpId)) ? tsdFocusEmpId : (emps.some(e => e.id === prevUser) ? prevUser : '');
+    tsdFocusEmpId = null; // only force the filter the first time the screen opens
+  }
+
+  function renderTsDetail(){
+    renderTsDetailFilters();
+    document.getElementById('tsd-range-label').textContent = tsRangeLabel();
+    document.getElementById('tsd-range-text').textContent = tsRangeLabel();
+
+    const deptFilter = document.getElementById('tsd-dept-filter').value;
+    const userFilter = document.getElementById('tsd-user-filter').value;
+    const showEmpty = document.getElementById('tsd-show-empty').checked;
     const dateStrs = tsDateStrsInRange();
-    document.getElementById('ts-detail-title').textContent = `Timesheet — ${emp.name}`;
-    document.getElementById('ts-detail-range').textContent = tsRangeLabel();
 
-    const body = document.getElementById('ts-detail-body');
-    body.innerHTML = dateStrs.slice().reverse().map(dateStr => {
-      const d = fromDateStr(dateStr);
-      const dayLabel = `${DAY_NAMES[d.getDay()===0?6:d.getDay()-1]} ${d.getDate()} ${MONTH_NAMES[d.getMonth()]}`;
-      const rec = (timesheetState.days[empId] || {})[dateStr] || {};
-      const mins = dayMinutes(rec);
-      const sched = scheduledFor(empId, dateStr);
-      const schedLabel = sched
-        ? `<div style="font-size:10.5px;color:var(--slate);margin-top:2px;">Rota: ${sched.start}–${sched.end}${sched.breakMins ? ` · ${sched.breakMins}m break` : ''}</div>`
-        : `<div style="font-size:10.5px;color:var(--slate);margin-top:2px;">Not on rota</div>`;
-      const { text: autoNote } = computeDayFlags(empId, dateStr, rec);
-      // Auto-fill the comment box with the rota-comparison note ONLY when
-      // there's no manually-saved comment yet, so it never overwrites what
-      // HR has already typed. HR can edit or clear it before saving.
-      const commentValue = rec.comment ? rec.comment : autoNote;
-      return `<tr data-ts-row="${dateStr}">
-        <td>${dayLabel}${schedLabel}</td>
-        <td><input type="time" class="ts-time-input ts-in" value="${rec.in || ''}"></td>
-        <td><input type="time" class="ts-time-input ts-breakstart" value="${rec.breakStart || ''}"></td>
-        <td><input type="time" class="ts-time-input ts-breakend" value="${rec.breakEnd || ''}"></td>
-        <td><input type="time" class="ts-time-input ts-out" value="${rec.out || ''}"></td>
-        <td class="ts-hours-cell" style="font-weight:700;">${mins ? fmtMins(mins) : '—'}</td>
-        <td>
-          <input type="text" class="ts-comment-input ts-comment" value="${commentValue.replace(/"/g,'&quot;')}" placeholder="Comment">
-          ${(!rec.comment && autoNote) ? '<span class="auto-note">auto-suggested from rota — edit or Save to keep</span>' : ''}
-        </td>
-        <td><button class="btn" data-ts-save="${dateStr}">Save</button></td>
-      </tr>`;
-    }).join('');
+    let emps = scopedEmployees();
+    if (deptFilter) emps = emps.filter(e => e.department === deptFilter);
+    if (userFilter) emps = emps.filter(e => e.id === userFilter);
 
-    body.querySelectorAll('[data-ts-save]').forEach(saveBtn => {
+    document.getElementById('tsd-scope-label').textContent = userFilter
+      ? (employeeById(userFilter) ? employeeById(userFilter).name : 'All employees')
+      : (deptFilter || 'All employees');
+
+    const body = document.getElementById('tsd-body');
+    let totalMins = 0;
+    const rowsHtml = [];
+
+    emps.forEach(emp => {
+      dateStrs.slice().reverse().forEach(dateStr => {
+        const rec = (timesheetState.days[emp.id] || {})[dateStr] || {};
+        const hasData = rec.in || rec.out || rec.breakStart || rec.breakEnd || rec.comment;
+        const off = timeOffFor(emp.id, dateStr);
+        if (!hasData && !off && !showEmpty) return;
+
+        const mins = dayMinutes(rec);
+        totalMins += mins;
+        const sched = scheduledFor(emp.id, dateStr);
+        const schedMins = sched ? hoursMinusBreak(sched.start, sched.end, sched.breakMins) : 0;
+        const balance = mins - schedMins;
+        const { flags, text: autoNote } = computeDayFlags(emp.id, dateStr, rec);
+        const dotClass = flags.noShow ? 'bad' : (flags.late || flags.earlyLeave || flags.breakOver) ? 'warn' : '';
+        const d = fromDateStr(dateStr);
+        const dateLabel = `${DAY_NAMES[d.getDay()===0?6:d.getDay()-1]}, ${MONTH_NAMES[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+        const commentValue = rec.comment ? rec.comment : autoNote;
+
+        rowsHtml.push(`<tr data-tsd-row="${emp.id}|${dateStr}">
+          <td><span class="ts-flag-dot ${dotClass}"></span></td>
+          <td>${emp.name}</td>
+          <td>${emp.personnelNumber || '—'}</td>
+          <td>${dateLabel}</td>
+          <td><input type="time" class="tsd-in" value="${rec.in || ''}"></td>
+          <td><input type="time" class="tsd-out" value="${rec.out || ''}"></td>
+          <td style="display:flex;gap:4px;">
+            <input type="time" class="tsd-breakstart" value="${rec.breakStart || ''}">
+            <input type="time" class="tsd-breakend" value="${rec.breakEnd || ''}">
+          </td>
+          <td>${sched ? fmtHM(schedMins) : '0:00'}</td>
+          <td style="font-weight:700;">${fmtHM(mins)}</td>
+          <td>${off ? fmtHM(schedMins) : '0:00'}</td>
+          <td>${balance ? fmtHM(balance) : '0:00'}</td>
+          <td>${off ? (off.reason || 'Absence') : '—'}</td>
+          <td><input type="text" class="tsd-comment" value="${commentValue.replace(/"/g,'&quot;')}" placeholder="Remarks"></td>
+          <td><button class="btn" data-tsd-save="${emp.id}|${dateStr}">Save</button></td>
+        </tr>`);
+      });
+    });
+
+    body.innerHTML = rowsHtml.join('') || `<tr><td colspan="14" style="color:var(--slate);padding:18px;">No rows for this selection.</td></tr>`;
+
+    const totalsRow = document.getElementById('tsd-totals-row');
+    totalsRow.innerHTML = `<td colspan="8" style="text-align:right;font-weight:700;">Total</td><td style="font-weight:700;">${fmtHM(totalMins)}</td><td colspan="4"></td>`;
+
+    body.querySelectorAll('[data-tsd-save]').forEach(saveBtn => {
       saveBtn.addEventListener('click', () => {
-        const dateStr = saveBtn.dataset.tsSave;
-        const row = body.querySelector(`tr[data-ts-row="${dateStr}"]`);
+        const [empId, dateStr] = saveBtn.dataset.tsdSave.split('|');
+        const row = body.querySelector(`tr[data-tsd-row="${empId}|${dateStr}"]`);
         const rec = {
-          in: row.querySelector('.ts-in').value || null,
-          breakStart: row.querySelector('.ts-breakstart').value || null,
-          breakEnd: row.querySelector('.ts-breakend').value || null,
-          out: row.querySelector('.ts-out').value || null,
-          comment: row.querySelector('.ts-comment').value.trim()
+          in: row.querySelector('.tsd-in').value || null,
+          breakStart: row.querySelector('.tsd-breakstart').value || null,
+          breakEnd: row.querySelector('.tsd-breakend').value || null,
+          out: row.querySelector('.tsd-out').value || null,
+          comment: row.querySelector('.tsd-comment').value.trim()
         };
         if (!timesheetState.days[empId]) timesheetState.days[empId] = {};
         timesheetState.days[empId][dateStr] = rec;
         saveTimesheet();
-        row.querySelector('.ts-hours-cell').textContent = dayMinutes(rec) ? fmtMins(dayMinutes(rec)) : '—';
-        renderTimesheetTab(); // refresh the total-hours list behind the modal
+        renderTsDetail();
       });
     });
-
-    tsDetailOverlay.classList.add('show');
   }
-  document.getElementById('ts-detail-close').addEventListener('click', () => tsDetailOverlay.classList.remove('show'));
+  ['tsd-dept-filter','tsd-user-filter','tsd-show-empty'].forEach(id => {
+    document.getElementById(id).addEventListener('change', renderTsDetail);
+  });
+  document.getElementById('tsd-clear-filters').addEventListener('click', () => {
+    document.getElementById('tsd-dept-filter').value = '';
+    document.getElementById('tsd-user-filter').value = '';
+    document.getElementById('tsd-show-empty').checked = true;
+    renderTsDetail();
+  });
+  document.getElementById('tsd-print-btn').addEventListener('click', () => window.print());
+  document.getElementById('tsd-mail-btn').addEventListener('click', () => {
+    window.location.href = `mailto:?subject=${encodeURIComponent('Timesheet — ' + tsRangeLabel())}&body=${encodeURIComponent('Timesheet for ' + tsRangeLabel() + ' is attached/exported from the Rota app.')}`;
+  });
+  document.getElementById('tsd-export-btn').addEventListener('click', () => {
+    const deptFilter = document.getElementById('tsd-dept-filter').value;
+    const userFilter = document.getElementById('tsd-user-filter').value;
+    const dateStrs = tsDateStrsInRange();
+    let emps = scopedEmployees();
+    if (deptFilter) emps = emps.filter(e => e.department === deptFilter);
+    if (userFilter) emps = emps.filter(e => e.id === userFilter);
+    const rows = [['User Name','Personnel Number','Date','In','Out','Break start','Break end','Scheduled','Duration','Absence Duration','Balance','Absences','Remarks']];
+    emps.forEach(emp => {
+      dateStrs.forEach(dateStr => {
+        const rec = (timesheetState.days[emp.id] || {})[dateStr] || {};
+        const off = timeOffFor(emp.id, dateStr);
+        if (!rec.in && !rec.out && !off) return;
+        const mins = dayMinutes(rec);
+        const sched = scheduledFor(emp.id, dateStr);
+        const schedMins = sched ? hoursMinusBreak(sched.start, sched.end, sched.breakMins) : 0;
+        rows.push([emp.name, emp.personnelNumber||'', dateStr, rec.in||'', rec.out||'', rec.breakStart||'', rec.breakEnd||'', fmtHM(schedMins), fmtHM(mins), off?fmtHM(schedMins):'0:00', fmtHM(mins-schedMins), off?(off.reason||'Absence'):'', rec.comment||'']);
+      });
+    });
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `hallan-timesheet-detail-${toDateStr(new Date())}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
 
   document.getElementById('ts-csv-btn').addEventListener('click', () => {
     const dateStrs = tsDateStrsInRange();
@@ -1502,11 +1907,158 @@
   });
 
   // Close modals by clicking the overlay background
-  [employeeOverlay, shiftOverlay, timeoffOverlay, downloadOverlay, bulkcopyOverlay, tsDetailOverlay].forEach(ov => {
+  [employeeOverlay, shiftOverlay, timeoffOverlay, downloadOverlay, bulkcopyOverlay,
+   document.getElementById('password-overlay'), document.getElementById('access-editor-overlay'), document.getElementById('access-manager-overlay')
+  ].forEach(ov => {
     ov.addEventListener('click', (e) => { if (e.target === ov) ov.classList.remove('show'); });
   });
 
-  renderSchedule();
+  /* =================================================================
+     CHANGE PASSWORD
+     NOTE: this posts to a guessed endpoint on the same backend used for
+     /api/staff/me above. Confirm the real route/field names on your
+     backend and adjust the fetch below if they differ.
+     ================================================================= */
+  const passwordOverlay = document.getElementById('password-overlay');
+  document.getElementById('pm-password-btn').addEventListener('click', () => {
+    profileMenu.classList.remove('show');
+    document.getElementById('pw-current').value = '';
+    document.getElementById('pw-new').value = '';
+    document.getElementById('pw-confirm').value = '';
+    document.getElementById('pw-err').style.display = 'none';
+    document.getElementById('pw-ok').style.display = 'none';
+    passwordOverlay.classList.add('show');
+  });
+  document.getElementById('pw-cancel').addEventListener('click', () => passwordOverlay.classList.remove('show'));
+  document.getElementById('pw-save').addEventListener('click', () => {
+    const current = document.getElementById('pw-current').value;
+    const next = document.getElementById('pw-new').value;
+    const confirmPw = document.getElementById('pw-confirm').value;
+    const errBox = document.getElementById('pw-err');
+    const okBox = document.getElementById('pw-ok');
+    errBox.style.display = 'none'; okBox.style.display = 'none';
+
+    if (!current || !next || !confirmPw) { errBox.textContent = 'Fill in all three fields.'; errBox.style.display = 'block'; return; }
+    if (next.length < 6) { errBox.textContent = 'New password must be at least 6 characters.'; errBox.style.display = 'block'; return; }
+    if (next !== confirmPw) { errBox.textContent = 'New password and confirmation don\'t match.'; errBox.style.display = 'block'; return; }
+
+    fetch(`${API_BASE}/api/staff/change-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ currentPassword: current, newPassword: next })
+    }).then(r => {
+      if (!r.ok) throw new Error('failed');
+      okBox.style.display = 'block';
+      setTimeout(() => passwordOverlay.classList.remove('show'), 1200);
+    }).catch(() => {
+      errBox.textContent = 'Couldn\'t update your password — check your current password and try again.';
+      errBox.style.display = 'block';
+    });
+  });
+
+  /* =================================================================
+     ACCESS TAB (HR only) — rota editors + manager analytics grants
+     ================================================================= */
+  function allDepartments(){
+    return Array.from(new Set(state.employees.map(e => e.department).filter(Boolean)));
+  }
+  function renderDeptCheckgrid(gridEl, checked){
+    gridEl.innerHTML = allDepartments().map(d => `
+      <label><input type="checkbox" value="${d}" ${checked.includes(d) ? 'checked' : ''}> ${d}</label>
+    `).join('') || '<div style="font-size:12.5px;color:var(--slate);">Add a department to an employee first.</div>';
+  }
+
+  function renderAccessTab(){
+    const editorsBody = document.getElementById('access-editors-body');
+    editorsBody.innerHTML = state.accessGrants.editors.map(g => `
+      <tr>
+        <td>${g.name}</td>
+        <td>${g.loginId || '—'}</td>
+        <td>${g.departments.map(d => `<span class="dept-chip">${d}</span>`).join('') || '—'}</td>
+        <td class="rowactions"><button class="edit" data-edit-editor="${g.id}">Edit</button></td>
+      </tr>
+    `).join('') || `<tr><td colspan="4" style="color:var(--slate);">No rota editors added yet.</td></tr>`;
+    editorsBody.querySelectorAll('[data-edit-editor]').forEach(btn => btn.addEventListener('click', () => openAccessEditorModal(btn.dataset.editEditor)));
+
+    const managersBody = document.getElementById('access-managers-body');
+    managersBody.innerHTML = state.accessGrants.managers.map(g => `
+      <tr>
+        <td>${g.name}</td>
+        <td>${g.loginId || '—'}</td>
+        <td>${g.departments.map(d => `<span class="dept-chip">${d}</span>`).join('') || '—'}</td>
+        <td class="rowactions"><button class="edit" data-edit-manager="${g.id}">Edit</button></td>
+      </tr>
+    `).join('') || `<tr><td colspan="4" style="color:var(--slate);">No managers added yet.</td></tr>`;
+    managersBody.querySelectorAll('[data-edit-manager]').forEach(btn => btn.addEventListener('click', () => openAccessManagerModal(btn.dataset.editManager)));
+  }
+
+  const accessEditorOverlay = document.getElementById('access-editor-overlay');
+  let editingAccessEditorId = null;
+  function openAccessEditorModal(id){
+    editingAccessEditorId = id || null;
+    const g = id ? state.accessGrants.editors.find(x => x.id === id) : null;
+    document.getElementById('access-editor-title').textContent = g ? 'Edit rota editor' : 'Add rota editor';
+    document.getElementById('ae-name').value = g ? g.name : '';
+    document.getElementById('ae-login').value = g ? g.loginId : '';
+    renderDeptCheckgrid(document.getElementById('ae-dept-checkgrid'), g ? g.departments : []);
+    document.getElementById('ae-delete').style.display = g ? 'inline' : 'none';
+    accessEditorOverlay.classList.add('show');
+  }
+  document.getElementById('add-access-editor-btn').addEventListener('click', () => openAccessEditorModal(null));
+  document.getElementById('ae-cancel').addEventListener('click', () => accessEditorOverlay.classList.remove('show'));
+  document.getElementById('ae-delete').addEventListener('click', () => {
+    state.accessGrants.editors = state.accessGrants.editors.filter(g => g.id !== editingAccessEditorId);
+    saveState(); renderAccessTab();
+    accessEditorOverlay.classList.remove('show');
+  });
+  document.getElementById('ae-save').addEventListener('click', () => {
+    const name = document.getElementById('ae-name').value.trim();
+    if (!name) { alert('Enter a name.'); return; }
+    const loginId = document.getElementById('ae-login').value.trim();
+    const departments = Array.from(document.querySelectorAll('#ae-dept-checkgrid input:checked')).map(cb => cb.value);
+    if (editingAccessEditorId) {
+      Object.assign(state.accessGrants.editors.find(g => g.id === editingAccessEditorId), { name, loginId, departments });
+    } else {
+      state.accessGrants.editors.push({ id: uid('acc'), name, loginId, departments });
+    }
+    saveState(); renderAccessTab();
+    accessEditorOverlay.classList.remove('show');
+  });
+
+  const accessManagerOverlay = document.getElementById('access-manager-overlay');
+  let editingAccessManagerId = null;
+  function openAccessManagerModal(id){
+    editingAccessManagerId = id || null;
+    const g = id ? state.accessGrants.managers.find(x => x.id === id) : null;
+    document.getElementById('access-manager-title').textContent = g ? 'Edit manager' : 'Add manager';
+    document.getElementById('am-name').value = g ? g.name : '';
+    document.getElementById('am-login').value = g ? g.loginId : '';
+    renderDeptCheckgrid(document.getElementById('am-dept-checkgrid'), g ? g.departments : []);
+    document.getElementById('am-delete').style.display = g ? 'inline' : 'none';
+    accessManagerOverlay.classList.add('show');
+  }
+  document.getElementById('add-access-manager-btn').addEventListener('click', () => openAccessManagerModal(null));
+  document.getElementById('am-cancel').addEventListener('click', () => accessManagerOverlay.classList.remove('show'));
+  document.getElementById('am-delete').addEventListener('click', () => {
+    state.accessGrants.managers = state.accessGrants.managers.filter(g => g.id !== editingAccessManagerId);
+    saveState(); renderAccessTab();
+    accessManagerOverlay.classList.remove('show');
+  });
+  document.getElementById('am-save').addEventListener('click', () => {
+    const name = document.getElementById('am-name').value.trim();
+    if (!name) { alert('Enter a name.'); return; }
+    const loginId = document.getElementById('am-login').value.trim();
+    const departments = Array.from(document.querySelectorAll('#am-dept-checkgrid input:checked')).map(cb => cb.value);
+    if (editingAccessManagerId) {
+      Object.assign(state.accessGrants.managers.find(g => g.id === editingAccessManagerId), { name, loginId, departments });
+    } else {
+      state.accessGrants.managers.push({ id: uid('acc'), name, loginId, departments });
+    }
+    saveState(); renderAccessTab();
+    accessManagerOverlay.classList.remove('show');
+  });
+
+  activateTab(currentRole === 'manager' ? 'analytics' : 'schedule');
 </script>
 </body>
 </html>
