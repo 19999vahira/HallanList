@@ -111,13 +111,8 @@
         <label class="field-label" for="password">Password</label>
         <input class="field" id="password" name="password" type="password" placeholder="••••••••" autocomplete="current-password" required>
 
-        <label class="field-label" for="role">Signing in as</label>
-        <select class="field" id="role" name="role">
-          <option value="staff">Staff</option>
-          <option value="rota_editor">Rota editor</option>
-          <option value="manager" selected>Manager</option>
-          <option value="hr">HR</option>
-        </select>
+        <label class="field-label" for="department">Department</label>
+        <input class="field" id="department" name="department" type="text" placeholder="e.g. Grocery — as HR has it on file" autocomplete="off" required>
 
         <button class="btn-primary" type="submit" id="login-btn">Log in</button>
       </form>
@@ -135,22 +130,14 @@
         <label class="field-label" for="su-employeeId">Employee ID</label>
         <input class="field" id="su-employeeId" name="employeeId" type="text" placeholder="e.g. 94 — the ID HR gave you" autocomplete="username" required>
 
-        <label class="field-label" for="su-name">Full name</label>
-        <input class="field" id="su-name" name="name" type="text" placeholder="e.g. Shyamanth Kota" autocomplete="name" required>
+        <label class="field-label" for="su-department">Department</label>
+        <input class="field" id="su-department" name="department" type="text" placeholder="e.g. Grocery — as HR has it on file" autocomplete="off" required>
 
         <label class="field-label" for="su-password">Create a password</label>
         <input class="field" id="su-password" name="password" type="password" placeholder="At least 6 characters" autocomplete="new-password" required>
 
         <label class="field-label" for="su-password2">Confirm password</label>
         <input class="field" id="su-password2" name="password2" type="password" placeholder="••••••••" autocomplete="new-password" required>
-
-        <label class="field-label" for="su-role">Signing up as</label>
-        <select class="field" id="su-role" name="role">
-          <option value="staff">Staff</option>
-          <option value="rota_editor">Rota editor</option>
-          <option value="manager">Manager</option>
-          <option value="hr">HR</option>
-        </select>
 
         <button class="btn-primary" type="submit" id="signup-btn">Create account</button>
       </form>
@@ -206,13 +193,13 @@
 
     const employeeId = document.getElementById('employeeId').value.trim();
     const password = document.getElementById('password').value;
-    const role = document.getElementById('role').value;
+    const department = document.getElementById('department').value.trim();
 
     try {
       const res = await fetch(`${API_BASE}/api/staff/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employeeId, password, role })
+        body: JSON.stringify({ employeeId, password, department })
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
@@ -230,14 +217,16 @@
   });
 
   /* ---- sign up ----
-     Posts to /api/staff/signup: { employeeId, name, password, role }.
+     Posts to /api/staff/signup: { employeeId, department, password }.
      The backend only creates a password for an employeeId that already
-     exists (active) in staff_employees, and only if the typed name matches
-     what HR has on file for that ID — so this can't be used to create a
-     brand-new employee, and Manager/HR can only be claimed by someone
-     actually in that department (checked server-side, not by what this
-     form sends). If a password already exists for that ID, signup is
-     refused and the person is told to log in / contact HR instead.
+     exists (active) in staff_employees, and only if the typed department
+     matches what HR has on file for that ID — so this can't be used to
+     create a brand-new employee, and it can't be claimed with just any
+     random ID number. Your access level (staff / manager / HR) is then
+     worked out automatically from your real department — there's
+     nothing to pick here. If a password already exists for that ID,
+     signup is refused and the person is told to log in / contact HR
+     instead.
   ---- */
   const signupForm = document.getElementById('signup-form');
   const signupErr = document.getElementById('signup-err');
@@ -250,10 +239,9 @@
     signupOk.style.display = 'none';
 
     const employeeId = document.getElementById('su-employeeId').value.trim();
-    const name = document.getElementById('su-name').value.trim();
+    const department = document.getElementById('su-department').value.trim();
     const password = document.getElementById('su-password').value;
     const password2 = document.getElementById('su-password2').value;
-    const role = document.getElementById('su-role').value;
 
     if (password.length < 6) { showErr(signupErr, 'Password must be at least 6 characters.'); return; }
     if (password !== password2) { showErr(signupErr, "Passwords don't match."); return; }
@@ -265,7 +253,7 @@
       const res = await fetch(`${API_BASE}/api/staff/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employeeId, name, password, role })
+        body: JSON.stringify({ employeeId, department, password })
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
@@ -283,6 +271,7 @@
         setTimeout(() => {
           formSignup.classList.remove('active'); formLogin.classList.add('active');
           document.getElementById('employeeId').value = employeeId;
+          document.getElementById('department').value = department;
           document.getElementById('password').focus();
         }, 900);
       }
