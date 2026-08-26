@@ -124,12 +124,20 @@
   .link-danger{background:none;border:none;color:#C4433F;font-size:13px;font-weight:600;padding:8px 0;}
   .link-danger:hover{text-decoration:underline;}
   .checkbox-row{display:flex;align-items:center;gap:8px;margin-top:16px;font-size:13.5px;}
-  nav a[data-tab="timesheet"]{display:none;}
+  nav a[data-tab="timesheet"].nav-hidden{display:none;}
   .ts-time-input{width:98px;padding:7px 8px;border:1px solid var(--line);border-radius:6px;font-size:12.5px;color:var(--ink);}
   .ts-comment-input{width:130px;padding:7px 8px;border:1px solid var(--line);border-radius:6px;font-size:12.5px;color:var(--ink);}
   table.simple.ts-detail th, table.simple.ts-detail td{padding:8px 10px;font-size:12.5px;}
   .rangebtns{display:flex;gap:6px;}
   .rangebtns .btn.active{background:var(--nav-blue);color:#fff;border-color:var(--nav-blue);font-weight:600;}
+  .issue-badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11.5px;font-weight:600;}
+  .issue-badge.ok{background:#E5F6ED;color:var(--green,#2FA86B);}
+  .issue-badge.warn{background:#FBF2E1;color:#B8811F;}
+  .issue-badge.bad{background:#FDEEEE;color:#B23A3A;}
+  .auto-note{font-size:11px;color:#B8811F;margin-top:4px;display:block;}
+  .analysis-head{display:flex;align-items:center;justify-content:space-between;margin:34px 0 14px;}
+  .analysis-head h2{font-size:16px;margin:0;}
+  .analysis-head .sub{font-size:12.5px;color:var(--slate);}
 </style>
 </head>
 <body>
@@ -146,7 +154,7 @@
     <a href="#" data-tab="schedule" class="active">Schedule</a>
     <a href="#" data-tab="employees">Employees</a>
     <a href="#" data-tab="shifts">Shifts</a>
-    <a href="#" data-tab="timesheet" id="nav-timesheet">Timesheet</a>
+    <a href="#" data-tab="timesheet" id="nav-timesheet" class="nav-hidden">Timesheet</a>
     <a href="clockin.html">Time Clock</a>
   </nav>
   <div class="right">
@@ -241,8 +249,19 @@
   </div>
   <div class="tabbody" style="max-width:1080px;">
     <table class="simple">
-      <thead><tr><th>Employee</th><th>Department</th><th>Total hours</th><th></th></tr></thead>
+      <thead><tr><th>Employee</th><th>Department</th><th>Total hours</th><th>Issues vs rota</th><th></th></tr></thead>
       <tbody id="timesheet-body"></tbody>
+    </table>
+
+    <div class="analysis-head">
+      <div>
+        <h2>Attendance analysis</h2>
+        <div class="sub">Compared against the Rota for the range selected above.</div>
+      </div>
+    </div>
+    <table class="simple">
+      <thead><tr><th>Employee</th><th>Late arrivals</th><th>Avg. mins late</th><th>Left early</th><th>Break overages</th><th>No-shows</th></tr></thead>
+      <tbody id="analysis-body"></tbody>
     </table>
   </div>
 </div>
@@ -411,7 +430,7 @@
   const initialsFromName = (localStorage.getItem('rota_name') || 'HC').split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase();
   document.getElementById('avatar-pill').textContent = initialsFromName;
   const currentRole = localStorage.getItem('rota_role') || 'staff';
-  if (currentRole === 'hr') document.getElementById('nav-timesheet').style.display = '';
+  if (currentRole === 'hr') document.getElementById('nav-timesheet').classList.remove('nav-hidden');
   document.getElementById('logout-btn').addEventListener('click', () => {
     localStorage.removeItem('rota_token'); localStorage.removeItem('rota_name'); localStorage.removeItem('rota_role');
     window.location.href = 'index.html';
@@ -1208,6 +1227,80 @@
     return Math.max(0, mins);
   }
 
+  /* ---------------------------------------------------------------
+     ROTA COMPARISON — reads state.shifts (the same in-memory Rota data
+     the Schedule tab uses) and compares it against what was actually
+     clocked in clockin.html. LATE_GRACE_MINS / BREAK_GRACE_MINS are the
+     "don't bother flagging this" tolerance windows.
+     --------------------------------------------------------------- */
+  const LATE_GRACE_MINS = 5;
+  const BREAK_GRACE_MINS = 10;
+
+  function scheduledFor(empId, dateStr){
+    return (state.shifts[empId] || {})[dateStr] || null;
+  }
+
+  // Returns a short human-readable discrepancy string for one day, or ''
+  // if nothing worth flagging. Used both for the auto-filled comment box
+  // and for the aggregate analysis table.
+  function computeDayFlags(empId, dateStr, rec){
+    const sched = scheduledFor(empId, dateStr);
+    const today = toDateStr(new Date());
+    const notes = [];
+    const flags = { late: 0, earlyLeave: 0, breakOver: 0, noShow: 0, unscheduled: 0, lateMins: 0 };
+
+    if (!sched) {
+      if (rec && rec.in) { notes.push('Not on the rota this day'); flags.unscheduled = 1; }
+      return { text: notes.join(' · '), flags };
+    }
+
+    if (!rec || !rec.in) {
+      if (dateStr < today) {
+        notes.push(`No show — scheduled ${sched.start}–${sched.end}`);
+        flags.noShow = 1;
+      }
+      return { text: notes.join(' · '), flags };
+    }
+
+    const lateMins = timeToMins(rec.in) - timeToMins(sched.start);
+    if (lateMins >= LATE_GRACE_MINS) { notes.push(`${lateMins}m late`); flags.late = 1; flags.lateMins = lateMins; }
+    else if (lateMins <= -LATE_GRACE_MINS) { notes.push(`${Math.abs(lateMins)}m early to start`); }
+
+    if (rec.out) {
+      const earlyMins = timeToMins(sched.end) - timeToMins(rec.out);
+      if (earlyMins >= LATE_GRACE_MINS) { notes.push(`left ${earlyMins}m early`); flags.earlyLeave = 1; }
+      else if (earlyMins <= -LATE_GRACE_MINS) { notes.push(`stayed ${Math.abs(earlyMins)}m late`); }
+    }
+
+    if (rec.breakStart && rec.breakEnd) {
+      let actualBreak = timeToMins(rec.breakEnd) - timeToMins(rec.breakStart);
+      if (actualBreak < 0) actualBreak += 24*60;
+      const schedBreak = sched.breakMins || 0;
+      const diff = actualBreak - schedBreak;
+      if (diff >= BREAK_GRACE_MINS) { notes.push(`break ${diff}m over (${actualBreak}m vs ${schedBreak}m scheduled)`); flags.breakOver = 1; }
+      else if (diff <= -BREAK_GRACE_MINS && schedBreak) { notes.push(`break ${Math.abs(diff)}m short`); }
+    } else if (sched.breakMins && rec.out && !rec.breakStart) {
+      notes.push(`no break taken (${sched.breakMins}m scheduled)`);
+    }
+
+    return { text: notes.join(' · '), flags };
+  }
+
+  function rangeAttendanceSummary(empId, dateStrs){
+    const totals = { late: 0, earlyLeave: 0, breakOver: 0, noShow: 0, unscheduled: 0, lateMinsSum: 0 };
+    dateStrs.forEach(dateStr => {
+      const rec = (timesheetState.days[empId] || {})[dateStr];
+      const { flags } = computeDayFlags(empId, dateStr, rec);
+      totals.late += flags.late;
+      totals.earlyLeave += flags.earlyLeave;
+      totals.breakOver += flags.breakOver;
+      totals.noShow += flags.noShow;
+      totals.unscheduled += flags.unscheduled;
+      totals.lateMinsSum += flags.lateMins;
+    });
+    return totals;
+  }
+
   function payPeriodContaining(date){
     const d = new Date(date);
     const start = d.getDate() >= 24
@@ -1276,17 +1369,55 @@
     body.innerHTML = state.employees.map(emp => {
       let mins = 0;
       dateStrs.forEach(ds => { mins += dayMinutes((timesheetState.days[emp.id] || {})[ds]); });
+
+      const s = rangeAttendanceSummary(emp.id, dateStrs);
+      let issueBadge;
+      if (s.noShow > 0) {
+        issueBadge = `<span class="issue-badge bad">${s.noShow} no-show${s.noShow===1?'':'s'}</span>`;
+      } else if (s.late > 0 || s.breakOver > 0 || s.earlyLeave > 0) {
+        const bits = [];
+        if (s.late) bits.push(`${s.late} late`);
+        if (s.earlyLeave) bits.push(`${s.earlyLeave} left early`);
+        if (s.breakOver) bits.push(`${s.breakOver} long break${s.breakOver===1?'':'s'}`);
+        issueBadge = `<span class="issue-badge warn">${bits.join(' · ')}</span>`;
+      } else {
+        issueBadge = `<span class="issue-badge ok">On track</span>`;
+      }
+
       return `<tr>
         <td>${emp.name}</td>
         <td>${emp.department || '—'}</td>
         <td style="font-weight:700;">${mins ? fmtMins(mins) : '0h'}</td>
+        <td>${issueBadge}</td>
         <td class="rowactions"><button class="edit" data-ts-open="${emp.id}">View / edit days</button></td>
       </tr>`;
-    }).join('') || `<tr><td colspan="4" style="color:var(--slate);">No employees yet.</td></tr>`;
+    }).join('') || `<tr><td colspan="5" style="color:var(--slate);">No employees yet.</td></tr>`;
 
     body.querySelectorAll('[data-ts-open]').forEach(btn => {
       btn.addEventListener('click', () => openTsDetail(btn.dataset.tsOpen));
     });
+
+    renderAttendanceAnalysis(dateStrs);
+  }
+
+  function renderAttendanceAnalysis(dateStrs){
+    const abody = document.getElementById('analysis-body');
+    const rows = state.employees.map(emp => {
+      const s = rangeAttendanceSummary(emp.id, dateStrs);
+      const avgLate = s.late ? Math.round(s.lateMinsSum / s.late) : 0;
+      return { emp, s, avgLate };
+    }).sort((a, b) => (b.s.late + b.s.noShow) - (a.s.late + a.s.noShow));
+
+    abody.innerHTML = rows.map(({ emp, s, avgLate }) => `
+      <tr>
+        <td>${emp.name}</td>
+        <td>${s.late || '—'}</td>
+        <td>${s.late ? avgLate + 'm' : '—'}</td>
+        <td>${s.earlyLeave || '—'}</td>
+        <td>${s.breakOver || '—'}</td>
+        <td>${s.noShow ? `<span class="issue-badge bad">${s.noShow}</span>` : '—'}</td>
+      </tr>
+    `).join('') || `<tr><td colspan="6" style="color:var(--slate);">No employees yet.</td></tr>`;
   }
 
   const tsDetailOverlay = document.getElementById('ts-detail-overlay');
@@ -1303,14 +1434,26 @@
       const dayLabel = `${DAY_NAMES[d.getDay()===0?6:d.getDay()-1]} ${d.getDate()} ${MONTH_NAMES[d.getMonth()]}`;
       const rec = (timesheetState.days[empId] || {})[dateStr] || {};
       const mins = dayMinutes(rec);
+      const sched = scheduledFor(empId, dateStr);
+      const schedLabel = sched
+        ? `<div style="font-size:10.5px;color:var(--slate);margin-top:2px;">Rota: ${sched.start}–${sched.end}${sched.breakMins ? ` · ${sched.breakMins}m break` : ''}</div>`
+        : `<div style="font-size:10.5px;color:var(--slate);margin-top:2px;">Not on rota</div>`;
+      const { text: autoNote } = computeDayFlags(empId, dateStr, rec);
+      // Auto-fill the comment box with the rota-comparison note ONLY when
+      // there's no manually-saved comment yet, so it never overwrites what
+      // HR has already typed. HR can edit or clear it before saving.
+      const commentValue = rec.comment ? rec.comment : autoNote;
       return `<tr data-ts-row="${dateStr}">
-        <td>${dayLabel}</td>
+        <td>${dayLabel}${schedLabel}</td>
         <td><input type="time" class="ts-time-input ts-in" value="${rec.in || ''}"></td>
         <td><input type="time" class="ts-time-input ts-breakstart" value="${rec.breakStart || ''}"></td>
         <td><input type="time" class="ts-time-input ts-breakend" value="${rec.breakEnd || ''}"></td>
         <td><input type="time" class="ts-time-input ts-out" value="${rec.out || ''}"></td>
         <td class="ts-hours-cell" style="font-weight:700;">${mins ? fmtMins(mins) : '—'}</td>
-        <td><input type="text" class="ts-comment-input ts-comment" value="${(rec.comment || '').replace(/"/g,'&quot;')}" placeholder="Comment"></td>
+        <td>
+          <input type="text" class="ts-comment-input ts-comment" value="${commentValue.replace(/"/g,'&quot;')}" placeholder="Comment">
+          ${(!rec.comment && autoNote) ? '<span class="auto-note">auto-suggested from rota — edit or Save to keep</span>' : ''}
+        </td>
         <td><button class="btn" data-ts-save="${dateStr}">Save</button></td>
       </tr>`;
     }).join('');
