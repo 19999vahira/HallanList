@@ -693,12 +693,13 @@
      so every device/browser reads and writes the same data (this used to
      be localStorage-only, which is why data looked "gone" on another
      device and Access-tab grants only worked on the device that made
-     them). localStorage is still used as a same-device offline cache —
-     never as the source of truth.
+     them). The server is the ONLY source of truth — there is no local
+     cache and no offline mode. If the server can't be reached, the page
+     shows an error and lets the person retry; it never falls back to
+     showing old data from this device.
      This is a SEPARATE employee list from Staff Portal on purpose — the
      Rota app owns its own employees/shifts/logins, no shared IDs.
      ================================================================= */
-  const STORAGE_KEY = 'hallan_rota_v2';
 
   const DEFAULT_SHIFT_TYPES = [
     { id: 'cashier1',  name: 'Cashier 1',           bg: '#F0A868', fg: '#5A3B12' },
@@ -746,7 +747,6 @@
   // finishes loading the real thing from the server, further down.
   let state = defaultState();
   let lastKnownUpdatedAt = null;   // server's updatedAt for the version of `state` we last loaded/saved — used for conflict detection
-  let serverReachable = true;      // false = we're editing a local-only cache; changes are NOT visible on other devices until this is true again
 
   function shiftTypeById(id){ return state.shiftTypes.find(r => r.id === id); }
   function employeeById(id){ return state.employees.find(e => e.id === id); }
@@ -776,7 +776,6 @@
     merged.shifts = migrateShiftsToArrays(merged.shifts);
     state = merged;
     lastKnownUpdatedAt = payload.updatedAt;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ state, updatedAt: lastKnownUpdatedAt }));
     return true;
   }
 
@@ -784,9 +783,6 @@
   // clicking) collapse into one PUT instead of one per edit.
   let syncTimer = null;
   function saveState(){
-    // Always persist locally immediately, so nothing is lost if the tab
-    // closes before the debounced server sync below fires.
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ state, updatedAt: lastKnownUpdatedAt }));
     setSyncStatus('syncing', 'Saving…');
     clearTimeout(syncTimer);
     syncTimer = setTimeout(syncStateToServer, 700);
@@ -814,13 +810,10 @@
       if (!res.ok || !payload.ok) throw new Error(payload.error || 'save failed');
 
       lastKnownUpdatedAt = payload.updatedAt;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ state, updatedAt: lastKnownUpdatedAt }));
-      serverReachable = true;
       setSyncStatus('synced', 'Saved');
       setTimeout(() => { document.getElementById('sync-status').style.display = 'none'; }, 1800);
     } catch (err) {
-      serverReachable = false;
-      setSyncStatus('offline', "Not saved — can't reach the server. This change is NOT visible on other devices yet.");
+      setSyncStatus('offline', "Not saved — can't reach the server. Check your connection; this change has NOT been saved anywhere.");
     }
   }
 
@@ -2372,6 +2365,7 @@
   });
 
   async function init(){
+    const blockerTitle = document.querySelector('#sync-blocker > div');
     const detail = document.getElementById('sync-blocker-detail');
     const retryBtn = document.getElementById('sync-blocker-retry');
     try {
@@ -2380,32 +2374,19 @@
       wireGridEvents();
       activateTab(currentRole === 'manager' ? 'analytics' : 'schedule');
     } catch (err) {
-      // Couldn't reach the server. Offer to open the last locally-cached
-      // copy (clearly marked as offline/unsynced), or retry the load —
-      // never silently start on an empty or stale rota.
-      serverReachable = false;
-      const cachedRaw = localStorage.getItem(STORAGE_KEY);
-      detail.innerHTML = "Couldn't reach the server, so the rota couldn't be loaded.<br><br>";
+      // Couldn't reach the server. The server is the only place the rota
+      // lives, so there is nothing to fall back to — just show the error
+      // and let the person retry.
+      blockerTitle.textContent = "Couldn't load the rota";
+      detail.textContent = "Couldn't reach the server, so the rota couldn't be loaded. Check your connection and try again.";
       retryBtn.style.display = 'inline-block';
       retryBtn.textContent = 'Retry';
-      retryBtn.onclick = () => { document.getElementById('sync-blocker-detail').textContent = ''; retryBtn.style.display = 'none'; document.querySelector('#sync-blocker > div').textContent = 'Loading the rota…'; init(); };
-
-      if (cachedRaw) {
-        const openCachedBtn = document.createElement('button');
-        openCachedBtn.textContent = 'Open last saved copy on this device (offline)';
-        openCachedBtn.style.cssText = 'display:block;margin-top:10px;padding:9px 18px;border:1px solid #D7DCE1;border-radius:6px;background:#fff;color:#37424A;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit;';
-        openCachedBtn.onclick = () => {
-          const cached = JSON.parse(cachedRaw);
-          state = { ...defaultState(), ...cached.state };
-          state.shifts = migrateShiftsToArrays(state.shifts);
-          lastKnownUpdatedAt = cached.updatedAt;
-          document.getElementById('sync-blocker').style.display = 'none';
-          setSyncStatus('offline', "Offline — showing this device's last saved copy. Changes here will NOT reach other devices until the connection is back.");
-          wireGridEvents();
-          activateTab(currentRole === 'manager' ? 'analytics' : 'schedule');
-        };
-        document.getElementById('sync-blocker-detail').after(openCachedBtn);
-      }
+      retryBtn.onclick = () => {
+        blockerTitle.textContent = 'Loading the rota…';
+        detail.textContent = '';
+        retryBtn.style.display = 'none';
+        init();
+      };
     }
   }
   init();
