@@ -1806,15 +1806,47 @@
      Pay period: 24th of a month through the 23rd of the next month,
      per your spec.
      ================================================================= */
-  const TIMESHEET_KEY = 'hallan_timesheet_v1';
-  function loadTimesheet(){
-    try {
-      const raw = localStorage.getItem(TIMESHEET_KEY);
-      return raw ? { days: {}, ...JSON.parse(raw) } : { days: {} };
-    } catch (e) { return { days: {} }; }
+  /* =================================================================
+     TIMESHEET (clock in/out data)
+     ------------------------------------------------------------------
+     Used to read/write a separate localStorage key so the PIN-based
+     Time Clock kiosk (clockin.html) and this page could stay decoupled
+     — but that only worked if both were used on the SAME device, which
+     staff clocking in from their own phones broke. It now comes from
+     the server (see /api/staff/timesheet-state and
+     /api/staff/timesheet-entry in server.js) so every device sees the
+     same punches. clockin.html needs to PUT to /api/staff/timesheet-entry
+     too, or its punches still won't show up here.
+
+     Record shape (unchanged, so the rest of this file didn't need to
+     change):
+       timesheetState.days[employeeId][dateStr] =
+         { in, breakStart, breakEnd, out, comment }
+       (all four times are 'HH:MM' 24hr strings or null)
+
+     Pay period: 24th of a month through the 23rd of the next month,
+     per your spec.
+     ================================================================= */
+  let timesheetState = { days: {} };
+  async function loadTimesheetFromServer(){
+    const res = await fetch(`${API_BASE}/api/staff/timesheet-state`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error('load failed');
+    const payload = await res.json();
+    if (!payload.ok) throw new Error(payload.error || 'load failed');
+    timesheetState = { days: payload.days || {} };
   }
-  function saveTimesheet(){ localStorage.setItem(TIMESHEET_KEY, JSON.stringify(timesheetState)); }
-  let timesheetState = loadTimesheet();
+  // Saves just the one day that changed (see the tsd-save click handler
+  // below) rather than the whole timesheetState, since punches from
+  // different employees/days shouldn't have to wait on each other.
+  async function saveTimesheetEntry(employeeId, dateStr, rec){
+    const res = await fetch(`${API_BASE}/api/staff/timesheet-entry`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ employeeId, date: dateStr, ...rec })
+    });
+    const payload = await res.json();
+    if (!res.ok || !payload.ok) throw new Error(payload.error || 'save failed');
+  }
 
   function timeToMins(t){ const [h,m] = t.split(':').map(Number); return h*60+m; }
   function dayMinutes(rec){
@@ -2151,7 +2183,7 @@
     totalsRow.innerHTML = `<td colspan="8" style="text-align:right;font-weight:700;">Total</td><td style="font-weight:700;">${fmtHM(totalMins)}</td><td colspan="4"></td>`;
 
     body.querySelectorAll('[data-tsd-save]').forEach(saveBtn => {
-      saveBtn.addEventListener('click', () => {
+      saveBtn.addEventListener('click', async () => {
         const [empId, dateStr] = saveBtn.dataset.tsdSave.split('|');
         const row = body.querySelector(`tr[data-tsd-row="${empId}|${dateStr}"]`);
         const rec = {
@@ -2161,10 +2193,18 @@
           out: row.querySelector('.tsd-out').value || null,
           comment: row.querySelector('.tsd-comment').value.trim()
         };
-        if (!timesheetState.days[empId]) timesheetState.days[empId] = {};
-        timesheetState.days[empId][dateStr] = rec;
-        saveTimesheet();
-        renderTsDetail();
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving…';
+        try {
+          await saveTimesheetEntry(empId, dateStr, rec);
+          if (!timesheetState.days[empId]) timesheetState.days[empId] = {};
+          timesheetState.days[empId][dateStr] = rec;
+          renderTsDetail();
+        } catch (err) {
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save';
+          alert("Could not save that row — check your connection and try again.");
+        }
       });
     });
   }
@@ -2387,6 +2427,7 @@
     const retryBtn = document.getElementById('sync-blocker-retry');
     try {
       await loadStateFromServer();
+      await loadTimesheetFromServer();
       document.getElementById('sync-blocker').style.display = 'none';
       wireGridEvents();
       activateTab(currentRole === 'manager' ? 'analytics' : 'schedule');
