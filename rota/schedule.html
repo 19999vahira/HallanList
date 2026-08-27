@@ -68,13 +68,16 @@
   .employee .meta .n{font-size:13.5px;font-weight:600;color:var(--ink);}
   .employee .meta .h{font-size:11.5px;color:var(--slate);margin-top:1px;}
 
-  table.schedule td.daycell{padding:6px;vertical-align:top;min-width:140px;height:66px;cursor:pointer;}
+  table.schedule td.daycell{padding:6px;vertical-align:top;min-width:140px;}
   table.schedule td.daycell:hover{background:#F8FAFB;}
   table.schedule td.daycell.copy-source{outline:2px dashed var(--nav-blue);outline-offset:-2px;}
-  .chip{border-radius:5px;padding:6px 8px;font-size:11.5px;line-height:1.35;}
+  .daycell-stack{display:flex;flex-direction:column;gap:4px;}
+  .chip{border-radius:5px;padding:6px 8px;font-size:11.5px;line-height:1.35;cursor:pointer;}
   .chip .t{font-weight:700;}
   .chip .l{opacity:.9;}
-  .empty-cell{display:flex;align-items:center;justify-content:center;height:100%;color:#C7CFD6;font-size:18px;}
+  .daycell-add-row{display:flex;gap:4px;margin-top:4px;}
+  .daycell-add{flex:1;border:1px dashed #C7CFD6;border-radius:5px;background:none;font-size:10.5px;color:#8992A0;padding:4px 2px;cursor:pointer;text-align:center;font-family:inherit;}
+  .daycell-add:hover{border-color:var(--nav-blue);color:var(--nav-blue);background:#F0F6FC;}
 
   tfoot td{background:#FAFBFC;font-size:11.5px;color:var(--slate);font-weight:700;padding:10px;}
   tfoot td.namecol{position:sticky;left:0;background:#FAFBFC;}
@@ -446,7 +449,8 @@
     <label for="emp-name">Name</label>
     <input type="text" id="emp-name" placeholder="e.g. Priya Nair">
     <label for="emp-dept">Department</label>
-    <input type="text" id="emp-dept" placeholder="e.g. Front of House">
+    <select id="emp-dept"></select>
+    <input type="text" id="emp-dept-new" placeholder="New department name" style="display:none;margin-top:8px;">
     <label for="emp-personnel">Personnel number</label>
     <input type="text" id="emp-personnel" placeholder="e.g. 00124">
     <label>Shifts this employee can cover</label>
@@ -538,7 +542,8 @@
       <div>
         <button class="btn" id="dl-cancel">Cancel</button>
         <button class="btn" id="dl-print">Print</button>
-        <button class="btn btn-primary" id="dl-csv">Download CSV</button>
+        <button class="btn" id="dl-csv">Download CSV</button>
+        <button class="btn btn-primary" id="dl-pdf">Download PDF</button>
       </div>
     </div>
   </div>
@@ -631,6 +636,9 @@
   <button id="paste-cancel">Cancel</button>
 </div>
 
+<!-- PDF export (Download modal -> Download PDF) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script>
   /* =================================================================
      AUTH GUARD — reuses the Staff Portal login (see rota/index.html).
@@ -641,12 +649,12 @@
   document.getElementById('user-name').textContent = localStorage.getItem('rota_name') || 'Hallan Cash & Carry';
   const initialsFromName = (localStorage.getItem('rota_name') || 'HC').split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase();
   document.getElementById('avatar-pill').textContent = initialsFromName;
-  /* currentRole: 'hr' | 'manager' | 'rota_editor' | 'staff'.
-     currentLoginId: NOTE — index.html doesn't currently save this; add
-     `localStorage.setItem('rota_login_id', <their login id>)` at login
-     time so manager/rota_editor scoping below can match a person to the
-     grants created on the Access tab. Until then, 'manager' and
-     'rota_editor' roles will show as "no departments granted yet". */
+  /* currentRole: 'hr' | 'manager' | 'staff'. There's no separate
+     'rota_editor' role anymore — the backend only ever sends the
+     employee's real HR department reduced to hr/manager/staff. Anyone
+     who isn't manager or hr is scoped purely by whatever the Access tab
+     has granted their Login ID (see scopedDepartments below); with no
+     grant, that's zero departments, not everything. */
   const currentRole = localStorage.getItem('rota_role') || 'staff';
   const currentLoginId = localStorage.getItem('rota_login_id') || '';
   document.getElementById('pm-name').textContent = localStorage.getItem('rota_name') || 'Hallan Cash & Carry';
@@ -692,19 +700,39 @@
     return {
       shiftTypes: DEFAULT_SHIFT_TYPES.map(r => ({...r})),
       employees: [],   // { id, name, department, personnelNumber, shiftTypeIds:[], loginId, pin }
-      shifts: {},      // shifts[employeeId][dateStr] = { shiftTypeId, start, end, breakMins }
-      timeOff: [],      // [{ id, employeeId, from: dateStr, to: dateStr, reason }]
+      shifts: {},      // shifts[employeeId][dateStr] = [{ id, shiftTypeId, start, end, breakMins }, ...] — an array, so a day can hold more than one shift (e.g. a split shift)
+      timeOff: [],      // [{ id, employeeId, from: dateStr, to: dateStr, reason }] — a day can already be covered by more than one of these
       accessGrants: {
         editors: [],    // [{ id, name, loginId, departments: [] }] — rota editors, scoped by department
         managers: []    // [{ id, name, loginId, departments: [] }] — manager analytics access, scoped by department
       }
     };
   }
+  // Upgrades data saved before a day could hold more than one shift, where
+  // shifts[empId][dateStr] was a single { shiftTypeId, start, end, ... }
+  // object, into the current array format. Safe to run every load — it's
+  // a no-op once everything is already an array.
+  function migrateShiftsToArrays(shifts){
+    Object.keys(shifts || {}).forEach(empId => {
+      const byDate = shifts[empId] || {};
+      Object.keys(byDate).forEach(dateStr => {
+        const entry = byDate[dateStr];
+        if (entry && !Array.isArray(entry)) {
+          byDate[dateStr] = [{ id: uid('shift'), ...entry }];
+        } else if (Array.isArray(entry)) {
+          entry.forEach(s => { if (!s.id) s.id = uid('shift'); });
+        }
+      });
+    });
+    return shifts;
+  }
   function loadState(){
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return defaultState();
-      return { ...defaultState(), ...JSON.parse(raw) };
+      const merged = { ...defaultState(), ...JSON.parse(raw) };
+      merged.shifts = migrateShiftsToArrays(merged.shifts);
+      return merged;
     } catch (e) { return defaultState(); }
   }
   function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
@@ -757,8 +785,19 @@
   }
   function initials(name){ return name.split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase(); }
 
+  // Returns EVERY time-off entry covering this employee/date — a day can
+  // legitimately have more than one (e.g. a half-day appointment logged
+  // separately from a later sickness entry).
+  function timeOffsFor(employeeId, dateStr){
+    return state.timeOff.filter(t => t.employeeId === employeeId && dateStr >= t.from && dateStr <= t.to);
+  }
+  // Convenience for call sites that only need to know "is this employee
+  // off at all that day" / want just one entry to reference.
   function timeOffFor(employeeId, dateStr){
-    return state.timeOff.find(t => t.employeeId === employeeId && dateStr >= t.from && dateStr <= t.to);
+    return timeOffsFor(employeeId, dateStr)[0] || null;
+  }
+  function shiftsFor(employeeId, dateStr){
+    return (state.shifts[employeeId] || {})[dateStr] || [];
   }
 
   /* =================================================================
@@ -772,11 +811,16 @@
     return (list || []).find(g => currentLoginId && g.loginId === currentLoginId) || null;
   }
   let scopedDepartments = null;
-  if (currentRole === 'rota_editor') {
-    const g = findAccessGrant(state.accessGrants.editors);
-    scopedDepartments = g ? g.departments : [];
-  } else if (currentRole === 'manager') {
+  if (currentRole === 'manager') {
     const g = findAccessGrant(state.accessGrants.managers);
+    scopedDepartments = g ? g.departments : [];
+  } else if (currentRole !== 'hr') {
+    // Everyone who isn't HR or a manager (i.e. every ordinary 'staff'
+    // login, which is also what a department-scoped rota editor logs in
+    // as now) is restricted to whatever departments the Access tab has
+    // granted their Login ID. No grant found = no departments = they see
+    // nothing, rather than the old bug where they silently saw it all.
+    const g = findAccessGrant(state.accessGrants.editors);
     scopedDepartments = g ? g.departments : [];
   }
   function inScope(department){
@@ -801,7 +845,10 @@
       nav('nav-employees').classList.add('nav-hidden');
       nav('nav-shifts').classList.add('nav-hidden');
       nav('nav-analytics').classList.remove('nav-hidden');
-    } else if (currentRole === 'rota_editor') {
+    } else {
+      // Ordinary staff logins (department-scoped rota editors included)
+      // only ever get the Schedule tab, scoped by their Access-tab grant
+      // above — never Employees or Shift Types, which are HR-only setup.
       nav('nav-employees').classList.add('nav-hidden');
       nav('nav-shifts').classList.add('nav-hidden');
     }
@@ -920,27 +967,36 @@
     body.innerHTML = '';
 
     visibleEmployees().forEach(emp => {
-      const empShifts = state.shifts[emp.id] || {};
       let totalMins = 0;
 
       const cellsHtml = dateStrs.map(dateStr => {
-        const off = timeOffFor(emp.id, dateStr);
-        if (off) {
-          return `<td class="daycell" data-emp="${emp.id}" data-date="${dateStr}" data-timeoff="${off.id}">
-            <div class="chip" style="background:var(--timeoff-bg);color:var(--timeoff-fg);">
-              <div class="t">Time off</div><div class="l">${off.reason || ''}</div>
-            </div></td>`;
-        }
-        const s = empShifts[dateStr];
-        if (!s) return `<td class="daycell" data-emp="${emp.id}" data-date="${dateStr}"><div class="empty-cell">+</div></td>`;
-        const st = shiftTypeById(s.shiftTypeId) || { name: 'Unassigned', bg: '#E7ECF0', fg: '#37424A' };
-        const mins = hoursMinusBreak(s.start, s.end, s.breakMins);
-        totalMins += mins;
-        const breakNote = s.breakMins ? ` · ${s.breakMins}m break` : '';
-        return `<td class="daycell" data-emp="${emp.id}" data-date="${dateStr}">
-          <div class="chip" style="background:${st.bg};color:${st.fg};">
+        const offs = timeOffsFor(emp.id, dateStr);
+        const shifts = shiftsFor(emp.id, dateStr);
+
+        const offChipsHtml = offs.map(off => `
+          <div class="chip timeoff-chip" data-timeoff-id="${off.id}" style="background:var(--timeoff-bg);color:var(--timeoff-fg);">
+            <div class="t">Time off</div><div class="l">${off.reason || ''}</div>
+          </div>`).join('');
+
+        const shiftChipsHtml = shifts.map(s => {
+          const st = shiftTypeById(s.shiftTypeId) || { name: 'Unassigned', bg: '#E7ECF0', fg: '#37424A' };
+          const mins = hoursMinusBreak(s.start, s.end, s.breakMins);
+          totalMins += mins;
+          const breakNote = s.breakMins ? ` · ${s.breakMins}m break` : '';
+          return `<div class="chip shift-chip" data-shift-id="${s.id}" data-emp="${emp.id}" data-date="${dateStr}" style="background:${st.bg};color:${st.fg};">
             <div class="t">${s.start}–${s.end}</div><div class="l">${st.name}${breakNote}</div>
-          </div></td>`;
+          </div>`;
+        }).join('');
+
+        const addRowHtml = `<div class="daycell-add-row">
+            <button type="button" class="daycell-add" data-add-shift data-emp="${emp.id}" data-date="${dateStr}">+ Shift</button>
+            <button type="button" class="daycell-add" data-add-timeoff data-emp="${emp.id}" data-date="${dateStr}">+ Off</button>
+          </div>`;
+
+        return `<td class="daycell" data-emp="${emp.id}" data-date="${dateStr}">
+          <div class="daycell-stack">${offChipsHtml}${shiftChipsHtml}</div>
+          ${addRowHtml}
+        </td>`;
       }).join('');
 
       const tr = document.createElement('tr');
@@ -960,48 +1016,68 @@
     dateStrs.forEach(dateStr => {
       let mins = 0;
       visibleEmployees().forEach(emp => {
-        const s = (state.shifts[emp.id] || {})[dateStr];
-        if (s && !timeOffFor(emp.id, dateStr)) mins += hoursMinusBreak(s.start, s.end, s.breakMins);
+        if (timeOffsFor(emp.id, dateStr).length) return;
+        shiftsFor(emp.id, dateStr).forEach(s => { mins += hoursMinusBreak(s.start, s.end, s.breakMins); });
       });
       const td = document.createElement('td');
       td.textContent = mins ? fmtMins(mins) : '—';
       totalsRow.appendChild(td);
     });
-
-    wireGridEvents();
   }
 
+  // Bound ONCE (not on every render) via delegation on the grid body, since
+  // the table body element itself persists across re-renders — only its
+  // contents change.
   function wireGridEvents(){
-    document.querySelectorAll('.daycell').forEach(td => {
-      td.addEventListener('click', (e) => {
-        const empId = td.dataset.emp, dateStr = td.dataset.date;
+    document.getElementById('grid-body').addEventListener('click', (e) => {
+      const addShiftBtn = e.target.closest('[data-add-shift]');
+      const addOffBtn = e.target.closest('[data-add-timeoff]');
+      const shiftChip = e.target.closest('.shift-chip');
+      const offChip = e.target.closest('.timeoff-chip');
 
-        // Ctrl/Cmd+click on a filled shift cell = copy
-        if ((e.ctrlKey || e.metaKey) && state.shifts[empId] && state.shifts[empId][dateStr] && !td.dataset.timeoff) {
-          clipboardShift = { ...state.shifts[empId][dateStr] };
-          bulkClipboard = [];
-          document.getElementById('paste-here-btn').style.display = 'none';
-          document.getElementById('paste-banner-text').textContent = 'Shift copied — click a cell to paste';
-          document.querySelectorAll('.daycell').forEach(x => x.classList.remove('copy-source'));
-          td.classList.add('copy-source');
-          document.getElementById('paste-banner').classList.add('show');
+      if (addShiftBtn) { openShiftModal(addShiftBtn.dataset.emp, addShiftBtn.dataset.date, null); return; }
+      if (addOffBtn) { openTimeOffModal(null, { employeeId: addOffBtn.dataset.emp, date: addOffBtn.dataset.date }); return; }
+
+      if (shiftChip) {
+        const empId = shiftChip.dataset.emp, dateStr = shiftChip.dataset.date, shiftId = shiftChip.dataset.shiftId;
+
+        // Ctrl/Cmd+click on a shift chip = copy just that one shift
+        if (e.ctrlKey || e.metaKey) {
+          const s = shiftsFor(empId, dateStr).find(x => x.id === shiftId);
+          if (s) {
+            const { id, ...rest } = s;
+            clipboardShift = { ...rest };
+            bulkClipboard = [];
+            document.getElementById('paste-here-btn').style.display = 'none';
+            document.getElementById('paste-banner-text').textContent = 'Shift copied — click a cell to paste';
+            document.querySelectorAll('.daycell').forEach(x => x.classList.remove('copy-source'));
+            shiftChip.closest('.daycell').classList.add('copy-source');
+            document.getElementById('paste-banner').classList.add('show');
+          }
           return;
         }
-
-        // Time off cell -> edit that range
-        if (td.dataset.timeoff) { openTimeOffModal(td.dataset.timeoff); return; }
-
-        // Paste mode active -> paste into this cell
         if (clipboardShift) {
-          assignShift(empId, dateStr, { ...clipboardShift });
+          addShift(empId, dateStr, { ...clipboardShift });
           clipboardShift = null;
           document.getElementById('paste-banner').classList.remove('show');
           document.querySelectorAll('.daycell').forEach(x => x.classList.remove('copy-source'));
           return;
         }
+        openShiftModal(empId, dateStr, shiftId);
+        return;
+      }
 
-        openShiftModal(empId, dateStr);
-      });
+      if (offChip) { openTimeOffModal(offChip.dataset.timeoffId); return; }
+
+      // Clicked empty space in a cell (not a chip, not an add button) —
+      // if something's on the clipboard, paste it here.
+      const td = e.target.closest('.daycell');
+      if (td && clipboardShift) {
+        addShift(td.dataset.emp, td.dataset.date, { ...clipboardShift });
+        clipboardShift = null;
+        document.getElementById('paste-banner').classList.remove('show');
+        document.querySelectorAll('.daycell').forEach(x => x.classList.remove('copy-source'));
+      }
     });
   }
 
@@ -1022,14 +1098,14 @@
     }
   });
 
-  // Cross-shift-type confirmation, shared by the shift modal AND paste.
+  // Shared cross-shift-type confirmation, used by add/update/paste below.
   // opts.skipConfirm = true is used for bulk paste, so pasting many shifts
   // doesn't pop up a confirm() dialog for every single one — it just
   // silently remembers the shift type against the employee, same as
   // confirming "yes" would have done.
-  function assignShift(empId, dateStr, shiftData, opts = {}){
+  function confirmShiftType(empId, shiftTypeId, opts){
     const emp = employeeById(empId);
-    const st = shiftTypeById(shiftData.shiftTypeId);
+    const st = shiftTypeById(shiftTypeId);
     if (emp && st && emp.shiftTypeIds.length && !emp.shiftTypeIds.includes(st.id)) {
       if (opts.skipConfirm) {
         emp.shiftTypeIds.push(st.id);
@@ -1039,10 +1115,35 @@
         emp.shiftTypeIds.push(st.id); // remembered for next time, per your request
       }
     }
+    return true;
+  }
+  // Adds a NEW shift to a day — a day can hold more than one (split
+  // shifts, cover across two departments, etc.), so this never overwrites
+  // whatever is already scheduled that day.
+  function addShift(empId, dateStr, shiftData, opts = {}){
+    if (!confirmShiftType(empId, shiftData.shiftTypeId, opts)) return false;
     if (!state.shifts[empId]) state.shifts[empId] = {};
-    state.shifts[empId][dateStr] = shiftData;
+    if (!state.shifts[empId][dateStr]) state.shifts[empId][dateStr] = [];
+    state.shifts[empId][dateStr].push({ id: uid('shift'), ...shiftData });
     saveState(); renderSchedule();
     return true;
+  }
+  // Updates one specific existing shift (by id) in place.
+  function updateShift(empId, dateStr, shiftId, shiftData, opts = {}){
+    const list = (state.shifts[empId] || {})[dateStr] || [];
+    const existing = list.find(s => s.id === shiftId);
+    if (!existing) return false;
+    if (!confirmShiftType(empId, shiftData.shiftTypeId, opts)) return false;
+    Object.assign(existing, shiftData);
+    saveState(); renderSchedule();
+    return true;
+  }
+  function deleteShift(empId, dateStr, shiftId){
+    const list = (state.shifts[empId] || {})[dateStr];
+    if (!list) return;
+    state.shifts[empId][dateStr] = list.filter(s => s.id !== shiftId);
+    if (!state.shifts[empId][dateStr].length) delete state.shifts[empId][dateStr];
+    saveState(); renderSchedule();
   }
 
   /* ---- week navigation ---- */
@@ -1070,10 +1171,11 @@
     const items = [];
     visibleEmployees().forEach(emp => {
       dateStrs.forEach((dateStr, dayOffset) => {
-        const s = (state.shifts[emp.id] || {})[dateStr];
-        if (s && !timeOffFor(emp.id, dateStr)) {
-          items.push({ empId: emp.id, empName: emp.name, dayOffset, shiftData: { ...s } });
-        }
+        if (timeOffsFor(emp.id, dateStr).length) return;
+        shiftsFor(emp.id, dateStr).forEach(s => {
+          const { id, ...shiftData } = s; // strip id so pasting creates a fresh shift, never edits the source
+          items.push({ empId: emp.id, empName: emp.name, dayOffset, shiftData });
+        });
       });
     });
     return items;
@@ -1140,7 +1242,7 @@
   document.getElementById('paste-here-btn').addEventListener('click', () => {
     bulkClipboard.forEach(item => {
       const targetDateStr = toDateStr(addDays(currentWeekStart, item.dayOffset));
-      assignShift(item.empId, targetDateStr, { ...item.shiftData }, { skipConfirm: true });
+      addShift(item.empId, targetDateStr, { ...item.shiftData }, { skipConfirm: true });
     });
     bulkClipboard = [];
     document.getElementById('paste-here-btn').style.display = 'none';
@@ -1151,16 +1253,19 @@
      SHIFT EDIT MODAL
      ================================================================= */
   const shiftOverlay = document.getElementById('shift-overlay');
-  let editingEmpId = null, editingDate = null;
+  let editingEmpId = null, editingDate = null, editingShiftId = null;
 
   function populateShiftTypeSelect(select){
     select.innerHTML = state.shiftTypes.map(st => `<option value="${st.id}">${st.name}</option>`).join('');
   }
 
-  function openShiftModal(empId, dateStr){
-    editingEmpId = empId; editingDate = dateStr;
+  // shiftId: pass an existing shift's id to edit it, or null/undefined to
+  // add a NEW shift to that day — a day can already hold other shifts,
+  // adding one never touches them.
+  function openShiftModal(empId, dateStr, shiftId){
+    editingEmpId = empId; editingDate = dateStr; editingShiftId = shiftId || null;
     const emp = employeeById(empId);
-    const existing = (state.shifts[empId] || {})[dateStr];
+    const existing = shiftId ? shiftsFor(empId, dateStr).find(s => s.id === shiftId) : null;
 
     document.getElementById('shift-modal-title').textContent = existing ? `Edit shift — ${emp.name}` : `Add shift — ${emp.name}`;
     populateShiftTypeSelect(document.getElementById('shift-role'));
@@ -1181,8 +1286,7 @@
   }
   document.getElementById('shift-cancel').addEventListener('click', () => shiftOverlay.classList.remove('show'));
   document.getElementById('shift-delete').addEventListener('click', () => {
-    if (state.shifts[editingEmpId]) delete state.shifts[editingEmpId][editingDate];
-    saveState(); renderSchedule();
+    if (editingShiftId) deleteShift(editingEmpId, editingDate, editingShiftId);
     shiftOverlay.classList.remove('show');
   });
   document.getElementById('shift-save').addEventListener('click', () => {
@@ -1192,7 +1296,10 @@
       end: document.getElementById('shift-end').value,
       breakMins: Number(document.getElementById('shift-break').value) || 0
     };
-    if (assignShift(editingEmpId, editingDate, shiftData)) shiftOverlay.classList.remove('show');
+    const ok = editingShiftId
+      ? updateShift(editingEmpId, editingDate, editingShiftId, shiftData)
+      : addShift(editingEmpId, editingDate, shiftData);
+    if (ok) shiftOverlay.classList.remove('show');
   });
 
   /* =================================================================
@@ -1201,7 +1308,12 @@
   const timeoffOverlay = document.getElementById('timeoff-overlay');
   let editingTimeOffId = null;
 
-  function openTimeOffModal(timeOffId){
+  // prefill: optional { employeeId, date } — used by a day cell's "+ Off"
+  // button so the modal opens ready to add another time-off entry for
+  // that person on that exact day, even if one (or more) already covers
+  // it. Nothing here stops a second, third, etc. entry from overlapping
+  // the same date — that's intentional.
+  function openTimeOffModal(timeOffId, prefill){
     editingTimeOffId = timeOffId || null;
     const sel = document.getElementById('to-employee');
     sel.innerHTML = state.employees.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
@@ -1216,8 +1328,10 @@
       document.getElementById('to-delete').style.display = 'inline';
     } else {
       document.getElementById('timeoff-modal-title').textContent = 'Add time off';
-      document.getElementById('to-from').value = toDateStr(new Date());
-      document.getElementById('to-to').value = toDateStr(new Date());
+      if (prefill && prefill.employeeId) sel.value = prefill.employeeId;
+      const d = (prefill && prefill.date) || toDateStr(new Date());
+      document.getElementById('to-from').value = d;
+      document.getElementById('to-to').value = d;
       document.getElementById('to-reason').value = '';
       document.getElementById('to-delete').style.display = 'none';
     }
@@ -1267,17 +1381,16 @@
     emps.forEach(emp => {
       dates.forEach(d => {
         const dateStr = toDateStr(d);
-        const off = timeOffFor(emp.id, dateStr);
         const dayName = DAY_NAMES[d.getDay()===0?6:d.getDay()-1];
-        if (off) {
-          rows.push([emp.name, emp.department, dateStr, dayName, 'Time Off', '', '', '', ...(includeHours ? [''] : [])]);
-          return;
-        }
-        const s = (state.shifts[emp.id] || {})[dateStr];
-        if (!s) return;
-        const st = shiftTypeById(s.shiftTypeId);
-        const mins = hoursMinusBreak(s.start, s.end, s.breakMins);
-        rows.push([emp.name, emp.department, dateStr, dayName, st ? st.name : 'Unassigned', s.start, s.end, s.breakMins || 0, ...(includeHours ? [fmtMins(mins)] : [])]);
+        const offs = timeOffsFor(emp.id, dateStr);
+        offs.forEach(off => {
+          rows.push([emp.name, emp.department, dateStr, dayName, 'Time Off', '', '', '', ...(includeHours ? [off.reason || ''] : [])]);
+        });
+        shiftsFor(emp.id, dateStr).forEach(s => {
+          const st = shiftTypeById(s.shiftTypeId);
+          const mins = hoursMinusBreak(s.start, s.end, s.breakMins);
+          rows.push([emp.name, emp.department, dateStr, dayName, st ? st.name : 'Unassigned', s.start, s.end, s.breakMins || 0, ...(includeHours ? [fmtMins(mins)] : [])]);
+        });
       });
     });
 
@@ -1288,6 +1401,81 @@
     a.href = url; a.download = `hallan-rota-${toDateStr(currentWeekStart)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+    downloadOverlay.classList.remove('show');
+  });
+
+  // ---- PDF export — a printable grid: one row per employee, one column
+  // per day of the week, matching the Sling-style rota sheet (day headers
+  // with dates, a chip of text per shift/time-off in each cell, and a
+  // "Scheduled hours / Employees" totals row at the bottom). ----
+  document.getElementById('dl-pdf').addEventListener('click', () => {
+    if (!(window.jspdf && window.jspdf.jsPDF)) {
+      alert('PDF export could not load (no internet connection?). Try Download CSV instead.');
+      return;
+    }
+    const onlyFiltered = document.getElementById('dl-filtered').checked;
+    const emps = onlyFiltered ? visibleEmployees() : state.employees;
+    const dates = weekDates();
+    const dateStrs = dates.map(toDateStr);
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+
+    const head = [['Employee', ...dates.map(d =>
+      `${DAY_NAMES[d.getDay()===0?6:d.getDay()-1].toUpperCase()} ${d.getDate()}`
+    )]];
+
+    const body = emps.map(emp => {
+      let totalMins = 0;
+      const dayCells = dateStrs.map(dateStr => {
+        const lines = [];
+        timeOffsFor(emp.id, dateStr).forEach(off => {
+          lines.push(`Time off${off.reason ? ' — ' + off.reason : ''}\nAll day`);
+        });
+        shiftsFor(emp.id, dateStr).forEach(s => {
+          const st = shiftTypeById(s.shiftTypeId);
+          totalMins += hoursMinusBreak(s.start, s.end, s.breakMins);
+          lines.push(`${st ? st.name : 'Unassigned'}\n${s.start} - ${s.end}`);
+        });
+        return lines.join('\n\n');
+      });
+      return [`${emp.name}\n${fmtMins(totalMins)}`, ...dayCells];
+    });
+
+    const totalsRow = ['Scheduled hours\nEmployees'];
+    dateStrs.forEach(dateStr => {
+      let mins = 0, headcount = 0;
+      emps.forEach(emp => {
+        if (timeOffsFor(emp.id, dateStr).length) return;
+        const dayShifts = shiftsFor(emp.id, dateStr);
+        if (dayShifts.length) headcount++;
+        dayShifts.forEach(s => { mins += hoursMinusBreak(s.start, s.end, s.breakMins); });
+      });
+      totalsRow.push(`${mins ? fmtMins(mins) : '—'}\n${headcount} ${headcount === 1 ? 'person' : 'people'}`);
+    });
+    body.push(totalsRow);
+
+    doc.setFontSize(13);
+    doc.setTextColor('#37424A');
+    doc.text(`Hallan Rota — ${weekLabelText()}`, 30, 30);
+
+    doc.autoTable({
+      head, body,
+      startY: 44,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 5, valign: 'top', lineColor: '#E3E7EB', lineWidth: 0.5, textColor: '#37424A' },
+      headStyles: { fillColor: '#3E97E8', textColor: '#ffffff', fontStyle: 'bold', halign: 'center' },
+      columnStyles: { 0: { cellWidth: 110, fontStyle: 'bold' } },
+      didParseCell: (data) => {
+        // Bold + shade the totals row (the last body row) like Sling does.
+        if (data.section === 'body' && data.row.index === body.length - 1) {
+          data.cell.styles.fillColor = '#F0F3F5';
+          data.cell.styles.fontStyle = 'bold';
+        }
+      }
+    });
+
+    doc.save(`hallan-rota-${toDateStr(currentWeekStart)}.pdf`);
     downloadOverlay.classList.remove('show');
   });
 
@@ -1326,13 +1514,52 @@
   const employeeOverlay = document.getElementById('employee-overlay');
   let editingEmployeeId = null;
 
+  // Populates the Department <select> with every department already in use
+  // (so you can see and pick from real options instead of retyping one),
+  // plus a "+ Add new department…" option that reveals a text box for a
+  // genuinely new one.
+  function populateDeptSelect(currentValue){
+    const select = document.getElementById('emp-dept');
+    const newInput = document.getElementById('emp-dept-new');
+    const depts = allDepartments();
+    const options = depts.map(d => `<option value="${d}">${d}</option>`);
+    options.push(`<option value="__new__">+ Add new department…</option>`);
+    select.innerHTML = options.join('');
+
+    if (currentValue && depts.includes(currentValue)) {
+      select.value = currentValue;
+      newInput.style.display = 'none';
+      newInput.value = '';
+    } else if (currentValue) {
+      // Existing employee's department isn't in the current list for some
+      // reason (e.g. renamed elsewhere) — keep it selectable rather than
+      // silently losing it.
+      select.insertAdjacentHTML('afterbegin', `<option value="${currentValue}">${currentValue}</option>`);
+      select.value = currentValue;
+      newInput.style.display = 'none';
+      newInput.value = '';
+    } else if (depts.length) {
+      select.value = depts[0];
+      newInput.style.display = 'none';
+      newInput.value = '';
+    } else {
+      // No departments exist yet at all — go straight to "new".
+      select.value = '__new__';
+      newInput.style.display = 'block';
+      newInput.value = '';
+    }
+  }
+  document.getElementById('emp-dept').addEventListener('change', (e) => {
+    document.getElementById('emp-dept-new').style.display = e.target.value === '__new__' ? 'block' : 'none';
+  });
+
   function openEmployeeModal(empId){
     editingEmployeeId = empId || null;
     const emp = empId ? employeeById(empId) : null;
 
     document.getElementById('employee-modal-title').textContent = emp ? 'Edit employee' : 'Add employee';
     document.getElementById('emp-name').value = emp ? emp.name : '';
-    document.getElementById('emp-dept').value = emp ? emp.department : '';
+    populateDeptSelect(emp ? emp.department : '');
     document.getElementById('emp-personnel').value = emp ? (emp.personnelNumber || '') : '';
     document.getElementById('emp-login').value = emp ? emp.loginId : '';
     document.getElementById('emp-pin').value = emp ? emp.pin : '';
@@ -1437,7 +1664,11 @@
   document.getElementById('emp-save').addEventListener('click', () => {
     const name = document.getElementById('emp-name').value.trim();
     if (!name) { alert('Enter a name.'); return; }
-    const department = document.getElementById('emp-dept').value.trim();
+    const deptSelectVal = document.getElementById('emp-dept').value;
+    const department = deptSelectVal === '__new__'
+      ? document.getElementById('emp-dept-new').value.trim()
+      : deptSelectVal.trim();
+    if (!department) { alert('Enter or pick a department.'); return; }
     const personnelNumber = document.getElementById('emp-personnel').value.trim();
     const loginId = document.getElementById('emp-login').value.trim();
     const pin = document.getElementById('emp-pin').value.trim();
@@ -2058,6 +2289,7 @@
     accessManagerOverlay.classList.remove('show');
   });
 
+  wireGridEvents();
   activateTab(currentRole === 'manager' ? 'analytics' : 'schedule');
 </script>
 </body>
