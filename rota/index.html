@@ -112,7 +112,38 @@
         <input class="field" id="password" name="password" type="password" placeholder="••••••••" autocomplete="current-password" required>
 
         <button class="btn-primary" type="submit" id="login-btn">Log in</button>
+        <div style="text-align:center;margin-top:14px;">
+          <button type="button" id="go-forgot" style="background:none;border:none;padding:0;color:var(--slate);font-size:13px;cursor:pointer;font-family:inherit;text-decoration:underline;">Forgot password?</button>
+        </div>
       </form>
+    </div>
+
+    <!-- ===================== FORGOT PASSWORD ===================== -->
+    <div class="authform" id="form-forgot">
+      <h1>Reset password</h1>
+      <div class="switchline">Remembered it after all?
+        <button type="button" id="go-login-from-forgot">Log in instead</button>
+      </div>
+      <div class="err" id="forgot-err"></div>
+      <div class="ok" id="forgot-ok">Password updated — logging you in…</div>
+      <form id="forgot-form">
+        <label class="field-label" for="fp-employeeId">Employee ID</label>
+        <input class="field" id="fp-employeeId" name="employeeId" type="text" placeholder="e.g. 94" autocomplete="username" required>
+
+        <label class="field-label" for="fp-department">Department</label>
+        <select class="field" id="fp-department" name="department" required>
+          <option value="">Loading departments…</option>
+        </select>
+
+        <label class="field-label" for="fp-password">New password</label>
+        <input class="field" id="fp-password" name="password" type="password" placeholder="At least 6 characters" autocomplete="new-password" required>
+
+        <label class="field-label" for="fp-password2">Confirm new password</label>
+        <input class="field" id="fp-password2" name="password2" type="password" placeholder="••••••••" autocomplete="new-password" required>
+
+        <button class="btn-primary" type="submit" id="forgot-btn">Reset password</button>
+      </form>
+      <div style="font-size:12.5px;color:var(--slate);margin-top:16px;">We check this against the department HR has on file for your Employee ID, so pick the same one you used to sign up. If it doesn't match, ask HR.</div>
     </div>
 
     <!-- ===================== SIGN UP ===================== -->
@@ -155,29 +186,33 @@
   // ---------------------------------------------------------------
   const API_BASE = 'https://hallan-picking-backend.onrender.com';
 
-  /* ---- switch between Log in / Sign up ---- */
+  /* ---- switch between Log in / Sign up / Forgot password ---- */
   const formLogin = document.getElementById('form-login');
   const formSignup = document.getElementById('form-signup');
-  document.getElementById('go-signup').addEventListener('click', () => {
-    formLogin.classList.remove('active'); formSignup.classList.add('active');
-  });
-  document.getElementById('go-login').addEventListener('click', () => {
-    formSignup.classList.remove('active'); formLogin.classList.add('active');
-  });
+  const formForgot = document.getElementById('form-forgot');
+  function showForm(el){
+    [formLogin, formSignup, formForgot].forEach(f => f.classList.remove('active'));
+    el.classList.add('active');
+  }
+  document.getElementById('go-signup').addEventListener('click', () => showForm(formSignup));
+  document.getElementById('go-login').addEventListener('click', () => showForm(formLogin));
+  document.getElementById('go-forgot').addEventListener('click', () => showForm(formForgot));
+  document.getElementById('go-login-from-forgot').addEventListener('click', () => showForm(formLogin));
 
-  /* ---- load real departments for the sign-up dropdown ---- */
+  /* ---- load real departments for the sign-up + forgot-password dropdowns ---- */
   (async () => {
-    const select = document.getElementById('su-department');
+    const selects = [document.getElementById('su-department'), document.getElementById('fp-department')];
     try {
       const res = await fetch(`${API_BASE}/api/staff/departments`);
       const data = await res.json();
       if (res.ok && data.ok && data.departments.length) {
-        select.innerHTML = data.departments.map(d => `<option value="${d}">${d}</option>`).join('');
+        const optionsHtml = data.departments.map(d => `<option value="${d}">${d}</option>`).join('');
+        selects.forEach(select => { select.innerHTML = optionsHtml; });
       } else {
-        select.innerHTML = '<option value="">Could not load departments — contact HR</option>';
+        selects.forEach(select => { select.innerHTML = '<option value="">Could not load departments — contact HR</option>'; });
       }
     } catch (err) {
-      select.innerHTML = '<option value="">Could not load departments — check your connection</option>';
+      selects.forEach(select => { select.innerHTML = '<option value="">Could not load departments — check your connection</option>'; });
     }
   })();
 
@@ -293,6 +328,55 @@
       showErr(signupErr, 'Could not reach the server. Check your connection and try again.');
       signupBtn.disabled = false;
       signupBtn.textContent = 'Create account';
+    }
+  });
+
+  /* ---- forgot password ----
+     Posts to /api/staff/forgot-password: { employeeId, department, password }.
+     Same trust model as signup: the typed department has to match what
+     HR has on file for that Employee ID, since there's no old password
+     to prove who's asking. On success the backend logs them straight in.
+  ---- */
+  const forgotForm = document.getElementById('forgot-form');
+  const forgotErr = document.getElementById('forgot-err');
+  const forgotOk = document.getElementById('forgot-ok');
+  const forgotBtn = document.getElementById('forgot-btn');
+
+  forgotForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearErr(forgotErr);
+    forgotOk.style.display = 'none';
+
+    const employeeId = document.getElementById('fp-employeeId').value.trim();
+    const department = document.getElementById('fp-department').value.trim();
+    const password = document.getElementById('fp-password').value;
+    const password2 = document.getElementById('fp-password2').value;
+
+    if (password.length < 6) { showErr(forgotErr, 'Password must be at least 6 characters.'); return; }
+    if (password !== password2) { showErr(forgotErr, "Passwords don't match."); return; }
+
+    forgotBtn.disabled = true;
+    forgotBtn.textContent = 'Resetting…';
+
+    try {
+      const res = await fetch(`${API_BASE}/api/staff/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId, department, password })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        showErr(forgotErr, data.error || "Couldn't reset that password — check your Employee ID and department with HR and try again.");
+        forgotBtn.disabled = false;
+        forgotBtn.textContent = 'Reset password';
+        return;
+      }
+      forgotOk.style.display = 'block';
+      setTimeout(() => goToRota(data, employeeId), 700);
+    } catch (err) {
+      showErr(forgotErr, 'Could not reach the server. Check your connection and try again.');
+      forgotBtn.disabled = false;
+      forgotBtn.textContent = 'Reset password';
     }
   });
 </script>
