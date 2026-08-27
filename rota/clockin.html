@@ -83,6 +83,14 @@
   <div class="clock" id="clock">--:--:--</div>
   <div class="date" id="date">—</div>
 
+  <!-- STEP 0: this device hasn't been signed in yet -->
+  <div class="step" id="step-setup">
+    <div class="err" style="display:block;">
+      This device hasn't been set up yet. Ask a manager to open <strong>index.html</strong> on this device and log in once — after that, staff can clock in and out here with just their Login ID and PIN.
+    </div>
+    <button class="btn-primary" id="setup-retry-btn">I've logged in — Retry</button>
+  </div>
+
   <!-- STEP 1: Login ID + PIN -->
   <div class="step active" id="step-login">
     <div class="err" id="login-err"></div>
@@ -113,31 +121,56 @@
 <script>
   /* ---------------------------------------------------------------
      This file must be served from the SAME origin/folder as the Rota
-     app (schedule.html) — it reads employees from the 'hallan_rota_v2'
-     localStorage key that schedule.html already writes (Employees tab
-     -> Login ID / PIN fields), and writes punches to a separate
-     'hallan_timesheet_v1' key that schedule.html's Timesheet tab reads.
+     app (schedule.html and index.html).
 
-     This is a shared/kiosk screen on purpose — it does NOT use the
-     rota_token login from index.html. Anyone standing at the device
-     identifies themselves with their own Login ID + PIN per punch.
+     It used to read employees from a 'hallan_rota_v2' localStorage key
+     and write punches to 'hallan_timesheet_v1' — both purely local to
+     whichever device the kiosk ran on, so punches made here never
+     reached the Timesheet tab on any OTHER device. Both now go through
+     the same shared backend schedule.html uses.
+
+     This is still a shared/kiosk screen for IDENTIFYING who's punching
+     — anyone standing at the device types their own Login ID + PIN per
+     punch, same as before. But calling the backend at all needs a
+     valid login token, and this page deliberately never asks anyone
+     for their staff password. So instead the DEVICE itself needs to be
+     signed in once: a manager opens index.html on this device and logs
+     in normally, which drops a 'rota_token' into this browser's
+     localStorage (the same key schedule.html already uses) — after
+     that, this page reuses that token for its own API calls, while
+     each individual punch is still tied to whoever's Login ID + PIN
+     was typed in, not to whoever originally signed the device in.
+     Note that token expires after 12 hours, so on an always-on kiosk
+     someone will need to log in again periodically — a longer-lived,
+     device-specific token would be a worthwhile follow-up if that
+     turns out to be a hassle.
      --------------------------------------------------------------- */
-  const ROTA_KEY = 'hallan_rota_v2';
-  const TIMESHEET_KEY = 'hallan_timesheet_v1';
+  const API_BASE = 'https://hallan-picking-backend.onrender.com';
+  const token = localStorage.getItem('rota_token');
 
-  function loadRota(){
-    try {
-      const raw = localStorage.getItem(ROTA_KEY);
-      return raw ? JSON.parse(raw) : { employees: [] };
-    } catch (e) { return { employees: [] }; }
+  async function fetchEmployees(){
+    const res = await fetch(`${API_BASE}/api/staff/rota-state`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error('load failed');
+    const payload = await res.json();
+    if (!payload.ok) throw new Error(payload.error || 'load failed');
+    return (payload.data && payload.data.employees) || [];
   }
-  function loadTimesheet(){
-    try {
-      const raw = localStorage.getItem(TIMESHEET_KEY);
-      return raw ? { days: {}, ...JSON.parse(raw) } : { days: {} };
-    } catch (e) { return { days: {} }; }
+  async function fetchTodayRecord(employeeId, dateStr){
+    const res = await fetch(`${API_BASE}/api/staff/timesheet-state`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error('load failed');
+    const payload = await res.json();
+    if (!payload.ok) throw new Error(payload.error || 'load failed');
+    return ((payload.days || {})[employeeId] || {})[dateStr] || {};
   }
-  function saveTimesheet(ts){ localStorage.setItem(TIMESHEET_KEY, JSON.stringify(ts)); }
+  async function saveTimesheetEntry(employeeId, dateStr, rec){
+    const res = await fetch(`${API_BASE}/api/staff/timesheet-entry`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ employeeId, date: dateStr, ...rec })
+    });
+    const payload = await res.json();
+    if (!res.ok || !payload.ok) throw new Error(payload.error || 'save failed');
+  }
 
   function toDateStr(d){ return d.toISOString().slice(0,10); }
   function nowHHMM(){
@@ -159,16 +192,20 @@
   }
   tick(); setInterval(tick, 1000);
 
+  const stepSetup = document.getElementById('step-setup');
   const stepLogin = document.getElementById('step-login');
   const stepStatus = document.getElementById('step-status');
   const stepConfirm = document.getElementById('step-confirm');
 
   function showStep(step){
-    [stepLogin, stepStatus, stepConfirm].forEach(s => s.classList.remove('active'));
+    [stepSetup, stepLogin, stepStatus, stepConfirm].forEach(s => s.classList.remove('active'));
     step.classList.add('active');
   }
 
+  document.getElementById('setup-retry-btn').addEventListener('click', () => window.location.reload());
+
   function resetToLogin(){
+    if (!token) { showStep(stepSetup); return; }
     document.getElementById('login-id').value = '';
     document.getElementById('login-pin').value = '';
     document.getElementById('login-err').style.display = 'none';
@@ -178,10 +215,11 @@
 
   let currentEmployee = null;
 
-  document.getElementById('login-continue-btn').addEventListener('click', () => {
+  document.getElementById('login-continue-btn').addEventListener('click', async () => {
     const loginId = document.getElementById('login-id').value.trim();
     const pin = document.getElementById('login-pin').value.trim();
     const errBox = document.getElementById('login-err');
+    const btn = document.getElementById('login-continue-btn');
 
     if (!loginId || !pin) {
       errBox.textContent = 'Enter both your Login ID and PIN.';
@@ -189,20 +227,30 @@
       return;
     }
 
-    const rota = loadRota();
-    const emp = (rota.employees || []).find(e =>
-      (e.loginId || '').trim() === loginId && (e.pin || '').trim() === pin
-    );
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+    try {
+      const employees = await fetchEmployees();
+      const emp = employees.find(e =>
+        (e.loginId || '').trim() === loginId && (e.pin || '').trim() === pin
+      );
 
-    if (!emp) {
-      errBox.textContent = 'Login ID or PIN not recognised. Check with your manager if this keeps happening.';
+      if (!emp) {
+        errBox.textContent = 'Login ID or PIN not recognised. Check with your manager if this keeps happening.';
+        errBox.style.display = 'block';
+        return;
+      }
+
+      errBox.style.display = 'none';
+      currentEmployee = emp;
+      await showStatusStep();
+    } catch (err) {
+      errBox.textContent = "Could not reach the server. Check the connection and try again.";
       errBox.style.display = 'block';
-      return;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Continue';
     }
-
-    errBox.style.display = 'none';
-    currentEmployee = emp;
-    showStatusStep();
   });
 
   document.getElementById('login-pin').addEventListener('keydown', (e) => {
@@ -211,17 +259,20 @@
 
   document.getElementById('status-back-btn').addEventListener('click', resetToLogin);
 
-  function todayRecord(){
-    const ts = loadTimesheet();
-    const dateStr = toDateStr(new Date());
-    return (ts.days[currentEmployee.id] || {})[dateStr] || {};
-  }
-
-  function showStatusStep(){
+  async function showStatusStep(){
     document.getElementById('status-name').textContent = currentEmployee.name;
     document.getElementById('status-dept').textContent = currentEmployee.department || '';
 
-    const rec = todayRecord();
+    const dateStr = toDateStr(new Date());
+    let rec;
+    try {
+      rec = await fetchTodayRecord(currentEmployee.id, dateStr);
+    } catch (err) {
+      document.getElementById('login-err').textContent = "Could not reach the server. Check the connection and try again.";
+      document.getElementById('login-err').style.display = 'block';
+      showStep(stepLogin);
+      return;
+    }
     const pill = document.getElementById('status-pill');
     const pillText = document.getElementById('status-pill-text');
     const actions = document.getElementById('status-actions');
@@ -252,18 +303,14 @@
     }
 
     actions.querySelectorAll('[data-action]').forEach(btn => {
-      btn.addEventListener('click', () => recordPunch(btn.dataset.action));
+      btn.addEventListener('click', () => recordPunch(btn.dataset.action, rec));
     });
 
     showStep(stepStatus);
   }
 
-  function recordPunch(action){
-    const ts = loadTimesheet();
+  async function recordPunch(action, rec){
     const dateStr = toDateStr(new Date());
-    if (!ts.days[currentEmployee.id]) ts.days[currentEmployee.id] = {};
-    const rec = ts.days[currentEmployee.id][dateStr] || {};
-
     const time = nowHHMM();
     let confirmText = '', confirmSub = '';
 
@@ -272,8 +319,14 @@
     if (action === 'breakend') { rec.breakEnd = time; confirmText = 'Break ended'; confirmSub = `Welcome back, ${currentEmployee.name.split(' ')[0]}.`; }
     if (action === 'out') { rec.out = time; confirmText = 'Clocked out'; confirmSub = `See you next time, ${currentEmployee.name.split(' ')[0]}!`; }
 
-    ts.days[currentEmployee.id][dateStr] = rec;
-    saveTimesheet(ts);
+    document.querySelectorAll('[data-action]').forEach(b => b.disabled = true);
+    try {
+      await saveTimesheetEntry(currentEmployee.id, dateStr, rec);
+    } catch (err) {
+      alert("Could not save that — check the connection and try again.");
+      document.querySelectorAll('[data-action]').forEach(b => b.disabled = false);
+      return;
+    }
 
     document.getElementById('confirm-text').textContent = confirmText;
     document.getElementById('confirm-sub').textContent = confirmSub;
