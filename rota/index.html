@@ -111,9 +111,6 @@
         <label class="field-label" for="password">Password</label>
         <input class="field" id="password" name="password" type="password" placeholder="••••••••" autocomplete="current-password" required>
 
-        <label class="field-label" for="department">Department</label>
-        <input class="field" id="department" name="department" type="text" placeholder="e.g. Grocery — as HR has it on file" autocomplete="off" required>
-
         <button class="btn-primary" type="submit" id="login-btn">Log in</button>
       </form>
     </div>
@@ -131,7 +128,9 @@
         <input class="field" id="su-employeeId" name="employeeId" type="text" placeholder="e.g. 94 — the ID HR gave you" autocomplete="username" required>
 
         <label class="field-label" for="su-department">Department</label>
-        <input class="field" id="su-department" name="department" type="text" placeholder="e.g. Grocery — as HR has it on file" autocomplete="off" required>
+        <select class="field" id="su-department" name="department" required>
+          <option value="">Loading departments…</option>
+        </select>
 
         <label class="field-label" for="su-password">Create a password</label>
         <input class="field" id="su-password" name="password" type="password" placeholder="At least 6 characters" autocomplete="new-password" required>
@@ -166,6 +165,22 @@
     formSignup.classList.remove('active'); formLogin.classList.add('active');
   });
 
+  /* ---- load real departments for the sign-up dropdown ---- */
+  (async () => {
+    const select = document.getElementById('su-department');
+    try {
+      const res = await fetch(`${API_BASE}/api/staff/departments`);
+      const data = await res.json();
+      if (res.ok && data.ok && data.departments.length) {
+        select.innerHTML = data.departments.map(d => `<option value="${d}">${d}</option>`).join('');
+      } else {
+        select.innerHTML = '<option value="">Could not load departments — contact HR</option>';
+      }
+    } catch (err) {
+      select.innerHTML = '<option value="">Could not load departments — check your connection</option>';
+    }
+  })();
+
   /* ---- log in ---- */
   const loginForm = document.getElementById('login-form');
   const loginErr = document.getElementById('login-err');
@@ -193,13 +208,12 @@
 
     const employeeId = document.getElementById('employeeId').value.trim();
     const password = document.getElementById('password').value;
-    const department = document.getElementById('department').value.trim();
 
     try {
       const res = await fetch(`${API_BASE}/api/staff/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employeeId, password, department })
+        body: JSON.stringify({ employeeId, password })
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
@@ -218,15 +232,16 @@
 
   /* ---- sign up ----
      Posts to /api/staff/signup: { employeeId, department, password }.
-     The backend only creates a password for an employeeId that already
-     exists (active) in staff_employees, and only if the typed department
-     matches what HR has on file for that ID — so this can't be used to
-     create a brand-new employee, and it can't be claimed with just any
-     random ID number. Your access level (staff / manager / HR) is then
-     worked out automatically from your real department — there's
-     nothing to pick here. If a password already exists for that ID,
-     signup is refused and the person is told to log in / contact HR
-     instead.
+     Department comes from a real dropdown (populated above from
+     /api/staff/departments), not free text, so it always matches HR's
+     spelling exactly. The backend only creates a password for an
+     employeeId that already exists (active) in staff_employees, and only
+     if the picked department matches what HR has on file for that ID —
+     so this can't be used to create a brand-new employee, and it can't
+     be claimed with just any random ID number. Your access level
+     (staff / manager / HR) is then worked out automatically from your
+     real department. If a password already exists for that ID, signup
+     is refused and the person is told to log in / contact HR instead.
   ---- */
   const signupForm = document.getElementById('signup-form');
   const signupErr = document.getElementById('signup-err');
@@ -271,7 +286,6 @@
         setTimeout(() => {
           formSignup.classList.remove('active'); formLogin.classList.add('active');
           document.getElementById('employeeId').value = employeeId;
-          document.getElementById('department').value = department;
           document.getElementById('password').focus();
         }, 900);
       }
