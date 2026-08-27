@@ -201,6 +201,16 @@
 </head>
 <body>
 
+<!-- Shown while the rota is loading from the server, and again if the
+     connection is lost — never let someone edit the schedule while
+     looking at stale/unsynced data without knowing it. -->
+<div id="sync-blocker" style="position:fixed;inset:0;background:#F7F9FA;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-family:'Inter',sans-serif;">
+  <div style="font-size:15px;font-weight:600;color:#37424A;">Loading the rota…</div>
+  <div id="sync-blocker-detail" style="font-size:13px;color:#6B7684;max-width:340px;text-align:center;"></div>
+  <button id="sync-blocker-retry" style="display:none;padding:9px 18px;border:none;border-radius:6px;background:#4A99E9;color:#fff;font-weight:600;font-size:13.5px;cursor:pointer;font-family:inherit;">Retry</button>
+</div>
+<div id="sync-status" style="display:none;position:fixed;bottom:14px;right:14px;z-index:9998;padding:8px 14px;border-radius:6px;font-size:12.5px;font-weight:600;font-family:'Inter',sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.12);"></div>
+
 <div class="topnav">
   <div class="brand">
     <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -679,9 +689,12 @@
     .catch(() => { window.location.href = 'index.html'; });
 
   /* =================================================================
-     DATA LAYER — localStorage for now (see note in chat: swap loadState/
-     saveState for real fetch()/POST calls against a backend when ready;
-     the shape of `state` is already designed to map onto that cleanly).
+     DATA LAYER — backed by the shared database via /api/staff/rota-state,
+     so every device/browser reads and writes the same data (this used to
+     be localStorage-only, which is why data looked "gone" on another
+     device and Access-tab grants only worked on the device that made
+     them). localStorage is still used as a same-device offline cache —
+     never as the source of truth.
      This is a SEPARATE employee list from Staff Portal on purpose — the
      Rota app owns its own employees/shifts/logins, no shared IDs.
      ================================================================= */
@@ -726,21 +739,90 @@
     });
     return shifts;
   }
-  function loadState(){
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return defaultState();
-      const merged = { ...defaultState(), ...JSON.parse(raw) };
-      merged.shifts = migrateShiftsToArrays(merged.shifts);
-      return merged;
-    } catch (e) { return defaultState(); }
-  }
-  function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 
-  let state = loadState();
+  // `state` starts as an empty shell purely so the many event-listener
+  // closures defined below (which reference `state`) don't throw before
+  // real data arrives — nothing actually renders from it until init()
+  // finishes loading the real thing from the server, further down.
+  let state = defaultState();
+  let lastKnownUpdatedAt = null;   // server's updatedAt for the version of `state` we last loaded/saved — used for conflict detection
+  let serverReachable = true;      // false = we're editing a local-only cache; changes are NOT visible on other devices until this is true again
+
   function shiftTypeById(id){ return state.shiftTypes.find(r => r.id === id); }
   function employeeById(id){ return state.employees.find(e => e.id === id); }
   function uid(prefix){ return prefix + '_' + Math.random().toString(36).slice(2, 9); }
+
+  function setSyncStatus(kind, text){
+    const el = document.getElementById('sync-status');
+    const styles = {
+      synced:   { bg: '#E5F6ED', fg: '#2C6B22' },
+      syncing:  { bg: '#EAF2FB', fg: '#2E6FA8' },
+      offline:  { bg: '#FDEEEE', fg: '#B23A3A' }
+    };
+    const s = styles[kind] || styles.offline;
+    el.style.background = s.bg; el.style.color = s.fg;
+    el.textContent = text;
+    el.style.display = 'block';
+  }
+
+  // Fetches the current shared state from the server. Returns true on
+  // success (state/lastKnownUpdatedAt are updated), false on failure.
+  async function loadStateFromServer(){
+    const res = await fetch(`${API_BASE}/api/staff/rota-state`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error('load failed');
+    const payload = await res.json();
+    if (!payload.ok) throw new Error(payload.error || 'load failed');
+    const merged = payload.data ? { ...defaultState(), ...payload.data } : defaultState();
+    merged.shifts = migrateShiftsToArrays(merged.shifts);
+    state = merged;
+    lastKnownUpdatedAt = payload.updatedAt;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ state, updatedAt: lastKnownUpdatedAt }));
+    return true;
+  }
+
+  // Debounced so rapid successive edits (bulk paste of many shifts, fast
+  // clicking) collapse into one PUT instead of one per edit.
+  let syncTimer = null;
+  function saveState(){
+    // Always persist locally immediately, so nothing is lost if the tab
+    // closes before the debounced server sync below fires.
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ state, updatedAt: lastKnownUpdatedAt }));
+    setSyncStatus('syncing', 'Saving…');
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(syncStateToServer, 700);
+  }
+
+  async function syncStateToServer(){
+    try {
+      const res = await fetch(`${API_BASE}/api/staff/rota-state`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ data: state, expectedUpdatedAt: lastKnownUpdatedAt })
+      });
+      const payload = await res.json();
+
+      if (res.status === 409) {
+        // Someone else saved from another device since we last loaded.
+        // Don't guess how to merge — reload the real thing and make the
+        // person redo their change against current data, since silently
+        // overwriting someone else's rota edit could cost someone a
+        // shift, or their pay.
+        alert("Someone else saved changes to the rota since this page loaded. This page will now reload the latest version — you'll need to redo your last change.");
+        window.location.reload();
+        return;
+      }
+      if (!res.ok || !payload.ok) throw new Error(payload.error || 'save failed');
+
+      lastKnownUpdatedAt = payload.updatedAt;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ state, updatedAt: lastKnownUpdatedAt }));
+      serverReachable = true;
+      setSyncStatus('synced', 'Saved');
+      setTimeout(() => { document.getElementById('sync-status').style.display = 'none'; }, 1800);
+    } catch (err) {
+      serverReachable = false;
+      setSyncStatus('offline', "Not saved — can't reach the server. This change is NOT visible on other devices yet.");
+    }
+  }
 
   /* ---- date helpers ---- */
   function toDateStr(d){ return d.toISOString().slice(0,10); }
@@ -2146,9 +2228,6 @@
 
   /* =================================================================
      CHANGE PASSWORD
-     NOTE: this posts to a guessed endpoint on the same backend used for
-     /api/staff/me above. Confirm the real route/field names on your
-     backend and adjust the fetch below if they differ.
      ================================================================= */
   const passwordOverlay = document.getElementById('password-overlay');
   document.getElementById('pm-password-btn').addEventListener('click', () => {
@@ -2176,13 +2255,16 @@
     fetch(`${API_BASE}/api/staff/change-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ currentPassword: current, newPassword: next })
-    }).then(r => {
-      if (!r.ok) throw new Error('failed');
+      body: JSON.stringify({ old_password: current, new_password: next })
+    }).then(async r => {
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}));
+        throw new Error(data.error || 'failed');
+      }
       okBox.style.display = 'block';
       setTimeout(() => passwordOverlay.classList.remove('show'), 1200);
-    }).catch(() => {
-      errBox.textContent = 'Couldn\'t update your password — check your current password and try again.';
+    }).catch((err) => {
+      errBox.textContent = err.message && err.message !== 'failed' ? err.message : "Couldn't update your password — check your current password and try again.";
       errBox.style.display = 'block';
     });
   });
@@ -2289,8 +2371,44 @@
     accessManagerOverlay.classList.remove('show');
   });
 
-  wireGridEvents();
-  activateTab(currentRole === 'manager' ? 'analytics' : 'schedule');
+  async function init(){
+    const detail = document.getElementById('sync-blocker-detail');
+    const retryBtn = document.getElementById('sync-blocker-retry');
+    try {
+      await loadStateFromServer();
+      document.getElementById('sync-blocker').style.display = 'none';
+      wireGridEvents();
+      activateTab(currentRole === 'manager' ? 'analytics' : 'schedule');
+    } catch (err) {
+      // Couldn't reach the server. Offer to open the last locally-cached
+      // copy (clearly marked as offline/unsynced), or retry the load —
+      // never silently start on an empty or stale rota.
+      serverReachable = false;
+      const cachedRaw = localStorage.getItem(STORAGE_KEY);
+      detail.innerHTML = "Couldn't reach the server, so the rota couldn't be loaded.<br><br>";
+      retryBtn.style.display = 'inline-block';
+      retryBtn.textContent = 'Retry';
+      retryBtn.onclick = () => { document.getElementById('sync-blocker-detail').textContent = ''; retryBtn.style.display = 'none'; document.querySelector('#sync-blocker > div').textContent = 'Loading the rota…'; init(); };
+
+      if (cachedRaw) {
+        const openCachedBtn = document.createElement('button');
+        openCachedBtn.textContent = 'Open last saved copy on this device (offline)';
+        openCachedBtn.style.cssText = 'display:block;margin-top:10px;padding:9px 18px;border:1px solid #D7DCE1;border-radius:6px;background:#fff;color:#37424A;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit;';
+        openCachedBtn.onclick = () => {
+          const cached = JSON.parse(cachedRaw);
+          state = { ...defaultState(), ...cached.state };
+          state.shifts = migrateShiftsToArrays(state.shifts);
+          lastKnownUpdatedAt = cached.updatedAt;
+          document.getElementById('sync-blocker').style.display = 'none';
+          setSyncStatus('offline', "Offline — showing this device's last saved copy. Changes here will NOT reach other devices until the connection is back.");
+          wireGridEvents();
+          activateTab(currentRole === 'manager' ? 'analytics' : 'schedule');
+        };
+        document.getElementById('sync-blocker-detail').after(openCachedBtn);
+      }
+    }
+  }
+  init();
 </script>
 </body>
 </html>
