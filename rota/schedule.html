@@ -1838,8 +1838,25 @@
   const LATE_GRACE_MINS = 5;
   const BREAK_GRACE_MINS = 10;
 
+  // NOTE: state.shifts[empId][dateStr] is an ARRAY (a day can hold more
+  // than one shift — e.g. a split shift). This combines all of that
+  // day's shifts into one summary object (earliest start, latest end,
+  // breaks added together) so the Timesheet/Analytics screens — which
+  // only ever compare against one "the shift that day" — get a single
+  // start/end/breakMins to work with instead of crashing on an array.
   function scheduledFor(empId, dateStr){
-    return (state.shifts[empId] || {})[dateStr] || null;
+    const list = (state.shifts[empId] || {})[dateStr] || [];
+    if (!list.length) return null;
+    const starts = list.map(s => timeToMins(s.start));
+    const ends = list.map(s => timeToMins(s.end < s.start ? addMinsToHM(s.end, 24*60) : s.end));
+    const start = list[starts.indexOf(Math.min(...starts))].start;
+    const end = list[ends.indexOf(Math.max(...ends))].end;
+    const breakMins = list.reduce((sum, s) => sum + (s.breakMins || 0), 0);
+    return { start, end, breakMins };
+  }
+  function addMinsToHM(hm, addMins){
+    const mins = timeToMins(hm) + addMins;
+    return `${String(Math.floor(mins/60)%24).padStart(2,'0')}:${String(mins%60).padStart(2,'0')}`;
   }
 
   // Returns a short human-readable discrepancy string for one day, or ''
