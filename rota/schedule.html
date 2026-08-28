@@ -137,6 +137,12 @@
   .issue-badge.ok{background:#E5F6ED;color:var(--green,#2FA86B);}
   .issue-badge.warn{background:#FBF2E1;color:#B8811F;}
   .issue-badge.bad{background:#FDEEEE;color:#B23A3A;}
+  table.simple th.sortable{cursor:pointer;user-select:none;}
+  table.simple th.sortable:hover{color:var(--ink);}
+  table.simple th.sortable .sort-arrow{display:inline-block;width:10px;font-size:10px;color:var(--blue);margin-left:2px;}
+  button.issue-link{background:none;border:none;padding:0;margin:0;font:inherit;font-weight:600;color:var(--blue);cursor:pointer;text-decoration:underline;}
+  button.issue-link:hover{color:var(--blue-btn-hover,#3583D4);}
+  button.issue-link.bad{color:#B23A3A;}
   .auto-note{font-size:11px;color:#B8811F;margin-top:4px;display:block;}
   .analysis-head{display:flex;align-items:center;justify-content:space-between;margin:34px 0 14px;}
   .analysis-head h2{font-size:16px;margin:0;}
@@ -360,7 +366,15 @@
       </div>
     </div>
     <table class="simple">
-      <thead><tr><th>Employee</th><th>Department</th><th>Late arrivals</th><th>Avg. mins late</th><th>Left early</th><th>Break overages</th><th>No-shows</th></tr></thead>
+      <thead><tr>
+        <th class="sortable" data-sort="name">Employee <span class="sort-arrow" data-arrow="name"></span></th>
+        <th class="sortable" data-sort="department">Department <span class="sort-arrow" data-arrow="department"></span></th>
+        <th class="sortable" data-sort="late">Late arrivals <span class="sort-arrow" data-arrow="late"></span></th>
+        <th class="sortable" data-sort="avgLate">Avg. mins late <span class="sort-arrow" data-arrow="avgLate"></span></th>
+        <th class="sortable" data-sort="earlyLeave">Left early <span class="sort-arrow" data-arrow="earlyLeave"></span></th>
+        <th class="sortable" data-sort="breakOver">Break overages <span class="sort-arrow" data-arrow="breakOver"></span></th>
+        <th class="sortable" data-sort="noShow">No-shows <span class="sort-arrow" data-arrow="noShow"></span></th>
+      </tr></thead>
       <tbody id="analysis-body"></tbody>
     </table>
   </div>
@@ -481,6 +495,20 @@
         <button class="btn" id="emp-cancel">Cancel</button>
         <button class="btn btn-primary" id="emp-save">Save</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Attendance issue detail (dates/times behind an Analytics count) -->
+<div class="overlay" id="issue-detail-overlay">
+  <div class="modal" style="width:460px;">
+    <h3 id="issue-detail-title">—</h3>
+    <table class="simple" style="margin-top:4px;">
+      <thead><tr><th>Date</th><th>Details</th></tr></thead>
+      <tbody id="issue-detail-body"></tbody>
+    </table>
+    <div class="modal-actions" style="justify-content:flex-end;">
+      <button class="btn" id="issue-detail-close">Close</button>
     </div>
   </div>
 </div>
@@ -1909,17 +1937,25 @@
       if (dateStr < today) {
         notes.push(`No show — scheduled ${sched.start}–${sched.end}`);
         flags.noShow = 1;
+        flags.schedStart = sched.start;
+        flags.schedEnd = sched.end;
       }
       return { text: notes.join(' · '), flags };
     }
 
     const lateMins = timeToMins(rec.in) - timeToMins(sched.start);
-    if (lateMins >= LATE_GRACE_MINS) { notes.push(`${lateMins}m late`); flags.late = 1; flags.lateMins = lateMins; }
+    if (lateMins >= LATE_GRACE_MINS) {
+      notes.push(`${lateMins}m late`); flags.late = 1; flags.lateMins = lateMins;
+      flags.schedStart = sched.start;
+    }
     else if (lateMins <= -LATE_GRACE_MINS) { notes.push(`${Math.abs(lateMins)}m early to start`); }
 
     if (rec.out) {
       const earlyMins = timeToMins(sched.end) - timeToMins(rec.out);
-      if (earlyMins >= LATE_GRACE_MINS) { notes.push(`left ${earlyMins}m early`); flags.earlyLeave = 1; }
+      if (earlyMins >= LATE_GRACE_MINS) {
+        notes.push(`left ${earlyMins}m early`); flags.earlyLeave = 1; flags.earlyMins = earlyMins;
+        flags.schedEnd = sched.end;
+      }
       else if (earlyMins <= -LATE_GRACE_MINS) { notes.push(`stayed ${Math.abs(earlyMins)}m late`); }
     }
 
@@ -1928,7 +1964,10 @@
       if (actualBreak < 0) actualBreak += 24*60;
       const schedBreak = sched.breakMins || 0;
       const diff = actualBreak - schedBreak;
-      if (diff >= BREAK_GRACE_MINS) { notes.push(`break ${diff}m over (${actualBreak}m vs ${schedBreak}m scheduled)`); flags.breakOver = 1; }
+      if (diff >= BREAK_GRACE_MINS) {
+        notes.push(`break ${diff}m over (${actualBreak}m vs ${schedBreak}m scheduled)`); flags.breakOver = 1;
+        flags.breakActual = actualBreak; flags.breakSched = schedBreak; flags.breakDiff = diff;
+      }
       else if (diff <= -BREAK_GRACE_MINS && schedBreak) { notes.push(`break ${Math.abs(diff)}m short`); }
     } else if (sched.breakMins && rec.out && !rec.breakStart) {
       notes.push(`no break taken (${sched.breakMins}m scheduled)`);
@@ -1939,6 +1978,7 @@
 
   function rangeAttendanceSummary(empId, dateStrs){
     const totals = { late: 0, earlyLeave: 0, breakOver: 0, noShow: 0, unscheduled: 0, lateMinsSum: 0 };
+    const details = { late: [], earlyLeave: [], breakOver: [], noShow: [] };
     dateStrs.forEach(dateStr => {
       const rec = (timesheetState.days[empId] || {})[dateStr];
       const { flags } = computeDayFlags(empId, dateStr, rec);
@@ -1948,8 +1988,24 @@
       totals.noShow += flags.noShow;
       totals.unscheduled += flags.unscheduled;
       totals.lateMinsSum += flags.lateMins;
+
+      if (flags.late) details.late.push({ dateStr,
+        text: `Clocked in at ${fmtDisplayTime12(rec.in)} — scheduled ${fmtDisplayTime12(flags.schedStart)} (${flags.lateMins}m late)` });
+      if (flags.earlyLeave) details.earlyLeave.push({ dateStr,
+        text: `Clocked out at ${fmtDisplayTime12(rec.out)} — scheduled ${fmtDisplayTime12(flags.schedEnd)} (${flags.earlyMins}m early)` });
+      if (flags.breakOver) details.breakOver.push({ dateStr,
+        text: `Break was ${flags.breakActual}m — ${flags.breakSched}m scheduled (${flags.breakDiff}m over)` });
+      if (flags.noShow) details.noShow.push({ dateStr,
+        text: `Scheduled ${fmtDisplayTime12(flags.schedStart)}–${fmtDisplayTime12(flags.schedEnd)}, never clocked in` });
     });
-    return totals;
+    return { ...totals, details };
+  }
+  function fmtDisplayTime12(hhmm){
+    if (!hhmm) return '—';
+    const [h,m] = hhmm.split(':').map(Number);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const h12 = ((h + 11) % 12) + 1;
+    return `${h12}:${String(m).padStart(2,'0')} ${ampm}`;
   }
 
   function payPeriodContaining(date){
@@ -2057,6 +2113,9 @@
     });
   }
 
+  let analyticsSortKey = 'issues'; // 'name'|'department'|'late'|'avgLate'|'earlyLeave'|'breakOver'|'noShow'
+  let analyticsSortDir = 'desc';
+
   function renderAnalyticsTab(){
     document.getElementById('an-period-label').textContent = tsRangeLabel();
     const dateStrs = tsDateStrsInRange();
@@ -2066,23 +2125,76 @@
       : `Compared against the Rota — showing ${scopedDepartments.length ? scopedDepartments.join(', ') : 'no departments granted yet'}.`;
 
     const abody = document.getElementById('analysis-body');
-    const rows = emps.map(emp => {
+    let rows = emps.map(emp => {
       const s = rangeAttendanceSummary(emp.id, dateStrs);
       const avgLate = s.late ? Math.round(s.lateMinsSum / s.late) : 0;
       return { emp, s, avgLate };
-    }).sort((a, b) => (b.s.late + b.s.noShow) - (a.s.late + a.s.noShow));
+    });
+
+    const dir = analyticsSortDir === 'asc' ? 1 : -1;
+    const sorters = {
+      name: (a,b) => a.emp.name.localeCompare(b.emp.name) * dir,
+      department: (a,b) => (a.emp.department||'').localeCompare(b.emp.department||'') * dir,
+      late: (a,b) => (a.s.late - b.s.late) * dir,
+      avgLate: (a,b) => (a.avgLate - b.avgLate) * dir,
+      earlyLeave: (a,b) => (a.s.earlyLeave - b.s.earlyLeave) * dir,
+      breakOver: (a,b) => (a.s.breakOver - b.s.breakOver) * dir,
+      noShow: (a,b) => (a.s.noShow - b.s.noShow) * dir,
+      issues: (a,b) => ((a.s.late + a.s.noShow) - (b.s.late + b.s.noShow)) * dir
+    };
+    rows = rows.sort(sorters[analyticsSortKey] || sorters.issues);
+
+    document.querySelectorAll('#tab-analytics .sort-arrow').forEach(el => el.textContent = '');
+    const activeArrow = document.querySelector(`#tab-analytics .sort-arrow[data-arrow="${analyticsSortKey}"]`);
+    if (activeArrow) activeArrow.textContent = analyticsSortDir === 'asc' ? '▲' : '▼';
 
     abody.innerHTML = rows.map(({ emp, s, avgLate }) => `
       <tr>
         <td>${emp.name}</td>
         <td>${emp.department || '—'}</td>
-        <td>${s.late || '—'}</td>
-        <td>${s.late ? avgLate + 'm' : '—'}</td>
-        <td>${s.earlyLeave || '—'}</td>
-        <td>${s.breakOver || '—'}</td>
-        <td>${s.noShow ? `<span class="issue-badge bad">${s.noShow}</span>` : '—'}</td>
+        <td>${s.late ? `<button class="issue-link" data-issue="late" data-emp="${emp.id}">${s.late}</button>` : '—'}</td>
+        <td>${s.late ? `<button class="issue-link" data-issue="late" data-emp="${emp.id}">${avgLate}m</button>` : '—'}</td>
+        <td>${s.earlyLeave ? `<button class="issue-link" data-issue="earlyLeave" data-emp="${emp.id}">${s.earlyLeave}</button>` : '—'}</td>
+        <td>${s.breakOver ? `<button class="issue-link" data-issue="breakOver" data-emp="${emp.id}">${s.breakOver}</button>` : '—'}</td>
+        <td>${s.noShow ? `<button class="issue-link bad" data-issue="noShow" data-emp="${emp.id}">${s.noShow}</button>` : '—'}</td>
       </tr>
     `).join('') || `<tr><td colspan="7" style="color:var(--slate);">No employees yet.</td></tr>`;
+
+    abody.querySelectorAll('[data-issue]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const row = rows.find(r => r.emp.id === btn.dataset.emp);
+        if (row) openIssueDetail(row.emp.name, btn.dataset.issue, row.s.details[btn.dataset.issue]);
+      });
+    });
+  }
+
+  document.querySelectorAll('#tab-analytics th.sortable').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.sort;
+      if (analyticsSortKey === key) {
+        analyticsSortDir = analyticsSortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        analyticsSortKey = key;
+        analyticsSortDir = (key === 'name' || key === 'department') ? 'asc' : 'desc';
+      }
+      renderAnalyticsTab();
+    });
+  });
+
+  const ISSUE_LABELS = { late: 'Late arrivals', earlyLeave: 'Left early', breakOver: 'Break overages', noShow: 'No-shows' };
+  const issueDetailOverlay = document.getElementById('issue-detail-overlay');
+  document.getElementById('issue-detail-close').addEventListener('click', () => issueDetailOverlay.classList.remove('show'));
+
+  function openIssueDetail(empName, issueKey, entries){
+    document.getElementById('issue-detail-title').textContent = `${ISSUE_LABELS[issueKey]} — ${empName}`;
+    const dbody = document.getElementById('issue-detail-body');
+    const sorted = (entries || []).slice().sort((a, b) => a.dateStr < b.dateStr ? 1 : -1);
+    dbody.innerHTML = sorted.map(e => {
+      const d = fromDateStr(e.dateStr);
+      const label = `${DAY_NAMES[d.getDay() === 0 ? 6 : d.getDay()-1]} ${d.getDate()} ${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+      return `<tr><td style="white-space:nowrap;">${label}</td><td>${e.text}</td></tr>`;
+    }).join('') || `<tr><td colspan="2" style="color:var(--slate);">No occurrences in this range.</td></tr>`;
+    issueDetailOverlay.classList.add('show');
   }
 
   /* =================================================================
