@@ -2669,7 +2669,7 @@ function downloadWholesaleExcel(columns){
 // time the Upload Images modal is opened. Keyed the same way as the
 // backend's SLOT_KEY: `first`/`last` for the cover and closing pages, and
 // `departments[<department name>]` for each department's layout image.
-let flyerImages = { first: null, last: null, departments: {} };
+let flyerImages = { first: null, last: null, layout: null, departments: {} };
 
 // NOTE ON FONT: jsPDF only ships Helvetica/Times/Courier out of the box —
 // it can't use "Sagona Book" (or any font not already installed in the
@@ -2688,6 +2688,7 @@ async function loadFlyerImages(){
   const images = data.images || {};
   flyerImages.first = images['FIRST_PAGE'] || null;
   flyerImages.last = images['LAST_PAGE'] || null;
+  flyerImages.layout = images['LAYOUT'] || null;
   flyerImages.departments = {};
   Object.keys(images).forEach(k => {
     if(k.startsWith('DEPT::')) flyerImages.departments[k.slice(6)] = images[k];
@@ -2714,10 +2715,23 @@ function renderFlyerImagesModal(){
   wrap.innerHTML = '';
   wrap.appendChild(buildFlyerImageRow('FIRST_PAGE', 'First page (cover)', flyerImages.first));
   wrap.appendChild(buildFlyerImageRow('LAST_PAGE', 'Last page (thank you)', flyerImages.last));
+  const layoutHeading = document.createElement('div');
+  layoutHeading.style.cssText = 'font-weight:700;font-size:12px;margin:18px 0 4px;padding-top:14px;border-top:1px solid var(--line);color:var(--text-dim);text-transform:uppercase;letter-spacing:.6px;';
+  layoutHeading.textContent = 'Layout';
+  wrap.appendChild(layoutHeading);
+  const layoutSub = document.createElement('p');
+  layoutSub.style.cssText = 'font-size:11px;color:var(--text-dim);margin:0 0 6px;';
+  layoutSub.textContent = 'This one background is used for every department\'s page in the flyer.';
+  wrap.appendChild(layoutSub);
+  wrap.appendChild(buildFlyerImageRow('LAYOUT', 'Layout (used for every department)', flyerImages.layout));
   const heading = document.createElement('div');
   heading.style.cssText = 'font-weight:700;font-size:12px;margin:18px 0 4px;padding-top:14px;border-top:1px solid var(--line);color:var(--text-dim);text-transform:uppercase;letter-spacing:.6px;';
-  heading.textContent = 'Department layouts';
+  heading.textContent = 'Department overrides (optional)';
   wrap.appendChild(heading);
+  const overrideSub = document.createElement('p');
+  overrideSub.style.cssText = 'font-size:11px;color:var(--text-dim);margin:0 0 6px;';
+  overrideSub.textContent = 'Only needed if a specific department should use a different background than the shared Layout above.';
+  wrap.appendChild(overrideSub);
   const depts = flyerDepartmentNames();
   if(depts.length === 0){
     const p = document.createElement('div');
@@ -2792,6 +2806,7 @@ async function uploadFlyerImage(slotKey, label, file){
     await apiPost('wholesale/flyer/images', { slot_key: slotKey, image_data: dataUrl });
     if(slotKey === 'FIRST_PAGE') flyerImages.first = dataUrl;
     else if(slotKey === 'LAST_PAGE') flyerImages.last = dataUrl;
+    else if(slotKey === 'LAYOUT') flyerImages.layout = dataUrl;
     else flyerImages.departments[slotKey.slice(6)] = dataUrl;
     renderFlyerImagesModal();
     toast(label + ' saved');
@@ -2806,6 +2821,7 @@ async function deleteFlyerImage(slotKey, label){
     await apiPost('wholesale/flyer/images/delete', { slot_key: slotKey });
     if(slotKey === 'FIRST_PAGE') flyerImages.first = null;
     else if(slotKey === 'LAST_PAGE') flyerImages.last = null;
+    else if(slotKey === 'LAYOUT') flyerImages.layout = null;
     else delete flyerImages.departments[slotKey.slice(6)];
     renderFlyerImagesModal();
     toast('Image deleted');
@@ -2834,6 +2850,22 @@ function flyerDdmmyyyy(iso){
 function flyerDrawBackground(doc, dataUrl){
   const fmt = dataUrl.slice(0, 20).includes('image/png') ? 'PNG' : 'JPEG';
   doc.addImage(dataUrl, fmt, 0, 0, 210, 297, undefined, 'FAST');
+}
+// Draws one line of the cover page's validity text with the label ("Valid"
+// / "to") in Hallan navy and the date itself in gold, centered as a unit —
+// jsPDF can't mix colours within a single text() call, so this measures
+// each piece separately and places them side by side around the centre.
+function flyerDrawValidityLine(doc, label, value, y, fontSize){
+  doc.setFontSize(fontSize);
+  doc.setTextColor(14, 30, 51);
+  const labelText = label + ' ';
+  const labelWidth = doc.getTextWidth(labelText);
+  const valueWidth = doc.getTextWidth(value);
+  const startX = 105 - (labelWidth + valueWidth) / 2;
+  doc.setTextColor(14, 30, 51);
+  doc.text(labelText, startX, y);
+  doc.setTextColor(184, 134, 11);
+  doc.text(value, startX + labelWidth, y);
 }
 // One item row: name in Hallan navy on the left, a dot leader filling the
 // gap, and the price in gold on the right — same idea as a printed menu,
@@ -2881,9 +2913,8 @@ async function generateColourFlyer(){
       doc.text('Wholesale Price List', 105, 60, { align: 'center' });
     }
     doc.setFont(FLYER_FONT_NAME, 'normal');
-    doc.setFontSize(13);
-    doc.setTextColor(14, 30, 51);
-    doc.text('Valid ' + flyerDdmmyyyy(fromVal) + ' to ' + flyerDdmmyyyy(toVal), 105, 118, { align: 'center' });
+    flyerDrawValidityLine(doc, 'Valid', flyerDdmmyyyy(fromVal), 122, 20);
+    flyerDrawValidityLine(doc, 'to', flyerDdmmyyyy(toVal), 134, 20);
 
     // ---- One page per department (spilling onto extra pages if a
     // department has more items than fit) ----
@@ -2900,10 +2931,12 @@ async function generateColourFlyer(){
         const priceVal = (adj.price !== undefined && adj.price !== '')
           ? Number(adj.price)
           : (r.price_net === null || r.price_net === undefined ? null : Number(r.price_net));
-        return { name: r.stock_name, price: priceVal };
+        return { name: r.stock_name, price: priceVal, isVat: r.vatid === 1 };
       }).filter(it => it.price !== null);
       if(items.length === 0) return;
-      const bg = flyerImages.departments[g.department];
+      // A department-specific image (if uploaded) wins; otherwise every
+      // department falls back to the one shared Layout image.
+      const bg = flyerImages.departments[g.department] || flyerImages.layout;
       if(!bg) missingLayouts.push(g.department);
       let idx = 0;
       while(idx < items.length){
@@ -2916,7 +2949,8 @@ async function generateColourFlyer(){
         let y = topSafeY + 17;
         const maxRows = Math.max(1, Math.floor((bottomSafeY - y) / rowHeight));
         for(let i = 0; i < maxRows && idx < items.length; i++, idx++){
-          flyerDrawItemRow(doc, items[idx].name, '£' + items[idx].price.toFixed(2), contentX, y, contentWidth);
+          const priceText = '£' + items[idx].price.toFixed(2) + (items[idx].isVat ? ' +VAT' : '');
+          flyerDrawItemRow(doc, items[idx].name, priceText, contentX, y, contentWidth);
           y += rowHeight;
         }
       }
