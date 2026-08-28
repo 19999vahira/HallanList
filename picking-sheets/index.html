@@ -339,7 +339,7 @@
   @media(max-width:480px){ .modal{padding:18px;} }
   .modal h3{margin:0 0 4px;font-size:17px;}
   .modal .modal-sub{color:var(--text-dim);font-size:12px;margin:0 0 18px;}
-  .modal input[type=text],.modal input[type=password],.modal input[type=datetime-local],.modal input[type=email]{
+  .modal input[type=text],.modal input[type=password],.modal input[type=datetime-local],.modal input[type=email],.modal input[type=date]{
     width:100%;padding:11px 13px;border-radius:6px;border:1px solid var(--line);
     background:var(--panel2);color:var(--text);font-size:16px;margin-bottom:10px;font-family:'Inter',sans-serif;
   }
@@ -661,6 +661,8 @@
         <button class="btn-ghost" onclick="window.print()">Print</button>
         <button class="btn-ghost" onclick="openWholesaleExportModal('excel')">Download Excel</button>
         <button class="btn-amber" onclick="openWholesaleExportModal('pdf')">Download PDF</button>
+        <button class="btn-amber" onclick="openFlyerDownloadModal()">Download Colour Flyer</button>
+        <button class="btn-ghost" onclick="openFlyerImagesModal()">Upload Images</button>
         <button class="btn-ghost" onclick="emailWholesalePDF()">Email</button>
         <button class="btn-danger-ghost" onclick="openWholesalePasswordModal()">Change Password</button>
       </div>
@@ -2151,6 +2153,37 @@
   </div>
 </div>
 
+<!-- WHOLESALE FLYER: UPLOAD IMAGES (first page, last page, one per department) -->
+<div class="modal-backdrop" id="modalFlyerImages">
+  <div class="modal" style="width:640px;">
+    <h3>Flyer Images</h3>
+    <p class="modal-sub">Upload the first page, last page, and a layout image for each department. Saved automatically and shared across every device.</p>
+    <div id="flyerImagesContent" style="max-height:60vh;overflow:auto;padding-right:4px;">
+      <div class="loading">Loading…</div>
+    </div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalFlyerImages')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- WHOLESALE FLYER: DOWNLOAD (choose validity dates) -->
+<div class="modal-backdrop" id="modalFlyerDownload">
+  <div class="modal" style="width:380px;">
+    <h3>Download Colour Flyer</h3>
+    <p class="modal-sub">These dates are printed on the cover page under the logo.</p>
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;">Valid from</label>
+    <input type="date" id="flyerFromDate">
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin:12px 0 4px;">Valid to</label>
+    <input type="date" id="flyerToDate">
+    <div class="errdetail" id="flyerDownloadErr" style="display:none;"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalFlyerDownload')">Cancel</button>
+      <button class="btn-amber" id="flyerDownloadBtn" onclick="generateColourFlyer()">Download</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ============ CONFIG ============ */
 const API_BASE = "https://hallan-picking-backend.onrender.com/api/";
@@ -2628,6 +2661,286 @@ function downloadWholesaleExcel(columns){
   }catch(e){
     toast('Could not generate Excel file');
     console.error(e);
+  }
+}
+
+/* ============ WHOLESALE COLOUR FLYER (images + PDF generation) ============ */
+// Session cache of the saved flyer images, refreshed from the server every
+// time the Upload Images modal is opened. Keyed the same way as the
+// backend's SLOT_KEY: `first`/`last` for the cover and closing pages, and
+// `departments[<department name>]` for each department's layout image.
+let flyerImages = { first: null, last: null, departments: {} };
+
+// NOTE ON FONT: jsPDF only ships Helvetica/Times/Courier out of the box —
+// it can't use "Sagona Book" (or any font not already installed in the
+// browser) without the actual font file embedded into it first. To use the
+// real Sagona Book on the PDF: convert the .ttf to a jsPDF font module
+// (https://rawgit.com/MrRio/jsPDF/master/fontconverter/fontconverter.html),
+// paste the doc.addFileToVFS(...)/doc.addFont(...) lines this generates
+// right before `doc.setFont(FLYER_FONT_NAME, 'normal')` is first called
+// inside generateColourFlyer(), and set FLYER_FONT_NAME below to the name
+// you registered it under. Until that's done, this uses Times — the
+// closest built-in serif — so the flyer still generates correctly.
+const FLYER_FONT_NAME = 'times';
+
+async function loadFlyerImages(){
+  const data = await apiGet('wholesale/flyer/images');
+  const images = data.images || {};
+  flyerImages.first = images['FIRST_PAGE'] || null;
+  flyerImages.last = images['LAST_PAGE'] || null;
+  flyerImages.departments = {};
+  Object.keys(images).forEach(k => {
+    if(k.startsWith('DEPT::')) flyerImages.departments[k.slice(6)] = images[k];
+  });
+}
+function flyerDepartmentNames(){
+  return [...new Set(wholesaleRows.map(r => r.department_name || '—'))].sort((a,b) => a.localeCompare(b));
+}
+async function openFlyerImagesModal(){
+  if(wholesaleRows.length === 0){ toast('Open the pricing list first'); return; }
+  openModal('modalFlyerImages');
+  const content = document.getElementById('flyerImagesContent');
+  content.innerHTML = '<div class="loading">Loading…</div>';
+  try{
+    await loadFlyerImages();
+    renderFlyerImagesModal();
+  }catch(e){
+    content.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load images.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+function renderFlyerImagesModal(){
+  const wrap = document.getElementById('flyerImagesContent');
+  wrap.innerHTML = '';
+  wrap.appendChild(buildFlyerImageRow('FIRST_PAGE', 'First page (cover)', flyerImages.first));
+  wrap.appendChild(buildFlyerImageRow('LAST_PAGE', 'Last page (thank you)', flyerImages.last));
+  const heading = document.createElement('div');
+  heading.style.cssText = 'font-weight:700;font-size:12px;margin:18px 0 4px;padding-top:14px;border-top:1px solid var(--line);color:var(--text-dim);text-transform:uppercase;letter-spacing:.6px;';
+  heading.textContent = 'Department layouts';
+  wrap.appendChild(heading);
+  const depts = flyerDepartmentNames();
+  if(depts.length === 0){
+    const p = document.createElement('div');
+    p.className = 'empty-hint';
+    p.textContent = 'No departments loaded yet.';
+    wrap.appendChild(p);
+    return;
+  }
+  depts.forEach(dep => {
+    wrap.appendChild(buildFlyerImageRow('DEPT::' + dep, dep, flyerImages.departments[dep]));
+  });
+}
+function buildFlyerImageRow(slotKey, label, dataUrl){
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);';
+  const thumbHtml = dataUrl
+    ? `<img src="${dataUrl}" style="width:48px;height:72px;object-fit:cover;border-radius:6px;border:1px solid var(--line);flex-shrink:0;">`
+    : `<div style="width:48px;height:72px;border-radius:6px;border:1px dashed var(--line);display:flex;align-items:center;justify-content:center;font-size:8px;color:var(--text-dim);text-align:center;flex-shrink:0;">No image</div>`;
+  row.innerHTML = `
+    ${thumbHtml}
+    <div style="flex:1;min-width:0;">
+      <div style="font-size:13px;font-weight:600;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(label)}</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <input type="file" accept="image/*" style="max-width:160px;font-size:11px;">
+        <button class="btn-amber" style="padding:7px 12px;font-size:12px;" data-act="upload">${dataUrl ? 'Replace' : 'Upload'}</button>
+        ${dataUrl ? '<button class="btn-danger-ghost" style="padding:7px 12px;font-size:12px;" data-act="delete">Delete</button>' : ''}
+      </div>
+    </div>
+  `;
+  const fileInput = row.querySelector('input[type=file]');
+  row.querySelector('[data-act="upload"]').addEventListener('click', () => {
+    const f = fileInput.files && fileInput.files[0];
+    if(!f){ toast('Choose a file first'); return; }
+    uploadFlyerImage(slotKey, label, f);
+  });
+  const delBtn = row.querySelector('[data-act="delete"]');
+  if(delBtn) delBtn.addEventListener('click', () => deleteFlyerImage(slotKey, label));
+  return row;
+}
+// Reads the chosen file and downscales it in-browser (long edge capped at
+// 1400px, JPEG ~85%) before it's sent anywhere — these are full-page
+// backgrounds so the original photos can be several MB each; this keeps
+// uploads fast and keeps the saved CLOB a sane size.
+function flyerFileToDataUrl(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 1400;
+        let w = img.width, h = img.height;
+        if(w > maxDim || h > maxDim){
+          if(w > h){ h = Math.round(h * maxDim / w); w = maxDim; }
+          else { w = Math.round(w * maxDim / h); h = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = () => reject(new Error('Could not read image'));
+      img.src = reader.result;
+    };
+    reader.onerror = () => reject(new Error('Could not read ' + file.name));
+    reader.readAsDataURL(file);
+  });
+}
+async function uploadFlyerImage(slotKey, label, file){
+  toast('Uploading…');
+  try{
+    const dataUrl = await flyerFileToDataUrl(file);
+    await apiPost('wholesale/flyer/images', { slot_key: slotKey, image_data: dataUrl });
+    if(slotKey === 'FIRST_PAGE') flyerImages.first = dataUrl;
+    else if(slotKey === 'LAST_PAGE') flyerImages.last = dataUrl;
+    else flyerImages.departments[slotKey.slice(6)] = dataUrl;
+    renderFlyerImagesModal();
+    toast(label + ' saved');
+  }catch(e){
+    toast('Could not upload image');
+    console.error(e);
+  }
+}
+async function deleteFlyerImage(slotKey, label){
+  if(!confirm('Delete the image for "' + label + '"?')) return;
+  try{
+    await apiPost('wholesale/flyer/images/delete', { slot_key: slotKey });
+    if(slotKey === 'FIRST_PAGE') flyerImages.first = null;
+    else if(slotKey === 'LAST_PAGE') flyerImages.last = null;
+    else delete flyerImages.departments[slotKey.slice(6)];
+    renderFlyerImagesModal();
+    toast('Image deleted');
+  }catch(e){
+    toast('Could not delete image');
+    console.error(e);
+  }
+}
+
+/* ---- Download: choose validity dates, then build the multi-page PDF ---- */
+function openFlyerDownloadModal(){
+  if(wholesaleRows.length === 0){ toast('Nothing to include yet'); return; }
+  document.getElementById('flyerFromDate').value = '';
+  document.getElementById('flyerToDate').value = '';
+  const err = document.getElementById('flyerDownloadErr');
+  err.style.display = 'none'; err.textContent = '';
+  openModal('modalFlyerDownload');
+}
+function flyerDdmmyyyy(iso){
+  const parts = iso.split('-');
+  return parts[2] + '/' + parts[1] + '/' + parts[0];
+}
+// Draws a full-bleed A4 background image on the current page. Detects PNG
+// vs JPEG from the data URL itself so it doesn't matter which one a given
+// upload got saved as.
+function flyerDrawBackground(doc, dataUrl){
+  const fmt = dataUrl.slice(0, 20).includes('image/png') ? 'PNG' : 'JPEG';
+  doc.addImage(dataUrl, fmt, 0, 0, 210, 297, undefined, 'FAST');
+}
+// One item row: name in Hallan navy on the left, a dot leader filling the
+// gap, and the price in gold on the right — same idea as a printed menu,
+// so it reads cleanly regardless of how long each item's name is.
+function flyerDrawItemRow(doc, name, priceText, x, y, width){
+  doc.setFontSize(11.5);
+  doc.setTextColor(14, 30, 51); // Hallan navy — matches the header bar colour used across the app
+  doc.text(name, x, y);
+  const nameWidth = doc.getTextWidth(name);
+  doc.setTextColor(184, 134, 11); // gold — matches the app's accent colour
+  const priceWidth = doc.getTextWidth(priceText);
+  doc.text(priceText, x + width - priceWidth, y);
+  const gap = width - nameWidth - priceWidth - 6;
+  if(gap > 3){
+    doc.setTextColor(150, 150, 150);
+    const dotWidth = doc.getTextWidth('.');
+    const dots = '.'.repeat(Math.max(1, Math.floor(gap / dotWidth)));
+    doc.text(dots, x + nameWidth + 3, y);
+  }
+}
+async function generateColourFlyer(){
+  const fromVal = document.getElementById('flyerFromDate').value;
+  const toVal = document.getElementById('flyerToDate').value;
+  const err = document.getElementById('flyerDownloadErr');
+  if(!fromVal || !toVal){
+    err.textContent = 'Choose both a "valid from" and a "valid to" date.';
+    err.style.display = 'block';
+    return;
+  }
+  if(wholesaleRows.length === 0){ toast('Nothing to include yet'); return; }
+  err.style.display = 'none';
+  const btn = document.getElementById('flyerDownloadBtn');
+  btn.disabled = true;
+  try{
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p', 'mm', 'a4');
+    doc.setFont(FLYER_FONT_NAME, 'normal');
+
+    // ---- Page 1: cover ----
+    if(flyerImages.first){
+      flyerDrawBackground(doc, flyerImages.first);
+    } else {
+      doc.setFontSize(22);
+      doc.setTextColor(14, 30, 51);
+      doc.text('Wholesale Price List', 105, 60, { align: 'center' });
+    }
+    doc.setFont(FLYER_FONT_NAME, 'normal');
+    doc.setFontSize(13);
+    doc.setTextColor(14, 30, 51);
+    doc.text('Valid ' + flyerDdmmyyyy(fromVal) + ' to ' + flyerDdmmyyyy(toVal), 105, 118, { align: 'center' });
+
+    // ---- One page per department (spilling onto extra pages if a
+    // department has more items than fit) ----
+    const groups = groupRowsByDepartment(wholesaleRows);
+    const topSafeY = 95;    // clears the top wave/dot design on the layout image
+    const bottomSafeY = 220; // stays clear of the bottom wave design
+    const contentX = 25;
+    const contentWidth = 160;
+    const rowHeight = 8;
+    const missingLayouts = [];
+    groups.forEach(g => {
+      const items = g.items.map(r => {
+        const adj = wholesaleAdjust[r.stock_name] || {};
+        const priceVal = (adj.price !== undefined && adj.price !== '')
+          ? Number(adj.price)
+          : (r.price_net === null || r.price_net === undefined ? null : Number(r.price_net));
+        return { name: r.stock_name, price: priceVal };
+      }).filter(it => it.price !== null);
+      if(items.length === 0) return;
+      const bg = flyerImages.departments[g.department];
+      if(!bg) missingLayouts.push(g.department);
+      let idx = 0;
+      while(idx < items.length){
+        doc.addPage();
+        if(bg) flyerDrawBackground(doc, bg);
+        doc.setFont(FLYER_FONT_NAME, 'normal');
+        doc.setFontSize(17);
+        doc.setTextColor(14, 30, 51);
+        doc.text(g.department + (idx > 0 ? ' (cont.)' : ''), contentX, topSafeY);
+        let y = topSafeY + 17;
+        const maxRows = Math.max(1, Math.floor((bottomSafeY - y) / rowHeight));
+        for(let i = 0; i < maxRows && idx < items.length; i++, idx++){
+          flyerDrawItemRow(doc, items[idx].name, '£' + items[idx].price.toFixed(2), contentX, y, contentWidth);
+          y += rowHeight;
+        }
+      }
+    });
+
+    // ---- Last page ----
+    if(flyerImages.last){
+      doc.addPage();
+      flyerDrawBackground(doc, flyerImages.last);
+    }
+
+    doc.save('wholesale-colour-flyer-' + new Date().toISOString().slice(0,10) + '.pdf');
+    closeModal('modalFlyerDownload');
+    if(missingLayouts.length){
+      toast('Downloaded — no layout image for: ' + missingLayouts.slice(0,3).join(', ') + (missingLayouts.length > 3 ? '…' : ''));
+    } else {
+      toast('Flyer downloaded');
+    }
+  }catch(e){
+    err.textContent = 'Could not generate the flyer. ' + (e.message || '');
+    err.style.display = 'block';
+    console.error(e);
+  }finally{
+    btn.disabled = false;
   }
 }
 
