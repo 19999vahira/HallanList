@@ -2663,6 +2663,14 @@ function wholesaleIncVatPrice(netPrice, isVat){
   const STANDARD_VAT_RATE = 0.20; // UK standard rate
   return isVat ? netPrice * (1 + STANDARD_VAT_RATE) : netPrice;
 }
+// ---- CSV "Selling Price" formatting only (Cost / Unit is untouched) ----
+// Vector import needs this column to 4 decimal places, shaded 0.0001 below
+// the VAT-inclusive price (e.g. 12.9900 -> 12.9899), not the plain 2dp
+// figure used everywhere else on this page (screen boxes, PDF, Excel).
+function wholesaleCsvSellingPrice(netPrice, isVat){
+  const incVat = wholesaleIncVatPrice(netPrice, isVat);
+  return (incVat - 0.0001).toFixed(4);
+}
 function downloadWholesaleCSV(testOnly){
   if(wholesaleRows.length === 0){ toast('Nothing to export yet'); return; }
   const allRows = wholesaleExportRows();
@@ -2683,7 +2691,7 @@ function downloadWholesaleCSV(testOnly){
     'Description as per Vector': r.item,
     'Qty per Box': r.packSize,
     'Cost / Unit': r.suppCost === null ? '' : r.suppCost.toFixed(2),
-    'Selling Price': r.tradePrice === null ? '' : wholesaleIncVatPrice(r.tradePrice, r.isVat).toFixed(2),
+    'Selling Price': r.tradePrice === null ? '' : wholesaleCsvSellingPrice(r.tradePrice, r.isVat),
     'Barcode': r.barcode,
     'Department': r.department,
     'Supplier': r.supplierName
