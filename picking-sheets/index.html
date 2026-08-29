@@ -2172,9 +2172,9 @@
   <div class="modal" style="width:380px;">
     <h3>Download Colour Flyer</h3>
     <p class="modal-sub">These dates are printed on the cover page under the logo.</p>
-    <label style="display:block;font-size:19px;color:var(--text-dim);margin-bottom:4px;">Valid from</label>
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;">Valid from</label>
     <input type="date" id="flyerFromDate">
-    <label style="display:block;font-size:19px;color:var(--text-dim);margin:12px 0 4px;">Valid to</label>
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin:12px 0 4px;">Valid to</label>
     <input type="date" id="flyerToDate">
     <div class="errdetail" id="flyerDownloadErr" style="display:none;"></div>
     <div class="modal-close-row">
@@ -2667,9 +2667,12 @@ function downloadWholesaleExcel(columns){
 /* ============ WHOLESALE COLOUR FLYER (images + PDF generation) ============ */
 // Session cache of the saved flyer images, refreshed from the server every
 // time the Upload Images modal is opened. Keyed the same way as the
-// backend's SLOT_KEY: `first`/`last` for the cover and closing pages, and
-// `departments[<department name>]` for each department's layout image.
-let flyerImages = { first: null, last: null, layout: null, departments: {} };
+// backend's SLOT_KEY: `first`/`last` for the cover and closing pages,
+// `layout` for the one shared wave-design background used on every
+// department page, and `deptTop`/`deptBottom[<department name>]` for the
+// small optional photo each department can nest into the top-right /
+// bottom-left gap of that background (NOT a full-page replacement).
+let flyerImages = { first: null, last: null, layout: null, deptTop: {}, deptBottom: {} };
 
 // NOTE ON FONT: jsPDF only ships Helvetica/Times/Courier out of the box —
 // it can't use "Sagona Book" (or any font not already installed in the
@@ -2689,9 +2692,11 @@ async function loadFlyerImages(){
   flyerImages.first = images['FIRST_PAGE'] || null;
   flyerImages.last = images['LAST_PAGE'] || null;
   flyerImages.layout = images['LAYOUT'] || null;
-  flyerImages.departments = {};
+  flyerImages.deptTop = {};
+  flyerImages.deptBottom = {};
   Object.keys(images).forEach(k => {
-    if(k.startsWith('DEPT::')) flyerImages.departments[k.slice(6)] = images[k];
+    if(k.startsWith('DEPT_TOP::')) flyerImages.deptTop[k.slice(10)] = images[k];
+    else if(k.startsWith('DEPT_BOTTOM::')) flyerImages.deptBottom[k.slice(13)] = images[k];
   });
 }
 function flyerDepartmentNames(){
@@ -2721,16 +2726,16 @@ function renderFlyerImagesModal(){
   wrap.appendChild(layoutHeading);
   const layoutSub = document.createElement('p');
   layoutSub.style.cssText = 'font-size:11px;color:var(--text-dim);margin:0 0 6px;';
-  layoutSub.textContent = 'This one background is used for every department\'s page in the flyer.';
+  layoutSub.textContent = 'This one wave-design background is used, full-page, on every department\'s page.';
   wrap.appendChild(layoutSub);
   wrap.appendChild(buildFlyerImageRow('LAYOUT', 'Layout (used for every department)', flyerImages.layout));
   const heading = document.createElement('div');
   heading.style.cssText = 'font-weight:700;font-size:12px;margin:18px 0 4px;padding-top:14px;border-top:1px solid var(--line);color:var(--text-dim);text-transform:uppercase;letter-spacing:.6px;';
-  heading.textContent = 'Department overrides (optional)';
+  heading.textContent = 'Department photos (optional)';
   wrap.appendChild(heading);
   const overrideSub = document.createElement('p');
   overrideSub.style.cssText = 'font-size:11px;color:var(--text-dim);margin:0 0 6px;';
-  overrideSub.textContent = 'Only needed if a specific department should use a different background than the shared Layout above.';
+  overrideSub.textContent = 'A small photo per department, nested oval-shaped into the Layout\'s top-right and bottom-left gaps — not a full background. Either one is optional.';
   wrap.appendChild(overrideSub);
   const depts = flyerDepartmentNames();
   if(depts.length === 0){
@@ -2741,7 +2746,12 @@ function renderFlyerImagesModal(){
     return;
   }
   depts.forEach(dep => {
-    wrap.appendChild(buildFlyerImageRow('DEPT::' + dep, dep, flyerImages.departments[dep]));
+    const deptHeading = document.createElement('div');
+    deptHeading.style.cssText = 'font-weight:600;font-size:12.5px;margin:14px 0 2px;color:var(--text);';
+    deptHeading.textContent = dep;
+    wrap.appendChild(deptHeading);
+    wrap.appendChild(buildFlyerImageRow('DEPT_TOP::' + dep, 'Top image', flyerImages.deptTop[dep]));
+    wrap.appendChild(buildFlyerImageRow('DEPT_BOTTOM::' + dep, 'Bottom image', flyerImages.deptBottom[dep]));
   });
 }
 function buildFlyerImageRow(slotKey, label, dataUrl){
@@ -2772,9 +2782,10 @@ function buildFlyerImageRow(slotKey, label, dataUrl){
   return row;
 }
 // Reads the chosen file and downscales it in-browser (long edge capped at
-// 1400px, JPEG ~85%) before it's sent anywhere — these are full-page
-// backgrounds so the original photos can be several MB each; this keeps
-// uploads fast and keeps the saved CLOB a sane size.
+// 1400px, JPEG ~85%) before it's sent anywhere — keeps uploads fast and
+// keeps the saved CLOB a sane size. The small department Top/Bottom photos
+// get oval-cropped separately, at generation time (see flyerOvalCrop), so
+// they can stay full quality here and still come out small in the PDF.
 function flyerFileToDataUrl(file){
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -2807,7 +2818,8 @@ async function uploadFlyerImage(slotKey, label, file){
     if(slotKey === 'FIRST_PAGE') flyerImages.first = dataUrl;
     else if(slotKey === 'LAST_PAGE') flyerImages.last = dataUrl;
     else if(slotKey === 'LAYOUT') flyerImages.layout = dataUrl;
-    else flyerImages.departments[slotKey.slice(6)] = dataUrl;
+    else if(slotKey.startsWith('DEPT_TOP::')) flyerImages.deptTop[slotKey.slice(10)] = dataUrl;
+    else if(slotKey.startsWith('DEPT_BOTTOM::')) flyerImages.deptBottom[slotKey.slice(13)] = dataUrl;
     renderFlyerImagesModal();
     toast(label + ' saved');
   }catch(e){
@@ -2822,7 +2834,8 @@ async function deleteFlyerImage(slotKey, label){
     if(slotKey === 'FIRST_PAGE') flyerImages.first = null;
     else if(slotKey === 'LAST_PAGE') flyerImages.last = null;
     else if(slotKey === 'LAYOUT') flyerImages.layout = null;
-    else delete flyerImages.departments[slotKey.slice(6)];
+    else if(slotKey.startsWith('DEPT_TOP::')) delete flyerImages.deptTop[slotKey.slice(10)];
+    else if(slotKey.startsWith('DEPT_BOTTOM::')) delete flyerImages.deptBottom[slotKey.slice(13)];
     renderFlyerImagesModal();
     toast('Image deleted');
   }catch(e){
@@ -2851,6 +2864,41 @@ function flyerDrawBackground(doc, dataUrl){
   const fmt = dataUrl.slice(0, 20).includes('image/png') ? 'PNG' : 'JPEG';
   doc.addImage(dataUrl, fmt, 0, 0, 210, 297, undefined, 'FAST');
 }
+// Crops a department's small Top/Bottom photo into an oval (cover-fit, so
+// nothing gets squashed) so it nests into the Layout's curved gap instead
+// of sitting on the page as an obvious rectangle. Runs once per photo per
+// download — outW/outH set the oval's aspect ratio and resolution.
+function flyerOvalCrop(dataUrl, outW, outH){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = outW; canvas.height = outH;
+      const ctx = canvas.getContext('2d');
+      ctx.save();
+      ctx.beginPath();
+      ctx.ellipse(outW / 2, outH / 2, outW / 2, outH / 2, 0, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      const srcRatio = img.width / img.height;
+      const dstRatio = outW / outH;
+      let sx = 0, sy = 0, sw = img.width, sh = img.height;
+      if(srcRatio > dstRatio){ sw = img.height * dstRatio; sx = (img.width - sw) / 2; }
+      else { sh = img.width / dstRatio; sy = (img.height - sh) / 2; }
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outW, outH);
+      ctx.restore();
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => reject(new Error('Could not load image for oval crop'));
+    img.src = dataUrl;
+  });
+}
+// Where the small oval photos sit on the page, in mm — tuned to nest into
+// the gap the wave design leaves top-right and bottom-left (see the sample
+// Layout image). If a photo isn't landing quite in the gap on your actual
+// Layout artwork, these five numbers per oval are the ones to nudge.
+const FLYER_TOP_OVAL = { x: 136, y: 16, w: 52, h: 38 };
+const FLYER_BOTTOM_OVAL = { x: 20, y: 242, w: 52, h: 38 };
 // Draws one line of the cover page's validity text with the label ("Valid"
 // / "to") in Hallan navy and the date itself in gold, centered as a unit —
 // jsPDF can't mix colours within a single text() call, so this measures
@@ -2871,7 +2919,7 @@ function flyerDrawValidityLine(doc, label, value, y, fontSize){
 // gap, and the price in gold on the right — same idea as a printed menu,
 // so it reads cleanly regardless of how long each item's name is.
 function flyerDrawItemRow(doc, name, priceText, x, y, width){
-  doc.setFontSize(11.5);
+  doc.setFontSize(13);
   doc.setTextColor(14, 30, 51); // Hallan navy — matches the header bar colour used across the app
   doc.text(name, x, y);
   const nameWidth = doc.getTextWidth(name);
@@ -2913,19 +2961,22 @@ async function generateColourFlyer(){
       doc.text('Wholesale Price List', 105, 60, { align: 'center' });
     }
     doc.setFont(FLYER_FONT_NAME, 'normal');
-    flyerDrawValidityLine(doc, 'Valid', flyerDdmmyyyy(fromVal), 122, 20);
-    flyerDrawValidityLine(doc, 'to', flyerDdmmyyyy(toVal), 134, 20);
+    flyerDrawValidityLine(doc, 'Valid', flyerDdmmyyyy(fromVal), 124, 26);
+    flyerDrawValidityLine(doc, 'to', flyerDdmmyyyy(toVal), 138, 26);
 
     // ---- One page per department (spilling onto extra pages if a
-    // department has more items than fit) ----
+    // department has more items than fit). Every department page uses the
+    // same shared Layout background; a department's own Top/Bottom photo
+    // (if uploaded) is nested, oval-cropped, into that background's gaps —
+    // only on the department's first page, not on any "(cont.)" pages.
     const groups = groupRowsByDepartment(wholesaleRows);
     const topSafeY = 95;    // clears the top wave/dot design on the layout image
     const bottomSafeY = 220; // stays clear of the bottom wave design
     const contentX = 25;
     const contentWidth = 160;
-    const rowHeight = 8;
-    const missingLayouts = [];
-    groups.forEach(g => {
+    const rowHeight = 9;
+    const missingLayout = !flyerImages.layout;
+    for(const g of groups){
       const items = g.items.map(r => {
         const adj = wholesaleAdjust[r.stock_name] || {};
         const priceVal = (adj.price !== undefined && adj.price !== '')
@@ -2933,20 +2984,26 @@ async function generateColourFlyer(){
           : (r.price_net === null || r.price_net === undefined ? null : Number(r.price_net));
         return { name: r.stock_name, price: priceVal, isVat: r.vatid === 1 };
       }).filter(it => it.price !== null);
-      if(items.length === 0) return;
-      // A department-specific image (if uploaded) wins; otherwise every
-      // department falls back to the one shared Layout image.
-      const bg = flyerImages.departments[g.department] || flyerImages.layout;
-      if(!bg) missingLayouts.push(g.department);
+      if(items.length === 0) continue;
+
+      const topPhoto = flyerImages.deptTop[g.department];
+      const bottomPhoto = flyerImages.deptBottom[g.department];
+      const topOvalDataUrl = topPhoto ? await flyerOvalCrop(topPhoto, 480, 350) : null;
+      const bottomOvalDataUrl = bottomPhoto ? await flyerOvalCrop(bottomPhoto, 480, 350) : null;
+
       let idx = 0;
       while(idx < items.length){
         doc.addPage();
-        if(bg) flyerDrawBackground(doc, bg);
+        if(flyerImages.layout) flyerDrawBackground(doc, flyerImages.layout);
+        if(idx === 0){
+          if(topOvalDataUrl) doc.addImage(topOvalDataUrl, 'PNG', FLYER_TOP_OVAL.x, FLYER_TOP_OVAL.y, FLYER_TOP_OVAL.w, FLYER_TOP_OVAL.h, undefined, 'FAST');
+          if(bottomOvalDataUrl) doc.addImage(bottomOvalDataUrl, 'PNG', FLYER_BOTTOM_OVAL.x, FLYER_BOTTOM_OVAL.y, FLYER_BOTTOM_OVAL.w, FLYER_BOTTOM_OVAL.h, undefined, 'FAST');
+        }
         doc.setFont(FLYER_FONT_NAME, 'normal');
-        doc.setFontSize(17);
+        doc.setFontSize(20);
         doc.setTextColor(14, 30, 51);
         doc.text(g.department + (idx > 0 ? ' (cont.)' : ''), contentX, topSafeY);
-        let y = topSafeY + 17;
+        let y = topSafeY + 18;
         const maxRows = Math.max(1, Math.floor((bottomSafeY - y) / rowHeight));
         for(let i = 0; i < maxRows && idx < items.length; i++, idx++){
           const priceText = '£' + items[idx].price.toFixed(2) + (items[idx].isVat ? ' +VAT' : '');
@@ -2954,7 +3011,7 @@ async function generateColourFlyer(){
           y += rowHeight;
         }
       }
-    });
+    }
 
     // ---- Last page ----
     if(flyerImages.last){
@@ -2964,8 +3021,8 @@ async function generateColourFlyer(){
 
     doc.save('wholesale-colour-flyer-' + new Date().toISOString().slice(0,10) + '.pdf');
     closeModal('modalFlyerDownload');
-    if(missingLayouts.length){
-      toast('Downloaded — no layout image for: ' + missingLayouts.slice(0,3).join(', ') + (missingLayouts.length > 3 ? '…' : ''));
+    if(missingLayout){
+      toast('Downloaded — no shared Layout image uploaded yet, so department pages have no background');
     } else {
       toast('Flyer downloaded');
     }
