@@ -2686,6 +2686,56 @@ let flyerImages = { first: null, last: null, layout: null, deptTop: {}, deptBott
 // closest built-in serif — so the flyer still generates correctly.
 const FLYER_FONT_NAME = 'times';
 
+// ---- Cursive font (cover page + notes page only) ----
+// jsPDF has no built-in script/cursive font, so the actual TTF is fetched
+// once per session and embedded into whichever jsPDF `doc` is generating a
+// flyer. Pacifico is a single-weight (non-variable) Google Font, which is
+// what jsPDF's font parser needs — a variable font won't embed correctly.
+// Cached after the first successful fetch so repeat downloads don't refetch
+// ~95KB every time. If the fetch fails (e.g. offline), the flyer still
+// generates fine — it just falls back to FLYER_FONT_NAME for those spots.
+const FLYER_CURSIVE_FONT_URL = 'https://raw.githubusercontent.com/google/fonts/main/ofl/pacifico/Pacifico-Regular.ttf';
+const FLYER_CURSIVE_FONT_FILE = 'Pacifico-Regular.ttf';
+const FLYER_CURSIVE_FONT_NAME = 'FlyerCursive';
+let flyerCursiveFontB64 = null;
+async function flyerLoadCursiveFontBase64(){
+  if(flyerCursiveFontB64) return flyerCursiveFontB64;
+  const resp = await fetch(FLYER_CURSIVE_FONT_URL);
+  if(!resp.ok) throw new Error('Could not download cursive font');
+  const bytes = new Uint8Array(await resp.arrayBuffer());
+  let binary = '';
+  const chunkSize = 0x8000;
+  for(let i = 0; i < bytes.length; i += chunkSize){
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+  }
+  flyerCursiveFontB64 = btoa(binary);
+  return flyerCursiveFontB64;
+}
+// Registers the cursive font on this specific jsPDF `doc` instance (fonts
+// aren't shared across documents) and returns whether it's available to use.
+async function flyerRegisterCursiveFont(doc){
+  try{
+    const b64 = await flyerLoadCursiveFontBase64();
+    doc.addFileToVFS(FLYER_CURSIVE_FONT_FILE, b64);
+    doc.addFont(FLYER_CURSIVE_FONT_FILE, FLYER_CURSIVE_FONT_NAME, 'normal');
+    return true;
+  }catch(e){
+    console.error('Cursive flyer font unavailable, falling back to ' + FLYER_FONT_NAME, e);
+    return false;
+  }
+}
+
+// ---- Notes page copy (drawn in gold, cursive, on its own page before the
+// closing "thank you" page) ----
+const FLYER_NOTES = [
+  'Please note these prices are only valid on or between these dates.',
+  'All offers are subject to availability and/or until stocks last.',
+  'Hallan Cash & Carry accepts no responsibility for errors and omissions.',
+  'Purchase limitations may apply.',
+  'Hallan Cash & Carry reserves the right to restrict sales, stop or withdraw this promotion without prior notice.',
+  'Terms & conditions are available upon request.'
+];
+
 async function loadFlyerImages(){
   const data = await apiGet('wholesale/flyer/images');
   const images = data.images || {};
@@ -2893,12 +2943,15 @@ function flyerOvalCrop(dataUrl, outW, outH){
     img.src = dataUrl;
   });
 }
-// Where the small oval photos sit on the page, in mm — tuned to nest into
-// the gap the wave design leaves top-right and bottom-left (see the sample
-// Layout image). If a photo isn't landing quite in the gap on your actual
-// Layout artwork, these five numbers per oval are the ones to nudge.
-const FLYER_TOP_OVAL = { x: 130, y: 14, w: 66, h: 48 };
-const FLYER_BOTTOM_OVAL = { x: 16, y: 238, w: 66, h: 48 };
+// Where the small oval photos sit on the page, in mm — measured directly
+// off the reference mock-up (the black hand-drawn ovals) so each photo sits
+// centred in the curved gap the wave design leaves, top-right and
+// bottom-left, instead of floating small and off-centre inside it. If a
+// photo isn't landing quite in the gap on your actual Layout artwork, these
+// four numbers per oval are the ones to nudge — x/y is the top-left corner,
+// w/h is the size, all in mm on the A4 page (210 x 297).
+const FLYER_TOP_OVAL = { x: 82, y: 4, w: 118, h: 60 };
+const FLYER_BOTTOM_OVAL = { x: 15, y: 230, w: 114, h: 43 };
 // Draws one line of the cover page's validity text with the label ("Valid"
 // / "to") in Hallan navy and the date itself in gold, centered as a unit —
 // jsPDF can't mix colours within a single text() call, so this measures
@@ -2915,12 +2968,25 @@ function flyerDrawValidityLine(doc, label, value, y, fontSize){
   doc.setTextColor(184, 134, 11);
   doc.text(value, startX + labelWidth, y);
 }
+// Draws a line made of several differently-coloured text segments, centred
+// as one unit on the page — same idea as flyerDrawValidityLine but for more
+// than two segments (used for "Offers valid from <date> to <date>"). All
+// segments share one font size; set it with doc.setFontSize() before calling.
+function flyerDrawCenteredSegments(doc, segments, y){
+  const widths = segments.map(s => doc.getTextWidth(s.text));
+  const totalWidth = widths.reduce((a, b) => a + b, 0);
+  let x = 105 - totalWidth / 2;
+  segments.forEach((s, i) => {
+    doc.setTextColor(s.color[0], s.color[1], s.color[2]);
+    doc.text(s.text, x, y);
+    x += widths[i];
+  });
+}
 // One item row: name in Hallan navy on the left, a dot leader filling the
 // gap, and the price in gold on the right — same idea as a printed menu,
 // so it reads cleanly regardless of how long each item's name is. fontSize
-// is passed in per-department (see generateColourFlyer) so a long list can
-// shrink to fit on one page instead of spilling a couple of stragglers
-// onto an almost-empty "(cont.)" page.
+// is the fixed department item-list size (see generateColourFlyer) — the
+// same for every department, however many items it has.
 function flyerDrawItemRow(doc, name, priceText, x, y, width, fontSize){
   doc.setFontSize(fontSize);
   doc.setTextColor(14, 30, 51); // Hallan navy — matches the header bar colour used across the app
@@ -2955,6 +3021,12 @@ async function generateColourFlyer(){
     const doc = new jsPDF('p', 'mm', 'a4');
     doc.setFont(FLYER_FONT_NAME, 'normal');
 
+    // Load the cursive font once onto this doc — used only on the cover
+    // page and the notes page. Everything else (department pages, item
+    // lists) stays in FLYER_FONT_NAME.
+    const cursiveOk = await flyerRegisterCursiveFont(doc);
+    const flyerCursiveOrFallback = cursiveOk ? FLYER_CURSIVE_FONT_NAME : FLYER_FONT_NAME;
+
     // ---- Page 1: cover ----
     if(flyerImages.first){
       flyerDrawBackground(doc, flyerImages.first);
@@ -2963,9 +3035,17 @@ async function generateColourFlyer(){
       doc.setTextColor(14, 30, 51);
       doc.text('Wholesale Price List', 105, 60, { align: 'center' });
     }
-    doc.setFont(FLYER_FONT_NAME, 'normal');
-    flyerDrawValidityLine(doc, 'Valid', flyerDdmmyyyy(fromVal), 124, 26);
-    flyerDrawValidityLine(doc, 'to', flyerDdmmyyyy(toVal), 138, 26);
+    doc.setFont(flyerCursiveOrFallback, 'normal');
+    doc.setFontSize(38);
+    doc.setTextColor(14, 30, 51); // Hallan blue
+    doc.text('Hallan Cash & Carry', 105, 118, { align: 'center' });
+    doc.setFontSize(19);
+    flyerDrawCenteredSegments(doc, [
+      { text: 'Offers valid from ', color: [14, 30, 51] },
+      { text: flyerDdmmyyyy(fromVal), color: [184, 134, 11] },
+      { text: ' to ', color: [14, 30, 51] },
+      { text: flyerDdmmyyyy(toVal), color: [184, 134, 11] }
+    ], 140);
 
     // ---- One page per department (spilling onto extra pages if a
     // department has more items than fit). Every department page uses the
@@ -2979,9 +3059,7 @@ async function generateColourFlyer(){
     const contentWidth = 160;
     const headingGap = 20;       // gap from the department heading down to the first item row
     const DEFAULT_ROW_HEIGHT = 9;
-    const MIN_ROW_HEIGHT = 5.2;   // below this, items genuinely spill onto a further page rather than shrinking more
     const DEFAULT_ITEM_FONT = 13;
-    const MIN_ITEM_FONT = 7;
     const missingLayout = !flyerImages.layout;
     for(const g of groups){
       const items = g.items.map(r => {
@@ -2993,17 +3071,12 @@ async function generateColourFlyer(){
       }).filter(it => it.price !== null);
       if(items.length === 0) continue;
 
-      // Shrink the row height/font just enough to fit the whole department
-      // on one page when reasonably possible, instead of leaving a couple
-      // of leftover items stranded on an almost-empty "(cont.)" page. Only
-      // once even the smallest readable size can't fit everyone does it
-      // genuinely spill onto a further page.
-      const availableHeight = bottomSafeY - (topSafeY + headingGap);
-      let rowHeight = DEFAULT_ROW_HEIGHT;
-      if(items.length * DEFAULT_ROW_HEIGHT > availableHeight){
-        rowHeight = Math.max(MIN_ROW_HEIGHT, availableHeight / items.length);
-      }
-      const itemFontSize = Math.max(MIN_ITEM_FONT, DEFAULT_ITEM_FONT * (rowHeight / DEFAULT_ROW_HEIGHT));
+      // Font/row height stay fixed for every department — a department with
+      // more items than fit on one page just spills onto a "(cont.)" page
+      // instead of shrinking, so the type size is consistent across the
+      // whole flyer.
+      const rowHeight = DEFAULT_ROW_HEIGHT;
+      const itemFontSize = DEFAULT_ITEM_FONT;
 
       const topPhoto = flyerImages.deptTop[g.department];
       const bottomPhoto = flyerImages.deptBottom[g.department];
@@ -3032,6 +3105,29 @@ async function generateColourFlyer(){
       }
     }
 
+    // ---- Notes page (one page, before the closing "thank you" page). Same
+    // shared Layout background and heading style as a department page; the
+    // note points themselves are drawn in gold, in the cursive font. ----
+    doc.addPage();
+    if(flyerImages.layout) flyerDrawBackground(doc, flyerImages.layout);
+    doc.setFont(FLYER_FONT_NAME, 'normal');
+    doc.setFontSize(20);
+    doc.setTextColor(14, 30, 51);
+    doc.text('Notes', contentX, topSafeY);
+    doc.setFont(flyerCursiveOrFallback, 'normal');
+    doc.setFontSize(15);
+    doc.setTextColor(184, 134, 11);
+    let notesY = topSafeY + headingGap;
+    const notesLineHeight = 7.5;
+    for(const note of FLYER_NOTES){
+      const lines = doc.splitTextToSize('• ' + note, contentWidth);
+      lines.forEach(line => {
+        doc.text(line, contentX, notesY);
+        notesY += notesLineHeight;
+      });
+      notesY += 2.5; // small gap between points
+    }
+
     // ---- Last page ----
     if(flyerImages.last){
       doc.addPage();
@@ -3041,7 +3137,7 @@ async function generateColourFlyer(){
     doc.save('wholesale-colour-flyer-' + new Date().toISOString().slice(0,10) + '.pdf');
     closeModal('modalFlyerDownload');
     if(missingLayout){
-      toast('Downloaded — no shared Layout image uploaded yet, so department pages have no background');
+      toast('Downloaded — no shared Layout image uploaded yet, so department and notes pages have no background');
     } else {
       toast('Flyer downloaded');
     }
