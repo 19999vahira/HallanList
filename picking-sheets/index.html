@@ -2689,13 +2689,13 @@ const FLYER_FONT_NAME = 'times';
 // ---- Cursive font (cover page + notes page only) ----
 // jsPDF has no built-in script/cursive font, so the actual TTF is fetched
 // once per session and embedded into whichever jsPDF `doc` is generating a
-// flyer. Pacifico is a single-weight (non-variable) Google Font, which is
-// what jsPDF's font parser needs — a variable font won't embed correctly.
+// flyer. Great Vibes is a single-weight (non-variable) Google Font, which
+// is what jsPDF's font parser needs — a variable font won't embed correctly.
 // Cached after the first successful fetch so repeat downloads don't refetch
 // ~95KB every time. If the fetch fails (e.g. offline), the flyer still
 // generates fine — it just falls back to FLYER_FONT_NAME for those spots.
-const FLYER_CURSIVE_FONT_URL = 'https://raw.githubusercontent.com/google/fonts/main/ofl/pacifico/Pacifico-Regular.ttf';
-const FLYER_CURSIVE_FONT_FILE = 'Pacifico-Regular.ttf';
+const FLYER_CURSIVE_FONT_URL = 'https://raw.githubusercontent.com/google/fonts/main/ofl/greatvibes/GreatVibes-Regular.ttf';
+const FLYER_CURSIVE_FONT_FILE = 'GreatVibes-Regular.ttf';
 const FLYER_CURSIVE_FONT_NAME = 'FlyerCursive';
 let flyerCursiveFontB64 = null;
 async function flyerLoadCursiveFontBase64(){
@@ -3038,14 +3038,14 @@ async function generateColourFlyer(){
     doc.setFont(flyerCursiveOrFallback, 'normal');
     doc.setFontSize(38);
     doc.setTextColor(14, 30, 51); // Hallan blue
-    doc.text('Hallan Cash & Carry', 105, 118, { align: 'center' });
+    doc.text('Hallan Cash & Carry', 105, 145, { align: 'center' }); // pushed down from the top artwork/logo so it doesn't crowd it
     doc.setFontSize(19);
     flyerDrawCenteredSegments(doc, [
       { text: 'Offers valid from ', color: [14, 30, 51] },
       { text: flyerDdmmyyyy(fromVal), color: [184, 134, 11] },
       { text: ' to ', color: [14, 30, 51] },
       { text: flyerDdmmyyyy(toVal), color: [184, 134, 11] }
-    ], 140);
+    ], 167);
 
     // ---- One page per department (spilling onto extra pages if a
     // department has more items than fit). Every department page uses the
