@@ -2815,7 +2815,7 @@ function buildFlyerImageRow(slotKey, label, dataUrl){
     <div style="flex:1;min-width:0;">
       <div style="font-size:13px;font-weight:600;margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(label)}</div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <input type="file" accept="image/*" style="max-width:160px;font-size:11px;">
+        <input type="file" accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif" style="max-width:160px;font-size:11px;">
         <button class="btn-amber" style="padding:7px 12px;font-size:12px;" data-act="upload">${dataUrl ? 'Replace' : 'Upload'}</button>
         ${dataUrl ? '<button class="btn-danger-ghost" style="padding:7px 12px;font-size:12px;" data-act="delete">Delete</button>' : ''}
       </div>
@@ -2853,7 +2853,9 @@ function flyerFileToDataUrl(file){
         canvas.getContext('2d').drawImage(img, 0, 0, w, h);
         resolve(canvas.toDataURL('image/jpeg', 0.85));
       };
-      img.onerror = () => reject(new Error('Could not read image'));
+      img.onerror = () => reject(new Error(
+        'Could not read "' + file.name + '" — if it\'s an iPhone photo it may be HEIC format, which browsers can\'t open. Re-save/export it as JPG or PNG first, then try again.'
+      ));
       img.src = reader.result;
     };
     reader.onerror = () => reject(new Error('Could not read ' + file.name));
@@ -2873,7 +2875,7 @@ async function uploadFlyerImage(slotKey, label, file){
     renderFlyerImagesModal();
     toast(label + ' saved');
   }catch(e){
-    toast('Could not upload image');
+    toast(e.message || 'Could not upload image');
     console.error(e);
   }
 }
@@ -7698,7 +7700,11 @@ function toast(msg){
   const t = document.getElementById('toast');
   t.textContent = msg; t.style.display='block';
   clearTimeout(t._h);
-  t._h = setTimeout(()=>t.style.display='none', 2200);
+  // Scale the display time with message length so longer explanatory
+  // messages (e.g. an upload-format error) stay readable instead of
+  // vanishing at the same 2.2s used for short confirmations like "Saved".
+  const duration = Math.min(7000, Math.max(2200, msg.length * 60));
+  t._h = setTimeout(()=>t.style.display='none', duration);
 }
 
 /* ============ MODALS ============ */
