@@ -2644,7 +2644,24 @@ function emailWholesalePDF(){
    data (see the PACK_SIZE/SUPPLIER_NAME subqueries on GET
    /api/wholesale/pricing) so the import doesn't blank those fields out in
    Vector — Vector's file import treats a blank cell as "clear this", not
-   "leave unchanged". ---- */
+   "leave unchanged".
+
+   SELLING PRICE IS VAT-INCLUSIVE HERE, UNLIKE EVERYWHERE ELSE ON THIS PAGE:
+   the on-screen Trade 3 Price boxes, the PDF and the Excel export all show
+   the net price with a '+VAT' tag alongside it (staff read it as "net,
+   add VAT yourself") — see wholesalePriceCellText. This CSV is different:
+   it's fed straight into Vector's File Import - Stock, which is now run
+   with "Include VAT" ticked for Trade 3 (see vector_price_import.ps1), so
+   the Selling Price column has to actually BE the VAT-inclusive figure or
+   Vector will store the net price as if it were gross, undercharging by
+   the VAT amount. wholesaleIncVatPrice below applies the standard 20% UK
+   rate to VAT-rated rows only (r.isVat, i.e. VATID = 1) and passes non-VAT
+   rows through unchanged. Cost / Unit is untouched — it stays net, matching
+   the Cost Price checkbox in Vector being left unticked. ---- */
+function wholesaleIncVatPrice(netPrice, isVat){
+  const STANDARD_VAT_RATE = 0.20; // UK standard rate
+  return isVat ? netPrice * (1 + STANDARD_VAT_RATE) : netPrice;
+}
 function downloadWholesaleCSV(){
   if(wholesaleRows.length === 0){ toast('Nothing to export yet'); return; }
   const rows = wholesaleExportRows();
@@ -2653,7 +2670,7 @@ function downloadWholesaleCSV(){
     'Description as per Vector': r.item,
     'Qty per Box': r.packSize,
     'Cost / Unit': r.suppCost === null ? '' : r.suppCost.toFixed(2),
-    'Selling Price': r.tradePrice === null ? '' : r.tradePrice.toFixed(2),
+    'Selling Price': r.tradePrice === null ? '' : wholesaleIncVatPrice(r.tradePrice, r.isVat).toFixed(2),
     'Barcode': r.barcode,
     'Department': r.department,
     'Supplier': r.supplierName
