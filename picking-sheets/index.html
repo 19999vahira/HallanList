@@ -659,7 +659,7 @@
       <input type="text" id="wholesaleSearch" class="historysearch" placeholder="Search item or department…" oninput="renderWholesaleTable()">
       <div style="display:flex;gap:10px;">
         <button class="btn-ghost" onclick="window.print()">Print</button>
-        <button class="btn-ghost" onclick="openWholesaleExportModal('excel')">Download Excel</button>
+        <button class="btn-ghost" onclick="downloadWholesaleCSV()">Download CSV</button>
         <button class="btn-amber" onclick="openWholesaleExportModal('pdf')">Download PDF</button>
         <button class="btn-amber" onclick="openFlyerDownloadModal()">Download Colour Flyer</button>
         <button class="btn-ghost" onclick="openFlyerImagesModal()">Upload Images</button>
@@ -2532,6 +2532,8 @@ function wholesaleExportRows(){
       item: r.stock_name,
       department: r.department_name,
       barcode: r.barcode || '',
+      packSize: r.pack_size === null || r.pack_size === undefined ? '' : r.pack_size,
+      supplierName: r.supplier_name || '',
       suppCost: r.suppcost_net === null || r.suppcost_net === undefined ? null : Number(r.suppcost_net),
       tradePrice: priceVal,
       isVat: r.vatid === 1,
@@ -2541,8 +2543,11 @@ function wholesaleExportRows(){
   });
 }
 
-/* ---- Export: choose columns, then PDF or Excel ---- */
-let wholesaleExportTarget = null; // 'pdf' | 'excel'
+/* ---- Export: choose columns, then PDF. (Download CSV, used to send new
+   Trade 3 prices to Vector, is a separate fixed-column flow — see
+   downloadWholesaleCSV below — since Vector needs an exact column set/order,
+   not a person's reading preference.) ---- */
+let wholesaleExportTarget = null; // 'pdf'
 function openWholesaleExportModal(target){
   if(wholesaleRows.length === 0){ toast('Nothing to export yet'); return; }
   wholesaleExportTarget = target;
@@ -2557,8 +2562,7 @@ function confirmWholesaleExport(){
     barcode: document.getElementById('wsColBarcode').checked
   };
   closeModal('modalWholesaleExport');
-  if(wholesaleExportTarget === 'excel') downloadWholesaleExcel(columns);
-  else downloadWholesalePDF(columns);
+  downloadWholesalePDF(columns);
 }
 function wholesalePriceCellText(r){
   if(r.tradePrice === null) return '—';
@@ -2630,38 +2634,39 @@ function emailWholesalePDF(){
     console.error(e);
   }
 }
-function downloadWholesaleExcel(columns){
-  if(wholesaleRows.length === 0) return;
-  try{
-    const rows = wholesaleExportRows();
-    const anyChanged = rows.some(r => r.changed);
-    const sheetData = rows.map(r => {
-      const line = { 'Item': r.item };
-      if(columns.department) line['Department'] = r.department;
-      if(columns.suppCost) line['Supplier Cost'] = r.suppCost;
-      if(columns.margin) line['Margin %'] = r.margin;
-      if(columns.tradePrice) line['Trade 3 Price'] = wholesalePriceCellText(r);
-      if(columns.barcode) line['Barcode'] = r.barcode || '';
-      return line;
-    });
-    const ws = XLSX.utils.json_to_sheet(sheetData);
-    if(anyChanged){
-      XLSX.utils.sheet_add_aoa(ws, [[], ['C = price manually changed from the synced value']], { origin: -1 });
-    }
-    const widths = [{ wch: 40 }];
-    if(columns.department) widths.push({ wch: 20 });
-    if(columns.suppCost) widths.push({ wch: 14 });
-    if(columns.margin) widths.push({ wch: 10 });
-    if(columns.tradePrice) widths.push({ wch: 16 });
-    if(columns.barcode) widths.push({ wch: 18 });
-    ws['!cols'] = widths;
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Wholesale Pricing');
-    XLSX.writeFile(wb, 'wholesale-pricing-' + new Date().toISOString().slice(0,10) + '.xlsx');
-  }catch(e){
-    toast('Could not generate Excel file');
-    console.error(e);
-  }
+/* ---- Download CSV: same fixed column set/order as the Retail CSV export
+   (Description as per Vector, Qty per Box, Cost / Unit, Selling Price,
+   Barcode, Department, Supplier) so it goes through the exact same Vector
+   "Standard file layout" File Import that Retail CSV already uses — see
+   vector_price_import.ps1. Only Selling Price is actually new here (the
+   live-edited Trade 3 price boxes on this page); Qty per Box, Cost/Unit,
+   Barcode, Department and Supplier are carried over from the last synced
+   data (see the PACK_SIZE/SUPPLIER_NAME subqueries on GET
+   /api/wholesale/pricing) so the import doesn't blank those fields out in
+   Vector — Vector's file import treats a blank cell as "clear this", not
+   "leave unchanged". ---- */
+function downloadWholesaleCSV(){
+  if(wholesaleRows.length === 0){ toast('Nothing to export yet'); return; }
+  const rows = wholesaleExportRows();
+  const headers = ['Description as per Vector', 'Qty per Box', 'Cost / Unit', 'Selling Price', 'Barcode', 'Department', 'Supplier'];
+  const csvRows = rows.map(r => ({
+    'Description as per Vector': r.item,
+    'Qty per Box': r.packSize,
+    'Cost / Unit': r.suppCost === null ? '' : r.suppCost.toFixed(2),
+    'Selling Price': r.tradePrice === null ? '' : r.tradePrice.toFixed(2),
+    'Barcode': r.barcode,
+    'Department': r.department,
+    'Supplier': r.supplierName
+  }));
+  const fileName = 'wholesale-price-update.csv'; // fixed name — the Vector machine's watcher looks for this exact filename
+  downloadFixedNameCSV(fileName, headers, csvRows);
+  // Also queue the same file server-side, same as Retail CSV, so the Vector
+  // machine's poller can pick it up and the person here sees a live status
+  // instead of just a downloaded file — see GET /api/vector-import/next and
+  // trackVectorImportStatus.
+  apiPost('vector-import/queue', { file_name: fileName, csv_content: buildCSVText(headers, csvRows), type: 'WHOLESALE' })
+    .then(res => { if(res && res.queue_id) trackVectorImportStatus(res.queue_id, 'WHOLESALE'); })
+    .catch(e => console.error('Could not queue wholesale CSV for remote import', e));
 }
 
 /* ============ WHOLESALE COLOUR FLYER (images + PDF generation) ============ */
@@ -7384,6 +7389,15 @@ const VIMPORT_STATUS_TEXT = {
     done_msg: 'The goods receipt has been raised in Vector and left pending for you to check.',
     sending_title: 'Sending to the till...',
     sending_msg: 'This raises a goods receipt in Vector — usually takes a few minutes.'
+  },
+  WHOLESALE: {
+    QUEUED: 'Waiting for the till to pick this up...',
+    PULLED: 'Received by the till...',
+    IMPORTING: 'Updating wholesale prices in Vector...',
+    done_title: 'Wholesale prices updated',
+    done_msg: 'Vector has been updated with the new Trade 3 prices.',
+    sending_title: 'Sending to the till...',
+    sending_msg: 'This updates Trade 3 prices in Vector — usually takes a few minutes.'
   }
 };
 function vimportSetSteps(currentStatus, failed){
