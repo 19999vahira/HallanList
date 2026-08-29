@@ -660,6 +660,7 @@
       <div style="display:flex;gap:10px;">
         <button class="btn-ghost" onclick="window.print()">Print</button>
         <button class="btn-ghost" onclick="downloadWholesaleCSV()">Download CSV</button>
+        <button class="btn-ghost" onclick="downloadWholesaleCSV(true)" title="Downloads and imports just the first row, so you can check Vector's File Import - Stock error panel before running the full list">Test Download CSV (1 row)</button>
         <button class="btn-amber" onclick="openWholesaleExportModal('pdf')">Download PDF</button>
         <button class="btn-amber" onclick="openFlyerDownloadModal()">Download Colour Flyer</button>
         <button class="btn-ghost" onclick="openFlyerImagesModal()">Upload Images</button>
@@ -2662,9 +2663,21 @@ function wholesaleIncVatPrice(netPrice, isVat){
   const STANDARD_VAT_RATE = 0.20; // UK standard rate
   return isVat ? netPrice * (1 + STANDARD_VAT_RATE) : netPrice;
 }
-function downloadWholesaleCSV(){
+function downloadWholesaleCSV(testOnly){
   if(wholesaleRows.length === 0){ toast('Nothing to export yet'); return; }
-  const rows = wholesaleExportRows();
+  const allRows = wholesaleExportRows();
+  // Test mode takes just the first row of the CURRENT filtered/sorted table
+  // (same order the person is looking at) and runs it through the exact
+  // same queue -> vector_price_import.ps1 -> Vector "File Import - Stock"
+  // pipeline as a full export, just with one line. That's deliberate: a
+  // dry-run that skips the real import wouldn't catch the kind of mistakes
+  // this is actually for (blank Supplier Name, wrong pack size, etc.) —
+  // those only show up in Vector's own error panel (see the screenshot that
+  // started this feature), so the test has to go through Vector for real to
+  // be worth anything. It does genuinely update that one item's price in
+  // Vector, same as a live import would.
+  const rows = testOnly ? allRows.slice(0, 1) : allRows;
+  if(testOnly && rows.length === 0){ toast('Nothing to test yet'); return; }
   const headers = ['Description as per Vector', 'Qty per Box', 'Cost / Unit', 'Selling Price', 'Barcode', 'Department', 'Supplier'];
   const csvRows = rows.map(r => ({
     'Description as per Vector': r.item,
@@ -2675,12 +2688,17 @@ function downloadWholesaleCSV(){
     'Department': r.department,
     'Supplier': r.supplierName
   }));
-  const fileName = 'wholesale-price-update.csv'; // fixed name — the Vector machine's watcher looks for this exact filename
+  // Distinct filename for the test run so it's obviously not the real
+  // batch if anyone spots it in a downloads folder or the queue history.
+  const fileName = testOnly ? 'wholesale-price-update-test.csv' : 'wholesale-price-update.csv'; // fixed name - the Vector machine's watcher looks for this exact filename
   downloadFixedNameCSV(fileName, headers, csvRows);
   // Also queue the same file server-side, same as Retail CSV, so the Vector
   // machine's poller can pick it up and the person here sees a live status
   // instead of just a downloaded file — see GET /api/vector-import/next and
-  // trackVectorImportStatus.
+  // trackVectorImportStatus. Test rows go through the same 'WHOLESALE' type
+  // as a real run (same Trade 3 price level, same Include VAT handling in
+  // vector_price_import.ps1) since the whole point is checking that exact
+  // path with one row.
   apiPost('vector-import/queue', { file_name: fileName, csv_content: buildCSVText(headers, csvRows), type: 'WHOLESALE' })
     .then(res => { if(res && res.queue_id) trackVectorImportStatus(res.queue_id, 'WHOLESALE'); })
     .catch(e => console.error('Could not queue wholesale CSV for remote import', e));
