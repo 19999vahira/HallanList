@@ -2664,12 +2664,13 @@ function wholesaleIncVatPrice(netPrice, isVat){
   return isVat ? netPrice * (1 + STANDARD_VAT_RATE) : netPrice;
 }
 // ---- CSV "Selling Price" formatting only (Cost / Unit is untouched) ----
-// Vector import needs this column to 4 decimal places, shaded 0.0001 below
-// the VAT-inclusive price (e.g. 12.9900 -> 12.9899), not the plain 2dp
-// figure used everywhere else on this page (screen boxes, PDF, Excel).
+// Vector import wants this column charm-priced: always ending in .99, never
+// a round pound figure. netPrice is rounded up to the next whole pound and
+// then 0.01 is taken off (e.g. VAT-inclusive 12.30 -> 12.99, 13.00 -> 12.99,
+// 12.99 stays 12.99) — 2 decimal places, matching Cost / Unit elsewhere.
 function wholesaleCsvSellingPrice(netPrice, isVat){
   const incVat = wholesaleIncVatPrice(netPrice, isVat);
-  return (incVat - 0.0001).toFixed(4);
+  return (Math.ceil(incVat.toFixed(2)) - 0.01).toFixed(2);
 }
 function downloadWholesaleCSV(testOnly){
   if(wholesaleRows.length === 0){ toast('Nothing to export yet'); return; }
@@ -3088,7 +3089,7 @@ async function generateColourFlyer(){
     doc.setFont(flyerCursiveOrFallback, 'normal');
     doc.setFontSize(38);
     doc.setTextColor(14, 30, 51); // Hallan blue
-    //doc.text('Hallan Cash & Carry', 105, 145, { align: 'center' }); // pushed down from the top artwork/logo so it doesn't crowd it
+    doc.text('Hallan Cash & Carry', 105, 145, { align: 'center' }); // pushed down from the top artwork/logo so it doesn't crowd it
     doc.setFontSize(19);
     flyerDrawCenteredSegments(doc, [
       { text: 'Offers valid from ', color: [14, 30, 51] },
