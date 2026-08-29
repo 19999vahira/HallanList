@@ -2897,8 +2897,8 @@ function flyerOvalCrop(dataUrl, outW, outH){
 // the gap the wave design leaves top-right and bottom-left (see the sample
 // Layout image). If a photo isn't landing quite in the gap on your actual
 // Layout artwork, these five numbers per oval are the ones to nudge.
-const FLYER_TOP_OVAL = { x: 136, y: 16, w: 52, h: 38 };
-const FLYER_BOTTOM_OVAL = { x: 20, y: 242, w: 52, h: 38 };
+const FLYER_TOP_OVAL = { x: 130, y: 14, w: 66, h: 48 };
+const FLYER_BOTTOM_OVAL = { x: 16, y: 238, w: 66, h: 48 };
 // Draws one line of the cover page's validity text with the label ("Valid"
 // / "to") in Hallan navy and the date itself in gold, centered as a unit —
 // jsPDF can't mix colours within a single text() call, so this measures
@@ -2917,9 +2917,12 @@ function flyerDrawValidityLine(doc, label, value, y, fontSize){
 }
 // One item row: name in Hallan navy on the left, a dot leader filling the
 // gap, and the price in gold on the right — same idea as a printed menu,
-// so it reads cleanly regardless of how long each item's name is.
-function flyerDrawItemRow(doc, name, priceText, x, y, width){
-  doc.setFontSize(13);
+// so it reads cleanly regardless of how long each item's name is. fontSize
+// is passed in per-department (see generateColourFlyer) so a long list can
+// shrink to fit on one page instead of spilling a couple of stragglers
+// onto an almost-empty "(cont.)" page.
+function flyerDrawItemRow(doc, name, priceText, x, y, width, fontSize){
+  doc.setFontSize(fontSize);
   doc.setTextColor(14, 30, 51); // Hallan navy — matches the header bar colour used across the app
   doc.text(name, x, y);
   const nameWidth = doc.getTextWidth(name);
@@ -2974,7 +2977,11 @@ async function generateColourFlyer(){
     const bottomSafeY = 220; // stays clear of the bottom wave design
     const contentX = 25;
     const contentWidth = 160;
-    const rowHeight = 9;
+    const headingGap = 20;       // gap from the department heading down to the first item row
+    const DEFAULT_ROW_HEIGHT = 9;
+    const MIN_ROW_HEIGHT = 5.2;   // below this, items genuinely spill onto a further page rather than shrinking more
+    const DEFAULT_ITEM_FONT = 13;
+    const MIN_ITEM_FONT = 7;
     const missingLayout = !flyerImages.layout;
     for(const g of groups){
       const items = g.items.map(r => {
@@ -2986,10 +2993,22 @@ async function generateColourFlyer(){
       }).filter(it => it.price !== null);
       if(items.length === 0) continue;
 
+      // Shrink the row height/font just enough to fit the whole department
+      // on one page when reasonably possible, instead of leaving a couple
+      // of leftover items stranded on an almost-empty "(cont.)" page. Only
+      // once even the smallest readable size can't fit everyone does it
+      // genuinely spill onto a further page.
+      const availableHeight = bottomSafeY - (topSafeY + headingGap);
+      let rowHeight = DEFAULT_ROW_HEIGHT;
+      if(items.length * DEFAULT_ROW_HEIGHT > availableHeight){
+        rowHeight = Math.max(MIN_ROW_HEIGHT, availableHeight / items.length);
+      }
+      const itemFontSize = Math.max(MIN_ITEM_FONT, DEFAULT_ITEM_FONT * (rowHeight / DEFAULT_ROW_HEIGHT));
+
       const topPhoto = flyerImages.deptTop[g.department];
       const bottomPhoto = flyerImages.deptBottom[g.department];
-      const topOvalDataUrl = topPhoto ? await flyerOvalCrop(topPhoto, 480, 350) : null;
-      const bottomOvalDataUrl = bottomPhoto ? await flyerOvalCrop(bottomPhoto, 480, 350) : null;
+      const topOvalDataUrl = topPhoto ? await flyerOvalCrop(topPhoto, Math.round(FLYER_TOP_OVAL.w * 10), Math.round(FLYER_TOP_OVAL.h * 10)) : null;
+      const bottomOvalDataUrl = bottomPhoto ? await flyerOvalCrop(bottomPhoto, Math.round(FLYER_BOTTOM_OVAL.w * 10), Math.round(FLYER_BOTTOM_OVAL.h * 10)) : null;
 
       let idx = 0;
       while(idx < items.length){
@@ -3003,11 +3022,11 @@ async function generateColourFlyer(){
         doc.setFontSize(20);
         doc.setTextColor(14, 30, 51);
         doc.text(g.department + (idx > 0 ? ' (cont.)' : ''), contentX, topSafeY);
-        let y = topSafeY + 18;
+        let y = topSafeY + headingGap;
         const maxRows = Math.max(1, Math.floor((bottomSafeY - y) / rowHeight));
         for(let i = 0; i < maxRows && idx < items.length; i++, idx++){
           const priceText = '£' + items[idx].price.toFixed(2) + (items[idx].isVat ? ' +VAT' : '');
-          flyerDrawItemRow(doc, items[idx].name, priceText, contentX, y, contentWidth);
+          flyerDrawItemRow(doc, items[idx].name, priceText, contentX, y, contentWidth, itemFontSize);
           y += rowHeight;
         }
       }
