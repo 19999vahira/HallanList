@@ -3041,7 +3041,11 @@ function flyerCircleCrop(dataUrl, diameterPx){
 // bottom-left gaps; Middle sits centred behind the item list itself. Nudge
 // these if a photo needs repositioning against your Layout artwork.
 const FLYER_TOP_CIRCLE = { cx: 141, cy: 34, d: 60 };
-const FLYER_MIDDLE_CIRCLE = { cx: 105, cy: 157, d: 100 };
+// Middle circle's diameter matches contentWidth (160mm) — the same span as
+// an item row, from the item name's start (contentX) to the price's end
+// (contentX + contentWidth) — so every row of data sits over the photo,
+// not just a strip through the middle of it.
+const FLYER_MIDDLE_CIRCLE = { cx: 105, cy: 157, d: 160 };
 const FLYER_BOTTOM_CIRCLE = { cx: 72, cy: 251, d: 50 };
 // How faint the watermark circles print — deliberately very low so the
 // photo reads as a light background texture, not something competing with
@@ -3159,6 +3163,10 @@ async function generateColourFlyer(){
     doc.setFontSize(38);
     doc.setTextColor(...FLYER_COLOR_BLUE);
     //doc.text('Hallan Cash & Carry', 105, 145, { align: 'center' }); // pushed down from the top artwork/logo so it doesn't crowd it
+    // "Offers valid from ... to ..." is brand-font (Nunito Sans SemiBold),
+    // not cursive — cursive is reserved for the "Hallan Cash & Carry"
+    // script line above (currently commented out) and the Notes page.
+    doc.setFont(flyerMainFont, 'normal');
     doc.setFontSize(24);
     flyerDrawCenteredSegments(doc, [
       { text: 'Offers valid from ', color: FLYER_COLOR_BLUE },
