@@ -2722,7 +2722,8 @@ function downloadWholesaleCSV(testOnly){
 // for the optional photo each department can show — cropped to a circle and
 // drawn at very low opacity as a faint watermark behind that department's
 // price list (NOT a full-page replacement), repeated on every page the
-// department spans, including "(cont.)" pages.
+// department spans (a department that overflows onto extra pages keeps
+// the same heading on every one of them, no "(cont.)" suffix).
 let flyerImages = { first: null, last: null, layout: null, deptTop: {}, deptMiddle: {}, deptBottom: {} };
 
 // ---- Brand font (Hallan spec sheet: "Nunito Sans SemiBold", 13pt for the
@@ -2872,7 +2873,7 @@ function renderFlyerImagesModal(){
   wrap.appendChild(heading);
   const overrideSub = document.createElement('p');
   overrideSub.style.cssText = 'font-size:11px;color:var(--text-dim);margin:0 0 6px;';
-  overrideSub.textContent = 'Up to three photos per department — Top, Middle and Bottom. Each is cropped to a circle and printed at very low opacity, like a faint watermark sitting behind that department\'s price list, and repeats on every page the department spans (including "(cont.)" pages). All three are optional.';
+  overrideSub.textContent = 'Up to three photos per department — Top, Middle and Bottom. Each is cropped to a circle and printed at very low opacity, like a faint watermark sitting behind that department\'s price list, and repeats on every page the department spans. All three are optional.';
   wrap.appendChild(overrideSub);
   const depts = flyerDepartmentNames();
   if(depts.length === 0){
@@ -3180,8 +3181,9 @@ async function generateColourFlyer(){
     // same shared Layout background; a department's own Top/Middle/Bottom
     // photo (if uploaded) is circle-cropped and printed at very low
     // opacity as a faint watermark behind that department's price list —
-    // on every page the department spans, including "(cont.)" pages, not
-    // just its first page. The heading shows the department name with any
+    // on every page the department spans, not just its first page — and
+    // the heading stays the same on every one of those pages (no "(cont.)"
+    // suffix). It shows the department name with any
     // leading "Wholesale " stripped (e.g. "Cleaning & Hygiene" instead of
     // "Wholesale Cleaning & Hygiene") — see flyerDeptDisplayName.
     const groups = groupRowsByDepartment(wholesaleRows);
@@ -3205,9 +3207,9 @@ async function generateColourFlyer(){
       if(items.length === 0) continue;
 
       // Font/row height stay fixed for every department — a department with
-      // more items than fit on one page just spills onto a "(cont.)" page
-      // instead of shrinking, so the type size is consistent across the
-      // whole flyer.
+      // more items than fit on one page just spills onto an extra page
+      // (same heading, no "(cont.)" suffix) instead of shrinking, so the
+      // type size is consistent across the whole flyer.
       const rowHeight = DEFAULT_ROW_HEIGHT;
       const itemFontSize = DEFAULT_ITEM_FONT;
       const deptHeading = flyerDeptDisplayName(g.department);
@@ -3224,7 +3226,7 @@ async function generateColourFlyer(){
         doc.addPage();
         if(flyerImages.layout) flyerDrawBackground(doc, flyerImages.layout);
         // Every page this department spans gets its watermark photos, not
-        // just the first — so a department that runs onto "(cont.)" pages
+        // just the first — so a department that overflows onto extra pages
         // still has them on every page.
         flyerDrawWatermarkCircle(doc, topCircleDataUrl, FLYER_TOP_CIRCLE);
         flyerDrawWatermarkCircle(doc, middleCircleDataUrl, FLYER_MIDDLE_CIRCLE);
@@ -3232,7 +3234,7 @@ async function generateColourFlyer(){
         doc.setFont(flyerMainFont, 'normal');
         doc.setFontSize(DEPT_HEADING_FONT);
         doc.setTextColor(...FLYER_COLOR_BLUE);
-        doc.text(deptHeading + (idx > 0 ? ' (cont.)' : ''), contentX, topSafeY);
+        doc.text(deptHeading, contentX, topSafeY);
         let y = topSafeY + headingGap;
         const maxRows = Math.max(1, Math.floor((bottomSafeY - y) / rowHeight));
         for(let i = 0; i < maxRows && idx < items.length; i++, idx++){
