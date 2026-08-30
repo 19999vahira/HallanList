@@ -2450,6 +2450,17 @@ function groupRowsByDepartment(rows){
   });
   return groups;
 }
+// On-screen preview of the CSV's VAT-inclusive, charm-priced Selling Price
+// column (see wholesaleCsvSellingPrice below) so staff can see exactly what
+// will be sent to Vector without having to download the CSV first. adj.price
+// is the live-edited Trade 3 Price (net, per the '+VAT' tag), same value the
+// CSV export reads from.
+function wholesaleIncVatDisplayText(priceStr, isVat){
+  if(priceStr === '' || priceStr === null || priceStr === undefined) return '—';
+  const net = Number(priceStr);
+  if(Number.isNaN(net)) return '—';
+  return wholesaleCsvSellingPrice(net, isVat);
+}
 function buildWholesaleItemsTable(items){
   const table = document.createElement('table');
   table.className = 'finaltable';
@@ -2460,6 +2471,7 @@ function buildWholesaleItemsTable(items){
   thead.innerHTML = `<tr>
     <th>Item</th>
     <th class="qtycell">Supplier Cost</th><th class="qtycell">Margin</th><th class="qtycell">Trade 3 Price</th>
+    <th class="qtycell">Selling Price Inc. VAT</th>
   </tr>`;
   const tbody = document.createElement('tbody');
   items.forEach(r=>{
@@ -2489,16 +2501,21 @@ function buildWholesaleItemsTable(items){
         <span class="wsprintprice">${adj.price !== '' ? Number(adj.price).toFixed(2) : '—'}</span>
         ${r.vatid === 1 ? '<span class="vattag">+VAT</span>' : ''}
       </td>
+      <td class="qtycell">
+        <span class="wsprintincvat">${wholesaleIncVatDisplayText(adj.price, r.vatid === 1)}</span>
+      </td>
     `;
     const priceInput = tr.querySelector('.priceinput');
     const marginInput = tr.querySelector('.margininput');
     const pricePrint = tr.querySelector('.wsprintprice');
     const marginPrint = tr.querySelector('.wsprintmargin');
+    const incVatPrint = tr.querySelector('.wsprintincvat');
     priceInput.addEventListener('change', () => {
       const v = priceInput.value.trim();
       adj.price = v;
       adj.changed = true;
       pricePrint.textContent = v !== '' ? Number(v).toFixed(2) : '—';
+      incVatPrint.textContent = wholesaleIncVatDisplayText(adj.price, r.vatid === 1);
       const newMargin = wholesaleMarginFromPrice(r.suppcost_net, v);
       if(newMargin !== null){
         adj.margin = newMargin.toFixed(1);
@@ -2516,6 +2533,7 @@ function buildWholesaleItemsTable(items){
         adj.price = newPrice.toFixed(2);
         priceInput.value = adj.price;
         pricePrint.textContent = Number(adj.price).toFixed(2);
+        incVatPrint.textContent = wholesaleIncVatDisplayText(adj.price, r.vatid === 1);
       }
     });
     tbody.appendChild(tr);
@@ -2664,13 +2682,23 @@ function wholesaleIncVatPrice(netPrice, isVat){
   return isVat ? netPrice * (1 + STANDARD_VAT_RATE) : netPrice;
 }
 // ---- CSV "Selling Price" formatting only (Cost / Unit is untouched) ----
-// Vector import wants this column charm-priced: always ending in .99, never
-// a round pound figure. netPrice is rounded up to the next whole pound and
-// then 0.01 is taken off (e.g. VAT-inclusive 12.30 -> 12.99, 13.00 -> 12.99,
-// 12.99 stays 12.99) — 2 decimal places, matching Cost / Unit elsewhere.
+// Vector import wants this column charm-priced: rounded DOWN to the nearest
+// price ending in 9 pence (x.x9) — the classic "just under" charm price,
+// never rounded up past the actual price. So 13.75 -> 13.79 (same 10p band),
+// 13.05 -> 13.09 (same 10p band), but a round figure like 13.00 drops into
+// the band below it -> 12.99 (there's no ".09" that's still <= 13.00 in its
+// own band once you've used up the whole pound). 12.99 stays 12.99.
+// Everything is done in whole pence (not decimal maths) to avoid floating
+// point issues like 13.75 * 1.2 landing on 16.499999999999996 instead of
+// 16.5 — 2 decimal places, matching Cost / Unit elsewhere.
 function wholesaleCsvSellingPrice(netPrice, isVat){
   const incVat = wholesaleIncVatPrice(netPrice, isVat);
-  return (Math.ceil(incVat.toFixed(2)) - 0.01).toFixed(2);
+  const pence = Math.round(incVat * 100);            // e.g. 13.75 -> 1375
+  // Subtract 1p first so an exact 10p figure (e.g. 1300) drops into the
+  // band below instead of staying in its own — that's what makes
+  // 13.00 -> 12.99 while 13.05 -> 13.09.
+  const charmPence = Math.floor((pence - 1) / 10) * 10 + 9;
+  return (charmPence / 100).toFixed(2);              // -> "13.79"
 }
 function downloadWholesaleCSV(testOnly){
   if(wholesaleRows.length === 0){ toast('Nothing to export yet'); return; }
