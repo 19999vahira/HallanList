@@ -2450,11 +2450,11 @@ function groupRowsByDepartment(rows){
   });
   return groups;
 }
-// On-screen preview of the CSV's VAT-inclusive, charm-priced Selling Price
-// column (see wholesaleCsvSellingPrice below) so staff can see exactly what
-// will be sent to Vector without having to download the CSV first. adj.price
-// is the live-edited Trade 3 Price (net, per the '+VAT' tag), same value the
-// CSV export reads from.
+// On-screen preview of the CSV's VAT-inclusive Selling Price column (see
+// wholesaleCsvSellingPrice below) so staff can see exactly what will be
+// sent to Vector without having to download the CSV first. adj.price is the
+// live-edited Trade 3 Price (net, per the '+VAT' tag), same value the CSV
+// export reads from.
 function wholesaleIncVatDisplayText(priceStr, isVat){
   if(priceStr === '' || priceStr === null || priceStr === undefined) return '—';
   const net = Number(priceStr);
@@ -2682,23 +2682,16 @@ function wholesaleIncVatPrice(netPrice, isVat){
   return isVat ? netPrice * (1 + STANDARD_VAT_RATE) : netPrice;
 }
 // ---- CSV "Selling Price" formatting only (Cost / Unit is untouched) ----
-// Vector import wants this column charm-priced: rounded DOWN to the nearest
-// price ending in 9 pence (x.x9) — the classic "just under" charm price,
-// never rounded up past the actual price. So 13.75 -> 13.79 (same 10p band),
-// 13.05 -> 13.09 (same 10p band), but a round figure like 13.00 drops into
-// the band below it -> 12.99 (there's no ".09" that's still <= 13.00 in its
-// own band once you've used up the whole pound). 12.99 stays 12.99.
-// Everything is done in whole pence (not decimal maths) to avoid floating
-// point issues like 13.75 * 1.2 landing on 16.499999999999996 instead of
-// 16.5 — 2 decimal places, matching Cost / Unit elsewhere.
+// No automatic charm-pricing/rounding here — this is just the VAT-inclusive
+// figure, straight from whatever's typed into the Trade 3 Price box (net),
+// to 2 decimal places, matching Cost / Unit elsewhere. Now that the
+// "Selling Price Inc. VAT" column on screen shows this same figure next to
+// the price box, staff set the exact final price themselves by adjusting
+// the Trade 3 Price (net) input — nothing gets nudged to end in a
+// particular digit automatically.
 function wholesaleCsvSellingPrice(netPrice, isVat){
   const incVat = wholesaleIncVatPrice(netPrice, isVat);
-  const pence = Math.round(incVat * 100);            // e.g. 13.75 -> 1375
-  // Subtract 1p first so an exact 10p figure (e.g. 1300) drops into the
-  // band below instead of staying in its own — that's what makes
-  // 13.00 -> 12.99 while 13.05 -> 13.09.
-  const charmPence = Math.floor((pence - 1) / 10) * 10 + 9;
-  return (charmPence / 100).toFixed(2);              // -> "13.79"
+  return incVat.toFixed(2);
 }
 function downloadWholesaleCSV(testOnly){
   if(wholesaleRows.length === 0){ toast('Nothing to export yet'); return; }
