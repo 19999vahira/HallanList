@@ -1768,7 +1768,7 @@
     <p class="modal-sub">Scan now — it looks up automatically</p>
     <div class="scanmanual">
       <input type="text" id="goodsInBarcodeInput" placeholder="Waiting for scan…" autocomplete="off" autocapitalize="off"
-        inputmode="none" onkeydown="if(event.key==='Enter')submitGoodsInBarcode()">
+        inputmode="none" onkeydown="if(event.key==='Enter')submitGoodsInBarcode()" oninput="onGoodsInBarcodeInput()">
       <button class="btn-ghost" onclick="submitGoodsInBarcode()">Look up</button>
     </div>
     <div id="goodsInScanFeedback"></div>
@@ -2091,7 +2091,7 @@
     <p class="modal-sub" id="scannerSubtitle">Scan now — it looks up automatically</p>
     <div class="scanmanual">
       <input type="text" id="manualBarcodeInput" placeholder="Waiting for scan…" autocomplete="off" autocapitalize="off"
-        inputmode="none" onkeydown="if(event.key==='Enter')submitManualBarcode()">
+        inputmode="none" onkeydown="if(event.key==='Enter')submitManualBarcode()" oninput="onManualBarcodeInput()">
       <button class="btn-ghost" onclick="submitManualBarcode()">Look up</button>
     </div>
     <div style="margin:2px 0 10px;">
@@ -6553,9 +6553,20 @@ function scanGoodsAddManually(){
   document.getElementById('goodsInBarcodeInput').focus();
 }
 function submitGoodsInBarcode(){
+  clearTimeout(goodsInBarcodeDebounce);
   const code = document.getElementById('goodsInBarcodeInput').value.trim();
   if(!code) return;
   handleGoodsInScannedCode(code);
+}
+let goodsInBarcodeDebounce = null;
+function onGoodsInBarcodeInput(){
+  clearTimeout(goodsInBarcodeDebounce);
+  const val = document.getElementById('goodsInBarcodeInput').value.trim();
+  if(!val) return;
+  // Same auto-submit pattern as the making-list scanner — a short pause
+  // after typing stops means the scan is finished, so look it up
+  // automatically instead of waiting for a "Look up" tap.
+  goodsInBarcodeDebounce = setTimeout(submitGoodsInBarcode, 300);
 }
 async function handleGoodsInScannedCode(code){
   const input = document.getElementById('goodsInBarcodeInput');
@@ -8343,12 +8354,6 @@ async function reopenList(id){
 }
 async function startCreatingList(){
   try{
-    const data = await apiGet('retail/lists/');
-    const openList = (data.items || []).find(l => l.status === 'OPEN');
-    if(openList){
-      const editExisting = confirm('"' + openList.list_name + '" is already in progress.\n\nOK = keep editing that list\nCancel = start a brand new list');
-      if(editExisting){ openMakingListDetail(openList.list_id); return; }
-    }
     const name = (prompt('Name this list (optional):', '') || '').trim();
     const createdBy = promptStaffName('Your name (making this list):');
     const res = await apiPost('retail/lists/', { list_name: name || undefined, created_by: createdBy || undefined });
@@ -8486,9 +8491,20 @@ function closeScanner(){
   closeModal('modalScanner');
 }
 function submitManualBarcode(){
+  clearTimeout(manualBarcodeDebounce);
   const code = document.getElementById('manualBarcodeInput').value.trim();
   if(!code) return;
   handleScannedCode(code);
+}
+let manualBarcodeDebounce = null;
+function onManualBarcodeInput(){
+  clearTimeout(manualBarcodeDebounce);
+  const val = document.getElementById('manualBarcodeInput').value.trim();
+  if(!val) return;
+  // Hardware scanners type the barcode in a fast burst; a short pause after
+  // typing stops means the scan is finished, so look it up automatically
+  // instead of waiting for a "Look up" tap or an Enter keystroke.
+  manualBarcodeDebounce = setTimeout(submitManualBarcode, 300);
 }
 function toggleScannerNameSearch(){
   const box = document.getElementById('scannerNameSearchBox');
