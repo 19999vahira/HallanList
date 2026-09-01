@@ -745,12 +745,17 @@
         <button class="btn-ghost" onclick="window.print()">Print</button>
         <button class="btn-ghost" onclick="downloadWholesaleCSV()">Download CSV</button>
         <button class="btn-ghost" onclick="downloadWholesaleCSV(true)" title="Downloads and imports just the first row, so you can check Vector's File Import - Stock error panel before running the full list">Test Download CSV (1 row)</button>
+        <button class="btn-ghost" onclick="openWholesaleScheduleModal()" title="Schedule a Download CSV / Test Download CSV run for a future date and time, with the result emailed to you">Schedule</button>
         <button class="btn-amber" onclick="openWholesaleExportModal('pdf')">Download PDF</button>
         <button class="btn-amber" onclick="openFlyerDownloadModal()">Download Colour Flyer</button>
         <button class="btn-ghost" onclick="openFlyerImagesModal()">Upload Images</button>
         <button class="btn-ghost" onclick="emailWholesalePDF()">Email</button>
+        <button id="wholesaleBlockBtn" class="btn-danger-ghost" onclick="toggleWholesalePriceBlock()" title="Block: locks the selling prices currently on screen so the next refresh/sync won't overwrite them. Cost still updates as usual. Release: unlocks them so prices go back to always showing the latest synced value.">Block Prices</button>
         <button class="btn-danger-ghost" onclick="openWholesalePasswordModal()">Change Password</button>
       </div>
+    </div>
+    <div id="wholesaleBlockedBanner" class="empty-hint" style="display:none;margin-bottom:10px;border-left:3px solid var(--danger);">
+      🔒 Selling prices are currently <strong>blocked</strong> — they won't change when the pricing list refreshes or re-syncs. Supplier cost still updates as usual. Click <strong>Release Prices</strong> above to unlock them.
     </div>
     <div id="wholesaleContent"></div>
   </div>
@@ -2238,6 +2243,47 @@
   </div>
 </div>
 
+<!-- WHOLESALE SCHEDULE: schedule a Download CSV / Test Download CSV run, emails the result -->
+<div class="modal-backdrop" id="modalWholesaleSchedule">
+  <div class="modal" style="width:480px;">
+    <h3>Schedule Price Update CSV</h3>
+    <p class="modal-sub">Runs "Download CSV" automatically at the date/time below and queues it for the till, same as clicking it yourself. Since nobody's watching the screen, the outcome is emailed instead.</p>
+
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;">Date &amp; time</label>
+    <input type="datetime-local" id="wsSchedRunAt">
+
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin:12px 0 4px;">Repeat</label>
+    <select id="wsSchedRecurrence">
+      <option value="ONCE">Once</option>
+      <option value="DAILY">Every day</option>
+      <option value="WEEKLY">Every week</option>
+    </select>
+
+    <label style="display:flex;align-items:center;gap:8px;margin:14px 0 4px;font-size:14px;">
+      <input type="checkbox" id="wsSchedTestOnly"> Test Download CSV (1 row) instead of the full list
+    </label>
+
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin:14px 0 4px;">Send result to</label>
+    <div id="wsSchedEmailList" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
+    <div style="display:flex;gap:8px;">
+      <input type="email" id="wsSchedNewEmail" placeholder="Add an email address…" style="flex:1;">
+      <button class="btn-ghost" onclick="addWholesaleScheduleEmail()">Save</button>
+    </div>
+    <p style="font-size:11px;color:var(--text-dim);margin:4px 0 0;">Saved emails stay here for next time — tick who this run should notify, or delete one with the × to remove it from the list entirely.</p>
+
+    <div class="errdetail" id="wsSchedErr" style="display:none;"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalWholesaleSchedule')">Cancel</button>
+      <button class="btn-amber" onclick="submitWholesaleSchedule()">Schedule</button>
+    </div>
+
+    <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);">
+      <h4 style="margin:0 0 8px;font-size:14px;">Scheduled &amp; recent runs</h4>
+      <div id="wsSchedList" style="max-height:220px;overflow:auto;"><div class="loading">Loading…</div></div>
+    </div>
+  </div>
+</div>
+
 <!-- WHOLESALE FLYER: UPLOAD IMAGES (first page, last page, one per department) -->
 <div class="modal-backdrop" id="modalFlyerImages">
   <div class="modal" style="width:640px;">
@@ -2290,7 +2336,11 @@ let scannerListEl = null;
 let scannerTarget = 'retail'; // 'retail' (Making List), 'warehouse' (Warehouse category), or 'location' (Row products)
 let historyLists = [];
 let wholesaleRows = [];
-let wholesaleAdjust = {}; // keyed by stock_name -> { margin, price } — session-only, not saved to the database
+let wholesaleAdjust = {}; // keyed by stock_name -> { margin, price } — recomputed fresh from synced data on every load, UNLESS a row is locked (see below)
+let wholesaleBlocked = false; // Feature 1: when true, locked selling prices are preserved across refreshes; cost still always updates
+let wholesaleLockedPrices = {}; // keyed by stock_name -> { price, margin }, mirrors WHOLESALE_PRICE_LOCK server-side
+let wholesaleSavedEmails = []; // Feature 2: saved/reusable schedule notification emails
+let wholesaleScheduleSelectedEmails = new Set(); // ticked emails in the schedule modal for the run being created
 let currentHistoryList = null;
 let currentHistoryItems = null;
 
@@ -2462,13 +2512,85 @@ async function loadWholesalePricing(){
   wholesaleAdjust = {};
   content.innerHTML = '<div class="loading">Loading pricing list…</div>';
   try{
-    const data = await apiGet('wholesale/pricing/');
+    // Pricing (cost/list price, cached ~3 min server-side for speed) and the
+    // current Block/Release lock state are independent and can load in
+    // parallel — the lock state decides which rows get their selling price
+    // seeded from wholesaleLockedPrices instead of the fresh synced value.
+    const [data, lockData] = await Promise.all([
+      apiGet('wholesale/pricing/'),
+      apiGet('wholesale/price-lock').catch(e => { console.error('Could not load price lock state', e); return null; })
+    ]);
     wholesaleRows = data.items || [];
+    if(lockData){
+      wholesaleBlocked = !!lockData.blocked;
+      wholesaleLockedPrices = lockData.prices || {};
+    }
+    updateWholesaleBlockUI();
     renderWholesaleTable();
   }catch(e){
     content.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load the pricing list.</div>' + errDetailHtml(e);
     console.error(e);
   }
+}
+function updateWholesaleBlockUI(){
+  const btn = document.getElementById('wholesaleBlockBtn');
+  const banner = document.getElementById('wholesaleBlockedBanner');
+  if(!btn) return;
+  if(wholesaleBlocked){
+    btn.textContent = 'Release Prices';
+    btn.classList.remove('btn-danger-ghost');
+    btn.classList.add('btn-amber');
+    if(banner) banner.style.display = 'block';
+  } else {
+    btn.textContent = 'Block Prices';
+    btn.classList.remove('btn-amber');
+    btn.classList.add('btn-danger-ghost');
+    if(banner) banner.style.display = 'none';
+  }
+}
+// ---- Feature 1: Block / Release selling prices ----
+async function toggleWholesalePriceBlock(){
+  if(!wholesaleBlocked){
+    // BLOCK: snapshot exactly what's on screen right now so the next
+    // refresh/sync preserves it. Cost is never part of this snapshot —
+    // only price/margin — so cost keeps updating normally either way.
+    const prices = Object.keys(wholesaleAdjust)
+      .filter(name => wholesaleAdjust[name] && wholesaleAdjust[name].price !== '')
+      .map(name => ({ stock_name: name, price: wholesaleAdjust[name].price, margin: wholesaleAdjust[name].margin }));
+    try{
+      await apiPost('wholesale/price-lock/block', { prices });
+      wholesaleBlocked = true;
+      // Reflect the just-blocked values locally so nothing visually jumps.
+      prices.forEach(p => { wholesaleLockedPrices[p.stock_name] = { price: p.price, margin: p.margin }; });
+      updateWholesaleBlockUI();
+      toast('Selling prices are now blocked — cost will keep updating, selling prices won\'t.');
+    }catch(e){
+      console.error(e);
+      toast('Could not block selling prices');
+    }
+  } else {
+    if(!confirm('Release blocked selling prices?\nThey will go back to showing the latest synced price next time the list refreshes.')) return;
+    try{
+      await apiPost('wholesale/price-lock/release', {});
+      wholesaleBlocked = false;
+      wholesaleLockedPrices = {};
+      updateWholesaleBlockUI();
+      toast('Selling prices released');
+      loadWholesalePricing(); // reload so prices go back to their fresh synced defaults immediately
+    }catch(e){
+      console.error(e);
+      toast('Could not release selling prices');
+    }
+  }
+}
+// Saves one row's edited price/margin server-side while blocked, so it's
+// preserved even if the person never clicks "Block" again. No-op (and no
+// network call) while unblocked — matches today's session-only behaviour.
+function persistWholesaleLockIfBlocked(stockName, adj){
+  if(!wholesaleBlocked) return;
+  wholesaleLockedPrices[stockName] = { price: adj.price, margin: adj.margin };
+  apiPost('wholesale/price-lock/update', { stock_name: stockName, price: adj.price, margin: adj.margin })
+    .catch(e => console.error('Could not save blocked price for', stockName, e));
 }
 function wholesaleMarginPct(r){
   if(!r.price_net || r.price_net <= 0 || r.suppcost_net === null || r.suppcost_net === undefined) return null;
@@ -2564,12 +2686,23 @@ function buildWholesaleItemsTable(items){
     // through to the export so a changed row can be flagged there.
     let adj = wholesaleAdjust[r.stock_name];
     if(!adj){
-      const initialMargin = wholesaleMarginPct(r);
-      adj = {
-        margin: initialMargin === null ? '' : initialMargin.toFixed(1),
-        price: (r.price_net === null || r.price_net === undefined) ? '' : Number(r.price_net).toFixed(2),
-        changed: false
-      };
+      // Feature 1: while prices are blocked, a row that has a saved lock
+      // keeps showing that locked selling price/margin instead of being
+      // recomputed from the freshly-synced cost/list price below — that's
+      // the whole point of Block. Cost (r.suppcost_net, rendered separately
+      // in this row) is never affected either way.
+      const lock = wholesaleBlocked ? wholesaleLockedPrices[r.stock_name] : null;
+      if(lock && lock.price !== null && lock.price !== undefined){
+        adj = { margin: lock.margin === null || lock.margin === undefined ? '' : Number(lock.margin).toFixed(1),
+                price: Number(lock.price).toFixed(2), changed: true };
+      } else {
+        const initialMargin = wholesaleMarginPct(r);
+        adj = {
+          margin: initialMargin === null ? '' : initialMargin.toFixed(1),
+          price: (r.price_net === null || r.price_net === undefined) ? '' : Number(r.price_net).toFixed(2),
+          changed: false
+        };
+      }
       wholesaleAdjust[r.stock_name] = adj;
     }
     const tr = document.createElement('tr');
@@ -2606,6 +2739,7 @@ function buildWholesaleItemsTable(items){
         marginInput.value = adj.margin;
         marginPrint.textContent = Number(adj.margin).toFixed(1) + '%';
       }
+      persistWholesaleLockIfBlocked(r.stock_name, adj);
     });
     marginInput.addEventListener('change', () => {
       const v = marginInput.value.trim();
@@ -2619,6 +2753,7 @@ function buildWholesaleItemsTable(items){
         pricePrint.textContent = Number(adj.price).toFixed(2);
         incVatPrint.textContent = wholesaleIncVatDisplayText(adj.price, r.vatid === 1);
       }
+      persistWholesaleLockIfBlocked(r.stock_name, adj);
     });
     tbody.appendChild(tr);
   });
@@ -2816,6 +2951,156 @@ function downloadWholesaleCSV(testOnly){
   apiPost('vector-import/queue', { file_name: fileName, csv_content: buildCSVText(headers, csvRows), type: 'WHOLESALE' })
     .then(res => { if(res && res.queue_id) trackVectorImportStatus(res.queue_id, 'WHOLESALE'); })
     .catch(e => console.error('Could not queue wholesale CSV for remote import', e));
+}
+
+/* ============ WHOLESALE SCHEDULE (Feature 2): schedule Download CSV /
+   Test Download CSV for a future date/time, result emailed since nobody's
+   watching the screen. Saved emails persist server-side (WHOLESALE_NOTIFY_EMAILS)
+   so they don't need retyping every time. ============ */
+function wsSchedShowErr(msg){
+  const el = document.getElementById('wsSchedErr');
+  el.textContent = msg; el.style.display = 'block';
+}
+function wsSchedHideErr(){
+  const el = document.getElementById('wsSchedErr');
+  el.style.display = 'none'; el.textContent = '';
+}
+async function openWholesaleScheduleModal(){
+  wsSchedHideErr();
+  document.getElementById('wsSchedRunAt').value = '';
+  document.getElementById('wsSchedRecurrence').value = 'ONCE';
+  document.getElementById('wsSchedTestOnly').checked = false;
+  wholesaleScheduleSelectedEmails = new Set();
+  openModal('modalWholesaleSchedule');
+  await Promise.all([loadWholesaleScheduleEmails(), loadWholesaleSchedules()]);
+}
+async function loadWholesaleScheduleEmails(){
+  const wrap = document.getElementById('wsSchedEmailList');
+  try{
+    const data = await apiGet('wholesale/schedule/emails');
+    wholesaleSavedEmails = data.emails || [];
+  }catch(e){
+    console.error('Could not load saved emails', e);
+    wholesaleSavedEmails = [];
+  }
+  renderWholesaleScheduleEmailChips();
+  if(wrap && wholesaleSavedEmails.length === 0){
+    wrap.innerHTML = '<span style="font-size:12px;color:var(--text-dim);">No saved emails yet — add one below.</span>';
+  }
+}
+function renderWholesaleScheduleEmailChips(){
+  const wrap = document.getElementById('wsSchedEmailList');
+  if(!wrap) return;
+  if(wholesaleSavedEmails.length === 0){ wrap.innerHTML = ''; return; }
+  wrap.innerHTML = wholesaleSavedEmails.map(email => {
+    const on = wholesaleScheduleSelectedEmails.has(email);
+    return `<span class="wschipEmail" data-email="${escapeHtml(email)}" style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:14px;font-size:12px;cursor:pointer;border:1px solid var(--line);${on ? 'background:var(--accent);color:#1a1a1a;border-color:var(--accent);' : ''}">
+      <span onclick="toggleWholesaleScheduleEmail('${escapeHtml(email).replace(/'/g,"\\'")}')">${escapeHtml(email)}</span>
+      <span onclick="deleteWholesaleScheduleEmail('${escapeHtml(email).replace(/'/g,"\\'")}')" title="Remove this saved email" style="opacity:0.7;">&times;</span>
+    </span>`;
+  }).join('');
+}
+function toggleWholesaleScheduleEmail(email){
+  if(wholesaleScheduleSelectedEmails.has(email)) wholesaleScheduleSelectedEmails.delete(email);
+  else wholesaleScheduleSelectedEmails.add(email);
+  renderWholesaleScheduleEmailChips();
+}
+async function addWholesaleScheduleEmail(){
+  const input = document.getElementById('wsSchedNewEmail');
+  const email = input.value.trim().toLowerCase();
+  if(!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ wsSchedShowErr('Enter a valid email address.'); return; }
+  wsSchedHideErr();
+  try{
+    await apiPost('wholesale/schedule/emails', { email });
+    input.value = '';
+    await loadWholesaleScheduleEmails();
+    wholesaleScheduleSelectedEmails.add(email); // tick it straight away for this run
+    renderWholesaleScheduleEmailChips();
+    toast('Email saved');
+  }catch(e){
+    console.error(e);
+    wsSchedShowErr('Could not save that email.');
+  }
+}
+async function deleteWholesaleScheduleEmail(email){
+  if(!confirm('Remove ' + email + ' from the saved list?\nThis does not cancel any schedules already using it.')) return;
+  try{
+    await apiDelete('wholesale/schedule/emails/' + encodeURIComponent(email));
+    wholesaleScheduleSelectedEmails.delete(email);
+    await loadWholesaleScheduleEmails();
+  }catch(e){
+    console.error(e);
+    toast('Could not remove that email');
+  }
+}
+async function submitWholesaleSchedule(){
+  wsSchedHideErr();
+  const runAtVal = document.getElementById('wsSchedRunAt').value;
+  if(!runAtVal){ wsSchedShowErr('Choose a date and time.'); return; }
+  const runAtDate = new Date(runAtVal);
+  if(isNaN(runAtDate.getTime())){ wsSchedShowErr('That date/time doesn\'t look valid.'); return; }
+  const emails = Array.from(wholesaleScheduleSelectedEmails);
+  if(emails.length === 0){ wsSchedShowErr('Tick at least one email to send the result to.'); return; }
+  const recurrence = document.getElementById('wsSchedRecurrence').value;
+  const testOnly = document.getElementById('wsSchedTestOnly').checked;
+  try{
+    await apiPost('wholesale/schedule', {
+      run_at: runAtDate.toISOString(),
+      recurrence,
+      test_only: testOnly,
+      emails
+    });
+    toast('Scheduled — you\'ll get an email once it runs');
+    document.getElementById('wsSchedRunAt').value = '';
+    wholesaleScheduleSelectedEmails = new Set();
+    renderWholesaleScheduleEmailChips();
+    loadWholesaleSchedules();
+  }catch(e){
+    console.error(e);
+    wsSchedShowErr('Could not create the schedule.');
+  }
+}
+function wsSchedStatusLabel(s){
+  return { PENDING: 'Scheduled', RUNNING: 'Running…', DONE: 'Completed', FAILED: 'Failed', CANCELLED: 'Cancelled' }[s] || s;
+}
+async function loadWholesaleSchedules(){
+  const list = document.getElementById('wsSchedList');
+  try{
+    const data = await apiGet('wholesale/schedule');
+    renderWholesaleSchedules(data.schedules || []);
+  }catch(e){
+    console.error(e);
+    list.innerHTML = '<div class="empty-hint">Could not load scheduled runs.</div>';
+  }
+}
+function renderWholesaleSchedules(schedules){
+  const list = document.getElementById('wsSchedList');
+  if(schedules.length === 0){ list.innerHTML = '<div class="empty-hint">No schedules yet.</div>'; return; }
+  list.innerHTML = schedules.map(s => {
+    const when = ukDateTimeString(new Date(s.run_at));
+    const rec = s.recurrence === 'ONCE' ? '' : (s.recurrence === 'DAILY' ? ' · repeats daily' : ' · repeats weekly');
+    const test = s.test_only ? ' · test (1 row)' : '';
+    const cancelBtn = s.status === 'PENDING'
+      ? `<button class="btn-ghost" style="padding:3px 8px;font-size:11px;" onclick="cancelWholesaleSchedule(${s.schedule_id})">Cancel</button>` : '';
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--line);font-size:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <strong>${when}</strong>
+        <span>${wsSchedStatusLabel(s.status)}${cancelBtn}</span>
+      </div>
+      <div style="color:var(--text-dim);">${escapeHtml(s.emails)}${rec}${test}</div>
+      ${s.last_result ? `<div style="color:var(--text-dim);margin-top:2px;">${escapeHtml(s.last_result)}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+async function cancelWholesaleSchedule(id){
+  if(!confirm('Cancel this scheduled run?')) return;
+  try{
+    await apiDelete('wholesale/schedule/' + id);
+    loadWholesaleSchedules();
+  }catch(e){
+    console.error(e);
+    toast('Could not cancel — it may have already started running.');
+  }
 }
 
 /* ============ WHOLESALE COLOUR FLYER (images + PDF generation) ============ */
