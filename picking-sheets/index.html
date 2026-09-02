@@ -590,10 +590,36 @@
   <div class="login-card">
     <img src="../assets/hallan-logo.png" alt="Hallan Cash & Carry" style="width:180px;max-width:70%;margin:0 auto 18px;display:block;">
     <h2>Hallan Picking Sheets</h2>
-    <p>Enter the access code to continue</p>
-    <input type="password" id="loginPass" placeholder="Access code" autocomplete="off">
-    <button class="btn-primary" onclick="doLogin()">Enter</button>
+    <p>Enter your passcode to continue</p>
+    <input type="password" id="loginPass" placeholder="Your passcode" autocomplete="off">
+    <button class="btn-primary" id="loginBtn" onclick="doLogin()">Enter</button>
     <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- IP BLOCKED (staff — dead end, admin can't be added from inside this screen for them) -->
+<div id="view-ip-blocked" class="view">
+  <div class="login-card">
+    <h2>Network not allowed</h2>
+    <p>This portal can only be used from networks an admin has approved. Ask an admin to add your current network, then try again.</p>
+    <div class="mono" id="ipBlockedYourIp" style="margin:10px 0;color:var(--text-dim);font-size:13px;"></div>
+    <button class="btn-ghost" onclick="portalSignOut()" style="width:100%;">Sign out</button>
+  </div>
+</div>
+
+<!-- IP SETUP (admin only — lets an admin approve their own new network on the spot) -->
+<div id="view-ip-setup" class="view">
+  <div class="login-card" style="max-width:420px;">
+    <h2>New network detected</h2>
+    <p>This network isn't on the allowed list yet. As an admin, you can add it now.</p>
+    <div class="empty-hint" style="margin:14px 0;">
+      Your current network's address is<br>
+      <span class="mono" id="ipSetupYourIp" style="font-size:18px;font-weight:700;color:var(--text);"></span>
+    </div>
+    <input type="text" id="ipSetupLabel" placeholder="Label (e.g. Shop office, Home)" autocomplete="off">
+    <button class="btn-primary" onclick="portalAddMyIp()" style="width:100%;margin-top:10px;">Add this network</button>
+    <button class="btn-ghost" onclick="portalSignOut()" style="width:100%;margin-top:8px;">Sign out instead</button>
+    <div class="login-err" id="ipSetupErr"></div>
   </div>
 </div>
 
@@ -610,6 +636,8 @@
       <a class="navbtn" href="../" style="text-decoration:none;display:inline-flex;align-items:center;">← Hallan Portal</a>
       <button class="navbtn" onclick="goHome()">Home</button>
       <button class="navbtn" onclick="showFinal()">Final List</button>
+      <span class="mono" id="portalWhoAmI" style="font-size:12px;color:var(--text-dim);margin-left:8px;"></span>
+      <button class="navbtn" onclick="portalSignOut()">Sign out</button>
     </nav>
   </header>
 
@@ -621,65 +649,77 @@
       <p>Choose a list type to start building a picking sheet against live stock.</p>
     </div>
     <div class="tilegrid">
-      <div class="tile" style="--tile-color:#2563eb;" onclick="openListType('WAREHOUSE')">
+      <div class="tile" data-module="picking" style="--tile-color:#2563eb;" onclick="openListType('WAREHOUSE')">
         <div class="tile-icon">📦</div>
         <div class="num">01 &middot; BULK</div>
         <h3>Warehouse List</h3>
         <p>Bulk categories like 20kg, 10kg, 5kg rice. Organised by bin.</p>
       </div>
-      <div class="tile" style="--tile-color:#059669;" onclick="openListType('RETAIL')">
+      <div class="tile" data-module="picking" style="--tile-color:#059669;" onclick="openListType('RETAIL')">
         <div class="tile-icon">🛒</div>
         <div class="num">02 &middot; SHOP</div>
         <h3>Retail List</h3>
         <p>Scan stock to build a shop-floor list, then pick it off the shelf.</p>
       </div>
-      <div class="tile" style="--tile-color:#b8860b;" onclick="openWholesalePricing()">
+      <div class="tile" data-module="wholesale" style="--tile-color:#b8860b;" onclick="openWholesalePricing()">
         <div class="tile-icon">💷</div>
         <div class="num">03 &middot; PRICE</div>
         <h3>Wholesale Pricing List</h3>
         <p>Trade 3 pricing and supplier cost for Wholesale department stock.</p>
       </div>
-      <div class="tile" style="--tile-color:#7c3aed;" onclick="openLocation()">
+      <div class="tile" data-module="location" style="--tile-color:#7c3aed;" onclick="openLocation()">
         <div class="tile-icon">🗺️</div>
         <div class="num">04 &middot; MAP</div>
         <h3>Location List</h3>
         <p>Zones, shelves and rows — know exactly where every product sits.</p>
       </div>
-      <div class="tile" style="--tile-color:#0891b2;" onclick="openStockInfo()">
+      <div class="tile" data-module="stockinfo" style="--tile-color:#0891b2;" onclick="openStockInfo()">
         <div class="tile-icon">🔍</div>
         <div class="num">05 &middot; FIND</div>
         <h3>Stock Info</h3>
         <p>Search any product by barcode or name — see its location and live stock.</p>
       </div>
-      <div class="tile" style="--tile-color:#dc2626;" onclick="openReplenishment()">
+      <div class="tile" data-module="replenishment" style="--tile-color:#dc2626;" onclick="openReplenishment()">
         <div class="tile-icon">🔁</div>
         <div class="num">06 &middot; RESTOCK</div>
         <h3>Shelf Replenishment</h3>
         <p>Start a shelf, then print what's sold since you started — resets each time you print.</p>
       </div>
-      <div class="tile" style="--tile-color:#0f766e;" onclick="openSupplierOrders()">
+      <div class="tile" data-module="supplier" style="--tile-color:#0f766e;" onclick="openSupplierOrders()">
         <div class="tile-icon">🚚</div>
         <div class="num">07 &middot; ORDER</div>
         <h3>Supplier Orders</h3>
         <p>Search a supplier — see sales history and a reorder suggestion per item.</p>
       </div>
-      <div class="tile" style="--tile-color:#4338ca;" onclick="openInvoices()">
+      <div class="tile" data-module="invoices" style="--tile-color:#4338ca;" onclick="openInvoices()">
         <div class="tile-icon">🧾</div>
         <div class="num">08 &middot; RECEIVE</div>
         <h3>Invoices</h3>
         <p>Goods received notes — pending vs posted, by supplier.</p>
       </div>
-      <div class="tile" style="--tile-color:#c2410c;" onclick="openRestaurantOrders()">
+      <div class="tile" data-module="restaurant" style="--tile-color:#c2410c;" onclick="openRestaurantOrders()">
         <div class="tile-icon">🍽️</div>
         <div class="num">09 &middot; ORDER</div>
         <h3>Restaurant Orders</h3>
         <p>Passcode-only ordering for wholesale restaurant customers.</p>
       </div>
-      <div class="tile" style="--tile-color:#25d366;" onclick="openWhatsappBroadcast()">
+      <div class="tile" data-module="whatsapp" style="--tile-color:#25d366;" onclick="openWhatsappBroadcast()">
         <div class="tile-icon">💬</div>
         <div class="num">10 &middot; NOTIFY</div>
         <h3>WhatsApp Broadcast</h3>
         <p>Write a message with an attachment and send it to your saved contact list.</p>
+      </div>
+      <div class="tile" data-admin-only="1" style="--tile-color:#475569;display:none;" onclick="openManageUsers()">
+        <div class="tile-icon">👤</div>
+        <div class="num">ADMIN</div>
+        <h3>Manage Users</h3>
+        <p>Add staff, set their passcode, and choose which sections they can see.</p>
+      </div>
+      <div class="tile" data-admin-only="1" style="--tile-color:#475569;display:none;" onclick="openManageIps()">
+        <div class="tile-icon">🌐</div>
+        <div class="num">ADMIN</div>
+        <h3>Add IP Address</h3>
+        <p>Approve a network so the portal can be used from it.</p>
       </div>
     </div>
   </div>
@@ -726,6 +766,74 @@
         <div id="waContactList" style="margin-top:12px;"></div>
       </div>
     </div>
+  </div>
+
+  <!-- ADMIN: MANAGE USERS -->
+  <div id="view-manage-users" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span><span class="current">Manage Users</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Admin</div>
+      <h2>Manage Users</h2>
+      <p>Give each person their own passcode, and tick which sections they're allowed to see.</p>
+    </div>
+    <div class="actionbar no-print">
+      <button class="btn-amber" onclick="openPortalUserForm(null)">+ Add User</button>
+    </div>
+    <div id="portalUsersList" class="empty-hint">Loading…</div>
+  </div>
+
+  <!-- ADMIN: ADD/MANAGE USER MODAL -->
+  <div class="modal-backdrop" id="modalPortalUser">
+    <div class="modal" style="width:420px;">
+      <h3 id="portalUserModalTitle">Add User</h3>
+      <input type="hidden" id="portalUserId">
+      <label style="display:block;font-size:12px;color:var(--text-dim);margin:10px 0 4px;">Name</label>
+      <input type="text" id="portalUserName" placeholder="e.g. Priya" autocomplete="off">
+      <label style="display:block;font-size:12px;color:var(--text-dim);margin:10px 0 4px;">Passcode</label>
+      <input type="text" id="portalUserPasscode" placeholder="Leave blank to keep current passcode" autocomplete="off">
+      <label style="display:block;font-size:12px;color:var(--text-dim);margin:10px 0 4px;">Role</label>
+      <select id="portalUserRole" style="width:100%;">
+        <option value="staff">Staff — only the sections ticked below</option>
+        <option value="admin">Admin — sees everything, can manage users &amp; IPs</option>
+      </select>
+      <div id="portalUserModulesWrap" style="margin-top:14px;">
+        <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;">Sections this person can see</label>
+        <div id="portalUserModulesList" style="display:flex;flex-direction:column;gap:6px;"></div>
+      </div>
+      <div class="errdetail" id="portalUserErr" style="display:none;"></div>
+      <div class="modal-close-row">
+        <button class="btn-ghost" onclick="closeModal('modalPortalUser')">Cancel</button>
+        <button class="btn-amber" onclick="savePortalUser()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADMIN: ADD IP ADDRESS -->
+  <div id="view-manage-ips" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span><span class="current">Add IP Address</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Admin</div>
+      <h2>Add IP Address</h2>
+      <p>Only networks on this list can use the portal — this is checked on the server, not just in the browser.</p>
+    </div>
+    <div class="empty-hint" style="margin-bottom:16px;">
+      This device's current network address is
+      <span class="mono" id="manageIpsYourIp" style="font-weight:700;color:var(--text);">detecting…</span>
+      <button class="btn-ghost" style="margin-left:10px;" onclick="addDetectedIp()">Add this network</button>
+    </div>
+    <div class="actionbar no-print">
+      <input type="text" id="manualIpAddress" class="historysearch" placeholder="Or enter an IP address manually…" style="max-width:220px;">
+      <input type="text" id="manualIpLabel" class="historysearch" placeholder="Label (e.g. Shop office)" style="max-width:220px;">
+      <button class="btn-amber" onclick="addManualIp()">Add</button>
+    </div>
+    <div class="empty-hint" style="border-left:3px solid var(--danger);margin-bottom:10px;">
+      Most home broadband IPs stay fairly stable, but mobile data / mobile broadband (Three, EE, etc.) shares and changes IPs constantly — adding one of those won't reliably keep working. A VPN with a fixed exit IP is the reliable option for remote/mobile access.
+    </div>
+    <div id="allowedIpsList" class="empty-hint">Loading…</div>
   </div>
 
   <!-- WHOLESALE PRICING LIST -->
@@ -2319,9 +2427,23 @@
 <script>
 /* ============ CONFIG ============ */
 const API_BASE = "https://hallan-picking-backend.onrender.com/api/";
-const SITE_PASSWORD = "hallan2026"; // change this, then tell your team the new code
 // Wholesale Pricing password now lives server-side (APP_SETTINGS table) so it can be
 // changed from the portal and stays in sync across every device — see openWholesalePricing().
+
+/* ============ PORTAL SESSION (name, role, section access) ============ */
+let portalSession = null; // { token, name, role, modules } once logged in — see doLogin()
+function loadPortalSession(){
+  try{ return JSON.parse(localStorage.getItem('hallan_portal_session') || 'null'); }catch(e){ return null; }
+}
+function savePortalSession(s){
+  portalSession = s;
+  localStorage.setItem('hallan_portal_session', JSON.stringify(s));
+}
+function portalCan(moduleKey){
+  if(!portalSession) return false;
+  if(portalSession.role === 'admin') return true;
+  return (portalSession.modules || []).includes(moduleKey);
+}
 
 /* ============ STATE ============ */
 let categories = [];
@@ -2412,22 +2534,259 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('beforeunload', () => { if(activeTimer.phase) flushActiveTimer(true); });
 
 /* ============ AUTH ============ */
-function doLogin(){
-  const val = document.getElementById('loginPass').value;
-  if(val === SITE_PASSWORD){
-    localStorage.setItem('hallan_auth','1');
+// The passcode is checked server-side against PORTAL_USERS (see
+// POST /api/portal/login in server.js) — nothing about who's allowed in,
+// or which sections they can see, is decided in this file any more.
+async function doLogin(){
+  const val = document.getElementById('loginPass').value.trim();
+  const btn = document.getElementById('loginBtn');
+  const errEl = document.getElementById('loginErr');
+  errEl.textContent = '';
+  if(!val){ errEl.textContent = 'Enter your passcode.'; return; }
+  btn.disabled = true; btn.textContent = 'Checking…';
+  try{
+    const res = await fetch(API_BASE + 'portal/login', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ passcode: val })
+    });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok){
+      errEl.textContent = data.error || 'Incorrect passcode, try again.';
+      return;
+    }
+    savePortalSession({ token: data.token, name: data.name, role: data.role, modules: data.modules || [] });
+    document.getElementById('loginPass').value = '';
+    if(!data.ipAllowed){
+      if(data.role === 'admin'){ showIpSetup(data.yourIp); } else { showIpBlocked(data.yourIp); }
+      return;
+    }
     showApp();
-  } else {
-    document.getElementById('loginErr').textContent = 'Incorrect code, try again.';
+  } catch(e){
+    errEl.textContent = 'Could not reach the server — check your connection and try again.';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Enter';
   }
 }
+function switchAuthView(id){
+  ['view-login','view-ip-blocked','view-ip-setup','app'].forEach(v => {
+    const el = document.getElementById(v);
+    if(!el) return;
+    if(v === id){ el.style.display = v === 'app' ? 'block' : 'flex'; el.classList.add('active'); }
+    else { el.style.display = 'none'; el.classList.remove('active'); }
+  });
+}
 function showApp(){
-  document.getElementById('view-login').classList.remove('active');
-  document.getElementById('view-login').style.display='none';
-  document.getElementById('app').style.display='block';
+  switchAuthView('app');
+  renderHomeTiles();
   goHome();
 }
-if(localStorage.getItem('hallan_auth')==='1'){ showApp(); }
+// Hides any home-screen tile the signed-in person hasn't been given access
+// to, and reveals the two admin-only tiles (Manage Users / Add IP Address)
+// for admins. This is a display convenience only — the real permission
+// check happens server-side on every API call (see portalModuleGate in
+// server.js), so this can never be the only thing standing between staff
+// and a section they're not meant to see.
+function renderHomeTiles(){
+  if(!portalSession) return;
+  document.getElementById('portalWhoAmI').textContent = portalSession.name + (portalSession.role === 'admin' ? ' (admin)' : '');
+  document.querySelectorAll('#view-home .tile[data-module]').forEach(el => {
+    el.style.display = portalCan(el.getAttribute('data-module')) ? '' : 'none';
+  });
+  document.querySelectorAll('#view-home .tile[data-admin-only]').forEach(el => {
+    el.style.display = portalSession.role === 'admin' ? '' : 'none';
+  });
+}
+
+/* ============ ADMIN: MANAGE USERS ============ */
+let portalModulesCache = null; // cached list of {key,label} from GET /api/portal/modules
+async function getPortalModules(){
+  if(portalModulesCache) return portalModulesCache;
+  const data = await apiGet('portal/modules');
+  portalModulesCache = data.modules || [];
+  return portalModulesCache;
+}
+function openManageUsers(){
+  showView('view-manage-users');
+  loadPortalUsers();
+}
+async function loadPortalUsers(){
+  const el = document.getElementById('portalUsersList');
+  el.textContent = 'Loading…';
+  try{
+    const [modules, data] = await Promise.all([getPortalModules(), apiGet('portal/users')]);
+    const moduleLabel = key => (modules.find(m => m.key === key) || {}).label || key;
+    if(!data.items.length){ el.innerHTML = '<div class="empty-hint">No users yet — add one above.</div>'; return; }
+    el.innerHTML = data.items.map(u => `
+      <div class="list-row" style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;${u.active ? '' : 'opacity:0.5;'}">
+        <div>
+          <div style="font-weight:700;">${escapeHtml(u.name)} ${u.role === 'admin' ? '<span style="font-size:11px;background:var(--accent,#b8860b);color:#fff;padding:2px 7px;border-radius:5px;margin-left:6px;">admin</span>' : ''}${u.active ? '' : ' <span style="font-size:11px;background:var(--text-dim);color:#fff;padding:2px 7px;border-radius:5px;margin-left:6px;">inactive</span>'}</div>
+          <div style="font-size:12px;color:var(--text-dim);margin-top:3px;">${u.role === 'admin' ? 'All sections' : (u.modules.length ? u.modules.map(moduleLabel).join(', ') : 'No sections granted yet')}</div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-ghost" onclick='openPortalUserForm(${JSON.stringify(u).replace(/'/g,"&apos;")})'>Edit</button>
+          <button class="btn-danger-ghost" onclick="deletePortalUser(${u.user_id}, '${escapeHtml(u.name).replace(/'/g,"\\'")}')">Delete</button>
+        </div>
+      </div>
+    `).join('');
+  } catch(e){
+    if(!e.silent) el.innerHTML = '<div class="empty-hint">Could not load users — ' + escapeHtml(e.message) + '</div>';
+  }
+}
+async function openPortalUserForm(user){
+  const modules = await getPortalModules();
+  document.getElementById('portalUserModalTitle').textContent = user ? 'Edit User' : 'Add User';
+  document.getElementById('portalUserId').value = user ? user.user_id : '';
+  document.getElementById('portalUserName').value = user ? user.name : '';
+  document.getElementById('portalUserPasscode').value = '';
+  document.getElementById('portalUserPasscode').placeholder = user ? 'Leave blank to keep current passcode' : 'Passcode this person will type in';
+  document.getElementById('portalUserRole').value = user ? user.role : 'staff';
+  const userModules = user ? (user.modules || []) : [];
+  document.getElementById('portalUserModulesList').innerHTML = modules.map(m => `
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;">
+      <input type="checkbox" value="${m.key}" ${userModules.includes(m.key) ? 'checked' : ''}> ${escapeHtml(m.label)}
+    </label>
+  `).join('');
+  document.getElementById('portalUserErr').style.display = 'none';
+  openModal('modalPortalUser');
+}
+async function savePortalUser(){
+  const id = document.getElementById('portalUserId').value;
+  const name = document.getElementById('portalUserName').value.trim();
+  const passcode = document.getElementById('portalUserPasscode').value.trim();
+  const role = document.getElementById('portalUserRole').value;
+  const modules = Array.from(document.querySelectorAll('#portalUserModulesList input:checked')).map(el => el.value);
+  const errEl = document.getElementById('portalUserErr');
+  errEl.style.display = 'none';
+  if(!name){ errEl.textContent = 'Name is required.'; errEl.style.display = 'block'; return; }
+  if(!id && !passcode){ errEl.textContent = 'Passcode is required for a new user.'; errEl.style.display = 'block'; return; }
+  try{
+    const payload = { name, role, modules };
+    if(passcode) payload.passcode = passcode;
+    if(id) await apiPortalPatch('portal/users/' + id, payload);
+    else await apiPost('portal/users', payload);
+    closeModal('modalPortalUser');
+    loadPortalUsers();
+  } catch(e){
+    if(!e.silent){ errEl.textContent = e.body?.error || e.message; errEl.style.display = 'block'; }
+  }
+}
+// PATCH isn't in the original apiGet/apiPost/apiPut/apiDelete set — added
+// here rather than editing those, to keep this addition self-contained.
+async function apiPortalPatch(path, body){
+  const res = await fetch(API_BASE + path, {
+    method:'PATCH', headers:{'Content-Type':'application/json', ...apiAuthHeaders()}, body: JSON.stringify(body)
+  });
+  if(!res.ok) await apiThrow(res, 'PATCH', path);
+  return res.json().catch(()=>({}));
+}
+async function deletePortalUser(id, name){
+  if(!confirm('Remove ' + name + '? They will no longer be able to sign in.')) return;
+  try{
+    await apiDelete('portal/users/' + id);
+    loadPortalUsers();
+  } catch(e){
+    if(!e.silent) alert('Could not remove user — ' + e.message);
+  }
+}
+function escapeHtml(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ============ ADMIN: ADD IP ADDRESS ============ */
+function openManageIps(){
+  showView('view-manage-ips');
+  loadAllowedIps();
+  detectAndShowMyIp();
+}
+async function detectAndShowMyIp(){
+  const el = document.getElementById('manageIpsYourIp');
+  el.textContent = 'detecting…';
+  try{
+    const data = await apiGet('portal/my-ip');
+    el.textContent = data.ip;
+  } catch(e){
+    if(!e.silent) el.textContent = 'could not detect';
+  }
+}
+async function addDetectedIp(){
+  try{
+    const data = await apiGet('portal/my-ip');
+    await apiPost('portal/allowed-ips', { ip_address: data.ip, label: 'This device' });
+    loadAllowedIps();
+  } catch(e){
+    if(!e.silent) alert('Could not add this network — ' + (e.body?.error || e.message));
+  }
+}
+async function addManualIp(){
+  const ip = document.getElementById('manualIpAddress').value.trim();
+  const label = document.getElementById('manualIpLabel').value.trim();
+  if(!ip){ alert('Enter an IP address first.'); return; }
+  try{
+    await apiPost('portal/allowed-ips', { ip_address: ip, label: label || undefined });
+    document.getElementById('manualIpAddress').value = '';
+    document.getElementById('manualIpLabel').value = '';
+    loadAllowedIps();
+  } catch(e){
+    if(!e.silent) alert('Could not add — ' + (e.body?.error || e.message));
+  }
+}
+async function loadAllowedIps(){
+  const el = document.getElementById('allowedIpsList');
+  el.textContent = 'Loading…';
+  try{
+    const data = await apiGet('portal/allowed-ips');
+    if(!data.items.length){ el.innerHTML = '<div class="empty-hint">No networks approved yet — add one above.</div>'; return; }
+    el.innerHTML = data.items.map(ip => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;">
+        <div>
+          <div class="mono" style="font-weight:700;">${escapeHtml(ip.ip_address)}</div>
+          <div style="font-size:12px;color:var(--text-dim);margin-top:3px;">${escapeHtml(ip.label || '')} ${ip.added_by ? '· added by ' + escapeHtml(ip.added_by) : ''}</div>
+        </div>
+        <button class="btn-danger-ghost" onclick="deleteAllowedIp(${ip.ip_id})">Remove</button>
+      </div>
+    `).join('');
+  } catch(e){
+    if(!e.silent) el.innerHTML = '<div class="empty-hint">Could not load — ' + escapeHtml(e.message) + '</div>';
+  }
+}
+async function deleteAllowedIp(id){
+  if(!confirm('Remove this network? Anyone on it will be locked out immediately.')) return;
+  try{
+    await apiDelete('portal/allowed-ips/' + id);
+    loadAllowedIps();
+  } catch(e){
+    if(!e.silent) alert('Could not remove — ' + e.message);
+  }
+}
+function showIpBlocked(ip){
+  document.getElementById('ipBlockedYourIp').textContent = ip ? ('Your network: ' + ip) : '';
+  switchAuthView('view-ip-blocked');
+}
+function showIpSetup(ip){
+  document.getElementById('ipSetupYourIp').textContent = ip || '';
+  document.getElementById('ipSetupLabel').value = '';
+  document.getElementById('ipSetupErr').textContent = '';
+  switchAuthView('view-ip-setup');
+}
+async function portalAddMyIp(){
+  const label = document.getElementById('ipSetupLabel').value.trim();
+  const errEl = document.getElementById('ipSetupErr');
+  errEl.textContent = '';
+  try{
+    const myIp = await apiGet('portal/my-ip');
+    await apiPost('portal/allowed-ips', { ip_address: myIp.ip, label: label || undefined });
+    showApp();
+  } catch(e){
+    errEl.textContent = e.message || 'Could not add this network — try again.';
+  }
+}
+function portalSignOut(){
+  localStorage.removeItem('hallan_portal_session');
+  portalSession = null;
+  switchAuthView('view-login');
+}
+
+portalSession = loadPortalSession();
+if(portalSession && portalSession.token){ showApp(); }
 document.getElementById('loginPass').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
 
 /* ============ NAV ============ */
@@ -8430,35 +8789,52 @@ async function apiErrorText(res, verb, path, body){
   if(body && body.error) detail = body.error;
   return verb + ' ' + path + ' failed: ' + res.status + (detail ? ' — ' + detail : '');
 }
+function apiAuthHeaders(){
+  return portalSession && portalSession.token ? { 'Authorization': 'Bearer ' + portalSession.token } : {};
+}
+// Every 401 here means the passcode session is gone/expired; every 403 with
+// ipNotAllowed means the network changed since login (e.g. moved off wifi
+// onto mobile data) or was never approved. Both are handled in one place so
+// every screen in the app reacts the same way instead of just showing a raw
+// error toast for what's actually a sign-in problem.
 async function apiThrow(res, verb, path){
   let body = null;
   try{ body = await res.clone().json(); }catch(e){ /* body wasn't JSON — ignore, we'll just show the status */ }
+  if(res.status === 401 && body && body.portalAuthRequired){
+    portalSignOut();
+    throw Object.assign(new Error('Your session expired — please sign in again.'), { status: res.status, body, silent: true });
+  }
+  if(res.status === 403 && body && body.ipNotAllowed){
+    if(portalSession && portalSession.role === 'admin'){ showIpSetup(body.yourIp); }
+    else { showIpBlocked(body.yourIp); }
+    throw Object.assign(new Error(body.error || 'Network not allowed'), { status: res.status, body, silent: true });
+  }
   const err = new Error(await apiErrorText(res, verb, path, body));
   err.status = res.status;
   err.body = body;
   throw err;
 }
 async function apiGet(path){
-  const res = await fetch(API_BASE + path);
+  const res = await fetch(API_BASE + path, { headers: apiAuthHeaders() });
   if(!res.ok) await apiThrow(res, 'GET', path);
   return res.json();
 }
 async function apiPost(path, body){
   const res = await fetch(API_BASE + path, {
-    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+    method:'POST', headers:{'Content-Type':'application/json', ...apiAuthHeaders()}, body: JSON.stringify(body)
   });
   if(!res.ok) await apiThrow(res, 'POST', path);
   return res.json().catch(()=>({}));
 }
 async function apiPut(path, body){
   const res = await fetch(API_BASE + path, {
-    method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+    method:'PUT', headers:{'Content-Type':'application/json', ...apiAuthHeaders()}, body: JSON.stringify(body)
   });
   if(!res.ok) await apiThrow(res, 'PUT', path);
   return res.json().catch(()=>({}));
 }
 async function apiDelete(path){
-  const res = await fetch(API_BASE + path, { method:'DELETE' });
+  const res = await fetch(API_BASE + path, { method:'DELETE', headers: apiAuthHeaders() });
   if(!res.ok) await apiThrow(res, 'DELETE', path);
   return res.json().catch(()=>({}));
 }
