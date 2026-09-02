@@ -590,10 +590,24 @@
   <div class="login-card">
     <img src="../assets/hallan-logo.png" alt="Hallan Cash & Carry" style="width:180px;max-width:70%;margin:0 auto 18px;display:block;">
     <h2>Hallan Picking Sheets</h2>
-    <p>Enter your passcode to continue</p>
-    <input type="password" id="loginPass" placeholder="Your passcode" autocomplete="off">
+    <p>Enter your username and passcode to continue</p>
+    <input type="text" id="loginName" placeholder="Your username" autocomplete="off">
+    <input type="password" id="loginPass" placeholder="Your passcode" autocomplete="off" style="margin-top:8px;">
     <button class="btn-primary" id="loginBtn" onclick="doLogin()">Enter</button>
     <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- LOGIN: 2FA CODE -->
+<div id="view-login-otp" class="view">
+  <div class="login-card">
+    <img src="../assets/hallan-logo.png" alt="Hallan Cash & Carry" style="width:180px;max-width:70%;margin:0 auto 18px;display:block;">
+    <h2>Check your email</h2>
+    <p>We've emailed a 6-digit code to the address on file for this account. Enter it below — it expires in 10 minutes.</p>
+    <input type="text" id="loginOtpCode" placeholder="6-digit code" autocomplete="off" inputmode="numeric" maxlength="6" onkeydown="if(event.key==='Enter') doLoginVerify()">
+    <button class="btn-primary" id="loginOtpBtn" onclick="doLoginVerify()">Verify</button>
+    <div class="login-err" id="loginOtpErr"></div>
+    <a href="#" onclick="event.preventDefault(); cancelLoginOtp();" style="display:block;text-align:center;margin-top:14px;font-size:13px;color:var(--text-dim);">Back to sign in</a>
   </div>
 </div>
 
@@ -791,6 +805,8 @@
       <input type="hidden" id="portalUserId">
       <label style="display:block;font-size:12px;color:var(--text-dim);margin:10px 0 4px;">Name</label>
       <input type="text" id="portalUserName" placeholder="e.g. Priya" autocomplete="off">
+      <label style="display:block;font-size:12px;color:var(--text-dim);margin:10px 0 4px;">Email <span style="font-weight:400;">(2FA sign-in codes are sent here)</span></label>
+      <input type="email" id="portalUserEmail" placeholder="e.g. priya@hallan.co.uk" autocomplete="off">
       <label style="display:block;font-size:12px;color:var(--text-dim);margin:10px 0 4px;">Passcode</label>
       <input type="text" id="portalUserPasscode" placeholder="Leave blank to keep current passcode" autocomplete="off">
       <label style="display:block;font-size:12px;color:var(--text-dim);margin:10px 0 4px;">Role</label>
@@ -2534,27 +2550,64 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('beforeunload', () => { if(activeTimer.phase) flushActiveTimer(true); });
 
 /* ============ AUTH ============ */
-// The passcode is checked server-side against PORTAL_USERS (see
-// POST /api/portal/login in server.js) — nothing about who's allowed in,
-// or which sections they can see, is decided in this file any more.
+// Login is now two steps against server.js:
+//   1. POST /api/portal/login        { name, passcode } -> { requiresOtp: true, userId }
+//      (also emails a 6-digit code to that user's address on file)
+//   2. POST /api/portal/login/verify { userId, code }    -> { token, name, role, modules, ipAllowed, yourIp }
+// Nothing about who's allowed in, or which sections they can see, is
+// decided in this file — this just relays what the server says.
+let pendingLoginUserId = null; // set after step 1, needed for step 2
+
 async function doLogin(){
-  const val = document.getElementById('loginPass').value.trim();
+  const name = document.getElementById('loginName').value.trim();
+  const pass = document.getElementById('loginPass').value.trim();
   const btn = document.getElementById('loginBtn');
   const errEl = document.getElementById('loginErr');
   errEl.textContent = '';
-  if(!val){ errEl.textContent = 'Enter your passcode.'; return; }
+  if(!name || !pass){ errEl.textContent = 'Enter your username and passcode.'; return; }
   btn.disabled = true; btn.textContent = 'Checking…';
   try{
     const res = await fetch(API_BASE + 'portal/login', {
-      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ passcode: val })
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name: name, passcode: pass })
     });
     const data = await res.json().catch(()=>({}));
     if(!res.ok){
-      errEl.textContent = data.error || 'Incorrect passcode, try again.';
+      errEl.textContent = data.error || 'Incorrect username or passcode, try again.';
+      return;
+    }
+    // Step 1 never returns a token any more — it only means "code sent".
+    pendingLoginUserId = data.userId;
+    document.getElementById('loginPass').value = '';
+    document.getElementById('loginOtpCode').value = '';
+    document.getElementById('loginOtpErr').textContent = '';
+    switchAuthView('view-login-otp');
+    document.getElementById('loginOtpCode').focus();
+  } catch(e){
+    errEl.textContent = 'Could not reach the server — check your connection and try again.';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Enter';
+  }
+}
+async function doLoginVerify(){
+  const code = document.getElementById('loginOtpCode').value.trim();
+  const btn = document.getElementById('loginOtpBtn');
+  const errEl = document.getElementById('loginOtpErr');
+  errEl.textContent = '';
+  if(!pendingLoginUserId){ switchAuthView('view-login'); return; }
+  if(!code){ errEl.textContent = 'Enter the code from your email.'; return; }
+  btn.disabled = true; btn.textContent = 'Verifying…';
+  try{
+    const res = await fetch(API_BASE + 'portal/login/verify', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ userId: pendingLoginUserId, code: code })
+    });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok){
+      errEl.textContent = data.error || 'Incorrect code, try again.';
       return;
     }
     savePortalSession({ token: data.token, name: data.name, role: data.role, modules: data.modules || [] });
-    document.getElementById('loginPass').value = '';
+    pendingLoginUserId = null;
+    document.getElementById('loginOtpCode').value = '';
     if(!data.ipAllowed){
       if(data.role === 'admin'){ showIpSetup(data.yourIp); } else { showIpBlocked(data.yourIp); }
       return;
@@ -2563,11 +2616,18 @@ async function doLogin(){
   } catch(e){
     errEl.textContent = 'Could not reach the server — check your connection and try again.';
   } finally {
-    btn.disabled = false; btn.textContent = 'Enter';
+    btn.disabled = false; btn.textContent = 'Verify';
   }
 }
+function cancelLoginOtp(){
+  pendingLoginUserId = null;
+  document.getElementById('loginOtpCode').value = '';
+  document.getElementById('loginOtpErr').textContent = '';
+  document.getElementById('loginErr').textContent = '';
+  switchAuthView('view-login');
+}
 function switchAuthView(id){
-  ['view-login','view-ip-blocked','view-ip-setup','app'].forEach(v => {
+  ['view-login','view-login-otp','view-ip-blocked','view-ip-setup','app'].forEach(v => {
     const el = document.getElementById(v);
     if(!el) return;
     if(v === id){ el.style.display = v === 'app' ? 'block' : 'flex'; el.classList.add('active'); }
@@ -2619,6 +2679,7 @@ async function loadPortalUsers(){
       <div class="list-row" style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;${u.active ? '' : 'opacity:0.5;'}">
         <div>
           <div style="font-weight:700;">${escapeHtml(u.name)} ${u.role === 'admin' ? '<span style="font-size:11px;background:var(--accent,#b8860b);color:#fff;padding:2px 7px;border-radius:5px;margin-left:6px;">admin</span>' : ''}${u.active ? '' : ' <span style="font-size:11px;background:var(--text-dim);color:#fff;padding:2px 7px;border-radius:5px;margin-left:6px;">inactive</span>'}</div>
+          <div style="font-size:12px;color:var(--text-dim);margin-top:3px;">${escapeHtml(u.email || 'No email on file')}</div>
           <div style="font-size:12px;color:var(--text-dim);margin-top:3px;">${u.role === 'admin' ? 'All sections' : (u.modules.length ? u.modules.map(moduleLabel).join(', ') : 'No sections granted yet')}</div>
         </div>
         <div style="display:flex;gap:8px;">
@@ -2636,6 +2697,7 @@ async function openPortalUserForm(user){
   document.getElementById('portalUserModalTitle').textContent = user ? 'Edit User' : 'Add User';
   document.getElementById('portalUserId').value = user ? user.user_id : '';
   document.getElementById('portalUserName').value = user ? user.name : '';
+  document.getElementById('portalUserEmail').value = user ? (user.email || '') : '';
   document.getElementById('portalUserPasscode').value = '';
   document.getElementById('portalUserPasscode').placeholder = user ? 'Leave blank to keep current passcode' : 'Passcode this person will type in';
   document.getElementById('portalUserRole').value = user ? user.role : 'staff';
@@ -2651,15 +2713,17 @@ async function openPortalUserForm(user){
 async function savePortalUser(){
   const id = document.getElementById('portalUserId').value;
   const name = document.getElementById('portalUserName').value.trim();
+  const email = document.getElementById('portalUserEmail').value.trim();
   const passcode = document.getElementById('portalUserPasscode').value.trim();
   const role = document.getElementById('portalUserRole').value;
   const modules = Array.from(document.querySelectorAll('#portalUserModulesList input:checked')).map(el => el.value);
   const errEl = document.getElementById('portalUserErr');
   errEl.style.display = 'none';
   if(!name){ errEl.textContent = 'Name is required.'; errEl.style.display = 'block'; return; }
+  if(!email){ errEl.textContent = 'Email is required — it\'s where sign-in codes are sent.'; errEl.style.display = 'block'; return; }
   if(!id && !passcode){ errEl.textContent = 'Passcode is required for a new user.'; errEl.style.display = 'block'; return; }
   try{
-    const payload = { name, role, modules };
+    const payload = { name, email, role, modules };
     if(passcode) payload.passcode = passcode;
     if(id) await apiPortalPatch('portal/users/' + id, payload);
     else await apiPost('portal/users', payload);
@@ -2787,6 +2851,7 @@ function portalSignOut(){
 
 portalSession = loadPortalSession();
 if(portalSession && portalSession.token){ showApp(); }
+document.getElementById('loginName').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
 document.getElementById('loginPass').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
 
 /* ============ NAV ============ */
