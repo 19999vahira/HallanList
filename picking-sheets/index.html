@@ -2536,6 +2536,7 @@ function updateWholesaleBlockUI(){
   const btn = document.getElementById('wholesaleBlockBtn');
   const banner = document.getElementById('wholesaleBlockedBanner');
   if(!btn) return;
+  btn.disabled = false;
   if(wholesaleBlocked){
     btn.textContent = 'Release Prices';
     btn.classList.remove('btn-danger-ghost');
@@ -2550,6 +2551,8 @@ function updateWholesaleBlockUI(){
 }
 // ---- Feature 1: Block / Release selling prices ----
 async function toggleWholesalePriceBlock(){
+  const btn = document.getElementById('wholesaleBlockBtn');
+  const originalText = btn ? btn.textContent : '';
   if(!wholesaleBlocked){
     // BLOCK: snapshot exactly what's on screen right now so the next
     // refresh/sync preserves it. Cost is never part of this snapshot —
@@ -2557,6 +2560,7 @@ async function toggleWholesalePriceBlock(){
     const prices = Object.keys(wholesaleAdjust)
       .filter(name => wholesaleAdjust[name] && wholesaleAdjust[name].price !== '')
       .map(name => ({ stock_name: name, price: wholesaleAdjust[name].price, margin: wholesaleAdjust[name].margin }));
+    if(btn){ btn.disabled = true; btn.textContent = `Blocking ${prices.length} item(s)…`; }
     try{
       await apiPost('wholesale/price-lock/block', { prices });
       wholesaleBlocked = true;
@@ -2567,19 +2571,22 @@ async function toggleWholesalePriceBlock(){
     }catch(e){
       console.error(e);
       toast('Could not block selling prices');
+      if(btn){ btn.disabled = false; btn.textContent = originalText; }
     }
   } else {
     if(!confirm('Release blocked selling prices?\nThey will go back to showing the latest synced price next time the list refreshes.')) return;
+    if(btn){ btn.disabled = true; btn.textContent = 'Releasing…'; }
     try{
       await apiPost('wholesale/price-lock/release', {});
       wholesaleBlocked = false;
       wholesaleLockedPrices = {};
       updateWholesaleBlockUI();
       toast('Selling prices released');
-      loadWholesalePricing(); // reload so prices go back to their fresh synced defaults immediately
+      await loadWholesalePricing(); // reload so prices go back to their fresh synced defaults immediately
     }catch(e){
       console.error(e);
       toast('Could not release selling prices');
+      if(btn){ btn.disabled = false; btn.textContent = originalText; }
     }
   }
 }
@@ -3085,7 +3092,10 @@ function renderWholesaleSchedules(schedules){
     return `<div style="padding:8px 0;border-bottom:1px solid var(--line);font-size:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
         <strong>${when}</strong>
-        <span>${wsSchedStatusLabel(s.status)}${cancelBtn}</span>
+        <span style="display:flex;align-items:center;gap:6px;">
+          ${wsSchedStatusLabel(s.status)}${cancelBtn}
+          <span onclick="dismissWholesaleSchedule(${s.schedule_id})" title="Remove this from the list" style="cursor:pointer;font-size:15px;line-height:1;color:var(--text-dim);padding:0 2px;">&times;</span>
+        </span>
       </div>
       <div style="color:var(--text-dim);">${escapeHtml(s.emails)}${rec}${test}</div>
       ${s.last_result ? `<div style="color:var(--text-dim);margin-top:2px;">${escapeHtml(s.last_result)}</div>` : ''}
@@ -3100,6 +3110,18 @@ async function cancelWholesaleSchedule(id){
   }catch(e){
     console.error(e);
     toast('Could not cancel — it may have already started running.');
+  }
+}
+// The "×" on each entry: just removes it from the list (Done/Failed/
+// Cancelled history you no longer want to see). Doesn't stop anything
+// still running — for a not-yet-run schedule, use Cancel instead/first.
+async function dismissWholesaleSchedule(id){
+  try{
+    await apiDelete('wholesale/schedule/' + id + '/dismiss');
+    loadWholesaleSchedules();
+  }catch(e){
+    console.error(e);
+    toast('Could not remove that entry');
   }
 }
 
