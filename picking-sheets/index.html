@@ -2250,7 +2250,8 @@
     <p class="modal-sub">Runs "Download CSV" automatically at the date/time below and queues it for the till, same as clicking it yourself. Since nobody's watching the screen, the outcome is emailed instead.</p>
 
     <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;">Date &amp; time</label>
-    <input type="datetime-local" id="wsSchedRunAt">
+    <input type="datetime-local" id="wsSchedRunAt" onchange="this.blur()">
+    <p style="font-size:11px;color:var(--text-dim);margin:4px 0 0;">Times are in your device's local time zone.</p>
 
     <label style="display:block;font-size:12px;color:var(--text-dim);margin:12px 0 4px;">Repeat</label>
     <select id="wsSchedRecurrence">
