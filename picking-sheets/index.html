@@ -2497,6 +2497,12 @@
       <input type="checkbox" id="wsSchedTestOnly"> Test Download CSV (1 row) instead of the full list
     </label>
 
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin:14px 0 4px;">Flyer</label>
+    <select id="wsSchedFlyerMode">
+      <option value="whole">Flyer Whole — every department except Wholesale Vegetable</option>
+      <option value="veg">Flyer Veg — Wholesale Vegetable only</option>
+    </select>
+
     <label style="display:block;font-size:12px;color:var(--text-dim);margin:14px 0 4px;">Send result to</label>
     <div id="wsSchedEmailList" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
     <div style="display:flex;gap:8px;">
@@ -3540,6 +3546,7 @@ async function openWholesaleScheduleModal(){
   document.getElementById('wsSchedRunAt').value = '';
   document.getElementById('wsSchedRecurrence').value = 'ONCE';
   document.getElementById('wsSchedTestOnly').checked = false;
+  document.getElementById('wsSchedFlyerMode').value = wholesaleFlyerMode; // default to whatever's selected on the page right now
   wholesaleScheduleSelectedEmails = new Set();
   openModal('modalWholesaleSchedule');
   await Promise.all([loadWholesaleScheduleEmails(), loadWholesaleSchedules()]);
@@ -3613,11 +3620,13 @@ async function submitWholesaleSchedule(){
   if(emails.length === 0){ wsSchedShowErr('Tick at least one email to send the result to.'); return; }
   const recurrence = document.getElementById('wsSchedRecurrence').value;
   const testOnly = document.getElementById('wsSchedTestOnly').checked;
+  const flyerMode = document.getElementById('wsSchedFlyerMode').value;
   try{
     await apiPost('wholesale/schedule', {
       run_at: runAtDate.toISOString(),
       recurrence,
       test_only: testOnly,
+      flyer_mode: flyerMode,
       emails
     });
     toast('Scheduled — you\'ll get an email once it runs');
@@ -3650,6 +3659,7 @@ function renderWholesaleSchedules(schedules){
     const when = ukDateTimeString(new Date(s.run_at));
     const rec = s.recurrence === 'ONCE' ? '' : (s.recurrence === 'DAILY' ? ' · repeats daily' : ' · repeats weekly');
     const test = s.test_only ? ' · test (1 row)' : '';
+    const flyer = String(s.flyer_mode || 'WHOLE').toUpperCase() === 'VEG' ? ' · Flyer Veg' : ' · Flyer Whole';
     const cancelBtn = s.status === 'PENDING'
       ? `<button class="btn-ghost" style="padding:3px 8px;font-size:11px;" onclick="cancelWholesaleSchedule(${s.schedule_id})">Cancel</button>` : '';
     return `<div style="padding:8px 0;border-bottom:1px solid var(--line);font-size:12px;">
@@ -3660,7 +3670,7 @@ function renderWholesaleSchedules(schedules){
           <span onclick="dismissWholesaleSchedule(${s.schedule_id})" title="Remove this from the list" style="cursor:pointer;font-size:15px;line-height:1;color:var(--text-dim);padding:0 2px;">&times;</span>
         </span>
       </div>
-      <div style="color:var(--text-dim);">${escapeHtml(s.emails)}${rec}${test}</div>
+      <div style="color:var(--text-dim);">${escapeHtml(s.emails)}${rec}${test}${flyer}</div>
       ${s.last_result ? `<div style="color:var(--text-dim);margin-top:2px;">${escapeHtml(s.last_result)}</div>` : ''}
     </div>`;
   }).join('');
