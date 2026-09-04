@@ -932,6 +932,14 @@
       <h2>Wholesale Pricing List</h2>
       <p>Supplier cost vs. Trade 3 price for every Wholesale department item, synced from Vector.</p>
     </div>
+    <!-- Feature 3: Flyer Whole / Flyer Veg toggle. Whole = every department
+         except Wholesale Vegetable; Veg = only Wholesale Vegetable. Filters
+         the table on screen and everything downloaded from it (CSV, Test
+         CSV, PDF, Print, Email) — see setWholesaleFlyerMode / isWholesaleVegRow. -->
+    <div class="wsflyerToggle no-print" style="display:flex;gap:8px;margin-bottom:14px;">
+      <button class="btn-amber wsflyerBtn" id="wsFlyerWholeBtn" onclick="setWholesaleFlyerMode('whole')">Flyer Whole</button>
+      <button class="btn-ghost wsflyerBtn" id="wsFlyerVegBtn" onclick="setWholesaleFlyerMode('veg')">Flyer Veg</button>
+    </div>
     <div class="actionbar no-print">
       <input type="text" id="wholesaleSearch" class="historysearch" placeholder="Search item or department…" oninput="renderWholesaleTable()">
       <div style="display:flex;gap:10px;">
@@ -2581,6 +2589,7 @@ let wholesaleBlocked = false; // Feature 1: when true, locked selling prices are
 let wholesaleLockedPrices = {}; // keyed by stock_name -> { price, margin }, mirrors WHOLESALE_PRICE_LOCK server-side
 let wholesaleSavedEmails = []; // Feature 2: saved/reusable schedule notification emails
 let wholesaleScheduleSelectedEmails = new Set(); // ticked emails in the schedule modal for the run being created
+let wholesaleFlyerMode = 'whole'; // Feature 3: 'whole' (every dept except Wholesale Vegetable) or 'veg' (Wholesale Vegetable only) — see setWholesaleFlyerMode
 let currentHistoryList = null;
 let currentHistoryItems = null;
 
@@ -3036,6 +3045,11 @@ async function loadWholesalePricing(){
   const content = document.getElementById('wholesaleContent');
   document.getElementById('wholesaleSearch').value = '';
   wholesaleAdjust = {};
+  wholesaleFlyerMode = 'whole';
+  const wholeBtn0 = document.getElementById('wsFlyerWholeBtn');
+  const vegBtn0 = document.getElementById('wsFlyerVegBtn');
+  if(wholeBtn0){ wholeBtn0.classList.add('btn-amber'); wholeBtn0.classList.remove('btn-ghost'); }
+  if(vegBtn0){ vegBtn0.classList.add('btn-ghost'); vegBtn0.classList.remove('btn-amber'); }
   content.innerHTML = '<div class="loading">Loading pricing list…</div>';
   try{
     // Pricing (cost/list price, cached ~3 min server-side for speed) and the
@@ -3129,10 +3143,33 @@ function wholesaleMarginPct(r){
   if(!r.price_net || r.price_net <= 0 || r.suppcost_net === null || r.suppcost_net === undefined) return null;
   return ((r.price_net - r.suppcost_net) / r.price_net) * 100;
 }
+// Feature 3: true for any row whose department is Wholesale Vegetable
+// (matched on "vegetable" appearing anywhere in the synced department name,
+// same case-insensitive style as the rest of this page's department
+// handling — see flyerDeptDisplayName above).
+function isWholesaleVegRow(r){
+  return /vegetable/i.test(r.department_name || '');
+}
+// Switches between the two Flyer modes and re-renders. Every download on
+// this page (CSV, Test CSV, PDF, Print, Email) reads through
+// filteredWholesaleRows() -> wholesaleExportRows(), so they all pick up
+// whichever mode is currently selected automatically — no separate wiring
+// needed per button. The downloaded CSV's filename is fixed either way (see
+// downloadWholesaleCSV) since Vector's watcher on the till machine looks
+// for that exact filename regardless of which mode produced the content.
+function setWholesaleFlyerMode(mode){
+  wholesaleFlyerMode = mode;
+  const wholeBtn = document.getElementById('wsFlyerWholeBtn');
+  const vegBtn = document.getElementById('wsFlyerVegBtn');
+  if(wholeBtn){ wholeBtn.classList.toggle('btn-amber', mode === 'whole'); wholeBtn.classList.toggle('btn-ghost', mode !== 'whole'); }
+  if(vegBtn){ vegBtn.classList.toggle('btn-amber', mode === 'veg'); vegBtn.classList.toggle('btn-ghost', mode !== 'veg'); }
+  renderWholesaleTable();
+}
 function filteredWholesaleRows(){
   const q = (document.getElementById('wholesaleSearch').value || '').toLowerCase().trim();
-  if(!q) return wholesaleRows;
-  return wholesaleRows.filter(r =>
+  const modeRows = wholesaleRows.filter(r => wholesaleFlyerMode === 'veg' ? isWholesaleVegRow(r) : !isWholesaleVegRow(r));
+  if(!q) return modeRows;
+  return modeRows.filter(r =>
     (r.stock_name || '').toLowerCase().includes(q) ||
     (r.department_name || '').toLowerCase().includes(q)
   );
