@@ -470,6 +470,51 @@
   table.finaltable td{padding:10px;border-top:1px solid var(--line);font-size:13px;}
   table.finaltable td.qtycell,table.finaltable th.qtycell{text-align:right;font-family:'JetBrains Mono',monospace;font-weight:700;}
 
+  /* ---- Create Invoice: Steps 1 & 2 (Match, Quantity per Box) — these are
+     used hands-on out on the floor, so below 640px each row becomes a
+     stacked card instead of a squeezed, horizontally-scrolling table. The
+     table markup stays exactly the same; td::before reads the data-label
+     attribute already on every cell. Step 3 (Pricing) keeps the normal
+     scrolling table since it's mostly a desktop/office task. ---- */
+  table.civ-cardable td{position:relative;}
+  @media(max-width:640px){
+    table.civ-cardable, table.civ-cardable tbody, table.civ-cardable tr, table.civ-cardable td{display:block;width:100%;}
+    table.civ-cardable thead{display:none;}
+    table.civ-cardable{overflow:visible;}
+    table.civ-cardable tr{
+      background:#fff;border:1px solid var(--line);border-radius:10px;
+      padding:12px 14px;margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,.04);
+    }
+    table.civ-cardable td{
+      border-top:none;padding:7px 0;display:flex;justify-content:space-between;align-items:center;gap:12px;
+    }
+    table.civ-cardable td:not(:last-child){border-bottom:1px solid var(--line);}
+    table.civ-cardable td[data-label]::before{
+      content:attr(data-label);font-size:11px;text-transform:uppercase;letter-spacing:.4px;
+      color:var(--text-dim);font-weight:700;flex-shrink:0;
+    }
+    table.civ-cardable td[data-label=""]::before,
+    table.civ-cardable td:not([data-label])::before{content:none;}
+    table.civ-cardable td .restaurant-qty-input{width:110px !important;height:40px;font-size:16px;text-align:right;}
+    table.civ-cardable td input[type="text"]{width:100%;}
+    table.civ-cardable .civ-namecell{display:block;text-align:left;padding-bottom:10px !important;}
+    table.civ-cardable .civ-namecell::before{content:none;}
+    table.civ-cardable .civ-namecell .civ-primary-name{font-weight:700;font-size:15px;color:var(--text);}
+  }
+  /* Row flagged because Qty per Box differs from the on-file pack size by
+     more than 0.9 — a nudge to double-check, not a hard block. */
+  .civ-qty-warn{background:rgba(217,119,6,.09);}
+  .civ-qty-warn td{color:var(--text) !important;}
+  table.civ-cardable.civ-qty-warn td[data-label]::before{color:#b45309;}
+  .civ-qty-warn .civ-qty-warn-note{
+    display:block;font-size:11px;color:#b45309;font-weight:700;margin-top:2px;
+  }
+  .civ-step-actionbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px;}
+  @media(max-width:640px){
+    .civ-step-actionbar{flex-direction:column;align-items:stretch;}
+    .civ-step-actionbar > *{width:100%;}
+    .civ-step-actionbar select{width:100%;}
+  }
   .loading{color:var(--text-dim);font-size:13px;padding:20px 0;font-family:'JetBrains Mono',monospace;}
   .toast{
     position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--panel3);
@@ -1815,7 +1860,7 @@
       <span class="current" id="createdInvoiceMatchLabel">—</span>
     </div>
     <div class="hero">
-      <div class="eyebrow">Step 1 of 2</div>
+      <div class="eyebrow">Step 1 of 3</div>
       <h2>Match Items &amp; Quantity as Box</h2>
       <p>Matching is exact — a name only matches if it's listed in that product's NOTES. Lines in red weren't matched at all; search and pick the right product for those. Quantity as Box comes from the invoice — check it and adjust if needed.</p>
     </div>
@@ -1826,12 +1871,46 @@
       <div style="font-size:13px;color:var(--text-dim);"><span id="createdInvoiceMatchedCount">0</span> of <span id="createdInvoiceTotalCount">0</span> items matched</div>
       <div style="display:flex;gap:10px;">
         <button class="btn-ghost" onclick="saveAndExitCreatedInvoice()">Save &amp; Exit</button>
-        <button class="btn-amber" onclick="goToCreatedInvoicePrices()">Next: Prices</button>
+        <button class="btn-amber" onclick="goToCreatedInvoiceQty()">Next: Quantity per Box</button>
       </div>
     </div>
   </div>
 
-  <!-- CREATE INVOICE: STEP 2 — PRICES -->
+  <!-- CREATE INVOICE: STEP 2 — QUANTITY PER BOX -->
+  <div id="view-created-invoice-qty" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openInvoices()">Invoices</button><span class="sep">/</span>
+      <button onclick="openCreatedInvoicesList()">Create Invoice</button><span class="sep">/</span>
+      <span class="current" id="createdInvoiceQtyLabel">—</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Step 2 of 3</div>
+      <h2>Quantity per Box</h2>
+      <p>No prices here — just walk each box and enter how many units are actually in it. Pack Size (Prev) is what's on file for <em>this exact supplier</em>; if what you type is more than 0.9 away from it, you'll be asked to double-check before it's kept.</p>
+    </div>
+    <div class="civ-step-actionbar">
+      <select id="createdInvoiceQtySortSelect" onchange="setCreatedInvoiceSort(this.value)" style="padding:9px 10px;border-radius:6px;border:1px solid var(--line);background:#fff;">
+        <option value="default">Sort: Original order</option>
+        <option value="invoice">Sort by Invoice Name</option>
+        <option value="vector">Sort by Vector Name</option>
+      </select>
+      <button class="btn-ghost" onclick="openCreatedInvoiceMenu()">Quick Entry Menu</button>
+    </div>
+    <div id="createdInvoiceQtyContent">
+      <div class="loading">Loading…</div>
+    </div>
+    <div class="restaurant-footer-bar">
+      <div style="font-size:13px;color:var(--text-dim);"><a href="#" onclick="event.preventDefault(); backToCreatedInvoiceMatchFromQty()">&larr; Back</a></div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn-ghost" onclick="saveAndExitCreatedInvoiceQty()">Save &amp; Exit</button>
+        <button class="btn-ghost" onclick="saveCreatedInvoiceQtyOnly()">Save</button>
+        <button class="btn-amber" onclick="goToCreatedInvoicePricesFromQty()">Save &amp; Next: Prices</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CREATE INVOICE: STEP 3 — PRICES -->
   <div id="view-created-invoice-prices" class="view">
     <div class="crumbrow">
       <button onclick="goHome()">Home</button><span class="sep">/</span>
@@ -1840,9 +1919,9 @@
       <span class="current" id="createdInvoicePricesLabel">—</span>
     </div>
     <div class="hero">
-      <div class="eyebrow">Step 2 of 2</div>
+      <div class="eyebrow">Step 3 of 3</div>
       <h2>Packaging &amp; Pricing</h2>
-      <p>Everything here is ready except Qty per Box — that's filled in by hand while physically checking each box. Cost/Unit, Total Qty, and Margin update automatically as you go. Previous Cost and Pack Size come from what's on file for <em>this exact supplier</em>. Margin turns red when it's below that department's minimum.</p>
+      <p>Qty as Box and Qty per Box are already set from the previous steps. Cost/Unit, Total Qty, and Margin update automatically as you go. Previous Cost and Pack Size come from what's on file for <em>this exact supplier</em>. Margin turns red when it's below that department's minimum. Duplicate products are merged automatically (quantities combined, prices averaged) whenever you download.</p>
     </div>
     <div class="actionbar">
       <span></span>
@@ -1852,8 +1931,6 @@
           <option value="invoice">Sort by Invoice Name</option>
           <option value="vector">Sort by Vector Name</option>
         </select>
-        <button class="btn-ghost" onclick="openCreatedInvoiceMenu()">Menu</button>
-        <button class="btn-ghost" onclick="mergeCreatedInvoiceDuplicates()">Merge Duplicates</button>
         <button class="btn-ghost" onclick="openCreatedInvoiceExportModal('csv')">Download CSV</button>
         <button class="btn-amber" onclick="openCreatedInvoiceExportModal('pdf')">Download PDF</button>
         <button class="btn-ghost" onclick="downloadCreatedInvoiceRetailCSV()">Retail CSV</button>
@@ -1864,7 +1941,7 @@
       <div class="loading">Loading…</div>
     </div>
     <div class="restaurant-review-actions">
-      <button class="btn-ghost" onclick="backToCreatedInvoiceMatch()">Back</button>
+      <button class="btn-ghost" onclick="backToCreatedInvoiceQtyFromPrices()">Back</button>
       <button class="btn-amber" onclick="finishCreatedInvoice()">Mark Complete</button>
     </div>
     <div style="margin-top:24px;padding-top:18px;border-top:1px solid var(--line);">
@@ -7200,15 +7277,24 @@ async function deleteCreatedInvoice(id){
     console.error(e);
   }
 }
-// Resume where it was left off: if every line already has a quantity, go
-// straight to Prices; otherwise go to Match & Quantity first.
+// Resume where it was left off: if every line already has a Qty per Box,
+// go straight to Prices; if Qty as Box is done but Qty per Box isn't, go to
+// the Quantity per Box step; otherwise start back at Match & Quantity.
 async function openCreatedInvoice(id){
   try{
     const data = await apiGet('invoices/created/' + id + '/');
     currentCreatedInvoice = data;
-    const allQtyFilled = data.items.length > 0 && data.items.every(it => it.qty_box !== null && it.qty_box !== undefined && it.qty_box !== '');
-    if(allQtyFilled) goToCreatedInvoicePrices();
-    else openCreatedInvoiceMatchStep();
+    const allBoxQtyFilled = data.items.length > 0 && data.items.every(it => it.qty_box !== null && it.qty_box !== undefined && it.qty_box !== '');
+    const allPerBoxFilled = data.items.length > 0 && data.items.every(it => it.qty_per_box !== null && it.qty_per_box !== undefined && it.qty_per_box !== '');
+    if(allBoxQtyFilled && allPerBoxFilled){
+      document.getElementById('createdInvoicePricesLabel').textContent = data.header.supplier_name || 'Invoice';
+      showView('view-created-invoice-prices');
+      renderCreatedInvoicePricesTable();
+    } else if(allBoxQtyFilled){
+      openCreatedInvoiceQtyStep();
+    } else {
+      openCreatedInvoiceMatchStep();
+    }
   }catch(e){
     toast('Could not open invoice');
     console.error(e);
@@ -7773,15 +7859,15 @@ function renderCreatedInvoiceMatchTable(){
     return;
   }
   const table = document.createElement('table');
-  table.className = 'finaltable';
+  table.className = 'finaltable civ-cardable';
   table.innerHTML = '<thead><tr><th>Name as per Invoice</th><th>Description as per Vector</th><th class="qtycell">Quantity as Box</th><th class="qtycell"></th></tr></thead>';
   const tbody = document.createElement('tbody');
   items.forEach((it, idx) => {
     const matched = !!it.stockid;
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${escapeHtml(it.ocr_product_name)}</td>
-      <td>
+      <td class="civ-namecell"><span class="civ-primary-name">${escapeHtml(it.ocr_product_name)}</span></td>
+      <td data-label="Vector match">
         ${matched
           ? `${escapeHtml(it.matched_name)} <span style="font-size:10px;letter-spacing:.03em;text-transform:uppercase;color:var(--green);background:#eafaf0;border-radius:20px;padding:2px 8px;font-weight:700;margin-left:4px;">\u2713 Exact match</span>
              <div style="font-size:12px;"><a href="#" onclick="event.preventDefault(); toggleCreatedInvoiceSearch(${idx})">wrong item? change match</a></div>`
@@ -7790,12 +7876,12 @@ function renderCreatedInvoiceMatchTable(){
         }
         <div class="restaurant-sub-slot" id="createdInvoiceSearchSlot-${idx}" style="margin-top:6px;"></div>
       </td>
-      <td class="qtycell">
+      <td class="qtycell" data-label="Quantity as Box">
         <input type="number" min="0" step="0.001" class="restaurant-qty-input" style="width:90px;"
           value="${it.qty_box !== null && it.qty_box !== undefined ? it.qty_box : ''}"
           onchange="updateCreatedInvoiceQtyBox(${idx}, this.value)">
       </td>
-      <td class="qtycell"><a href="#" title="Remove this line" style="color:var(--danger);" onclick="event.preventDefault(); deleteCreatedInvoiceLine(${idx})">✕</a></td>
+      <td class="qtycell" data-label=""><a href="#" title="Remove this line" style="color:var(--danger);" onclick="event.preventDefault(); deleteCreatedInvoiceLine(${idx})">✕ Remove</a></td>
     `;
     tbody.appendChild(tr);
   });
@@ -7853,6 +7939,13 @@ async function pickCreatedInvoiceMatch(idx, stockid, name){
   currentCreatedInvoice.items[idx].matched_name = name;
   currentCreatedInvoice.items[idx]._matchedVia = 'manual';
   const onPricesView = document.getElementById('view-created-invoice-prices').classList.contains('active');
+  const onQtyView = document.getElementById('view-created-invoice-qty').classList.contains('active');
+  if(onQtyView){
+    // Qty step: no price on screen here either, same as the match step.
+    renderCreatedInvoiceQtyTable();
+    scheduleCreatedInvoiceAutosave();
+    return;
+  }
   if(!onPricesView){
     // Match step: no price on screen here yet, just re-render as normal.
     renderCreatedInvoiceMatchTable();
@@ -7883,6 +7976,8 @@ function deleteCreatedInvoiceLine(idx){
   currentCreatedInvoice.items.splice(idx, 1);
   if(document.getElementById('view-created-invoice-prices').classList.contains('active')){
     renderCreatedInvoicePricesTable();
+  } else if(document.getElementById('view-created-invoice-qty').classList.contains('active')){
+    renderCreatedInvoiceQtyTable();
   } else {
     renderCreatedInvoiceMatchTable();
   }
@@ -7911,11 +8006,155 @@ async function saveAndExitCreatedInvoice(){
     console.error(e);
   }
 }
-async function goToCreatedInvoicePrices(){
+async function goToCreatedInvoiceQty(){
   const unmatched = currentCreatedInvoice.items.filter(it => !it.stockid).length;
   const missingQty = currentCreatedInvoice.items.filter(it => it.qty_box === null || it.qty_box === undefined).length;
   if(unmatched > 0 || missingQty > 0){
     if(!confirm(`${unmatched} item(s) still unmatched and ${missingQty} still missing a Quantity as Box. Continue anyway?`)) return;
+  }
+  try{
+    await saveCreatedInvoiceItems();
+    const data = await apiGet('invoices/created/' + currentCreatedInvoice.header.invoice_id + '/');
+    currentCreatedInvoice = data;
+    openCreatedInvoiceQtyStep();
+  }catch(e){
+    toast('Could not load quantity step');
+    console.error(e);
+  }
+}
+function backToCreatedInvoiceMatchFromQty(){
+  saveCreatedInvoiceItems().catch(e => console.error(e));
+  openCreatedInvoiceMatchStep();
+}
+
+/* ---- Step 2: Quantity per Box ----
+   Deliberately no prices on screen — the only field staff fill in here is
+   Qty per Box, done by hand while physically checking each box. Pack Size
+   (Prev) is shown alongside it purely as a reference so a mistyped amount
+   is easy to catch (see checkCreatedInvoiceQtyDeviation). ---- */
+function openCreatedInvoiceQtyStep(){
+  document.getElementById('createdInvoiceQtyLabel').textContent = currentCreatedInvoice.header.supplier_name || 'Invoice';
+  showView('view-created-invoice-qty');
+  renderCreatedInvoiceQtyTable();
+}
+// True when Qty per Box is filled in AND differs from the on-file pack
+// size (for this exact supplier) by more than 0.9 — staff type this by
+// hand while walking boxes, and a slipped digit (2.5 instead of 3.5) is
+// the single most common mistake, so this is just a "go check again" nudge,
+// never a hard block.
+function checkCreatedInvoiceQtyDeviation(it){
+  if(it.qty_per_box === null || it.qty_per_box === undefined) return false;
+  if(it.pack_size_previous === null || it.pack_size_previous === undefined) return false;
+  return Math.abs(Number(it.qty_per_box) - Number(it.pack_size_previous)) > 0.9;
+}
+function renderCreatedInvoiceQtyTable(){
+  const content = document.getElementById('createdInvoiceQtyContent');
+  const items = currentCreatedInvoice.items;
+  if(items.length === 0){
+    content.innerHTML = '<div class="empty-hint">No items on this invoice.</div>';
+    return;
+  }
+  const table = document.createElement('table');
+  table.className = 'finaltable civ-cardable';
+  table.innerHTML = `<thead><tr>
+    <th>Name as per Invoice</th><th>Description as per Vector</th>
+    <th class="qtycell">Qty as Box</th><th class="qtycell">Qty per Box</th>
+    <th class="qtycell">Pack Size (Prev)</th><th class="qtycell">Total Qty</th><th class="qtycell"></th>
+  </tr></thead>`;
+  const tbody = document.createElement('tbody');
+  const displayOrder = getCreatedInvoiceDisplayOrder(items);
+  displayOrder.forEach(idx => {
+    const it = items[idx];
+    const totalQty = createdInvoiceTotalQty(it);
+    const flagged = checkCreatedInvoiceQtyDeviation(it);
+    const tr = document.createElement('tr');
+    tr.className = flagged ? 'civ-qty-warn' : '';
+    tr.innerHTML = `
+      <td class="civ-namecell"><span class="civ-primary-name">${escapeHtml(it.ocr_product_name)}</span></td>
+      <td data-label="Vector match">
+        ${escapeHtml(it.matched_name || '—')}
+        <div style="font-size:12px;"><a href="#" onclick="event.preventDefault(); toggleCreatedInvoiceSearch(${idx})">change match</a></div>
+        <div class="restaurant-sub-slot" id="createdInvoiceSearchSlot-${idx}" style="margin-top:6px;"></div>
+      </td>
+      <td class="qtycell" data-label="Qty as Box">
+        <input type="number" min="0" step="0.001" class="restaurant-qty-input" style="width:80px;"
+          value="${it.qty_box === null || it.qty_box === undefined ? '' : it.qty_box}"
+          onchange="updateCreatedInvoiceQtyStepField(${idx}, 'qty_box', this.value)">
+      </td>
+      <td class="qtycell" data-label="Qty per Box">
+        <input type="number" min="0" step="0.001" class="restaurant-qty-input" style="width:80px;"
+          placeholder="amount in each box"
+          value="${it.qty_per_box === null || it.qty_per_box === undefined ? '' : it.qty_per_box}"
+          onchange="updateCreatedInvoiceQtyPerBox(${idx}, this.value)">
+        ${flagged ? `<span class="civ-qty-warn-note">⚠ was ${it.pack_size_previous} last time</span>` : ''}
+      </td>
+      <td class="qtycell" data-label="Pack Size (Prev)">${it.pack_size_previous === null || it.pack_size_previous === undefined ? '—' : it.pack_size_previous}</td>
+      <td class="qtycell" data-label="Total Qty" id="createdInvoiceQtyTotalCell-${idx}">${totalQty === null ? '—' : totalQty}</td>
+      <td class="qtycell" data-label=""><a href="#" title="Remove this line" style="color:var(--danger);" onclick="event.preventDefault(); deleteCreatedInvoiceLine(${idx})">✕ Remove</a></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  content.innerHTML = '';
+  const scrollWrap = document.createElement('div');
+  scrollWrap.className = 'restaurant-table-scroll';
+  scrollWrap.appendChild(table);
+  content.appendChild(scrollWrap);
+}
+// Qty as Box can still be tweaked from this step too (matches old
+// behaviour) — just updates the value and the Total Qty cell, no
+// deviation check (that's only for Qty per Box).
+function updateCreatedInvoiceQtyStepField(idx, field, value){
+  currentCreatedInvoice.items[idx][field] = value === '' ? null : Number(value);
+  const it = currentCreatedInvoice.items[idx];
+  const totalCell = document.getElementById('createdInvoiceQtyTotalCell-' + idx);
+  const totalQty = createdInvoiceTotalQty(it);
+  if(totalCell) totalCell.textContent = totalQty === null ? '—' : totalQty;
+  scheduleCreatedInvoiceAutosave();
+}
+// The one field this whole step exists for. Flags (with a confirm prompt)
+// any entry that lands more than 0.9 away from the pack size on file for
+// this supplier — "are you sure?" rather than a hard stop, since a genuine
+// pack-size change from the supplier is real and shouldn't be blocked,
+// just double-checked. Cancelling leaves the previous value in place.
+function updateCreatedInvoiceQtyPerBox(idx, value){
+  const it = currentCreatedInvoice.items[idx];
+  const newVal = value === '' ? null : Number(value);
+  if(newVal !== null && it.pack_size_previous !== null && it.pack_size_previous !== undefined){
+    const diff = Math.abs(newVal - Number(it.pack_size_previous));
+    if(diff > 0.9){
+      const name = it.matched_name || it.ocr_product_name || 'this item';
+      const ok = confirm(`Qty per Box for "${name}" is ${newVal}, but last time it was ${it.pack_size_previous}. Are you sure that's correct?`);
+      if(!ok){ renderCreatedInvoiceQtyTable(); return; }
+    }
+  }
+  it.qty_per_box = newVal;
+  renderCreatedInvoiceQtyTable();
+  scheduleCreatedInvoiceAutosave();
+}
+async function saveAndExitCreatedInvoiceQty(){
+  try{
+    await saveCreatedInvoiceItems();
+    toast('Saved');
+    openCreatedInvoicesList();
+  }catch(e){
+    toast('Could not save');
+    console.error(e);
+  }
+}
+async function saveCreatedInvoiceQtyOnly(){
+  try{
+    await saveCreatedInvoiceItems();
+    toast('Saved');
+  }catch(e){
+    toast('Could not save');
+    console.error(e);
+  }
+}
+async function goToCreatedInvoicePricesFromQty(){
+  const missingPerBox = currentCreatedInvoice.items.filter(it => it.qty_per_box === null || it.qty_per_box === undefined).length;
+  if(missingPerBox > 0){
+    if(!confirm(`${missingPerBox} item(s) still missing a Qty per Box. Continue anyway?`)) return;
   }
   try{
     await saveCreatedInvoiceItems();
@@ -7929,16 +8168,16 @@ async function goToCreatedInvoicePrices(){
     console.error(e);
   }
 }
-function backToCreatedInvoiceMatch(){
+function backToCreatedInvoiceQtyFromPrices(){
   saveCreatedInvoiceItems().catch(e => console.error(e));
-  openCreatedInvoiceMatchStep();
+  openCreatedInvoiceQtyStep();
 }
 
-/* ---- Step 2: Packaging & Pricing ----
-   Only QTY_PER_BOX is left for staff to fill in while physically checking
-   each box — everything else here is either carried from step 1, looked
-   up (previous cost price / pack size, from SUPPLIER_STOCK for this exact
-   supplier), or computed live from the numbers already on the row. */
+/* ---- Step 3: Packaging & Pricing ----
+   Qty as Box and Qty per Box already came in from steps 1 and 2 — what's
+   left here is Box Price and Retail Price. Everything else is either
+   looked up (previous cost price / pack size, from SUPPLIER_STOCK for this
+   exact supplier) or computed live from the numbers already on the row. */
 function createdInvoiceCostPerUnit(it){
   if(it.box_price === null || it.box_price === undefined) return null;
   if(!it.qty_per_box) return null; // covers null, undefined, and 0 (division by zero)
@@ -8003,8 +8242,12 @@ function createdInvoiceMarginPct(it){
 // Different lines on the same invoice sometimes name the same Vector product
 // differently (e.g. "COKE 24x330" vs "Coca Cola cans"), but once matched they
 // share the same stockid. This finds every such group, combines them into a
-// single line — total weight/quantity summed, price averaged across the
-// group — and drops the rest so the invoice only totals each product once.
+// single line — total quantity summed, cost/unit and retail price averaged
+// (weighted by each line's total quantity, so a 20-unit line properly
+// outweighs a 2-unit line rather than being counted equally) — and drops the
+// rest so the invoice only totals each product once. Runs automatically
+// right before every download (see runCreatedInvoicePreDownloadMerge below)
+// rather than as a manual button, so nothing is ever downloaded un-merged.
 function mergeCreatedInvoiceDuplicates(){
   const items = currentCreatedInvoice.items;
   const groups = {};
@@ -8013,17 +8256,32 @@ function mergeCreatedInvoiceDuplicates(){
     (groups[it.stockid] = groups[it.stockid] || []).push(idx);
   });
   const dupGroups = Object.values(groups).filter(g => g.length > 1);
-  if(dupGroups.length === 0){ toast('No duplicate products found to merge'); return; }
-  const names = dupGroups.map(g => items[g[0]].matched_name).join(', ');
-  if(!confirm('Merge duplicate lines for: ' + names + '? Total quantity will be combined and price averaged. This cannot be undone.')) return;
+  if(dupGroups.length === 0) return 0;
   const toRemove = [];
   dupGroups.forEach(group => {
     const lines = group.map(idx => items[idx]);
+    // Weight = each line's own total quantity (boxes × per-box), falling
+    // back to 1 so a line with an incomplete quantity still counts instead
+    // of vanishing from the average entirely.
+    const weightOf = it => {
+      const q = createdInvoiceTotalQty(it);
+      return (q === null || q === 0) ? 1 : q;
+    };
+    const weightedAvg = (values) => {
+      // values: [{ v, w }] with v already known non-null
+      const totalW = values.reduce((s, x) => s + x.w, 0);
+      if(totalW === 0) return null;
+      return values.reduce((s, x) => s + x.v * x.w, 0) / totalW;
+    };
     const combinedTotalQty = lines.reduce((sum, it) => sum + (createdInvoiceTotalQty(it) || 0), 0);
-    const costs = lines.map(it => createdInvoiceCostPerUnit(it)).filter(v => v !== null);
-    const avgCostPerUnit = costs.length ? costs.reduce((a,b) => a+b, 0) / costs.length : null;
-    const retails = lines.map(it => it.retail_price).filter(v => v !== null && v !== undefined).map(Number);
-    const avgRetailPrice = retails.length ? retails.reduce((a,b) => a+b, 0) / retails.length : null;
+    const costValues = lines
+      .map(it => ({ v: createdInvoiceCostPerUnit(it), w: weightOf(it) }))
+      .filter(x => x.v !== null);
+    const avgCostPerUnit = weightedAvg(costValues);
+    const retailValues = lines
+      .map(it => ({ v: it.retail_price === null || it.retail_price === undefined ? null : Number(it.retail_price), w: weightOf(it) }))
+      .filter(x => x.v !== null);
+    const avgRetailPrice = weightedAvg(retailValues);
     const keepIdx = group[0];
     const keep = items[keepIdx];
     keep.ocr_product_name = lines.map(it => it.ocr_product_name).join(' + ');
@@ -8034,9 +8292,21 @@ function mergeCreatedInvoiceDuplicates(){
     group.slice(1).forEach(idx => toRemove.push(idx));
   });
   toRemove.sort((a,b) => b - a).forEach(idx => items.splice(idx, 1));
-  renderCreatedInvoicePricesTable();
-  scheduleCreatedInvoiceAutosave();
-  toast('Merged ' + dupGroups.length + ' duplicate product' + (dupGroups.length > 1 ? 's' : ''));
+  return dupGroups.length;
+}
+// Called first thing by every Create Invoice download action. Merges
+// duplicates in-memory, saves the merged result, and re-renders the prices
+// table (if it's the visible view) so what downloads always matches what's
+// on screen afterwards. Returns a promise so callers can await it before
+// building the actual file.
+async function runCreatedInvoicePreDownloadMerge(){
+  const mergedCount = mergeCreatedInvoiceDuplicates();
+  if(mergedCount === 0) return;
+  if(document.getElementById('view-created-invoice-prices').classList.contains('active')){
+    renderCreatedInvoicePricesTable();
+  }
+  toast('Merged ' + mergedCount + ' duplicate product' + (mergedCount > 1 ? 's' : '') + ' automatically');
+  try{ await saveCreatedInvoiceItems(); }catch(e){ console.error('Could not save auto-merge', e); }
 }
 let createdInvoiceSortMode = 'default';
 function setCreatedInvoiceSort(mode){
@@ -8294,8 +8564,17 @@ function renderCreatedInvoiceMenuItems(block){
     };
     boxInput.oninput = refreshMenuTotal;
     perBoxInput.oninput = refreshMenuTotal;
-    boxInput.onchange = (e) => updateCreatedInvoiceField(idx, 'qty_box', e.target.value);
-    perBoxInput.onchange = (e) => updateCreatedInvoiceField(idx, 'qty_per_box', e.target.value);
+    boxInput.onchange = (e) => updateCreatedInvoiceQtyStepField(idx, 'qty_box', e.target.value);
+    perBoxInput.onchange = (e) => {
+      updateCreatedInvoiceQtyPerBox(idx, e.target.value);
+      // updateCreatedInvoiceQtyPerBox may reject the value (deviation
+      // check, cancelled) and re-render the main qty table behind this
+      // modal — sync this block's own fields back from the real stored
+      // value rather than trusting what's still sitting in the input.
+      const fresh = currentCreatedInvoice.items[idx];
+      perBoxInput.value = fresh.qty_per_box === null || fresh.qty_per_box === undefined ? '' : fresh.qty_per_box;
+      refreshMenuTotal();
+    };
     grid.appendChild(block);
   });
   body.innerHTML = '';
@@ -8333,7 +8612,8 @@ const CREATED_INVOICE_EXPORT_COLUMNS = [
   { key: 'barcode', label: 'Barcode', extra: true },
   { key: 'supplier', label: 'Supplier', extra: true }
 ];
-function openCreatedInvoiceExportModal(format){
+async function openCreatedInvoiceExportModal(format){
+  await runCreatedInvoicePreDownloadMerge();
   const blocker = createdInvoiceExportBlocker();
   if(blocker){ toast(blocker); return; }
   createdInvoiceExportFormat = format;
@@ -8445,7 +8725,8 @@ function downloadFixedNameCSV(filename, headers, rows){
   a.click();
   URL.revokeObjectURL(url);
 }
-function completeRetailPriceUpdate(){
+async function completeRetailPriceUpdate(){
+  await runCreatedInvoicePreDownloadMerge();
   const items = currentCreatedInvoice.items.filter(it => it.stockid);
   if(items.length === 0){ toast('No matched items to send'); return; }
   const headers = ['Stock No', 'Retail Price'];
@@ -8456,7 +8737,8 @@ function completeRetailPriceUpdate(){
   downloadFixedNameCSV('hallan_retail_price_update.csv', headers, rows);
   toast('Retail price CSV saved — Vector import will pick it up automatically');
 }
-function completeCsvUpdateProcess(){
+async function completeCsvUpdateProcess(){
+  await runCreatedInvoicePreDownloadMerge();
   const items = currentCreatedInvoice.items.filter(it => it.stockid);
   if(items.length === 0){ toast('No matched items to send'); return; }
   const headers = ['Stock No', 'Description', 'Cost Price', 'Retail Price', 'Pack Size', 'Barcode'];
@@ -8477,7 +8759,8 @@ function completeCsvUpdateProcess(){
 /* ---- Retail CSV: fixed column set/order, separate from the column-picker
    export above — Description, Qty per Box, Cost/Unit, Selling Price,
    Barcode, Department, Supplier. ---- */
-function downloadCreatedInvoiceRetailCSV(){
+async function downloadCreatedInvoiceRetailCSV(){
+  await runCreatedInvoicePreDownloadMerge();
   const blocker = createdInvoiceExportBlocker();
   if(blocker){ toast(blocker); return; }
   const items = currentCreatedInvoice.items;
@@ -8630,7 +8913,8 @@ function dismissVectorImportBanner(){
   closeModal('modalVectorImport');
 }
 /* ---- Quantity CSV: fixed column set/order — Name, Total Quantity, Barcode. ---- */
-function downloadCreatedInvoiceQuantityCSV(){
+async function downloadCreatedInvoiceQuantityCSV(){
+  await runCreatedInvoicePreDownloadMerge();
   const blocker = createdInvoiceExportBlocker();
   if(blocker){ toast(blocker); return; }
   const items = currentCreatedInvoice.items;
