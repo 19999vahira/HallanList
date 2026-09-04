@@ -939,6 +939,7 @@
     <div class="wsflyerToggle no-print" style="display:flex;gap:8px;margin-bottom:14px;">
       <button class="btn-amber wsflyerBtn" id="wsFlyerWholeBtn" onclick="setWholesaleFlyerMode('whole')">Flyer Whole</button>
       <button class="btn-ghost wsflyerBtn" id="wsFlyerVegBtn" onclick="setWholesaleFlyerMode('veg')">Flyer Veg</button>
+      <button class="btn-ghost wsflyerBtn" id="wsStockBtn" onclick="toggleWholesaleStockColumn()" style="margin-left:8px;">Stock</button>
     </div>
     <div class="actionbar no-print">
       <input type="text" id="wholesaleSearch" class="historysearch" placeholder="Search item or department…" oninput="renderWholesaleTable()">
@@ -2596,6 +2597,7 @@ let wholesaleLockedPrices = {}; // keyed by stock_name -> { price, margin }, mir
 let wholesaleSavedEmails = []; // Feature 2: saved/reusable schedule notification emails
 let wholesaleScheduleSelectedEmails = new Set(); // ticked emails in the schedule modal for the run being created
 let wholesaleFlyerMode = 'whole'; // Feature 3: 'whole' (every dept except Wholesale Vegetable) or 'veg' (Wholesale Vegetable only) — see setWholesaleFlyerMode
+let wholesaleShowStock = false; // Feature 4: whether the Stock column is currently shown — see toggleWholesaleStockColumn
 let currentHistoryList = null;
 let currentHistoryItems = null;
 
@@ -3052,10 +3054,13 @@ async function loadWholesalePricing(){
   document.getElementById('wholesaleSearch').value = '';
   wholesaleAdjust = {};
   wholesaleFlyerMode = 'whole';
+  wholesaleShowStock = false;
   const wholeBtn0 = document.getElementById('wsFlyerWholeBtn');
   const vegBtn0 = document.getElementById('wsFlyerVegBtn');
+  const stockBtn0 = document.getElementById('wsStockBtn');
   if(wholeBtn0){ wholeBtn0.classList.add('btn-amber'); wholeBtn0.classList.remove('btn-ghost'); }
   if(vegBtn0){ vegBtn0.classList.add('btn-ghost'); vegBtn0.classList.remove('btn-amber'); }
+  if(stockBtn0){ stockBtn0.classList.add('btn-ghost'); stockBtn0.classList.remove('btn-amber'); }
   content.innerHTML = '<div class="loading">Loading pricing list…</div>';
   try{
     // Pricing (cost/list price, cached ~3 min server-side for speed) and the
@@ -3171,6 +3176,16 @@ function setWholesaleFlyerMode(mode){
   if(vegBtn){ vegBtn.classList.toggle('btn-amber', mode === 'veg'); vegBtn.classList.toggle('btn-ghost', mode !== 'veg'); }
   renderWholesaleTable();
 }
+// Feature 4: Stock button. Shows/hides a live "Stock" column (VESTOCK.QUANTITY,
+// matched by name server-side — see STOCK_QUANTITY in WHOLESALE_PRICING_SQL)
+// alongside whichever rows Flyer Whole/Veg is currently showing. On-screen
+// only — doesn't touch the CSV/PDF/print/email exports.
+function toggleWholesaleStockColumn(){
+  wholesaleShowStock = !wholesaleShowStock;
+  const stockBtn = document.getElementById('wsStockBtn');
+  if(stockBtn){ stockBtn.classList.toggle('btn-amber', wholesaleShowStock); stockBtn.classList.toggle('btn-ghost', !wholesaleShowStock); }
+  renderWholesaleTable();
+}
 function filteredWholesaleRows(){
   const q = (document.getElementById('wholesaleSearch').value || '').toLowerCase().trim();
   const modeRows = wholesaleRows.filter(r => wholesaleFlyerMode === 'veg' ? isWholesaleVegRow(r) : !isWholesaleVegRow(r));
@@ -3253,7 +3268,7 @@ function buildWholesaleItemsTable(items){
   thead.innerHTML = `<tr>
     <th>Item</th>
     <th class="qtycell">Supplier Cost</th><th class="qtycell">Margin</th><th class="qtycell">Trade 3 Price</th>
-    <th class="qtycell">Selling Price Inc. VAT</th>
+    <th class="qtycell">Selling Price Inc. VAT</th>${wholesaleShowStock ? '<th class="qtycell">Stock</th>' : ''}
   </tr>`;
   const tbody = document.createElement('tbody');
   items.forEach(r=>{
@@ -3297,6 +3312,7 @@ function buildWholesaleItemsTable(items){
       <td class="qtycell">
         <span class="wsprintincvat">${wholesaleIncVatDisplayText(adj.price, r.vatid === 1)}</span>
       </td>
+      ${wholesaleShowStock ? `<td class="qtycell">${r.stock_quantity === null || r.stock_quantity === undefined ? '—' : Number(r.stock_quantity)}</td>` : ''}
     `;
     const priceInput = tr.querySelector('.priceinput');
     const marginInput = tr.querySelector('.margininput');
