@@ -6942,7 +6942,7 @@ function renderSupplierPlaceOrderTable(){
   table.className = 'finaltable';
   table.innerHTML = `<thead><tr>
       ${cols.map(c => `<th class="${c.key === 'name' ? '' : 'qtycell'}" data-col="${c.key}" style="cursor:pointer;">${c.label}${arrow(c.key)}</th>`).join('')}
-      <th class="qtycell">Order Qty</th>
+      <th class="qtycell">Order Qty</th><th class="qtycell"></th>
     </tr></thead>`;
   table.querySelectorAll('th[data-col]').forEach(th=>{
     th.onclick = () => {
@@ -6958,15 +6958,33 @@ function renderSupplierPlaceOrderTable(){
     const qty = supplierPOQtyOverride.hasOwnProperty(it.stockid) ? supplierPOQtyOverride[it.stockid] : computeSupplierPOInitialQty(it);
     const tr = document.createElement('tr');
     tr.dataset.stockid = it.stockid;
+    if(supplierOrderCart.hasOwnProperty(it.stockid)) tr.style.background = 'rgba(22,163,74,.08)';
     tr.innerHTML = `
       <td>${escapeHtml(it.name)}</td>
       <td class="qtycell">${it.sold}</td>
       <td class="qtycell">${it.in_stock ?? '—'}</td>
       <td class="qtycell">${packSize || '—'}</td>
       <td class="qtycell"><input type="number" min="0" step="1" class="poqtyinput" style="width:70px;text-align:center;" value="${qty}"></td>
+      <td class="qtycell"><button class="poTickBtn" title="Add this item to the order list" style="border:none;background:none;color:var(--green);font-size:20px;cursor:pointer;">✔</button></td>
     `;
-    tr.querySelector('.poqtyinput').oninput = (e) => {
+    const qtyInput = tr.querySelector('.poqtyinput');
+    qtyInput.oninput = (e) => {
       supplierPOQtyOverride[it.stockid] = Number(e.target.value) || 0;
+    };
+    tr.querySelector('.poTickBtn').onclick = () => {
+      const qtyNow = Number(qtyInput.value) || 0;
+      // Assigning by stockid always replaces any previous entry for this
+      // item rather than adding to it — re-ticking the same item just
+      // overwrites its quantity with whatever's in the box now.
+      supplierOrderCart[it.stockid] = {
+        name: it.name,
+        qty: qtyNow,
+        product_code: it.product_code || '',
+        catalogue_number: it.catalogue_number || ''
+      };
+      tr.style.background = 'rgba(22,163,74,.08)';
+      updateSupplierCartCount();
+      toast(`${it.name} added to the order list`);
     };
     tbody.appendChild(tr);
   });
@@ -6981,6 +6999,7 @@ function addSupplierItemsToOrderList(){
   items.forEach(it=>{
     const qty = supplierPOQtyOverride.hasOwnProperty(it.stockid) ? supplierPOQtyOverride[it.stockid] : computeSupplierPOInitialQty(it);
     if(qty > 0){
+      // Same replace-not-add rule as the per-row tick button above.
       supplierOrderCart[it.stockid] = {
         name: it.name,
         qty,
@@ -6991,6 +7010,7 @@ function addSupplierItemsToOrderList(){
     }
   });
   updateSupplierCartCount();
+  renderSupplierPlaceOrderTable();
   toast(added ? `Added ${added} item${added === 1 ? '' : 's'} to the order list` : 'No items with an order quantity above 0 in the current view');
 }
 
@@ -7002,18 +7022,45 @@ function openSupplierOrderListPage(){
   renderSupplierOrderListPage();
 }
 
+let supplierOLSort = { col: 'name', dir: 'asc' };
+
 function renderSupplierOrderListPage(){
   const results = document.getElementById('supplierOrderListResults');
-  const entries = Object.entries(supplierOrderCart); // [stockid, {name, qty, product_code, catalogue_number}]
+  let entries = Object.entries(supplierOrderCart); // [stockid, {name, qty, product_code, catalogue_number}]
   if(entries.length === 0){
-    results.innerHTML = '<div class="empty-hint">No items added yet — go to Place Order, set quantities, then "Add Items to Order List".</div>';
+    results.innerHTML = '<div class="empty-hint">No items added yet — go to Place Order, set quantities, then tick items or "Add Items to Order List".</div>';
     return;
   }
+  const cols = [
+    { key: 'name', label: 'Stock Name' },
+    { key: 'qty', label: 'Added Qty' },
+    { key: 'product_code', label: 'Product Code' },
+    { key: 'catalogue_number', label: 'Catalogue Number' }
+  ];
+  const { col, dir } = supplierOLSort;
+  entries = entries.slice().sort((a,b)=>{
+    let av = a[1][col], bv = b[1][col];
+    if(col === 'qty'){ av = Number(av) || 0; bv = Number(bv) || 0; }
+    else { av = (av || '').toString().toLowerCase(); bv = (bv || '').toString().toLowerCase(); }
+    if(av < bv) return dir === 'asc' ? -1 : 1;
+    if(av > bv) return dir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  const arrow = (c) => supplierOLSort.col === c ? (supplierOLSort.dir === 'asc' ? ' ▲' : ' ▼') : '';
   const table = document.createElement('table');
   table.className = 'finaltable';
   table.innerHTML = `<thead><tr>
-      <th>Stock Name</th><th class="qtycell">Added Qty</th><th>Product Code</th><th>Catalogue Number</th><th class="qtycell"></th>
+      ${cols.map(c => `<th class="${c.key === 'qty' ? 'qtycell' : ''}" data-col="${c.key}" style="cursor:pointer;">${c.label}${arrow(c.key)}</th>`).join('')}
+      <th class="qtycell"></th>
     </tr></thead>`;
+  table.querySelectorAll('th[data-col]').forEach(th=>{
+    th.onclick = () => {
+      const c = th.dataset.col;
+      if(supplierOLSort.col === c) supplierOLSort.dir = supplierOLSort.dir === 'asc' ? 'desc' : 'asc';
+      else supplierOLSort = { col: c, dir: 'asc' };
+      renderSupplierOrderListPage();
+    };
+  });
   const tbody = document.createElement('tbody');
   entries.forEach(([stockid, it])=>{
     const tr = document.createElement('tr');
