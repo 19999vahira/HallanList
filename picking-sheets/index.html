@@ -3898,7 +3898,7 @@ function renderFlyerImagesModal(){
   wrap.appendChild(heading);
   const overrideSub = document.createElement('p');
   overrideSub.style.cssText = 'font-size:11px;color:var(--text-dim);margin:0 0 6px;';
-  overrideSub.textContent = 'Middle and Bottom photos are optional — each is cropped to a circle and printed at very low opacity, like a faint watermark sitting behind that department\'s price list, and repeats on every page the department spans. Featured items (below) replace the old single Top photo: pick 1, 3 or 5 items, give each a photo, and their name and price print underneath in red on that department\'s first page.';
+  overrideSub.textContent = 'Middle and Bottom photos are optional — each is cropped to a circle and printed at very low opacity, like a faint watermark sitting behind that department\'s price list, and repeats on every page the department spans. Featured items (below) replace the old single Top photo: pick 1, 3 or 5 items, give each a photo, and they print as rounded rectangles in the blank space above the department heading — one large centred photo, smaller ones either side — with the item name in small text and the price large and red underneath, on that department\'s first page.';
   wrap.appendChild(overrideSub);
   const depts = flyerDepartmentNames();
   if(depts.length === 0){
@@ -3978,8 +3978,8 @@ function buildFlyerFeaturedRow(dep){
       const row = document.createElement('div');
       row.style.cssText = 'display:flex;align-items:center;gap:10px;';
       const thumbHtml = it.image
-        ? `<img src="${it.image}" style="width:44px;height:44px;object-fit:cover;border-radius:50%;border:1px solid var(--line);flex-shrink:0;">`
-        : `<div style="width:44px;height:44px;border-radius:50%;border:1px dashed var(--line);display:flex;align-items:center;justify-content:center;font-size:8px;color:var(--text-dim);flex-shrink:0;">No img</div>`;
+        ? `<img src="${it.image}" style="width:40px;height:48px;object-fit:cover;border-radius:6px;border:1px solid var(--line);flex-shrink:0;">`
+        : `<div style="width:40px;height:48px;border-radius:6px;border:1px dashed var(--line);display:flex;align-items:center;justify-content:center;font-size:8px;color:var(--text-dim);flex-shrink:0;">No img</div>`;
       row.innerHTML = `
         ${thumbHtml}
         <div style="flex:1;min-width:0;">
@@ -4194,86 +4194,137 @@ const FLYER_TOP_CIRCLE = { cx: 141, cy: 34, d: 60 };
 const FLYER_MIDDLE_CIRCLE = { cx: 105, cy: 157, d: 160 };
 const FLYER_BOTTOM_CIRCLE = { cx: 72, cy: 251, d: 50 };
 // ---- Featured items strip (T1..Tn) — replaces the old single "Top image"
-// watermark. Unlike the Middle/Bottom circles, these print at full opacity
-// as real content, with the centre photo (T1) largest and the rest
-// alternating left/right and shrinking with distance from centre. Sizes
-// below are circle diameters in mm, indexed by position (T1 first).
-const FLYER_FEATURED_SIZES = { 1: [46], 3: [46, 30, 30], 5: [46, 32, 32, 24, 24] };
-const FLYER_FEATURED_GAP = 6;
-const FLYER_FEATURED_CAPTION_GAP = 3;
-const FLYER_FEATURED_CAPTION_LINEH = 4.2;
-// Crops every configured photo to a circle (reusing flyerCircleCrop) at its
-// display size. Runs once per department per download.
-async function flyerPrepareFeaturedCircles(featured){
-  const sizes = FLYER_FEATURED_SIZES[featured.count] || [];
+// watermark. Prints in the blank white space above the department heading
+// (inside the wave-artwork header, not the price-list content area), like a
+// shelf-edge display: rounded RECTANGLES (not circles), one big centred
+// product shot with smaller ones either side, all bottom-aligned on a
+// shared line. Item name prints small; price prints large and red — the
+// price is the whole point of this section. Dimensions are {w,h} in mm,
+// indexed by position (T1 first).
+const FLYER_FEATURED_RECTS = {
+  1: [{ w: 44, h: 50 }],
+  3: [{ w: 44, h: 50 }, { w: 30, h: 36 }, { w: 30, h: 36 }],
+  5: [{ w: 44, h: 50 }, { w: 30, h: 36 }, { w: 30, h: 36 }, { w: 24, h: 29 }, { w: 24, h: 29 }]
+};
+const FLYER_FEATURED_RADIUS = 4;   // mm — rounded corners, not a circle crop
+const FLYER_FEATURED_GAP = 6;      // mm gap between adjacent rectangle edges
+// Where the strip starts, in mm from the page top — sits in the blank
+// header space above the department heading (topSafeY, currently 95).
+// Nudge this against your actual Layout artwork if it ever creeps under
+// the wave/dot design or too close to the heading.
+const FLYER_FEATURED_TOP_Y = 20;
+// Crops one photo to a rounded rectangle at wPx x hPx, cover-fit so nothing
+// gets squashed/stretched (same idea as flyerCircleCrop, just not 1:1).
+function flyerRectCrop(dataUrl, wPx, hPx, radiusPx){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = wPx; canvas.height = hPx;
+      const ctx = canvas.getContext('2d');
+      ctx.save();
+      const r = Math.min(radiusPx, wPx / 2, hPx / 2);
+      ctx.beginPath();
+      ctx.moveTo(r, 0);
+      ctx.lineTo(wPx - r, 0);
+      ctx.quadraticCurveTo(wPx, 0, wPx, r);
+      ctx.lineTo(wPx, hPx - r);
+      ctx.quadraticCurveTo(wPx, hPx, wPx - r, hPx);
+      ctx.lineTo(r, hPx);
+      ctx.quadraticCurveTo(0, hPx, 0, hPx - r);
+      ctx.lineTo(0, r);
+      ctx.quadraticCurveTo(0, 0, r, 0);
+      ctx.closePath();
+      ctx.clip();
+      const targetRatio = wPx / hPx;
+      const srcRatio = img.width / img.height;
+      let sx, sy, sw, sh;
+      if(srcRatio > targetRatio){ sh = img.height; sw = sh * targetRatio; sx = (img.width - sw) / 2; sy = 0; }
+      else { sw = img.width; sh = sw / targetRatio; sx = 0; sy = (img.height - sh) / 2; }
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, wPx, hPx);
+      ctx.restore();
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => reject(new Error('Could not load image for crop'));
+    img.src = dataUrl;
+  });
+}
+// Crops every configured photo to its display rectangle. Runs once per
+// department per download.
+async function flyerPrepareFeaturedImages(featured){
+  const rects = FLYER_FEATURED_RECTS[featured.count] || [];
   const out = [];
   for(let i = 0; i < featured.count; i++){
     const it = featured.items[i];
-    const size = sizes[i] || sizes[sizes.length - 1] || 30;
-    const dataUrl = (it && it.image) ? await flyerCircleCrop(it.image, Math.round(size * 10)) : null;
-    out.push({ dataUrl, size, name: (it && it.name) || '' });
+    const dims = rects[i] || rects[rects.length - 1] || { w: 28, h: 34 };
+    const dataUrl = (it && it.image)
+      ? await flyerRectCrop(it.image, Math.round(dims.w * 10), Math.round(dims.h * 10), Math.round(FLYER_FEATURED_RADIUS * 10))
+      : null;
+    out.push({ dataUrl, w: dims.w, h: dims.h, name: (it && it.name) || '' });
   }
   return out;
 }
 // T1 (index 0) sits on the centre line. Every other slot alternates
-// outward from centre — odd index goes left, even index goes right — each
-// ring sized per FLYER_FEATURED_SIZES and separated by FLYER_FEATURED_GAP.
+// outward from centre — odd index goes left, even index goes right —
+// separated by FLYER_FEATURED_GAP, sized per FLYER_FEATURED_RECTS.
 function flyerFeaturedXPositions(prepared, centerX){
   const positions = new Array(prepared.length);
   positions[0] = centerX;
-  let leftEdge = centerX - prepared[0].size / 2;
-  let rightEdge = centerX + prepared[0].size / 2;
+  let leftEdge = centerX - prepared[0].w / 2;
+  let rightEdge = centerX + prepared[0].w / 2;
   for(let i = 1; i < prepared.length; i++){
-    const size = prepared[i].size;
+    const w = prepared[i].w;
     if(i % 2 === 1){
-      const cx = leftEdge - FLYER_FEATURED_GAP - size / 2;
+      const cx = leftEdge - FLYER_FEATURED_GAP - w / 2;
       positions[i] = cx;
-      leftEdge = cx - size / 2;
+      leftEdge = cx - w / 2;
     } else {
-      const cx = rightEdge + FLYER_FEATURED_GAP + size / 2;
+      const cx = rightEdge + FLYER_FEATURED_GAP + w / 2;
       positions[i] = cx;
-      rightEdge = cx + size / 2;
+      rightEdge = cx + w / 2;
     }
   }
   return positions;
 }
-// Draws the prepared featured-item circles centred on centerX starting at
-// startY, each captioned underneath with its item name (brand font, navy)
-// and price (same font, red) looked up from priceByName. Returns the y
-// coordinate the item list should resume from.
-function flyerDrawFeaturedStrip(doc, prepared, priceByName, startY, centerX, mainFont){
-  if(!prepared || prepared.length === 0) return startY;
+// Draws the prepared rectangles bottom-aligned on a shared line starting at
+// topY (so the tallest — T1 — reaches from topY down; shorter side photos
+// hang from the same bottom edge, shelf-display style). Underneath, in one
+// row: item name in small brand-font text, then the price in the same
+// brand font but large and red. Only called on a department's first page.
+function flyerDrawFeaturedStrip(doc, prepared, priceByName, topY, centerX, mainFont){
+  if(!prepared || prepared.length === 0) return;
   const positions = flyerFeaturedXPositions(prepared, centerX);
-  const maxSize = Math.max(...prepared.map(p => p.size));
-  const centreLineY = startY + maxSize / 2;
-  let maxCaptionBottom = startY + maxSize;
+  const maxH = Math.max(...prepared.map(p => p.h));
+  const bottomY = topY + maxH; // shared line every photo's bottom sits on
+  prepared.forEach((p, i) => {
+    if(!p.dataUrl) return;
+    const cx = positions[i];
+    const y = bottomY - p.h;
+    doc.addImage(p.dataUrl, 'PNG', cx - p.w / 2, y, p.w, p.h, undefined, 'FAST');
+  });
+  const captionStartY = bottomY + 6;
   prepared.forEach((p, i) => {
     const cx = positions[i];
-    const size = p.size;
-    const y = centreLineY - size / 2;
-    if(p.dataUrl) doc.addImage(p.dataUrl, 'PNG', cx - size / 2, y, size, size, undefined, 'FAST');
-    let captionY = y + size + FLYER_FEATURED_CAPTION_GAP + 3;
+    let cy = captionStartY;
     doc.setFont(mainFont, 'normal');
-    doc.setFontSize(i === 0 ? 9 : 7.5);
+    doc.setFontSize(6.5); // small name, per spec
     doc.setTextColor(...FLYER_COLOR_BLUE);
     if(p.name){
-      doc.splitTextToSize(p.name, size + 14).slice(0, 2).forEach(line => {
-        doc.text(line, cx, captionY, { align: 'center' });
-        captionY += FLYER_FEATURED_CAPTION_LINEH;
+      doc.splitTextToSize(p.name, p.w + 16).slice(0, 2).forEach(line => {
+        doc.text(line, cx, cy, { align: 'center' });
+        cy += 3.2;
       });
     }
     const priceInfo = priceByName.get(p.name);
     if(priceInfo){
+      cy += 1.5;
       doc.setFont(mainFont, 'normal');
-      doc.setFontSize(i === 0 ? 10 : 8.5);
-      doc.setTextColor(210, 20, 20); // red, per spec — same font, just a different colour
+      doc.setFontSize(i === 0 ? 20 : 15); // big, red — the price is the point of this section
+      doc.setTextColor(220, 0, 0);
       const priceText = '£' + priceInfo.price.toFixed(2) + (priceInfo.isVat ? ' +VAT' : '');
-      doc.text(priceText, cx, captionY, { align: 'center' });
-      captionY += FLYER_FEATURED_CAPTION_LINEH;
+      doc.text(priceText, cx, cy, { align: 'center' });
     }
-    if(captionY > maxCaptionBottom) maxCaptionBottom = captionY;
   });
-  return maxCaptionBottom + 6;
 }
 // How faint the watermark circles print — deliberately very low so the
 // photo reads as a light background texture, not something competing with
@@ -4456,7 +4507,7 @@ async function generateColourFlyer(){
       // priceByName looks up each featured item's live price off this
       // department's own list, same as the rows printed below it.
       const featured = flyerFeaturedGet(g.department);
-      const preparedFeatured = featured.count > 0 ? await flyerPrepareFeaturedCircles(featured) : [];
+      const preparedFeatured = featured.count > 0 ? await flyerPrepareFeaturedImages(featured) : [];
       const priceByName = new Map(items.map(it => [it.name, it]));
 
       let idx = 0;
@@ -4468,17 +4519,19 @@ async function generateColourFlyer(){
         // still has them on every page.
         flyerDrawWatermarkCircle(doc, middleCircleDataUrl, FLYER_MIDDLE_CIRCLE);
         flyerDrawWatermarkCircle(doc, bottomCircleDataUrl, FLYER_BOTTOM_CIRCLE);
+        // Featured items print in the blank header space ABOVE the heading
+        // (not in the content area, and not affecting where the item list
+        // starts) — only on this department's first page (idx is still 0
+        // here); repeating five full-size photos on every overflow page
+        // would be excessive.
+        if(preparedFeatured.length > 0 && idx === 0){
+          flyerDrawFeaturedStrip(doc, preparedFeatured, priceByName, FLYER_FEATURED_TOP_Y, contentX + contentWidth / 2, flyerMainFont);
+        }
         doc.setFont(flyerMainFont, 'normal');
         doc.setFontSize(DEPT_HEADING_FONT);
         doc.setTextColor(...FLYER_COLOR_BLUE);
         doc.text(deptHeading, contentX, topSafeY);
         let y = topSafeY + headingGap;
-        // Featured strip only prints on this department's first page (idx
-        // is still 0 here) — repeating five full-size photos on every
-        // overflow page would be excessive, unlike the old faint watermark.
-        if(preparedFeatured.length > 0 && idx === 0){
-          y = flyerDrawFeaturedStrip(doc, preparedFeatured, priceByName, y, contentX + contentWidth / 2, flyerMainFont);
-        }
         const maxRows = Math.max(1, Math.floor((bottomSafeY - y) / rowHeight));
         for(let i = 0; i < maxRows && idx < items.length; i++, idx++){
           const priceText = '£' + items[idx].price.toFixed(2) + (items[idx].isVat ? ' +VAT' : '');
