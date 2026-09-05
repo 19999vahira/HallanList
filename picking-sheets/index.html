@@ -2549,7 +2549,7 @@
 <div class="modal-backdrop" id="modalFlyerDownload">
   <div class="modal" style="width:380px;">
     <h3>Download Colour Flyer</h3>
-    <p class="modal-sub">These dates are printed on the cover page under the logo.</p>
+    <p class="modal-sub" id="flyerDownloadModeSub">These dates are printed on the cover page under the logo.</p>
     <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;">Valid from</label>
     <input type="date" id="flyerFromDate">
     <label style="display:block;font-size:12px;color:var(--text-dim);margin:12px 0 4px;">Valid to</label>
@@ -4010,6 +4010,11 @@ function openFlyerDownloadModal(){
   document.getElementById('flyerToDate').value = '';
   const err = document.getElementById('flyerDownloadErr');
   err.style.display = 'none'; err.textContent = '';
+  // Makes explicit which of the two flyers this will produce — it always
+  // follows whichever of Flyer Whole / Flyer Veg is currently selected
+  // above the table, same as every other download on this page.
+  const modeLabel = wholesaleFlyerMode === 'veg' ? 'Flyer Veg (Wholesale Vegetable only)' : 'Flyer Whole (every department except Wholesale Vegetable)';
+  document.getElementById('flyerDownloadModeSub').textContent = 'Downloading: ' + modeLabel + '. Switch the toggle above and reopen this if you meant the other one.';
   openModal('modalFlyerDownload');
 }
 function flyerDdmmyyyy(iso){
@@ -4202,7 +4207,14 @@ async function generateColourFlyer(){
     // suffix). It shows the department name with any
     // leading "Wholesale " stripped (e.g. "Cleaning & Hygiene" instead of
     // "Wholesale Cleaning & Hygiene") — see flyerDeptDisplayName.
-    const groups = groupRowsByDepartment(wholesaleRows);
+    // Respect whichever Flyer Whole / Flyer Veg toggle is currently
+    // selected — every other export on this page (CSV, PDF, print, email)
+    // already goes through filteredWholesaleRows()/the same mode filter;
+    // this was the one export left using the full unfiltered wholesaleRows,
+    // which meant Download Colour Flyer silently ignored the toggle and
+    // always produced one flyer covering every department.
+    const flyerSourceRows = wholesaleRows.filter(r => wholesaleFlyerMode === 'veg' ? isWholesaleVegRow(r) : !isWholesaleVegRow(r));
+    const groups = groupRowsByDepartment(flyerSourceRows);
     const topSafeY = 95;    // clears the top wave/dot design on the layout image
     const bottomSafeY = 220; // stays clear of the bottom wave design
     const contentX = 25;
