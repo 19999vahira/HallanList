@@ -433,6 +433,12 @@
     display:inline-block;margin-left:6px;font-family:'JetBrains Mono',monospace;font-size:10.5px;
     font-weight:700;color:var(--accent-dim);letter-spacing:.3px;
   }
+  /* ---- shown next to a blocked selling price that's been edited since Block
+     was clicked, so staff can see at a glance which prices actually moved ---- */
+  .pricechangedbadge{
+    display:inline-block;margin-left:6px;font-size:10.5px;font-weight:700;letter-spacing:.3px;
+    color:var(--danger);background:rgba(220,38,38,.12);border-radius:4px;padding:2px 6px;
+  }
   .wsprintprice{display:none;}
   .wsprintmargin{display:none;}
   /* ---- invoice margin flag (below department minimum) ---- */
@@ -3110,13 +3116,14 @@ async function toggleWholesalePriceBlock(){
     // only price/margin — so cost keeps updating normally either way.
     const prices = Object.keys(wholesaleAdjust)
       .filter(name => wholesaleAdjust[name] && wholesaleAdjust[name].price !== '')
-      .map(name => ({ stock_name: name, price: wholesaleAdjust[name].price, margin: wholesaleAdjust[name].margin }));
+      .map(name => ({ stock_name: name, price: wholesaleAdjust[name].price, margin: wholesaleAdjust[name].margin,
+        changed: !!wholesaleAdjust[name].changed }));
     if(btn){ btn.disabled = true; btn.textContent = `Blocking ${prices.length} item(s)…`; }
     try{
       await apiPost('wholesale/price-lock/block', { prices });
       wholesaleBlocked = true;
       // Reflect the just-blocked values locally so nothing visually jumps.
-      prices.forEach(p => { wholesaleLockedPrices[p.stock_name] = { price: p.price, margin: p.margin }; });
+      prices.forEach(p => { wholesaleLockedPrices[p.stock_name] = { price: p.price, margin: p.margin, changed: p.changed }; });
       updateWholesaleBlockUI();
       toast('Selling prices are now blocked — cost will keep updating, selling prices won\'t.');
     }catch(e){
@@ -3146,7 +3153,7 @@ async function toggleWholesalePriceBlock(){
 // network call) while unblocked — matches today's session-only behaviour.
 function persistWholesaleLockIfBlocked(stockName, adj){
   if(!wholesaleBlocked) return;
-  wholesaleLockedPrices[stockName] = { price: adj.price, margin: adj.margin };
+  wholesaleLockedPrices[stockName] = { price: adj.price, margin: adj.margin, changed: true };
   apiPost('wholesale/price-lock/update', { stock_name: stockName, price: adj.price, margin: adj.margin })
     .catch(e => console.error('Could not save blocked price for', stockName, e));
 }
@@ -3284,8 +3291,12 @@ function buildWholesaleItemsTable(items){
       // in this row) is never affected either way.
       const lock = wholesaleBlocked ? wholesaleLockedPrices[r.stock_name] : null;
       if(lock && lock.price !== null && lock.price !== undefined){
+        // `changed` reflects whether this row was actually edited after Block
+        // was clicked (persisted server-side as CHANGED_FLAG) — NOT just that
+        // it has a lock record, since Block snapshots every row on screen,
+        // touched or not.
         adj = { margin: lock.margin === null || lock.margin === undefined ? '' : Number(lock.margin).toFixed(1),
-                price: Number(lock.price).toFixed(2), changed: true };
+                price: Number(lock.price).toFixed(2), changed: !!lock.changed };
       } else {
         const initialMargin = wholesaleMarginPct(r);
         adj = {
@@ -3308,6 +3319,7 @@ function buildWholesaleItemsTable(items){
         <input type="number" step="0.01" min="0" class="priceinput" value="${adj.price}">
         <span class="wsprintprice">${adj.price !== '' ? Number(adj.price).toFixed(2) : '—'}</span>
         ${r.vatid === 1 ? '<span class="vattag">+VAT</span>' : ''}
+        <span class="pricechangedbadge" style="${wholesaleBlocked && adj.changed ? '' : 'display:none;'}">Price changed</span>
       </td>
       <td class="qtycell">
         <span class="wsprintincvat">${wholesaleIncVatDisplayText(adj.price, r.vatid === 1)}</span>
@@ -3319,10 +3331,12 @@ function buildWholesaleItemsTable(items){
     const pricePrint = tr.querySelector('.wsprintprice');
     const marginPrint = tr.querySelector('.wsprintmargin');
     const incVatPrint = tr.querySelector('.wsprintincvat');
+    const changedBadge = tr.querySelector('.pricechangedbadge');
     priceInput.addEventListener('change', () => {
       const v = priceInput.value.trim();
       adj.price = v;
       adj.changed = true;
+      if(wholesaleBlocked) changedBadge.style.display = '';
       pricePrint.textContent = v !== '' ? Number(v).toFixed(2) : '—';
       incVatPrint.textContent = wholesaleIncVatDisplayText(adj.price, r.vatid === 1);
       const newMargin = wholesaleMarginFromPrice(r.suppcost_net, v);
@@ -3337,6 +3351,7 @@ function buildWholesaleItemsTable(items){
       const v = marginInput.value.trim();
       adj.margin = v;
       adj.changed = true;
+      if(wholesaleBlocked) changedBadge.style.display = '';
       marginPrint.textContent = v !== '' ? Number(v).toFixed(1) + '%' : '—';
       const newPrice = wholesalePriceFromMargin(r.suppcost_net, v);
       if(newPrice !== null){
