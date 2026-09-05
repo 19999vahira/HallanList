@@ -1542,7 +1542,7 @@
     <div id="replenStatusBox"></div>
   </div>
 
-  <!-- SUPPLIER ORDERS: SEARCH -->
+  <!-- SUPPLIER ORDERS: LANDING -->
   <div id="view-supplier-search" class="view">
     <div class="crumbrow">
       <button onclick="goHome()">Home</button><span class="sep">/</span><span class="current">Supplier Orders</span>
@@ -1550,12 +1550,36 @@
     <div class="hero">
       <div class="eyebrow">Order</div>
       <h2>Supplier Orders</h2>
+      <p>Select a supplier to see sales history, reorder suggestions and place an order.</p>
+    </div>
+    <div class="actionbar">
+      <span></span>
+      <button class="btn-danger-ghost" onclick="openSupplierPasswordModal()">Change Password</button>
+    </div>
+    <div class="catgrid">
+      <div class="bincard" onclick="openSupplierSelectPage()">
+        <h4>🔎 Select Supplier</h4>
+        <div class="count">Search for a supplier by name</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUPPLIER ORDERS: SELECT (search) -->
+  <div id="view-supplier-select" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openSupplierOrders()">Supplier Orders</button><span class="sep">/</span>
+      <span class="current">Select Supplier</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Order</div>
+      <h2>Select Supplier</h2>
       <p>Search a supplier to see sales history and reorder suggestions.</p>
     </div>
     <div class="actionbar">
       <input type="text" id="supplierSearchInput" class="historysearch" style="max-width:420px;"
              placeholder="Search supplier name…" oninput="onSupplierSearch()" autocomplete="off">
-      <button class="btn-danger-ghost" onclick="openSupplierPasswordModal()">Change Password</button>
+      <span></span>
     </div>
     <div id="supplierSearchResults">
       <div class="empty-hint">Start typing a supplier name.</div>
@@ -1575,6 +1599,10 @@
       <p>Pick a view for this supplier.</p>
     </div>
     <div class="catgrid">
+      <div class="bincard" onclick="openSupplierPlaceOrder()">
+        <h4>🛒 Place Order</h4>
+        <div class="count">Build an order from sales &amp; stock</div>
+      </div>
       <div class="bincard" onclick="openSupplierBasicList()">
         <h4>📋 Basic List</h4>
         <div class="count">Items sold, by chosen number of weeks</div>
@@ -1588,6 +1616,45 @@
         <div class="count">Predicted vs previous vs current period</div>
       </div>
     </div>
+  </div>
+
+  <!-- SUPPLIER ORDERS: PLACE ORDER -->
+  <div id="view-supplier-placeorder" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openSupplierOrders()">Supplier Orders</button><span class="sep">/</span>
+      <button onclick="openSupplierHub(currentSupplier)" id="supplierPOCrumbBtn">Supplier</button><span class="sep">/</span>
+      <span class="current">Place Order</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow" id="supplierPOEyebrow">Supplier</div>
+      <h2>Place Order</h2>
+      <p>Tick an item to add it to the order list. Order quantity starts as sold ÷ pack size (boxes) — edit as needed before ticking.</p>
+    </div>
+    <div class="actionbar">
+      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+        <div style="display:flex;gap:8px;align-items:center;">
+          <label class="mono" style="font-size:12px;color:var(--text-dim);">Weeks:</label>
+          <select id="supplierPOWeeks" onchange="loadSupplierPlaceOrder()">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="4" selected>4</option>
+            <option value="8">8</option>
+            <option value="12">12</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <label class="mono" style="font-size:12px;color:var(--text-dim);">Supplier type:</label>
+          <select id="supplierPOPreferred" onchange="loadSupplierPlaceOrder()">
+            <option value="">All</option>
+            <option value="yes">Preferred supplier</option>
+            <option value="no">Non-preferred supplier</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn-amber" onclick="openSupplierOrderListModal()">🛒 Order List (<span id="supplierPOCartCount">0</span>)</button>
+    </div>
+    <div id="supplierPOResults"></div>
   </div>
 
   <!-- SUPPLIER ORDERS: BASIC LIST -->
@@ -2023,6 +2090,19 @@
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalSupplierDelivery')">Cancel</button>
       <button class="btn-amber" onclick="submitSupplierDelivery()">Set Date</button>
+    </div>
+  </div>
+</div>
+
+<!-- SUPPLIER ORDERS: ORDER LIST -->
+<div class="modal-backdrop" id="modalSupplierOrderList">
+  <div class="modal" style="max-width:720px;">
+    <h3>Order List</h3>
+    <p class="modal-sub" id="supplierOrderListSub">Items added from Place Order for this supplier.</p>
+    <div id="supplierOrderListBody" style="max-height:50vh;overflow-y:auto;"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalSupplierOrderList')">Close</button>
+      <button class="btn-amber" onclick="downloadSupplierOrderListCSV()">Download CSV</button>
     </div>
   </div>
 </div>
@@ -6671,9 +6751,13 @@ async function openSupplierOrders(){
     console.error(e);
     return;
   }
+  showView('view-supplier-search');
+}
+function openSupplierSelectPage(){
   document.getElementById('supplierSearchInput').value = '';
   document.getElementById('supplierSearchResults').innerHTML = '<div class="empty-hint">Start typing a supplier name.</div>';
-  showView('view-supplier-search');
+  showView('view-supplier-select');
+  document.getElementById('supplierSearchInput').focus();
 }
 function openSupplierPasswordModal(){
   document.getElementById('soOldPassword').value = '';
@@ -6741,6 +6825,128 @@ function openSupplierHub(supplier){
   document.getElementById('supplierHubCrumb').textContent = supplier.name;
   document.getElementById('supplierHubTitle').textContent = supplier.name;
   showView('view-supplier-hub');
+}
+
+/* ---- Place Order ---- */
+let supplierOrderCart = {}; // keyed by stockid -> {name, qty, product_code, catalogue_number}
+
+function openSupplierPlaceOrder(){
+  if(!currentSupplier) return;
+  document.getElementById('supplierPOCrumbBtn').textContent = currentSupplier.name;
+  document.getElementById('supplierPOEyebrow').textContent = currentSupplier.name;
+  supplierOrderCart = {};
+  updateSupplierCartCount();
+  showView('view-supplier-placeorder');
+  loadSupplierPlaceOrder();
+}
+
+function updateSupplierCartCount(){
+  document.getElementById('supplierPOCartCount').textContent = Object.keys(supplierOrderCart).length;
+}
+
+async function loadSupplierPlaceOrder(){
+  const weeks = document.getElementById('supplierPOWeeks').value;
+  const preferred = document.getElementById('supplierPOPreferred').value;
+  const results = document.getElementById('supplierPOResults');
+  results.innerHTML = '<div class="loading">Loading…</div>';
+  try{
+    let url = 'suppliers/' + currentSupplier.suppid + '/place-order-list/?weeks=' + weeks;
+    if(preferred) url += '&preferred=' + preferred;
+    const data = await apiGet(url);
+    const items = data.items || [];
+    if(items.length === 0){
+      results.innerHTML = '<div class="empty-hint">No items on file for this supplier.</div>';
+      return;
+    }
+    const table = document.createElement('table');
+    table.className = 'finaltable';
+    table.innerHTML = `<thead><tr>
+        <th>Name</th><th class="qtycell">Sold</th><th class="qtycell">In Stock</th>
+        <th class="qtycell">Pack Size</th><th class="qtycell">Order Qty</th><th class="qtycell"></th>
+      </tr></thead>`;
+    const tbody = document.createElement('tbody');
+    items.forEach(it=>{
+      const packSize = Number(it.pack_size) || 0;
+      const initialQty = packSize > 0 ? Math.ceil(Number(it.sold || 0) / packSize) : 0;
+      const tr = document.createElement('tr');
+      tr.dataset.stockid = it.stockid;
+      tr.innerHTML = `
+        <td>${escapeHtml(it.name)}</td>
+        <td class="qtycell">${it.sold}</td>
+        <td class="qtycell">${it.in_stock ?? '—'}</td>
+        <td class="qtycell">${packSize || '—'}</td>
+        <td class="qtycell"><input type="number" min="0" step="1" class="poqtyinput" style="width:70px;text-align:center;" value="${initialQty}"></td>
+        <td class="qtycell" style="white-space:nowrap;">
+          <button class="poTickBtn" title="Add to order" style="border:none;background:none;color:var(--green);font-size:20px;cursor:pointer;">✔</button>
+          <button class="poCrossBtn" title="Remove from order" style="border:none;background:none;color:var(--danger);font-size:20px;cursor:pointer;">✘</button>
+        </td>
+      `;
+      const qtyInput = tr.querySelector('.poqtyinput');
+      tr.querySelector('.poTickBtn').onclick = () => {
+        const qty = Number(qtyInput.value) || 0;
+        supplierOrderCart[it.stockid] = {
+          name: it.name,
+          qty,
+          product_code: it.product_code || '',
+          catalogue_number: it.catalogue_number || ''
+        };
+        tr.style.background = 'rgba(22,163,74,.08)';
+        updateSupplierCartCount();
+      };
+      tr.querySelector('.poCrossBtn').onclick = () => {
+        delete supplierOrderCart[it.stockid];
+        tr.style.background = '';
+        updateSupplierCartCount();
+      };
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    results.innerHTML = '';
+    results.appendChild(table);
+  }catch(e){
+    results.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load list.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+
+function openSupplierOrderListModal(){
+  const body = document.getElementById('supplierOrderListBody');
+  const entries = Object.values(supplierOrderCart);
+  document.getElementById('supplierOrderListSub').textContent =
+    currentSupplier ? `Items added from Place Order for ${currentSupplier.name}.` : 'Items added from Place Order.';
+  if(entries.length === 0){
+    body.innerHTML = '<div class="empty-hint">No items added yet — tick items on the Place Order screen.</div>';
+  }else{
+    const table = document.createElement('table');
+    table.className = 'finaltable';
+    table.innerHTML = `<thead><tr>
+        <th>Stock Name</th><th class="qtycell">Added Qty</th><th>Product Code</th><th>Catalogue Number</th>
+      </tr></thead>`;
+    const tbody = document.createElement('tbody');
+    entries.forEach(it=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${escapeHtml(it.name)}</td>
+        <td class="qtycell">${it.qty}</td>
+        <td>${escapeHtml(it.product_code || '—')}</td>
+        <td>${escapeHtml(it.catalogue_number || '—')}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    body.innerHTML = '';
+    body.appendChild(table);
+  }
+  openModal('modalSupplierOrderList');
+}
+
+function downloadSupplierOrderListCSV(){
+  const entries = Object.values(supplierOrderCart);
+  if(entries.length === 0){ toast('No items in the order list yet'); return; }
+  const headers = ['Stock Name', 'Added Qty', 'Product Code', 'Catalogue Number'];
+  const rows = entries.map(it => [it.name, it.qty, it.product_code || '', it.catalogue_number || '']);
+  const supplierPart = currentSupplier ? currentSupplier.name.replace(/[^a-z0-9]+/gi, '_') : 'order';
+  downloadCSV(`order_list_${supplierPart}.csv`, headers, rows);
 }
 
 /* ---- Basic List ---- */
