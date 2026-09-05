@@ -1629,7 +1629,7 @@
     <div class="hero">
       <div class="eyebrow" id="supplierPOEyebrow">Supplier</div>
       <h2>Place Order</h2>
-      <p>Tick an item to add it to the order list. Order quantity starts as sold ÷ pack size (boxes) — edit as needed before ticking.</p>
+      <p>Order quantity starts as sold ÷ pack size (boxes) — edit any you like, then add them to the order list. Click a column header to sort by it.</p>
     </div>
     <div class="actionbar">
       <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
@@ -1651,10 +1651,50 @@
             <option value="no">Non-preferred supplier</option>
           </select>
         </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <label class="mono" style="font-size:12px;color:var(--text-dim);">In Stock:</label>
+          <select id="supplierPOStockFilter" onchange="renderSupplierPlaceOrderTable()">
+            <option value="">All</option>
+            <option value="zero">= 0</option>
+            <option value="positive">&gt; 0</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <label class="mono" style="font-size:12px;color:var(--text-dim);">Sold:</label>
+          <select id="supplierPOSoldFilter" onchange="renderSupplierPlaceOrderTable()">
+            <option value="">All</option>
+            <option value="zero">= 0</option>
+            <option value="positive">&gt; 0</option>
+          </select>
+        </div>
       </div>
-      <button class="btn-amber" onclick="openSupplierOrderListModal()">🛒 Order List (<span id="supplierPOCartCount">0</span>)</button>
+      <button class="btn-amber" onclick="openSupplierOrderListPage()">🛒 Order List (<span id="supplierPOCartCount">0</span>)</button>
+    </div>
+    <div style="margin:4px 0 14px;">
+      <button class="btn-amber" onclick="addSupplierItemsToOrderList()">➕ Add Items to Order List</button>
     </div>
     <div id="supplierPOResults"></div>
+  </div>
+
+  <!-- SUPPLIER ORDERS: ORDER LIST -->
+  <div id="view-supplier-orderlist" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openSupplierOrders()">Supplier Orders</button><span class="sep">/</span>
+      <button onclick="openSupplierHub(currentSupplier)" id="supplierOLCrumbBtn">Supplier</button><span class="sep">/</span>
+      <button onclick="openSupplierPlaceOrder()">Place Order</button><span class="sep">/</span>
+      <span class="current">Order List</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow" id="supplierOLEyebrow">Supplier</div>
+      <h2>Order List</h2>
+      <p>Items added from Place Order. Remove any you don't want, then download as CSV.</p>
+    </div>
+    <div class="actionbar">
+      <span></span>
+      <button class="btn-amber" onclick="downloadSupplierOrderListCSV()">Download CSV</button>
+    </div>
+    <div id="supplierOrderListResults"></div>
   </div>
 
   <!-- SUPPLIER ORDERS: BASIC LIST -->
@@ -2090,19 +2130,6 @@
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalSupplierDelivery')">Cancel</button>
       <button class="btn-amber" onclick="submitSupplierDelivery()">Set Date</button>
-    </div>
-  </div>
-</div>
-
-<!-- SUPPLIER ORDERS: ORDER LIST -->
-<div class="modal-backdrop" id="modalSupplierOrderList">
-  <div class="modal" style="max-width:720px;">
-    <h3>Order List</h3>
-    <p class="modal-sub" id="supplierOrderListSub">Items added from Place Order for this supplier.</p>
-    <div id="supplierOrderListBody" style="max-height:50vh;overflow-y:auto;"></div>
-    <div class="modal-close-row">
-      <button class="btn-ghost" onclick="closeModal('modalSupplierOrderList')">Close</button>
-      <button class="btn-amber" onclick="downloadSupplierOrderListCSV()">Download CSV</button>
     </div>
   </div>
 </div>
@@ -6821,6 +6848,11 @@ function onSupplierSearch(){
 }
 
 function openSupplierHub(supplier){
+  if(!currentSupplier || currentSupplier.suppid !== supplier.suppid){
+    // Different supplier than before — start the order list fresh.
+    supplierOrderCart = {};
+    supplierPOQtyOverride = {};
+  }
   currentSupplier = supplier;
   document.getElementById('supplierHubCrumb').textContent = supplier.name;
   document.getElementById('supplierHubTitle').textContent = supplier.name;
@@ -6829,12 +6861,14 @@ function openSupplierHub(supplier){
 
 /* ---- Place Order ---- */
 let supplierOrderCart = {}; // keyed by stockid -> {name, qty, product_code, catalogue_number}
+let supplierPOItems = []; // last fetched items for the current weeks/preferred selection
+let supplierPOQtyOverride = {}; // keyed by stockid -> user-edited order qty
+let supplierPOSort = { col: 'name', dir: 'asc' };
 
 function openSupplierPlaceOrder(){
   if(!currentSupplier) return;
   document.getElementById('supplierPOCrumbBtn').textContent = currentSupplier.name;
   document.getElementById('supplierPOEyebrow').textContent = currentSupplier.name;
-  supplierOrderCart = {};
   updateSupplierCartCount();
   showView('view-supplier-placeorder');
   loadSupplierPlaceOrder();
@@ -6842,6 +6876,11 @@ function openSupplierPlaceOrder(){
 
 function updateSupplierCartCount(){
   document.getElementById('supplierPOCartCount').textContent = Object.keys(supplierOrderCart).length;
+}
+
+function computeSupplierPOInitialQty(it){
+  const packSize = Number(it.pack_size) || 0;
+  return packSize > 0 ? Math.ceil(Number(it.sold || 0) / packSize) : 0;
 }
 
 async function loadSupplierPlaceOrder(){
@@ -6853,91 +6892,148 @@ async function loadSupplierPlaceOrder(){
     let url = 'suppliers/' + currentSupplier.suppid + '/place-order-list/?weeks=' + weeks;
     if(preferred) url += '&preferred=' + preferred;
     const data = await apiGet(url);
-    const items = data.items || [];
-    if(items.length === 0){
-      results.innerHTML = '<div class="empty-hint">No items on file for this supplier.</div>';
-      return;
-    }
-    const table = document.createElement('table');
-    table.className = 'finaltable';
-    table.innerHTML = `<thead><tr>
-        <th>Name</th><th class="qtycell">Sold</th><th class="qtycell">In Stock</th>
-        <th class="qtycell">Pack Size</th><th class="qtycell">Order Qty</th><th class="qtycell"></th>
-      </tr></thead>`;
-    const tbody = document.createElement('tbody');
-    items.forEach(it=>{
-      const packSize = Number(it.pack_size) || 0;
-      const initialQty = packSize > 0 ? Math.ceil(Number(it.sold || 0) / packSize) : 0;
-      const tr = document.createElement('tr');
-      tr.dataset.stockid = it.stockid;
-      tr.innerHTML = `
-        <td>${escapeHtml(it.name)}</td>
-        <td class="qtycell">${it.sold}</td>
-        <td class="qtycell">${it.in_stock ?? '—'}</td>
-        <td class="qtycell">${packSize || '—'}</td>
-        <td class="qtycell"><input type="number" min="0" step="1" class="poqtyinput" style="width:70px;text-align:center;" value="${initialQty}"></td>
-        <td class="qtycell" style="white-space:nowrap;">
-          <button class="poTickBtn" title="Add to order" style="border:none;background:none;color:var(--green);font-size:20px;cursor:pointer;">✔</button>
-          <button class="poCrossBtn" title="Remove from order" style="border:none;background:none;color:var(--danger);font-size:20px;cursor:pointer;">✘</button>
-        </td>
-      `;
-      const qtyInput = tr.querySelector('.poqtyinput');
-      tr.querySelector('.poTickBtn').onclick = () => {
-        const qty = Number(qtyInput.value) || 0;
-        supplierOrderCart[it.stockid] = {
-          name: it.name,
-          qty,
-          product_code: it.product_code || '',
-          catalogue_number: it.catalogue_number || ''
-        };
-        tr.style.background = 'rgba(22,163,74,.08)';
-        updateSupplierCartCount();
-      };
-      tr.querySelector('.poCrossBtn').onclick = () => {
-        delete supplierOrderCart[it.stockid];
-        tr.style.background = '';
-        updateSupplierCartCount();
-      };
-      tbody.appendChild(tr);
-    });
-    table.appendChild(tbody);
-    results.innerHTML = '';
-    results.appendChild(table);
+    supplierPOItems = data.items || [];
+    renderSupplierPlaceOrderTable();
   }catch(e){
     results.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load list.</div>' + errDetailHtml(e);
     console.error(e);
   }
 }
 
-function openSupplierOrderListModal(){
-  const body = document.getElementById('supplierOrderListBody');
-  const entries = Object.values(supplierOrderCart);
-  document.getElementById('supplierOrderListSub').textContent =
-    currentSupplier ? `Items added from Place Order for ${currentSupplier.name}.` : 'Items added from Place Order.';
-  if(entries.length === 0){
-    body.innerHTML = '<div class="empty-hint">No items added yet — tick items on the Place Order screen.</div>';
-  }else{
-    const table = document.createElement('table');
-    table.className = 'finaltable';
-    table.innerHTML = `<thead><tr>
-        <th>Stock Name</th><th class="qtycell">Added Qty</th><th>Product Code</th><th>Catalogue Number</th>
-      </tr></thead>`;
-    const tbody = document.createElement('tbody');
-    entries.forEach(it=>{
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${escapeHtml(it.name)}</td>
-        <td class="qtycell">${it.qty}</td>
-        <td>${escapeHtml(it.product_code || '—')}</td>
-        <td>${escapeHtml(it.catalogue_number || '—')}</td>
-      `;
-      tbody.appendChild(tr);
-    });
-    table.appendChild(tbody);
-    body.innerHTML = '';
-    body.appendChild(table);
+function getSupplierPOFilteredSortedItems(){
+  const stockFilter = document.getElementById('supplierPOStockFilter').value;
+  const soldFilter = document.getElementById('supplierPOSoldFilter').value;
+  let items = supplierPOItems.filter(it=>{
+    const stock = Number(it.in_stock) || 0;
+    const sold = Number(it.sold) || 0;
+    if(stockFilter === 'zero' && stock !== 0) return false;
+    if(stockFilter === 'positive' && !(stock > 0)) return false;
+    if(soldFilter === 'zero' && sold !== 0) return false;
+    if(soldFilter === 'positive' && !(sold > 0)) return false;
+    return true;
+  });
+  const { col, dir } = supplierPOSort;
+  items = items.slice().sort((a,b)=>{
+    let av, bv;
+    if(col === 'name'){ av = (a.name || '').toLowerCase(); bv = (b.name || '').toLowerCase(); }
+    else { av = Number(a[col]) || 0; bv = Number(b[col]) || 0; }
+    if(av < bv) return dir === 'asc' ? -1 : 1;
+    if(av > bv) return dir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  return items;
+}
+
+function renderSupplierPlaceOrderTable(){
+  const results = document.getElementById('supplierPOResults');
+  const items = getSupplierPOFilteredSortedItems();
+  if(items.length === 0){
+    results.innerHTML = '<div class="empty-hint">No items match these filters.</div>';
+    return;
   }
-  openModal('modalSupplierOrderList');
+  const cols = [
+    { key: 'name', label: 'Name' },
+    { key: 'sold', label: 'Sold' },
+    { key: 'in_stock', label: 'In Stock' },
+    { key: 'pack_size', label: 'Pack Size' }
+  ];
+  const arrow = (c) => supplierPOSort.col === c ? (supplierPOSort.dir === 'asc' ? ' ▲' : ' ▼') : '';
+  const table = document.createElement('table');
+  table.className = 'finaltable';
+  table.innerHTML = `<thead><tr>
+      ${cols.map(c => `<th class="${c.key === 'name' ? '' : 'qtycell'}" data-col="${c.key}" style="cursor:pointer;">${c.label}${arrow(c.key)}</th>`).join('')}
+      <th class="qtycell">Order Qty</th>
+    </tr></thead>`;
+  table.querySelectorAll('th[data-col]').forEach(th=>{
+    th.onclick = () => {
+      const c = th.dataset.col;
+      if(supplierPOSort.col === c) supplierPOSort.dir = supplierPOSort.dir === 'asc' ? 'desc' : 'asc';
+      else supplierPOSort = { col: c, dir: 'asc' };
+      renderSupplierPlaceOrderTable();
+    };
+  });
+  const tbody = document.createElement('tbody');
+  items.forEach(it=>{
+    const packSize = Number(it.pack_size) || 0;
+    const qty = supplierPOQtyOverride.hasOwnProperty(it.stockid) ? supplierPOQtyOverride[it.stockid] : computeSupplierPOInitialQty(it);
+    const tr = document.createElement('tr');
+    tr.dataset.stockid = it.stockid;
+    tr.innerHTML = `
+      <td>${escapeHtml(it.name)}</td>
+      <td class="qtycell">${it.sold}</td>
+      <td class="qtycell">${it.in_stock ?? '—'}</td>
+      <td class="qtycell">${packSize || '—'}</td>
+      <td class="qtycell"><input type="number" min="0" step="1" class="poqtyinput" style="width:70px;text-align:center;" value="${qty}"></td>
+    `;
+    tr.querySelector('.poqtyinput').oninput = (e) => {
+      supplierPOQtyOverride[it.stockid] = Number(e.target.value) || 0;
+    };
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  results.innerHTML = '';
+  results.appendChild(table);
+}
+
+function addSupplierItemsToOrderList(){
+  const items = getSupplierPOFilteredSortedItems();
+  let added = 0;
+  items.forEach(it=>{
+    const qty = supplierPOQtyOverride.hasOwnProperty(it.stockid) ? supplierPOQtyOverride[it.stockid] : computeSupplierPOInitialQty(it);
+    if(qty > 0){
+      supplierOrderCart[it.stockid] = {
+        name: it.name,
+        qty,
+        product_code: it.product_code || '',
+        catalogue_number: it.catalogue_number || ''
+      };
+      added++;
+    }
+  });
+  updateSupplierCartCount();
+  toast(added ? `Added ${added} item${added === 1 ? '' : 's'} to the order list` : 'No items with an order quantity above 0 in the current view');
+}
+
+function openSupplierOrderListPage(){
+  if(!currentSupplier) return;
+  document.getElementById('supplierOLCrumbBtn').textContent = currentSupplier.name;
+  document.getElementById('supplierOLEyebrow').textContent = currentSupplier.name;
+  showView('view-supplier-orderlist');
+  renderSupplierOrderListPage();
+}
+
+function renderSupplierOrderListPage(){
+  const results = document.getElementById('supplierOrderListResults');
+  const entries = Object.entries(supplierOrderCart); // [stockid, {name, qty, product_code, catalogue_number}]
+  if(entries.length === 0){
+    results.innerHTML = '<div class="empty-hint">No items added yet — go to Place Order, set quantities, then "Add Items to Order List".</div>';
+    return;
+  }
+  const table = document.createElement('table');
+  table.className = 'finaltable';
+  table.innerHTML = `<thead><tr>
+      <th>Stock Name</th><th class="qtycell">Added Qty</th><th>Product Code</th><th>Catalogue Number</th><th class="qtycell"></th>
+    </tr></thead>`;
+  const tbody = document.createElement('tbody');
+  entries.forEach(([stockid, it])=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${escapeHtml(it.name)}</td>
+      <td class="qtycell">${it.qty}</td>
+      <td>${escapeHtml(it.product_code || '—')}</td>
+      <td>${escapeHtml(it.catalogue_number || '—')}</td>
+      <td class="qtycell"><button class="olRemoveBtn" title="Remove from order list" style="border:none;background:none;color:var(--danger);font-size:18px;cursor:pointer;">✘</button></td>
+    `;
+    tr.querySelector('.olRemoveBtn').onclick = () => {
+      delete supplierOrderCart[stockid];
+      updateSupplierCartCount();
+      renderSupplierOrderListPage();
+    };
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  results.innerHTML = '';
+  results.appendChild(table);
 }
 
 function downloadSupplierOrderListCSV(){
@@ -6951,6 +7047,7 @@ function downloadSupplierOrderListCSV(){
 
 /* ---- Basic List ---- */
 function openSupplierBasicList(){
+
   if(!currentSupplier) return;
   document.getElementById('supplierBasicCrumbBtn').textContent = currentSupplier.name;
   document.getElementById('supplierBasicEyebrow').textContent = currentSupplier.name;
