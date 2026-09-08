@@ -1629,18 +1629,37 @@
     <div class="hero">
       <div class="eyebrow" id="supplierPOEyebrow">Supplier</div>
       <h2>Place Order</h2>
-      <p>Order quantity starts as sold ÷ pack size (boxes) — edit any you like, then add them to the order list. Click a column header to sort by it.</p>
+      <p>Order quantity is worked out by the selected method below — edit any you like, then add them to the order list. Click a column header to sort by it.</p>
     </div>
     <div class="actionbar">
       <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
         <div style="display:flex;gap:8px;align-items:center;">
-          <label class="mono" style="font-size:12px;color:var(--text-dim);">Weeks:</label>
+          <label class="mono" style="font-size:12px;color:var(--text-dim);" title="How far back we look at sales history to work out demand">Sales history (weeks):</label>
           <select id="supplierPOWeeks" onchange="loadSupplierPlaceOrder()">
             <option value="1">1</option>
             <option value="2">2</option>
             <option value="4" selected>4</option>
             <option value="8">8</option>
             <option value="12">12</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <label class="mono" style="font-size:12px;color:var(--text-dim);" title="How many weeks of cover this order should give you">Predicted for (weeks):</label>
+          <select id="supplierPOPredictWeeks" onchange="loadSupplierPlaceOrder()">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="4" selected>4</option>
+            <option value="8">8</option>
+            <option value="12">12</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <label class="mono" style="font-size:12px;color:var(--text-dim);" title="Which formula is used to calculate the suggested order quantity">Method:</label>
+          <select id="supplierPOMethod" onchange="renderSupplierPlaceOrderTable()">
+            <option value="minmax" selected>Min / Max (Reorder Level)</option>
+            <option value="simple">Sold ÷ Pack Size (Simple)</option>
+            <option value="trend">Trend Weighted</option>
+            <option value="velocity">Stock-Aware Velocity</option>
           </select>
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
@@ -1670,6 +1689,7 @@
       </div>
       <button class="btn-amber" onclick="openSupplierOrderListPage()">🛒 Order List (<span id="supplierPOCartCount">0</span>)</button>
     </div>
+    <div style="margin:4px 0 14px;font-size:12px;color:var(--text-dim);" id="supplierPOMethodHint"></div>
     <div style="margin:4px 0 14px;">
       <button class="btn-amber" onclick="addSupplierItemsToOrderList()">➕ Add Items to Order List</button>
     </div>
@@ -6861,9 +6881,17 @@ function openSupplierHub(supplier){
 
 /* ---- Place Order ---- */
 let supplierOrderCart = {}; // keyed by stockid -> {name, qty, product_code, catalogue_number}
-let supplierPOItems = []; // last fetched items for the current weeks/preferred selection
+let supplierPOItems = []; // last fetched items for the current weeks/predict_weeks/preferred selection
 let supplierPOQtyOverride = {}; // keyed by stockid -> user-edited order qty
 let supplierPOSort = { col: 'name', dir: 'asc' };
+let supplierPOLevelDrafts = {}; // keyed by stockid -> {reorder_level, max_stock_level} while a row is mid-edit
+
+const SUPPLIER_PO_METHOD_HINTS = {
+  minmax: 'Min / Max: orders only once In Stock is at or below the Reorder Level, then tops back up to the Max Stock Level. Needs both levels set (from Vector, or edited here) — shows "—" where they\'re missing.',
+  simple: 'Simple: total sold over the sales-history window, scaled up to the number of weeks you\'re predicting for, then divided by pack size.',
+  trend: 'Trend Weighted: like Simple, but weights the more recent half of the sales-history window more heavily (60/40), so it reacts faster to items speeding up or slowing down.',
+  velocity: 'Stock-Aware Velocity: like Simple, but subtracts what\'s already In Stock so it doesn\'t over-order.'
+};
 
 function openSupplierPlaceOrder(){
   if(!currentSupplier) return;
@@ -6878,21 +6906,32 @@ function updateSupplierCartCount(){
   document.getElementById('supplierPOCartCount').textContent = Object.keys(supplierOrderCart).length;
 }
 
+function getSupplierPOMethod(){
+  return document.getElementById('supplierPOMethod').value || 'minmax';
+}
+
 function computeSupplierPOInitialQty(it){
-  const packSize = Number(it.pack_size) || 0;
-  return packSize > 0 ? Math.ceil(Number(it.sold || 0) / packSize) : 0;
+  const method = getSupplierPOMethod();
+  const suggestions = it.suggestions || {};
+  const val = suggestions[method];
+  return val === null || val === undefined ? 0 : Number(val) || 0;
 }
 
 async function loadSupplierPlaceOrder(){
   const weeks = document.getElementById('supplierPOWeeks').value;
+  const predictWeeks = document.getElementById('supplierPOPredictWeeks').value;
   const preferred = document.getElementById('supplierPOPreferred').value;
   const results = document.getElementById('supplierPOResults');
   results.innerHTML = '<div class="loading">Loading…</div>';
   try{
-    let url = 'suppliers/' + currentSupplier.suppid + '/place-order-list/?weeks=' + weeks;
+    let url = 'suppliers/' + currentSupplier.suppid + '/place-order-list/?weeks=' + weeks + '&predict_weeks=' + predictWeeks;
     if(preferred) url += '&preferred=' + preferred;
     const data = await apiGet(url);
     supplierPOItems = data.items || [];
+    // Re-fetching means any per-row order-qty edits the user hasn't
+    // ticked into the cart yet no longer apply to the freshly computed
+    // suggestions, so clear stale overrides — the cart itself is untouched.
+    supplierPOQtyOverride = {};
     renderSupplierPlaceOrderTable();
   }catch(e){
     results.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load list.</div>' + errDetailHtml(e);
@@ -6926,6 +6965,9 @@ function getSupplierPOFilteredSortedItems(){
 
 function renderSupplierPlaceOrderTable(){
   const results = document.getElementById('supplierPOResults');
+  const method = getSupplierPOMethod();
+  const hintEl = document.getElementById('supplierPOMethodHint');
+  if(hintEl) hintEl.textContent = SUPPLIER_PO_METHOD_HINTS[method] || '';
   const items = getSupplierPOFilteredSortedItems();
   if(items.length === 0){
     results.innerHTML = '<div class="empty-hint">No items match these filters.</div>';
@@ -6942,6 +6984,8 @@ function renderSupplierPlaceOrderTable(){
   table.className = 'finaltable';
   table.innerHTML = `<thead><tr>
       ${cols.map(c => `<th class="${c.key === 'name' ? '' : 'qtycell'}" data-col="${c.key}" style="cursor:pointer;">${c.label}${arrow(c.key)}</th>`).join('')}
+      <th class="qtycell" title="Order point — from Vector, or edited here">Reorder Level</th>
+      <th class="qtycell" title="Target stock to order up to — from Vector, or edited here">Max Stock Level</th>
       <th class="qtycell">Order Qty</th><th class="qtycell"></th>
     </tr></thead>`;
   table.querySelectorAll('th[data-col]').forEach(th=>{
@@ -6959,16 +7003,22 @@ function renderSupplierPlaceOrderTable(){
     const tr = document.createElement('tr');
     tr.dataset.stockid = it.stockid;
     if(supplierOrderCart.hasOwnProperty(it.stockid)) tr.style.background = 'rgba(22,163,74,.08)';
+    const minmaxNote = method === 'minmax' && it.minmax_triggered === false
+      ? '<div style="font-size:11px;color:var(--text-dim);">above reorder level</div>' : '';
     tr.innerHTML = `
       <td>${escapeHtml(it.name)}</td>
       <td class="qtycell">${it.sold}</td>
       <td class="qtycell">${it.in_stock ?? '—'}</td>
       <td class="qtycell">${packSize || '—'}</td>
-      <td class="qtycell"><input type="number" min="0" step="1" class="poqtyinput" style="width:70px;text-align:center;" value="${qty}"></td>
+      <td class="qtycell">${renderLevelCellHtml(it, 'reorder_level')}</td>
+      <td class="qtycell">${renderLevelCellHtml(it, 'max_stock_level')}</td>
+      <td class="qtycell"><input type="number" min="0" step="1" class="poqtyinput" style="width:70px;text-align:center;" value="${qty}">${minmaxNote}</td>
       <td class="qtycell">
         <button class="poZeroBtn" title="Set order qty to 0" style="border:1px solid var(--border,#ccc);background:none;color:var(--text-dim);font-size:12px;font-weight:700;width:22px;height:22px;border-radius:4px;cursor:pointer;margin-right:6px;">0</button><button class="poTickBtn" title="Add this item to the order list" style="border:none;background:none;color:var(--green);font-size:20px;cursor:pointer;">✔</button>
       </td>
     `;
+    wireLevelCell(tr, it, 'reorder_level');
+    wireLevelCell(tr, it, 'max_stock_level');
     const qtyInput = tr.querySelector('.poqtyinput');
     tr.querySelector('.poZeroBtn').onclick = () => {
       qtyInput.value = 0;
@@ -6997,6 +7047,75 @@ function renderSupplierPlaceOrderTable(){
   table.appendChild(tbody);
   results.innerHTML = '';
   results.appendChild(table);
+}
+
+// ---- Reorder Level / Max Stock Level cells: editable, saved to the
+//      STOCK_LEVEL_OVERRIDES table (survives the 5-minute Vector sync). ----
+function renderLevelCellHtml(it, field){
+  const draftKey = it.stockid + ':' + field;
+  const editing = supplierPOLevelDrafts.hasOwnProperty(draftKey);
+  const isOverride = field === 'reorder_level' ? it.reorder_level_override : it.max_stock_level_override;
+  const val = editing ? supplierPOLevelDrafts[draftKey] : it[field];
+  if(editing){
+    return `<div style="display:flex;gap:4px;align-items:center;justify-content:center;">
+      <input type="number" step="1" class="levelEditInput" data-field="${field}" style="width:64px;text-align:center;" value="${val === null || val === undefined ? '' : val}">
+      <button class="levelSaveBtn" data-field="${field}" title="Save" style="border:none;background:none;color:var(--green);cursor:pointer;">💾</button>
+      <button class="levelCancelBtn" data-field="${field}" title="Cancel" style="border:none;background:none;color:var(--text-dim);cursor:pointer;">✘</button>
+    </div>`;
+  }
+  const display = val === null || val === undefined ? '—' : val;
+  return `<div style="display:flex;gap:4px;align-items:center;justify-content:center;">
+    <span>${display}${isOverride ? ' <span title="Edited here — will not be overwritten by the Vector sync" style="color:var(--amber,#b45309);font-size:10px;">✎</span>' : ''}</span>
+    <button class="levelEditBtn" data-field="${field}" title="Edit" style="border:none;background:none;color:var(--text-dim);font-size:12px;cursor:pointer;">✎</button>
+  </div>`;
+}
+
+function wireLevelCell(tr, it, field){
+  const draftKey = it.stockid + ':' + field;
+  const editBtn = tr.querySelector(`.levelEditBtn[data-field="${field}"]`);
+  if(editBtn){
+    editBtn.onclick = () => {
+      supplierPOLevelDrafts[draftKey] = it[field] === null || it[field] === undefined ? '' : it[field];
+      renderSupplierPlaceOrderTable();
+    };
+  }
+  const cancelBtn = tr.querySelector(`.levelCancelBtn[data-field="${field}"]`);
+  if(cancelBtn){
+    cancelBtn.onclick = () => {
+      delete supplierPOLevelDrafts[draftKey];
+      renderSupplierPlaceOrderTable();
+    };
+  }
+  const input = tr.querySelector(`.levelEditInput[data-field="${field}"]`);
+  if(input){
+    input.oninput = (e) => { supplierPOLevelDrafts[draftKey] = e.target.value; };
+  }
+  const saveBtn = tr.querySelector(`.levelSaveBtn[data-field="${field}"]`);
+  if(saveBtn){
+    saveBtn.onclick = () => saveSupplierStockLevel(it, field);
+  }
+}
+
+async function saveSupplierStockLevel(it, changedField){
+  const draftKeyReorder = it.stockid + ':reorder_level';
+  const draftKeyMax = it.stockid + ':max_stock_level';
+  const reorderVal = supplierPOLevelDrafts.hasOwnProperty(draftKeyReorder) ? supplierPOLevelDrafts[draftKeyReorder] : it.reorder_level;
+  const maxVal = supplierPOLevelDrafts.hasOwnProperty(draftKeyMax) ? supplierPOLevelDrafts[draftKeyMax] : it.max_stock_level;
+  try{
+    await apiPut('stock/' + it.stockid + '/level-override/', {
+      reorder_level: reorderVal === '' || reorderVal === null || reorderVal === undefined ? null : Number(reorderVal),
+      max_stock_level: maxVal === '' || maxVal === null || maxVal === undefined ? null : Number(maxVal)
+    });
+    delete supplierPOLevelDrafts[draftKeyReorder];
+    delete supplierPOLevelDrafts[draftKeyMax];
+    toast(`Saved ${changedField === 'reorder_level' ? 'Reorder Level' : 'Max Stock Level'} for ${it.name}`);
+    // Refetch so the Min/Max suggestion (and anything else derived from
+    // these levels) is recalculated server-side from the saved values.
+    await loadSupplierPlaceOrder();
+  }catch(e){
+    toast('Could not save — try again');
+    console.error(e);
+  }
 }
 
 function addSupplierItemsToOrderList(){
