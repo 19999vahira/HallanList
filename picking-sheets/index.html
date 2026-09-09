@@ -1690,8 +1690,9 @@
       <button class="btn-amber" onclick="openSupplierOrderListPage()">🛒 Order List (<span id="supplierPOCartCount">0</span>)</button>
     </div>
     <div style="margin:4px 0 14px;font-size:12px;color:var(--text-dim);" id="supplierPOMethodHint"></div>
-    <div style="margin:4px 0 14px;">
+    <div style="margin:4px 0 14px;display:flex;gap:10px;flex-wrap:wrap;">
       <button class="btn-amber" onclick="addSupplierItemsToOrderList()">➕ Add Items to Order List</button>
+      <button class="btn-ghost" onclick="openSupplierLevelsModal()">✎ Edit Reorder &amp; Max Levels</button>
     </div>
     <div id="supplierPOResults"></div>
   </div>
@@ -2150,6 +2151,29 @@
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalSupplierDelivery')">Cancel</button>
       <button class="btn-amber" onclick="submitSupplierDelivery()">Set Date</button>
+    </div>
+  </div>
+</div>
+
+<!-- PLACE ORDER: bulk-edit Reorder Level / Max Stock Level for every item
+     currently shown on the Place Order screen, rather than one at a time.
+     Tab/Enter moves down each column (data-enter-col) so it can be filled
+     in like a spreadsheet. Save All sends everything in one request. -->
+<div class="modal-backdrop" id="modalSupplierLevels">
+  <div class="modal" style="width:640px;max-width:92vw;max-height:82vh;display:flex;flex-direction:column;">
+    <h3>Edit Reorder &amp; Max Stock Levels</h3>
+    <p class="modal-sub">Edits are saved separately from Vector, so they won't be overwritten by the next sync. Press Enter to jump to the next row in the same column.</p>
+    <div style="overflow-y:auto;flex:1;border:1px solid var(--line);border-radius:6px;">
+      <table class="finaltable" style="width:100%;">
+        <thead style="position:sticky;top:0;background:var(--bg-card,#fff);"><tr>
+          <th>Name</th><th class="qtycell">Reorder Level</th><th class="qtycell">Max Stock Level</th>
+        </tr></thead>
+        <tbody id="supplierLevelsModalBody"></tbody>
+      </table>
+    </div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalSupplierLevels')">Cancel</button>
+      <button class="btn-amber" onclick="saveSupplierLevelsModal()">💾 Save All</button>
     </div>
   </div>
 </div>
@@ -7012,7 +7036,7 @@ function renderSupplierPlaceOrderTable(){
       <td class="qtycell">${packSize || '—'}</td>
       <td class="qtycell">${renderLevelCellHtml(it, 'reorder_level')}</td>
       <td class="qtycell">${renderLevelCellHtml(it, 'max_stock_level')}</td>
-      <td class="qtycell"><input type="number" min="0" step="1" class="poqtyinput" style="width:70px;text-align:center;" value="${qty}">${minmaxNote}</td>
+      <td class="qtycell"><input type="number" min="0" step="1" class="poqtyinput" data-enter-col="qty" style="width:70px;text-align:center;" value="${qty}">${minmaxNote}</td>
       <td class="qtycell">
         <button class="poZeroBtn" title="Set order qty to 0" style="border:1px solid var(--border,#ccc);background:none;color:var(--text-dim);font-size:12px;font-weight:700;width:22px;height:22px;border-radius:4px;cursor:pointer;margin-right:6px;">0</button><button class="poTickBtn" title="Add this item to the order list" style="border:none;background:none;color:var(--green);font-size:20px;cursor:pointer;">✔</button>
       </td>
@@ -7058,7 +7082,7 @@ function renderLevelCellHtml(it, field){
   const val = editing ? supplierPOLevelDrafts[draftKey] : it[field];
   if(editing){
     return `<div style="display:flex;gap:4px;align-items:center;justify-content:center;">
-      <input type="number" step="1" class="levelEditInput" data-field="${field}" style="width:64px;text-align:center;" value="${val === null || val === undefined ? '' : val}">
+      <input type="number" step="1" class="levelEditInput" data-field="${field}" data-enter-col="row-${field}" style="width:64px;text-align:center;" value="${val === null || val === undefined ? '' : val}">
       <button class="levelSaveBtn" data-field="${field}" title="Save" style="border:none;background:none;color:var(--green);cursor:pointer;">💾</button>
       <button class="levelCancelBtn" data-field="${field}" title="Cancel" style="border:none;background:none;color:var(--text-dim);cursor:pointer;">✘</button>
     </div>`;
@@ -7111,6 +7135,67 @@ async function saveSupplierStockLevel(it, changedField){
     toast(`Saved ${changedField === 'reorder_level' ? 'Reorder Level' : 'Max Stock Level'} for ${it.name}`);
     // Refetch so the Min/Max suggestion (and anything else derived from
     // these levels) is recalculated server-side from the saved values.
+    await loadSupplierPlaceOrder();
+  }catch(e){
+    toast('Could not save — try again');
+    console.error(e);
+  }
+}
+
+// ---- Bulk "Edit Reorder & Max Levels" modal — lets staff edit every item
+//      currently shown on the Place Order screen in one sitting instead of
+//      one row at a time. Uses the same respects-current-filters item list
+//      as "Add Items to Order List", and saves everything in a single
+//      request (see the /bulk endpoint) rather than one PUT per row. ----
+function openSupplierLevelsModal(){
+  const items = getSupplierPOFilteredSortedItems();
+  if(items.length === 0){
+    toast('No items to edit — adjust the filters above first');
+    return;
+  }
+  renderSupplierLevelsModalRows(items);
+  openModal('modalSupplierLevels');
+}
+
+function renderSupplierLevelsModalRows(items){
+  const body = document.getElementById('supplierLevelsModalBody');
+  body.innerHTML = items.map(it => `
+    <tr data-stockid="${it.stockid}">
+      <td>${escapeHtml(it.name)}</td>
+      <td class="qtycell">
+        <input type="number" step="1" class="modalLevelInput" data-enter-col="modal-reorder" data-field="reorder_level"
+          style="width:80px;text-align:center;"
+          value="${it.reorder_level === null || it.reorder_level === undefined ? '' : it.reorder_level}">
+      </td>
+      <td class="qtycell">
+        <input type="number" step="1" class="modalLevelInput" data-enter-col="modal-max" data-field="max_stock_level"
+          style="width:80px;text-align:center;"
+          value="${it.max_stock_level === null || it.max_stock_level === undefined ? '' : it.max_stock_level}">
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function saveSupplierLevelsModal(){
+  const rows = document.querySelectorAll('#supplierLevelsModalBody tr');
+  const updates = [];
+  rows.forEach(tr => {
+    const stockid = Number(tr.dataset.stockid);
+    const reorderInput = tr.querySelector('input[data-field="reorder_level"]');
+    const maxInput = tr.querySelector('input[data-field="max_stock_level"]');
+    updates.push({
+      stockid,
+      reorder_level: reorderInput.value === '' ? null : Number(reorderInput.value),
+      max_stock_level: maxInput.value === '' ? null : Number(maxInput.value)
+    });
+  });
+  if(updates.length === 0){ closeModal('modalSupplierLevels'); return; }
+  try{
+    await apiPut('stock/level-overrides/bulk/', { updates });
+    closeModal('modalSupplierLevels');
+    toast(`Saved levels for ${updates.length} item${updates.length === 1 ? '' : 's'}`);
+    // Refetch so Min/Max suggestions (and anything derived from these
+    // levels) are recalculated server-side from the newly saved values.
     await loadSupplierPlaceOrder();
   }catch(e){
     toast('Could not save — try again');
@@ -8798,7 +8883,8 @@ async function pickCreatedInvoiceMatch(idx, stockid, name){
   currentCreatedInvoice.items[idx].retail_price = null;
   renderCreatedInvoicePricesTable();
   try{
-    await saveCreatedInvoiceItems();
+    clearTimeout(createdInvoiceAutosaveTimer);
+    await requestCreatedInvoiceSave();
     const data = await apiGet('invoices/created/' + currentCreatedInvoice.header.invoice_id + '/');
     currentCreatedInvoice = data;
     renderCreatedInvoicePricesTable();
@@ -8834,7 +8920,8 @@ async function saveCreatedInvoiceItems(){
 }
 async function saveAndExitCreatedInvoice(){
   try{
-    await saveCreatedInvoiceItems();
+    clearTimeout(createdInvoiceAutosaveTimer);
+    await requestCreatedInvoiceSave();
     toast('Saved');
     openCreatedInvoicesList();
   }catch(e){
@@ -8849,7 +8936,8 @@ async function goToCreatedInvoiceQty(){
     if(!confirm(`${unmatched} item(s) still unmatched and ${missingQty} still missing a Quantity as Box. Continue anyway?`)) return;
   }
   try{
-    await saveCreatedInvoiceItems();
+    clearTimeout(createdInvoiceAutosaveTimer);
+    await requestCreatedInvoiceSave();
     const data = await apiGet('invoices/created/' + currentCreatedInvoice.header.invoice_id + '/');
     currentCreatedInvoice = data;
     openCreatedInvoiceQtyStep();
@@ -8859,7 +8947,8 @@ async function goToCreatedInvoiceQty(){
   }
 }
 function backToCreatedInvoiceMatchFromQty(){
-  saveCreatedInvoiceItems().catch(e => console.error(e));
+  clearTimeout(createdInvoiceAutosaveTimer);
+  requestCreatedInvoiceSave().catch(e => console.error(e));
   openCreatedInvoiceMatchStep();
 }
 
@@ -8913,12 +9002,12 @@ function renderCreatedInvoiceQtyTable(){
         <div class="restaurant-sub-slot" id="createdInvoiceSearchSlot-${idx}" style="margin-top:6px;"></div>
       </td>
       <td class="qtycell" data-label="Qty as Box">
-        <input type="number" min="0" step="0.001" class="restaurant-qty-input" style="width:80px;"
+        <input type="number" min="0" step="0.001" class="restaurant-qty-input" data-enter-col="qtybox" style="width:80px;"
           value="${it.qty_box === null || it.qty_box === undefined ? '' : it.qty_box}"
           onchange="updateCreatedInvoiceQtyStepField(${idx}, 'qty_box', this.value)">
       </td>
       <td class="qtycell" data-label="Qty per Box">
-        <input type="number" min="0" step="0.001" class="restaurant-qty-input" style="width:80px;"
+        <input type="number" min="0" step="0.001" class="restaurant-qty-input" data-enter-col="qtyperbox" style="width:80px;"
           placeholder="amount in each box"
           value="${it.qty_per_box === null || it.qty_per_box === undefined ? '' : it.qty_per_box}"
           onchange="updateCreatedInvoiceQtyPerBox(${idx}, this.value)">
@@ -8970,7 +9059,8 @@ function updateCreatedInvoiceQtyPerBox(idx, value){
 }
 async function saveAndExitCreatedInvoiceQty(){
   try{
-    await saveCreatedInvoiceItems();
+    clearTimeout(createdInvoiceAutosaveTimer);
+    await requestCreatedInvoiceSave();
     toast('Saved');
     openCreatedInvoicesList();
   }catch(e){
@@ -8980,7 +9070,8 @@ async function saveAndExitCreatedInvoiceQty(){
 }
 async function saveCreatedInvoiceQtyOnly(){
   try{
-    await saveCreatedInvoiceItems();
+    clearTimeout(createdInvoiceAutosaveTimer);
+    await requestCreatedInvoiceSave();
     toast('Saved');
   }catch(e){
     toast('Could not save');
@@ -8993,7 +9084,8 @@ async function goToCreatedInvoicePricesFromQty(){
     if(!confirm(`${missingPerBox} item(s) still missing a Qty per Box. Continue anyway?`)) return;
   }
   try{
-    await saveCreatedInvoiceItems();
+    clearTimeout(createdInvoiceAutosaveTimer);
+    await requestCreatedInvoiceSave();
     const data = await apiGet('invoices/created/' + currentCreatedInvoice.header.invoice_id + '/');
     currentCreatedInvoice = data;
     document.getElementById('createdInvoicePricesLabel').textContent = data.header.supplier_name || 'Invoice';
@@ -9005,7 +9097,8 @@ async function goToCreatedInvoicePricesFromQty(){
   }
 }
 function backToCreatedInvoiceQtyFromPrices(){
-  saveCreatedInvoiceItems().catch(e => console.error(e));
+  clearTimeout(createdInvoiceAutosaveTimer);
+  requestCreatedInvoiceSave().catch(e => console.error(e));
   openCreatedInvoiceQtyStep();
 }
 
@@ -9142,7 +9235,8 @@ async function runCreatedInvoicePreDownloadMerge(){
     renderCreatedInvoicePricesTable();
   }
   toast('Merged ' + mergedCount + ' duplicate product' + (mergedCount > 1 ? 's' : '') + ' automatically');
-  try{ await saveCreatedInvoiceItems(); }catch(e){ console.error('Could not save auto-merge', e); }
+  clearTimeout(createdInvoiceAutosaveTimer);
+  try{ await requestCreatedInvoiceSave(); }catch(e){ console.error('Could not save auto-merge', e); }
 }
 let createdInvoiceSortMode = 'default';
 function setCreatedInvoiceSort(mode){
@@ -9199,24 +9293,24 @@ function renderCreatedInvoicePricesTable(){
         <div class="restaurant-sub-slot" id="createdInvoiceSearchSlot-${idx}" style="margin-top:6px;"></div>
       </td>
       <td class="qtycell">
-        <input type="number" min="0" step="0.001" class="restaurant-qty-input" style="width:80px;"
+        <input type="number" min="0" step="0.001" class="restaurant-qty-input" data-enter-col="qtybox" style="width:80px;"
           value="${it.qty_box === null || it.qty_box === undefined ? '' : it.qty_box}"
           onchange="updateCreatedInvoiceField(${idx}, 'qty_box', this.value)">
       </td>
       <td class="qtycell">
-        <input type="number" min="0" step="0.001" class="restaurant-qty-input" style="width:80px;"
+        <input type="number" min="0" step="0.001" class="restaurant-qty-input" data-enter-col="qtyperbox" style="width:80px;"
           placeholder="amount in each box"
           value="${it.qty_per_box === null || it.qty_per_box === undefined ? '' : it.qty_per_box}"
           onchange="updateCreatedInvoiceField(${idx}, 'qty_per_box', this.value)">
       </td>
       <td class="qtycell">
-        <input type="number" min="0" step="0.01" class="restaurant-qty-input" style="width:80px;"
+        <input type="number" min="0" step="0.01" class="restaurant-qty-input" data-enter-col="boxprice" style="width:80px;"
           value="${it.box_price === null || it.box_price === undefined ? '' : it.box_price}"
           onchange="updateCreatedInvoiceField(${idx}, 'box_price', this.value)">
       </td>
       <td class="qtycell" id="createdInvoiceCostUnitCell-${idx}">${costPerUnit === null ? '—' : costPerUnit.toFixed(2)}</td>
       <td class="qtycell">
-        <input type="number" min="0" step="0.01" class="restaurant-qty-input" style="width:80px;"
+        <input type="number" min="0" step="0.01" class="restaurant-qty-input" data-enter-col="retail" style="width:80px;"
           value="${it.retail_price === null || it.retail_price === undefined ? '' : it.retail_price}"
           onchange="updateCreatedInvoiceField(${idx}, 'retail_price', this.value)">
       </td>
@@ -9257,10 +9351,39 @@ function renderCreatedInvoicePricesTable(){
 // edit, so a quantity typed here is never only sitting in memory — closing
 // the tab, refreshing, or navigating away some other way won't lose it.
 let createdInvoiceAutosaveTimer = null;
+// Guards against overlapping save requests. Previously, a slow save that
+// started earlier could still be in flight when a second save (triggered by
+// further typing) went out — and if the FIRST (older, smaller) request's
+// response came back AFTER the second one, it would silently overwrite the
+// newer data with the older snapshot, making everything typed in between
+// vanish on refresh. Now at most one PUT is ever in flight at a time: if a
+// save is requested while one is already running, we just remember that and
+// fire exactly one more save — with the latest data — right after the
+// current one finishes, instead of letting two requests race.
+let createdInvoiceSaveInFlight = null;
+let createdInvoiceSavePending = false;
+function requestCreatedInvoiceSave(){
+  if(createdInvoiceSaveInFlight){
+    createdInvoiceSavePending = true;
+    return createdInvoiceSaveInFlight;
+  }
+  createdInvoiceSaveInFlight = (async () => {
+    try{
+      await saveCreatedInvoiceItems();
+    } finally {
+      createdInvoiceSaveInFlight = null;
+      if(createdInvoiceSavePending){
+        createdInvoiceSavePending = false;
+        requestCreatedInvoiceSave();
+      }
+    }
+  })();
+  return createdInvoiceSaveInFlight;
+}
 function scheduleCreatedInvoiceAutosave(){
   clearTimeout(createdInvoiceAutosaveTimer);
   createdInvoiceAutosaveTimer = setTimeout(() => {
-    saveCreatedInvoiceItems().catch(e => console.error('Autosave failed', e));
+    requestCreatedInvoiceSave().catch(e => console.error('Autosave failed', e));
   }, 800);
 }
 function updateCreatedInvoiceField(idx, field, value){
@@ -9418,7 +9541,8 @@ function renderCreatedInvoiceMenuItems(block){
 }
 async function finishCreatedInvoice(){
   try{
-    await saveCreatedInvoiceItems();
+    clearTimeout(createdInvoiceAutosaveTimer);
+    await requestCreatedInvoiceSave();
     await apiPut('invoices/created/' + currentCreatedInvoice.header.invoice_id + '/', { status: 'COMPLETE' });
     toast('Invoice marked complete');
     openCreatedInvoicesList();
@@ -9991,6 +10115,38 @@ function toast(msg){
 /* ============ MODALS ============ */
 function openModal(id){ document.getElementById(id).classList.add('active'); }
 function closeModal(id){ document.getElementById(id).classList.remove('active'); }
+
+// ---- Enter-key column navigation ----
+// Any <input> tagged with data-enter-col="something" gets spreadsheet-style
+// Enter behaviour: pressing Enter commits the value (same as clicking away —
+// it blurs, which fires the input's own onchange) and moves focus straight
+// down to the next input sharing the same data-enter-col value, instead of
+// doing nothing and forcing a reach for the mouse. Matching is scoped to the
+// nearest <table> (or nearest [data-enter-scope] element for non-table
+// layouts like the bulk levels list) so the same column name can be reused
+// across different screens without inputs on one screen jumping into
+// another. One delegated listener handles every screen — Place Order's Qty
+// column, the Reorder/Max levels editor, and every Create Invoice step —
+// so newly-rendered rows are wired automatically with no extra setup.
+document.addEventListener('keydown', function(e){
+  if(e.key !== 'Enter') return;
+  const el = e.target;
+  if(!el || el.tagName !== 'INPUT') return;
+  const col = el.getAttribute('data-enter-col');
+  if(!col) return;
+  e.preventDefault();
+  const scope = el.closest('[data-enter-scope]') || el.closest('table') || document;
+  const group = Array.prototype.slice.call(scope.querySelectorAll('input[data-enter-col="' + col + '"]'));
+  const i = group.indexOf(el);
+  if(i === -1) return;
+  const next = group[i + 1];
+  if(next){
+    next.focus();
+    if(next.select) next.select();
+  } else {
+    el.blur(); // last row in this column — just commit the value
+  }
+});
 
 /* ============ API HELPERS ============ */
 async function apiErrorText(res, verb, path, body){
