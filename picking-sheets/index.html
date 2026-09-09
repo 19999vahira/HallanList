@@ -339,6 +339,32 @@
   .btn-danger-ghost:hover{background:var(--danger);color:#fff;}
 
   .actionbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;}
+
+  /* ---- Place Order filter bar: a bordered card of label-over-select
+     fields, instead of loose inline labels + dropdowns crammed together.
+     A visible divider separates the "how to calculate" fields (weeks,
+     predicted-for, method) from the plain display filters (supplier type,
+     in stock, sold), since the first group changes numbers and the second
+     just hides/shows rows. ---- */
+  .po-actionbar{align-items:flex-start;flex-wrap:wrap;gap:14px;
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;}
+  .po-filterbar{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-end;}
+  .po-field{display:flex;flex-direction:column;gap:5px;}
+  .po-field label{font-size:11px;letter-spacing:.03em;text-transform:uppercase;
+    color:var(--text-dim);font-weight:700;white-space:nowrap;}
+  .po-field select{padding:8px 10px;border-radius:6px;border:1px solid var(--line);
+    background:var(--bg);color:var(--text);font-size:13px;min-height:36px;min-width:96px;}
+  .po-field.is-disabled{opacity:.5;}
+  .po-field.is-disabled select{cursor:not-allowed;background:var(--panel2);}
+  .po-field-sep{width:1px;align-self:stretch;background:var(--line);margin:2px 4px;}
+  .po-method-hint{margin:10px 0 16px;font-size:12px;line-height:1.5;color:var(--text-dim);
+    background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;}
+  @media(max-width:760px){
+    .po-actionbar{flex-direction:column;}
+    .po-filterbar{gap:14px;}
+    .po-field-sep{display:none;}
+  }
+
   .btn-ghost{
     background:var(--panel);border:1px solid var(--line);color:var(--text);padding:10px 16px;
     border-radius:6px;cursor:pointer;font-size:13px;font-family:'Inter',sans-serif;
@@ -1631,10 +1657,10 @@
       <h2>Place Order</h2>
       <p>Order quantity is worked out by the selected method below — edit any you like, then add them to the order list. Click a column header to sort by it.</p>
     </div>
-    <div class="actionbar">
-      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
-        <div style="display:flex;gap:8px;align-items:center;">
-          <label class="mono" style="font-size:12px;color:var(--text-dim);" title="How far back we look at sales history to work out demand">Sales history (weeks):</label>
+    <div class="actionbar po-actionbar">
+      <div class="po-filterbar">
+        <div class="po-field" id="poFieldWeeks">
+          <label for="supplierPOWeeks" title="How far back we look at sales history to work out demand">Sales history (wks)</label>
           <select id="supplierPOWeeks" onchange="loadSupplierPlaceOrder()">
             <option value="1">1</option>
             <option value="2">2</option>
@@ -1643,8 +1669,8 @@
             <option value="12">12</option>
           </select>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <label class="mono" style="font-size:12px;color:var(--text-dim);" title="How many weeks of cover this order should give you">Predicted for (weeks):</label>
+        <div class="po-field" id="poFieldPredictWeeks">
+          <label for="supplierPOPredictWeeks" title="How many weeks of cover this order should give you">Predicted for (wks)</label>
           <select id="supplierPOPredictWeeks" onchange="loadSupplierPlaceOrder()">
             <option value="1">1</option>
             <option value="2">2</option>
@@ -1653,33 +1679,34 @@
             <option value="12">12</option>
           </select>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <label class="mono" style="font-size:12px;color:var(--text-dim);" title="Which formula is used to calculate the suggested order quantity">Method:</label>
-          <select id="supplierPOMethod" onchange="renderSupplierPlaceOrderTable()">
+        <div class="po-field">
+          <label for="supplierPOMethod" title="Which formula is used to calculate the suggested order quantity">Method</label>
+          <select id="supplierPOMethod" onchange="onSupplierPOMethodChange()">
             <option value="minmax" selected>Min / Max (Reorder Level)</option>
             <option value="simple">Sold ÷ Pack Size (Simple)</option>
             <option value="trend">Trend Weighted</option>
             <option value="velocity">Stock-Aware Velocity</option>
           </select>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <label class="mono" style="font-size:12px;color:var(--text-dim);">Supplier type:</label>
+        <div class="po-field-sep"></div>
+        <div class="po-field">
+          <label for="supplierPOPreferred">Supplier type</label>
           <select id="supplierPOPreferred" onchange="loadSupplierPlaceOrder()">
             <option value="">All</option>
-            <option value="yes">Preferred supplier</option>
-            <option value="no">Non-preferred supplier</option>
+            <option value="yes">Preferred</option>
+            <option value="no">Non-preferred</option>
           </select>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <label class="mono" style="font-size:12px;color:var(--text-dim);">In Stock:</label>
+        <div class="po-field">
+          <label for="supplierPOStockFilter">In stock</label>
           <select id="supplierPOStockFilter" onchange="renderSupplierPlaceOrderTable()">
             <option value="">All</option>
             <option value="zero">= 0</option>
             <option value="positive">&gt; 0</option>
           </select>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <label class="mono" style="font-size:12px;color:var(--text-dim);">Sold:</label>
+        <div class="po-field">
+          <label for="supplierPOSoldFilter">Sold</label>
           <select id="supplierPOSoldFilter" onchange="renderSupplierPlaceOrderTable()">
             <option value="">All</option>
             <option value="zero">= 0</option>
@@ -1689,7 +1716,7 @@
       </div>
       <button class="btn-amber" onclick="openSupplierOrderListPage()">🛒 Order List (<span id="supplierPOCartCount">0</span>)</button>
     </div>
-    <div style="margin:4px 0 14px;font-size:12px;color:var(--text-dim);" id="supplierPOMethodHint"></div>
+    <div class="po-method-hint" id="supplierPOMethodHint"></div>
     <div style="margin:4px 0 14px;display:flex;gap:10px;flex-wrap:wrap;">
       <button class="btn-amber" onclick="addSupplierItemsToOrderList()">➕ Add Items to Order List</button>
       <button class="btn-ghost" onclick="openSupplierLevelsModal()">✎ Edit Reorder &amp; Max Levels</button>
@@ -6911,17 +6938,40 @@ let supplierPOSort = { col: 'name', dir: 'asc' };
 let supplierPOLevelDrafts = {}; // keyed by stockid -> {reorder_level, max_stock_level} while a row is mid-edit
 
 const SUPPLIER_PO_METHOD_HINTS = {
-  minmax: 'Min / Max: orders only once In Stock is at or below the Reorder Level, then tops back up to the Max Stock Level. Needs both levels set (from Vector, or edited here) — shows "—" where they\'re missing.',
+  minmax: 'Min / Max: orders only once In Stock is at or below the Reorder Level, then tops back up to the Max Stock Level. Doesn\'t use Sales History or Predicted For at all (those two fields are greyed out below) — needs both levels set (from Vector, or edited here), and shows "—" where they\'re missing.',
   simple: 'Simple: total sold over the sales-history window, scaled up to the number of weeks you\'re predicting for, then divided by pack size.',
   trend: 'Trend Weighted: like Simple, but weights the more recent half of the sales-history window more heavily (60/40), so it reacts faster to items speeding up or slowing down.',
   velocity: 'Stock-Aware Velocity: like Simple, but subtracts what\'s already In Stock so it doesn\'t over-order.'
 };
+// Which methods actually use the "Sales history" / "Predicted for" week
+// dropdowns — Min/Max is purely a stock-level trigger and ignores both, so
+// leaving them enabled just made it look like changing weeks "did nothing".
+// Now those two fields are visibly disabled whenever they wouldn't matter.
+const SUPPLIER_PO_METHODS_USING_WEEKS = { simple: true, trend: true, velocity: true, minmax: false };
+
+function updateSupplierPOMethodFieldsUI(){
+  const method = getSupplierPOMethod();
+  const usesWeeks = SUPPLIER_PO_METHODS_USING_WEEKS[method] !== false;
+  ['poFieldWeeks', 'poFieldPredictWeeks'].forEach(fieldId => {
+    const field = document.getElementById(fieldId);
+    if(!field) return;
+    field.classList.toggle('is-disabled', !usesWeeks);
+    const select = field.querySelector('select');
+    if(select) select.disabled = !usesWeeks;
+  });
+}
+
+function onSupplierPOMethodChange(){
+  updateSupplierPOMethodFieldsUI();
+  renderSupplierPlaceOrderTable();
+}
 
 function openSupplierPlaceOrder(){
   if(!currentSupplier) return;
   document.getElementById('supplierPOCrumbBtn').textContent = currentSupplier.name;
   document.getElementById('supplierPOEyebrow').textContent = currentSupplier.name;
   updateSupplierCartCount();
+  updateSupplierPOMethodFieldsUI();
   showView('view-supplier-placeorder');
   loadSupplierPlaceOrder();
 }
@@ -6990,6 +7040,7 @@ function getSupplierPOFilteredSortedItems(){
 function renderSupplierPlaceOrderTable(){
   const results = document.getElementById('supplierPOResults');
   const method = getSupplierPOMethod();
+  updateSupplierPOMethodFieldsUI();
   const hintEl = document.getElementById('supplierPOMethodHint');
   if(hintEl) hintEl.textContent = SUPPLIER_PO_METHOD_HINTS[method] || '';
   const items = getSupplierPOFilteredSortedItems();
