@@ -983,6 +983,7 @@
         <button class="btn-amber" onclick="openWholesaleExportModal('pdf')">Download PDF</button>
         <button class="btn-amber" onclick="openFlyerDownloadModal()">Download Colour Flyer</button>
         <button class="btn-ghost" onclick="openFlyerImagesModal()">Upload Images</button>
+        <button class="btn-ghost" onclick="openPdfLibraryModal()">PDF Library</button>
         <button class="btn-ghost" onclick="emailWholesalePDF()">Email</button>
         <button id="wholesaleBlockBtn" class="btn-danger-ghost" onclick="toggleWholesalePriceBlock()" title="Block: locks the selling prices currently on screen so the next refresh/sync won't overwrite them. Cost still updates as usual. Release: unlocks them so prices go back to always showing the latest synced value.">Block Prices</button>
         <button class="btn-danger-ghost" onclick="openWholesalePasswordModal()">Change Password</button>
@@ -2723,6 +2724,25 @@
   </div>
 </div>
 
+<!-- PDF LIBRARY: upload PDFs and get public links (WhatsApp buttons, etc.) -->
+<div class="modal-backdrop" id="modalPdfLibrary">
+  <div class="modal" style="width:640px;">
+    <h3>PDF Library</h3>
+    <p class="modal-sub">Upload a PDF to get a public link — use it in WhatsApp template buttons, the portal, or anywhere else. Uploading again with the same name replaces the old file at the same link.</p>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;">
+      <input type="text" id="pdfLibNameInput" class="historysearch" placeholder="e.g. wholesale-colour-flyer" style="flex:1;">
+      <input type="file" id="pdfLibFileInput" accept="application/pdf">
+      <button class="btn-amber" id="pdfLibUploadBtn" onclick="uploadPdfLibraryFile()">Upload</button>
+    </div>
+    <div id="pdfLibraryContent" style="max-height:50vh;overflow:auto;">
+      <div class="loading">Loading…</div>
+    </div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalPdfLibrary')">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- WHOLESALE FLYER: DOWNLOAD (choose validity dates) -->
 <div class="modal-backdrop" id="modalFlyerDownload">
   <div class="modal" style="width:380px;">
@@ -4096,6 +4116,106 @@ function renderFlyerImagesModal(){
     wrap.appendChild(buildFlyerImageRow('DEPT_BOTTOM::' + dep, 'Bottom image', flyerImages.deptBottom[dep]));
   });
 }
+/* ============ PDF LIBRARY (public flyer/document links) ============ */
+let pdfLibraryFiles = [];
+async function openPdfLibraryModal(){
+  openModal('modalPdfLibrary');
+  document.getElementById('pdfLibNameInput').value = '';
+  document.getElementById('pdfLibFileInput').value = '';
+  await loadPdfLibrary();
+}
+async function loadPdfLibrary(){
+  const content = document.getElementById('pdfLibraryContent');
+  content.innerHTML = '<div class="loading">Loading…</div>';
+  try{
+    const data = await apiGet('wholesale/flyer/pdfs');
+    pdfLibraryFiles = data.files || [];
+    renderPdfLibrary();
+  }catch(e){
+    content.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load PDFs.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+function renderPdfLibrary(){
+  const content = document.getElementById('pdfLibraryContent');
+  if(pdfLibraryFiles.length === 0){
+    content.innerHTML = '<div class="empty-hint">No PDFs uploaded yet.</div>';
+    return;
+  }
+  content.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="text-align:left;border-bottom:1px solid var(--line);">
+          <th style="padding:6px;">File</th>
+          <th style="padding:6px;">Public link</th>
+          <th style="padding:6px;">Updated</th>
+          <th style="padding:6px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${pdfLibraryFiles.map(f => `
+          <tr style="border-bottom:1px solid var(--line);">
+            <td style="padding:6px;">${escapeHtml(f.filename)}</td>
+            <td style="padding:6px;">
+              <a href="${escapeHtml(f.url)}" target="_blank" rel="noopener">${escapeHtml(f.url)}</a>
+              <button type="button" class="btn-ghost" style="padding:2px 8px;margin-left:6px;" onclick="copyPdfLibraryLink('${escapeHtml(f.url)}', this)">Copy</button>
+            </td>
+            <td style="padding:6px;">${new Date(f.updated_at).toLocaleString()}</td>
+            <td style="padding:6px;"><button type="button" class="btn-danger-ghost" style="padding:2px 8px;" onclick="deletePdfLibraryFile('${escapeHtml(f.filename)}')">Delete</button></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`;
+}
+function copyPdfLibraryLink(url, btn){
+  navigator.clipboard.writeText(url);
+  const old = btn.textContent;
+  btn.textContent = 'Copied!';
+  setTimeout(() => { btn.textContent = old; }, 1200);
+}
+function pdfLibraryFileToBase64(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+async function uploadPdfLibraryFile(){
+  const nameInput = document.getElementById('pdfLibNameInput');
+  const fileInput = document.getElementById('pdfLibFileInput');
+  const btn = document.getElementById('pdfLibUploadBtn');
+  const filename = nameInput.value.trim();
+  const file = fileInput.files[0];
+  if(!filename){ toast('Enter a name first'); return; }
+  if(!file){ toast('Choose a PDF file first'); return; }
+  if(file.type !== 'application/pdf'){ toast('That file is not a PDF'); return; }
+  btn.disabled = true;
+  try{
+    const pdf_base64 = await pdfLibraryFileToBase64(file);
+    const data = await apiPost('wholesale/flyer/pdfs', { filename, pdf_base64 });
+    toast('Uploaded — link ready');
+    nameInput.value = '';
+    fileInput.value = '';
+    await loadPdfLibrary();
+  }catch(e){
+    toast(e.message || 'Upload failed');
+    console.error(e);
+  }finally{
+    btn.disabled = false;
+  }
+}
+async function deletePdfLibraryFile(filename){
+  if(!confirm(`Delete "${filename}"? Any link/button using it will stop working.`)) return;
+  try{
+    await apiPost('wholesale/flyer/pdfs/delete', { filename });
+    await loadPdfLibrary();
+  }catch(e){
+    toast(e.message || 'Delete failed');
+    console.error(e);
+  }
+}
+
 // ---- Featured items (T1/T2/T3/T4/T5): replaces the old single "Top image"
 // watermark. The person picks an odd count (1, 3 or 5), then for each slot
 // picks a real item from that department's price list and uploads a photo.
