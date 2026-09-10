@@ -1,0 +1,156 @@
+<!--
+  PDF LIBRARY — admin upload widget
+  Drop this markup + script into any existing portal page (e.g. the
+  Wholesale Pricing page, or a new "Flyers" admin page). It calls the
+  staff-only endpoints added to server.js, which already require the
+  normal portal login — so this snippet doesn't need its own auth check,
+  it just needs to be placed somewhere already behind that login gate.
+
+  Requires: window.PORTAL_API_BASE to already be defined elsewhere on the
+  page (same base URL used by your other fetch() calls), and the portal's
+  existing Authorization: Bearer <token> pattern for authenticated fetches.
+  Adjust `authHeader()` below if your existing code stores/reads the token
+  differently.
+-->
+
+<div id="pdf-library">
+  <h3>Flyer / Document Library</h3>
+  <p style="color:#666; font-size:0.9em;">
+    Upload a PDF to get a public link — use this link in WhatsApp template
+    buttons, the portal, or anywhere else. Uploading again with the same
+    name replaces the old file at the same link.
+  </p>
+
+  <div style="display:flex; gap:8px; align-items:center; margin-bottom:16px;">
+    <input type="text" id="pdf-name-input" placeholder="e.g. wholesale-colour-flyer" style="flex:1; padding:8px;">
+    <input type="file" id="pdf-file-input" accept="application/pdf">
+    <button id="pdf-upload-btn">Upload</button>
+  </div>
+  <div id="pdf-upload-status" style="font-size:0.9em; margin-bottom:16px;"></div>
+
+  <table style="width:100%; border-collapse:collapse;">
+    <thead>
+      <tr style="text-align:left; border-bottom:1px solid #ddd;">
+        <th style="padding:6px;">File</th>
+        <th style="padding:6px;">Public link</th>
+        <th style="padding:6px;">Updated</th>
+        <th style="padding:6px;"></th>
+      </tr>
+    </thead>
+    <tbody id="pdf-list-body"></tbody>
+  </table>
+</div>
+
+<script>
+(function () {
+  // Reuses whatever base URL / token pattern the rest of the portal
+  // already uses. Adjust these two lines if your existing frontend code
+  // names things differently.
+  const API_BASE = window.PORTAL_API_BASE || '';
+  function authHeader() {
+    const token = localStorage.getItem('portal_token'); // adjust key name if different
+    return token ? { Authorization: 'Bearer ' + token } : {};
+  }
+
+  const nameInput = document.getElementById('pdf-name-input');
+  const fileInput = document.getElementById('pdf-file-input');
+  const uploadBtn = document.getElementById('pdf-upload-btn');
+  const statusEl = document.getElementById('pdf-upload-status');
+  const listBody = document.getElementById('pdf-list-body');
+
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        // reader.result is a data URL like "data:application/pdf;base64,XXXX"
+        // — the server only wants the part after the comma.
+        const base64 = reader.result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function loadList() {
+    listBody.innerHTML = '<tr><td colspan="4" style="padding:6px;">Loading…</td></tr>';
+    try {
+      const res = await fetch(`${API_BASE}/api/wholesale/flyer/pdfs`, { headers: authHeader() });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load');
+      if (!data.files.length) {
+        listBody.innerHTML = '<tr><td colspan="4" style="padding:6px; color:#888;">No PDFs uploaded yet.</td></tr>';
+        return;
+      }
+      listBody.innerHTML = data.files.map(f => `
+        <tr style="border-bottom:1px solid #eee;">
+          <td style="padding:6px;">${f.filename}</td>
+          <td style="padding:6px;"><a href="${f.url}" target="_blank" rel="noopener">${f.url}</a>
+            <button type="button" data-copy="${f.url}" style="margin-left:6px;">Copy</button>
+          </td>
+          <td style="padding:6px;">${new Date(f.updated_at).toLocaleString()}</td>
+          <td style="padding:6px;"><button type="button" data-delete="${f.filename}">Delete</button></td>
+        </tr>
+      `).join('');
+    } catch (e) {
+      listBody.innerHTML = `<tr><td colspan="4" style="padding:6px; color:#b00;">${e.message}</td></tr>`;
+    }
+  }
+
+  uploadBtn.addEventListener('click', async () => {
+    const filename = nameInput.value.trim();
+    const file = fileInput.files[0];
+    if (!filename) return (statusEl.textContent = 'Enter a name first.');
+    if (!file) return (statusEl.textContent = 'Choose a PDF file first.');
+    if (file.type !== 'application/pdf') return (statusEl.textContent = 'That file is not a PDF.');
+
+    statusEl.textContent = 'Uploading…';
+    uploadBtn.disabled = true;
+    try {
+      const pdf_base64 = await fileToBase64(file);
+      const res = await fetch(`${API_BASE}/api/wholesale/flyer/pdfs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader() },
+        body: JSON.stringify({ filename, pdf_base64 })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Upload failed');
+      statusEl.textContent = `Uploaded — link: ${data.url}`;
+      nameInput.value = '';
+      fileInput.value = '';
+      loadList();
+    } catch (e) {
+      statusEl.textContent = 'Error: ' + e.message;
+    } finally {
+      uploadBtn.disabled = false;
+    }
+  });
+
+  listBody.addEventListener('click', async (e) => {
+    const copyName = e.target.getAttribute('data-copy');
+    const deleteName = e.target.getAttribute('data-delete');
+    if (copyName) {
+      navigator.clipboard.writeText(copyName);
+      e.target.textContent = 'Copied!';
+      setTimeout(() => (e.target.textContent = 'Copy'), 1200);
+    }
+    if (deleteName) {
+      if (!confirm(`Delete "${deleteName}"? Any link/button using it will stop working.`)) return;
+      try {
+        const res = await fetch(`${API_BASE}/api/wholesale/flyer/pdfs/delete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeader() },
+          body: JSON.stringify({ filename: deleteName })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Delete failed');
+        loadList();
+      } catch (e) {
+        alert('Error: ' + e.message);
+      }
+    }
+  });
+
+  loadList();
+})();
+</script>
