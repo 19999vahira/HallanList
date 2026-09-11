@@ -824,7 +824,7 @@
         <div class="tile-icon">💬</div>
         <div class="num">10 &middot; NOTIFY</div>
         <h3>WhatsApp Broadcast</h3>
-        <p>Write a message with an attachment and send it to your saved contact list.</p>
+        <p>Write a message with an optional image and send it to your saved contact list.</p>
       </div>
       <div class="tile" data-admin-only="1" style="--tile-color:#475569;display:none;" onclick="openManageUsers()">
         <div class="tile-icon">👤</div>
@@ -849,7 +849,7 @@
     <div class="hero">
       <div class="eyebrow">Notify</div>
       <h2>WhatsApp Broadcast</h2>
-      <p>Write a message, attach a file if needed, then send it to everyone in your saved contact list.</p>
+      <p>Write a message, attach an image if needed, then send it to everyone in your saved contact list.</p>
       <button class="btn-ghost" id="waConnectBtn" style="margin-top:10px;" onclick="launchWhatsAppSignup()">🔗 Connect a WhatsApp Number</button>
       <div id="waConnectStatus" style="display:none;margin-top:10px;font-size:12px;color:var(--text-dim);white-space:pre-wrap;font-family:monospace;background:rgba(0,0,0,.15);border-radius:6px;padding:10px;"></div>
     </div>
@@ -861,8 +861,8 @@
 
         <label class="wa-label" style="margin-top:16px;display:block;">Attachment (optional)</label>
         <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap;">
-          <input type="file" id="waFileInput" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv" style="display:none;" onchange="onWaFileSelected(event)">
-          <button class="btn-ghost" onclick="document.getElementById('waFileInput').click()">📎 Attach Document/Image</button>
+          <input type="file" id="waFileInput" accept="image/*" style="display:none;" onchange="onWaFileSelected(event)">
+          <button class="btn-ghost" onclick="document.getElementById('waFileInput').click()">📎 Attach Image</button>
           <span id="waAttachName" style="font-size:13px;color:var(--text-dim);"></span>
           <button class="btn-danger-ghost" id="waAttachRemove" style="display:none;padding:7px 12px;font-size:12px;" onclick="removeWaAttachment()">Remove</button>
         </div>
@@ -5672,7 +5672,14 @@ async function removeWaContact(id, name){
 function onWaFileSelected(event){
   const file = event.target.files && event.target.files[0];
   if(!file) return;
-  // 16MB is WhatsApp's own hard cap on document/image uploads via the Cloud API.
+  // Document attachments were dropped along with the document header on the
+  // approved template — only images go through the template's media header now.
+  if(!file.type || !file.type.startsWith('image/')){
+    toast('Only images can be attached — the document template was removed');
+    event.target.value = '';
+    return;
+  }
+  // 16MB is WhatsApp's own hard cap on image uploads via the Cloud API.
   if(file.size > 16 * 1024 * 1024){
     toast('File is too large — WhatsApp allows up to 16MB');
     event.target.value = '';
