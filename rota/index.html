@@ -173,6 +173,29 @@
       </form>
     </div>
 
+    <!-- ===================== 2-STEP VERIFICATION (email code) =====================
+         Reached after log in / sign up / forgot-password all succeed on their
+         first step — same two-factor pattern as the Picking Lists portal
+         login: a 6-digit code is emailed to the address HR has on file for
+         this Employee ID, and it's required every time, not just on new
+         devices. -->
+    <div class="authform" id="form-otp">
+      <h1>Check your email</h1>
+      <div class="switchline" id="otp-subline">We've sent a 6-digit code to your email.</div>
+      <div class="err" id="otp-err"></div>
+      <form id="otp-form">
+        <label class="field-label" for="otp-code">6-digit code</label>
+        <input class="field" id="otp-code" name="code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="••••••" autocomplete="one-time-code" required style="letter-spacing:6px;font-size:20px;text-align:center;">
+
+        <button class="btn-primary" type="submit" id="otp-btn">Verify &amp; continue</button>
+        <div style="text-align:center;margin-top:14px;display:flex;justify-content:center;gap:18px;">
+          <button type="button" id="otp-resend" style="background:none;border:none;padding:0;color:var(--blue);font-weight:600;font-size:13px;cursor:pointer;font-family:inherit;">Resend code</button>
+          <button type="button" id="otp-back" style="background:none;border:none;padding:0;color:var(--slate);font-size:13px;cursor:pointer;font-family:inherit;text-decoration:underline;">Back</button>
+        </div>
+      </form>
+      <div style="font-size:12.5px;color:var(--slate);margin-top:16px;">Code expires after 10 minutes. If you don't have an email on file, ask HR to add one to your Employee record first.</div>
+    </div>
+
   </div>
 </main>
 
@@ -190,8 +213,9 @@
   const formLogin = document.getElementById('form-login');
   const formSignup = document.getElementById('form-signup');
   const formForgot = document.getElementById('form-forgot');
+  const formOtp = document.getElementById('form-otp');
   function showForm(el){
-    [formLogin, formSignup, formForgot].forEach(f => f.classList.remove('active'));
+    [formLogin, formSignup, formForgot, formOtp].forEach(f => f.classList.remove('active'));
     el.classList.add('active');
   }
   document.getElementById('go-signup').addEventListener('click', () => showForm(formSignup));
@@ -257,12 +281,95 @@
         loginBtn.textContent = 'Log in';
         return;
       }
-      goToRota(data, employeeId);
+      loginBtn.disabled = false;
+      loginBtn.textContent = 'Log in';
+      goToOtpStep(data.employeeId, formLogin);
     } catch (err) {
       showErr(loginErr, 'Could not reach the server. Check your connection and try again.');
       loginBtn.disabled = false;
       loginBtn.textContent = 'Log in';
     }
+  });
+
+  /* ---- 2-step verification (email code) ----
+     login / signup / forgot-password all land here once their first step
+     succeeds — none of them get a token directly any more (see server.js:
+     they all now call beginStaffOtp()). pendingEmployeeId/pendingFromForm
+     track what to go back to and what to verify against. ---- */
+  let pendingEmployeeId = null;
+  let pendingFromForm = null;
+  const otpForm = document.getElementById('otp-form');
+  const otpErr = document.getElementById('otp-err');
+  const otpBtn = document.getElementById('otp-btn');
+  const otpSubline = document.getElementById('otp-subline');
+
+  function goToOtpStep(employeeId, fromForm){
+    pendingEmployeeId = employeeId;
+    pendingFromForm = fromForm;
+    clearErr(otpErr);
+    document.getElementById('otp-code').value = '';
+    otpSubline.textContent = `We've sent a 6-digit code to the email on file for Employee ID ${employeeId}.`;
+    showForm(formOtp);
+    document.getElementById('otp-code').focus();
+  }
+
+  otpForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearErr(otpErr);
+    const code = document.getElementById('otp-code').value.trim();
+    if (!pendingEmployeeId) { showErr(otpErr, 'Session expired — please sign in again.'); showForm(formLogin); return; }
+
+    otpBtn.disabled = true;
+    otpBtn.textContent = 'Verifying…';
+    try {
+      const res = await fetch(`${API_BASE}/api/staff/login/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId: pendingEmployeeId, code })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        showErr(otpErr, data.error || 'Incorrect code — please try again.');
+        otpBtn.disabled = false;
+        otpBtn.textContent = 'Verify & continue';
+        return;
+      }
+      goToRota(data, pendingEmployeeId);
+    } catch (err) {
+      showErr(otpErr, 'Could not reach the server. Check your connection and try again.');
+      otpBtn.disabled = false;
+      otpBtn.textContent = 'Verify & continue';
+    }
+  });
+
+  document.getElementById('otp-resend').addEventListener('click', async () => {
+    if (!pendingEmployeeId) return;
+    clearErr(otpErr);
+    const resendBtn = document.getElementById('otp-resend');
+    resendBtn.disabled = true;
+    resendBtn.textContent = 'Sending…';
+    try {
+      const res = await fetch(`${API_BASE}/api/staff/login/resend-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId: pendingEmployeeId })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        showErr(otpErr, data.error || "Couldn't resend the code — try again shortly.");
+      } else {
+        otpSubline.textContent = 'A new code is on its way — it can take a minute to arrive.';
+      }
+    } catch (err) {
+      showErr(otpErr, 'Could not reach the server. Check your connection and try again.');
+    }
+    resendBtn.disabled = false;
+    resendBtn.textContent = 'Resend code';
+  });
+
+  document.getElementById('otp-back').addEventListener('click', () => {
+    pendingEmployeeId = null;
+    showForm(pendingFromForm || formLogin);
   });
 
   /* ---- sign up ----
@@ -313,17 +420,11 @@
         return;
       }
       signupOk.style.display = 'block';
-      if (data.token) {
-        // Backend logged them in immediately on signup.
-        setTimeout(() => goToRota(data, employeeId), 700);
-      } else {
-        // Backend just created the account — send them to log in with it.
-        setTimeout(() => {
-          formSignup.classList.remove('active'); formLogin.classList.add('active');
-          document.getElementById('employeeId').value = employeeId;
-          document.getElementById('password').focus();
-        }, 900);
-      }
+      signupBtn.disabled = false;
+      signupBtn.textContent = 'Create account';
+      // Account created — same 2-step email verification as a normal login,
+      // rather than being logged in immediately (see server.js beginStaffOtp).
+      setTimeout(() => goToOtpStep(data.employeeId, formSignup), 500);
     } catch (err) {
       showErr(signupErr, 'Could not reach the server. Check your connection and try again.');
       signupBtn.disabled = false;
@@ -372,7 +473,11 @@
         return;
       }
       forgotOk.style.display = 'block';
-      setTimeout(() => goToRota(data, employeeId), 700);
+      forgotBtn.disabled = false;
+      forgotBtn.textContent = 'Reset password';
+      // Password reset — same 2-step email verification as a normal login,
+      // rather than being logged in immediately (see server.js beginStaffOtp).
+      setTimeout(() => goToOtpStep(data.employeeId, formForgot), 500);
     } catch (err) {
       showErr(forgotErr, 'Could not reach the server. Check your connection and try again.');
       forgotBtn.disabled = false;
