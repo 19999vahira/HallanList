@@ -696,6 +696,12 @@
       <input type="file" id="pdfimp-file-input" accept="application/pdf" style="display:block;margin-bottom:6px;">
       <div id="pdfimp-status" style="font-size:12.5px;color:var(--slate);min-height:18px;"></div>
     </div>
+    <div id="pdfimp-step-dates" style="display:none;">
+      <div id="pdfimp-dates-note" style="font-size:13px;color:var(--slate);margin-bottom:12px;"></div>
+      <label style="font-size:12.5px;color:var(--ink);display:block;margin-bottom:4px;">Week starting (Monday)</label>
+      <input type="date" id="pdfimp-week-start" style="display:block;margin-bottom:6px;">
+      <div id="pdfimp-dates-status" style="font-size:12.5px;color:#B23A3A;min-height:18px;"></div>
+    </div>
     <div id="pdfimp-step-preview" style="display:none;">
       <div id="pdfimp-summary" style="font-size:13.5px;line-height:1.6;margin-bottom:10px;"></div>
       <div id="pdfimp-warnings" style="font-size:12.5px;color:#B23A3A;margin-bottom:10px;"></div>
@@ -704,6 +710,7 @@
     <div class="modal-actions">
       <div><button class="link-danger" id="pdfimp-cancel">Cancel</button></div>
       <div>
+        <button class="btn btn-primary" id="pdfimp-dates-continue" style="display:none;">Continue</button>
         <button class="btn btn-primary" id="pdfimp-confirm" style="display:none;">Import into Rota</button>
       </div>
     </div>
@@ -1830,17 +1837,28 @@
   const pdfimpFileInput = document.getElementById('pdfimp-file-input');
   const pdfimpStatus = document.getElementById('pdfimp-status');
   const pdfimpStepPick = document.getElementById('pdfimp-step-pick');
+  const pdfimpStepDates = document.getElementById('pdfimp-step-dates');
+  const pdfimpDatesNote = document.getElementById('pdfimp-dates-note');
+  const pdfimpWeekStartInput = document.getElementById('pdfimp-week-start');
+  const pdfimpDatesStatus = document.getElementById('pdfimp-dates-status');
+  const pdfimpDatesContinueBtn = document.getElementById('pdfimp-dates-continue');
   const pdfimpStepPreview = document.getElementById('pdfimp-step-preview');
   const pdfimpConfirmBtn = document.getElementById('pdfimp-confirm');
   let pendingPdfImport = null; // holds the parsed { weekDates, employeeRows, warnings } awaiting confirmation
+  let pendingRawParsed = null; // holds a parse result still waiting on the week-start date step
 
   function resetPdfImportModal(){
     pdfimpFileInput.value = '';
     pdfimpStatus.textContent = '';
+    pdfimpDatesStatus.textContent = '';
+    pdfimpWeekStartInput.value = '';
     pdfimpStepPick.style.display = 'block';
+    pdfimpStepDates.style.display = 'none';
     pdfimpStepPreview.style.display = 'none';
+    pdfimpDatesContinueBtn.style.display = 'none';
     pdfimpConfirmBtn.style.display = 'none';
     pendingPdfImport = null;
+    pendingRawParsed = null;
   }
   document.getElementById('pdfimp-open-btn').addEventListener('click', () => {
     resetPdfImportModal();
@@ -2054,8 +2072,12 @@
       }
     }
 
-    if (!weekDates) throw new Error("Couldn't read the week's date range from the PDF title — expected something like \"Hallan Rota — 31 Aug – 6 Sep 2026\".");
     if (!bounds) throw new Error("Couldn't find the header row (Employee / MON / TUE / ...) — this doesn't look like a Hallan Rota export.");
+    // weekDates may still be null here — the PDF's title didn't match the
+    // expected "Hallan Rota — <date range>" wording (renamed file, older
+    // export, hand-edited title, etc). That's no longer fatal: the caller
+    // asks the person which Monday this week starts on instead of guessing
+    // from unreliable text.
 
     // Turn each raw row into { name, entries: [ [entries...] x7 ] }
     const parsedEmployees = employeeRows.map(row => {
@@ -2146,51 +2168,91 @@
     renderSchedule();
   }
 
+  // Builds the plan + preview screen from a parsed PDF that already has a
+  // confirmed weekDates array (either read straight off the title, or
+  // supplied by the person via the week-start date picker).
+  function finalizeParsedImport(parsed){
+    const plan = buildImportPlan(parsed);
+    pendingPdfImport = { parsed, plan };
+
+    const first = fromDateStr(parsed.weekDates[0]), last = fromDateStr(parsed.weekDates[6]);
+    const weekLabel = `${first.getDate()} ${MONTH_NAMES[first.getMonth()]} – ${last.getDate()} ${MONTH_NAMES[last.getMonth()]} ${last.getFullYear()}`;
+
+    const summary = document.getElementById('pdfimp-summary');
+    summary.innerHTML = `
+      <b>Week:</b> ${weekLabel}<br>
+      <b>Shifts to add:</b> ${plan.shiftsAdded}<br>
+      <b>Time off entries to add:</b> ${plan.timeOffAdded}<br>
+      <b>New employees to create:</b> ${plan.newEmployees.length}${plan.newEmployees.length ? ' — ' + plan.newEmployees.map(e=>e.name).join(', ') : ''}<br>
+      <b>New shift types to create:</b> ${plan.newShiftTypes.length}${plan.newShiftTypes.length ? ' — ' + plan.newShiftTypes.map(s=>s.name).join(', ') : ''}
+    `;
+    const warningsEl = document.getElementById('pdfimp-warnings');
+    warningsEl.textContent = plan.newEmployees.length
+      ? 'New employees are added with no department set — open each on the Employees tab afterwards and pick one.'
+      : '';
+
+    const detail = document.getElementById('pdfimp-detail');
+    detail.innerHTML = plan.perEmployeePlan.map(p => `
+      <div style="margin-bottom:8px;">
+        <b>${p.emp.name}</b>${p.isNewEmp ? ' <span style="color:#2E6FA8;">(new)</span>' : ''}
+        ${p.dayPlans.length ? '<br>' + p.dayPlans.map(dp =>
+          dp.kind === 'timeoff'
+            ? `${dp.dateStr}: Time off${dp.reason ? ' — ' + dp.reason : ''}`
+            : `${dp.dateStr}: ${dp.shiftName} ${dp.start}-${dp.end}`
+        ).join('<br>') : '<span style="color:var(--slate);">No shifts this week</span>'}
+      </div>
+    `).join('') || '<span style="color:var(--slate);">Nothing found to import.</span>';
+
+    pdfimpStatus.textContent = '';
+    pdfimpStepPick.style.display = 'none';
+    pdfimpStepDates.style.display = 'none';
+    pdfimpDatesContinueBtn.style.display = 'none';
+    pdfimpStepPreview.style.display = 'block';
+    pdfimpConfirmBtn.style.display = plan.perEmployeePlan.length ? 'inline-block' : 'none';
+  }
+
   pdfimpFileInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     pdfimpStatus.textContent = 'Reading PDF…';
     try {
       const parsed = await parseRotaPdf(file);
-      const plan = buildImportPlan(parsed);
-      pendingPdfImport = { parsed, plan };
+      pendingRawParsed = parsed;
 
-      const first = fromDateStr(parsed.weekDates[0]), last = fromDateStr(parsed.weekDates[6]);
-      const weekLabel = `${first.getDate()} ${MONTH_NAMES[first.getMonth()]} – ${last.getDate()} ${MONTH_NAMES[last.getMonth()]} ${last.getFullYear()}`;
-
-      const summary = document.getElementById('pdfimp-summary');
-      summary.innerHTML = `
-        <b>Week:</b> ${weekLabel}<br>
-        <b>Shifts to add:</b> ${plan.shiftsAdded}<br>
-        <b>Time off entries to add:</b> ${plan.timeOffAdded}<br>
-        <b>New employees to create:</b> ${plan.newEmployees.length}${plan.newEmployees.length ? ' — ' + plan.newEmployees.map(e=>e.name).join(', ') : ''}<br>
-        <b>New shift types to create:</b> ${plan.newShiftTypes.length}${plan.newShiftTypes.length ? ' — ' + plan.newShiftTypes.map(s=>s.name).join(', ') : ''}
-      `;
-      const warningsEl = document.getElementById('pdfimp-warnings');
-      warningsEl.textContent = plan.newEmployees.length
-        ? 'New employees are added with no department set — open each on the Employees tab afterwards and pick one.'
-        : '';
-
-      const detail = document.getElementById('pdfimp-detail');
-      detail.innerHTML = plan.perEmployeePlan.map(p => `
-        <div style="margin-bottom:8px;">
-          <b>${p.emp.name}</b>${p.isNewEmp ? ' <span style="color:#2E6FA8;">(new)</span>' : ''}
-          ${p.dayPlans.length ? '<br>' + p.dayPlans.map(dp =>
-            dp.kind === 'timeoff'
-              ? `${dp.dateStr}: Time off${dp.reason ? ' — ' + dp.reason : ''}`
-              : `${dp.dateStr}: ${dp.shiftName} ${dp.start}-${dp.end}`
-          ).join('<br>') : '<span style="color:var(--slate);">No shifts this week</span>'}
-        </div>
-      `).join('') || '<span style="color:var(--slate);">Nothing found to import.</span>';
-
+      // Always let the person confirm (or set) which Monday this week
+      // starts on — the file name is never used for this, and the title
+      // text on the PDF itself is only ever a starting guess, not a
+      // requirement. This is what avoids the whole class of "couldn't
+      // read the date range" failures regardless of what the file's
+      // called or how its title was worded.
+      if (parsed.weekDates) {
+        const first = fromDateStr(parsed.weekDates[0]), last = fromDateStr(parsed.weekDates[6]);
+        pdfimpDatesNote.textContent = `Detected week ${first.getDate()} ${MONTH_NAMES[first.getMonth()]} – ${last.getDate()} ${MONTH_NAMES[last.getMonth()]} ${last.getFullYear()} from the PDF's title. Change it below if that's wrong.`;
+        pdfimpWeekStartInput.value = parsed.weekDates[0];
+      } else {
+        pdfimpDatesNote.textContent = "Couldn't tell which week this PDF is for from its title — pick the Monday it starts on below.";
+        pdfimpWeekStartInput.value = toDateStr(currentWeekStart);
+      }
+      pdfimpDatesStatus.textContent = '';
       pdfimpStatus.textContent = '';
       pdfimpStepPick.style.display = 'none';
-      pdfimpStepPreview.style.display = 'block';
-      pdfimpConfirmBtn.style.display = plan.perEmployeePlan.length ? 'inline-block' : 'none';
+      pdfimpStepDates.style.display = 'block';
+      pdfimpDatesContinueBtn.style.display = 'inline-block';
     } catch (err) {
       console.error('PDF import parse error', err);
       pdfimpStatus.textContent = err.message || "Couldn't read that PDF — make sure it's a Hallan Rota export.";
     }
+  });
+
+  pdfimpDatesContinueBtn.addEventListener('click', () => {
+    if (!pendingRawParsed) return;
+    const val = pdfimpWeekStartInput.value;
+    if (!val) { pdfimpDatesStatus.textContent = 'Pick a date first.'; return; }
+    const monday = getMonday(fromDateStr(val)); // snaps to that week's Monday even if a different day was picked
+    const dates = Array.from({length:7}, (_, i) => toDateStr(addDays(monday, i)));
+    const parsed = Object.assign({}, pendingRawParsed, { weekDates: dates });
+    pendingRawParsed = null;
+    finalizeParsedImport(parsed);
   });
 
   pdfimpConfirmBtn.addEventListener('click', () => {
