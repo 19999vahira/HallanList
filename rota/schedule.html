@@ -1593,12 +1593,26 @@
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
 
-    const head = [['Employee', ...dates.map(d =>
-      `${DAY_NAMES[d.getDay()===0?6:d.getDay()-1].toUpperCase()} ${d.getDate()}`
-    )]];
+    const numDays = dates.length;
+    const numCols = numDays + (numDays - 1) + 1; // day cols + narrow gap cols between them + employee col
+
+    // Column layout: Employee, Day0, gap, Day1, gap, ... Day(n-1) — a
+    // narrow blank column between each day so the days read as separate
+    // little cards, like the Sling export.
+    const head = [['Employee']];
+    dates.forEach((d, i) => {
+      head[0].push(`${DAY_NAMES[d.getDay()===0?6:d.getDay()-1].toUpperCase()} ${d.getDate()}`);
+      if (i < numDays - 1) head[0].push('');
+    });
+
+    function pushDayRow(label, dayValues) {
+      const row = [label];
+      dayValues.forEach((v, i) => { row.push(v); if (i < numDays - 1) row.push(''); });
+      body.push(row);
+    }
 
     const body = [];
-    const cellColors = []; // cellColors[rowIndex][colIndex] = {bg,fg} | null, colIndex is the day index (0-based)
+    const rowMeta = []; // parallel to body: {type:'employee',colors} | {type:'gap'} | {type:'totals'}
     emps.forEach(emp => {
       let totalMins = 0;
       const rowColors = [];
@@ -1627,12 +1641,16 @@
         }
         return lines.join('\n\n');
       });
-      cellColors.push(rowColors);
-      body.push([`${emp.name}\n${fmtMins(totalMins)}`, ...dayCells]);
+      pushDayRow(`${emp.name}\n${fmtMins(totalMins)}`, dayCells);
+      rowMeta.push({ type: 'employee', colors: rowColors });
+
+      // A slim blank row after each person, purely for breathing room —
+      // no border, no fill, so it just reads as a gap rather than a rule.
+      body.push(new Array(numCols).fill(''));
+      rowMeta.push({ type: 'gap' });
     });
 
-    const totalsRow = ['Scheduled hours\nEmployees'];
-    dateStrs.forEach(dateStr => {
+    const totalsDays = dateStrs.map(dateStr => {
       let mins = 0, headcount = 0;
       emps.forEach(emp => {
         if (timeOffsFor(emp.id, dateStr).length) return;
@@ -1640,32 +1658,63 @@
         if (dayShifts.length) headcount++;
         dayShifts.forEach(s => { mins += hoursMinusBreak(s.start, s.end, s.breakMins); });
       });
-      totalsRow.push(`${mins ? fmtMins(mins) : '—'}\n${headcount} ${headcount === 1 ? 'person' : 'people'}`);
+      return `${mins ? fmtMins(mins) : '—'}\n${headcount} ${headcount === 1 ? 'person' : 'people'}`;
     });
-    body.push(totalsRow);
+    pushDayRow('Scheduled hours\nEmployees', totalsDays);
+    rowMeta.push({ type: 'totals' });
 
-    doc.setFontSize(13);
-    doc.setTextColor('#37424A');
-    doc.text(`Hallan Rota — ${weekLabelText()}`, 30, 30);
+    // Heading — company name in bold, with the week range underneath.
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(15);
+    doc.setTextColor('#1B2733');
+    doc.text('Hallan Cash & Carry', 30, 26);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10.5);
+    doc.setTextColor('#5B6670');
+    doc.text(weekLabelText(), 30, 42);
+
+    const columnStyles = { 0: { cellWidth: 110, fontStyle: 'bold' } };
+    for (let i = 1; i < numCols; i++) {
+      if (i % 2 === 0) columnStyles[i] = { cellWidth: 5, lineWidth: 0 };
+    }
 
     doc.autoTable({
       head, body,
-      startY: 44,
+      startY: 54,
       theme: 'grid',
       styles: { fontSize: 8, cellPadding: 5, valign: 'top', lineColor: '#E3E7EB', lineWidth: 0.5, textColor: '#37424A', fontStyle: 'bold' },
       headStyles: { fillColor: '#3E97E8', textColor: '#ffffff', fontStyle: 'bold', halign: 'center' },
-      columnStyles: { 0: { cellWidth: 110, fontStyle: 'bold' } },
+      columnStyles,
       didParseCell: (data) => {
+        // Narrow blank column between each day — a visual gap, not a rule.
+        if (data.column.index > 0 && data.column.index % 2 === 0) {
+          data.cell.styles.fillColor = '#ffffff';
+          data.cell.styles.textColor = '#ffffff';
+          data.cell.styles.lineWidth = 0;
+          return;
+        }
+        if (data.section !== 'body') return;
+        const meta = rowMeta[data.row.index];
+        if (!meta) return;
+        // Blank spacer row after each person.
+        if (meta.type === 'gap') {
+          data.cell.styles.fillColor = '#ffffff';
+          data.cell.styles.textColor = '#ffffff';
+          data.cell.styles.lineWidth = 0;
+          data.cell.styles.cellPadding = 2;
+          return;
+        }
         // Paint day cells with the same color as their on-screen chip.
-        if (data.section === 'body' && data.column.index > 0 && data.row.index < cellColors.length) {
-          const color = cellColors[data.row.index][data.column.index - 1];
+        if (meta.type === 'employee' && data.column.index > 0) {
+          const dayIndex = (data.column.index - 1) / 2;
+          const color = meta.colors[dayIndex];
           if (color) {
             data.cell.styles.fillColor = color.bg;
             data.cell.styles.textColor = color.fg;
           }
         }
-        // Bold + shade the totals row (the last body row) like Sling does.
-        if (data.section === 'body' && data.row.index === body.length - 1) {
+        // Bold + shade the totals row, like Sling does.
+        if (meta.type === 'totals') {
           data.cell.styles.fillColor = '#F0F3F5';
           data.cell.styles.fontStyle = 'bold';
         }
@@ -3096,6 +3145,10 @@
     try {
       await loadStateFromServer();
       await loadTimesheetFromServer();
+      // Shift-type filter starts fully unticked (nothing shown until the
+      // person picks shift types to view) — employee filter is unaffected
+      // and still starts ticked/visible.
+      state.shiftTypes.forEach(st => hiddenShiftTypeIds.add(st.id));
       document.getElementById('sync-blocker').style.display = 'none';
       wireGridEvents();
       activateTab(currentRole === 'manager' ? 'analytics' : 'schedule');
