@@ -16,6 +16,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+<!-- Meta's SDK, used only by the "Connect a WhatsApp Number" button on the WhatsApp Broadcast page -->
+<script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
 <style>
   :root{
     --bg:#ffffff; --panel:#f4f6f9; --panel2:#eceff3; --panel3:#e4e8ee;
@@ -848,6 +850,8 @@
       <div class="eyebrow">Notify</div>
       <h2>WhatsApp Broadcast</h2>
       <p>Write a message, attach a file if needed, then send it to everyone in your saved contact list.</p>
+      <button class="btn-ghost" id="waConnectBtn" style="margin-top:10px;" onclick="launchWhatsAppSignup()">🔗 Connect a WhatsApp Number</button>
+      <div id="waConnectStatus" style="display:none;margin-top:10px;font-size:12px;color:var(--text-dim);white-space:pre-wrap;font-family:monospace;background:rgba(0,0,0,.15);border-radius:6px;padding:10px;"></div>
     </div>
     <div class="wa-layout">
       <div class="wa-panel">
@@ -5500,6 +5504,88 @@ function restaurantSignOut(){
 function openRestaurantOrders(){
   document.getElementById('restaurantPasscodeInput').value = '';
   showView('view-restaurant-passcode');
+}
+
+/* ============ WHATSAPP EMBEDDED SIGNUP (coexistence connect button) ============
+   One-off admin action, not part of the daily broadcast flow — lets you link
+   a new WhatsApp number for coexistence (keeps the WhatsApp Business app
+   working alongside the Cloud API) straight from this page, instead of a
+   separate hosted page. The App ID and Configuration ID below are plain
+   client-side identifiers, not secrets — the real secret
+   (WHATSAPP_APP_SECRET) lives only on the server and is never sent here. */
+const WA_SIGNUP_APP_ID = '1834320277742646';
+const WA_SIGNUP_CONFIG_ID = '3011266429208080';
+const WA_SIGNUP_GRAPH_VERSION = 'v26.0';
+let waSignupCapturedInfo = null;
+
+window.fbAsyncInit = function() {
+  FB.init({
+    appId: WA_SIGNUP_APP_ID,
+    autoLogAppEvents: true,
+    xfbml: true,
+    version: WA_SIGNUP_GRAPH_VERSION
+  });
+};
+
+window.addEventListener('message', (event) => {
+  if (!event.origin.endsWith('facebook.com')) return;
+  let data;
+  try { data = JSON.parse(event.data); } catch { return; }
+  if (data.type !== 'WA_EMBEDDED_SIGNUP') return;
+
+  const statusEl = document.getElementById('waConnectStatus');
+  statusEl.style.display = 'block';
+
+  if (data.event && data.event.startsWith('FINISH')) {
+    waSignupCapturedInfo = data.data;
+    statusEl.textContent =
+      'Flow completed: ' + data.event + '\n' +
+      'phone_number_id: ' + (data.data.phone_number_id || '(none)') + '\n' +
+      'waba_id: ' + (data.data.waba_id || '(none)') + '\n\n' +
+      (data.event === 'FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING'
+        ? '✅ Coexistence connected — the WhatsApp Business app stays linked.'
+        : '⚠️ This was not the coexistence path — the number entered may not have matched an existing WhatsApp Business app registration.');
+  } else if (data.event === 'CANCEL') {
+    statusEl.textContent = 'Cancelled at: ' + (data.data.current_step || data.data.error_message || 'unknown step');
+  }
+});
+
+async function waSignupSendCodeToServer(code){
+  const statusEl = document.getElementById('waConnectStatus');
+  const btnEl = document.getElementById('waConnectBtn');
+  btnEl.disabled = true;
+  statusEl.style.display = 'block';
+  statusEl.textContent = 'Exchanging code with the server…';
+  try {
+    const data = await apiPost('whatsapp/embedded-signup/exchange', {
+      code,
+      phone_number_id: waSignupCapturedInfo && waSignupCapturedInfo.phone_number_id,
+      waba_id: waSignupCapturedInfo && waSignupCapturedInfo.waba_id
+    });
+    statusEl.textContent += '\n\n✅ Token exchanged and logged on the server.';
+  } catch (e) {
+    statusEl.textContent += '\n\n❌ Exchange failed: ' + e.message;
+  } finally {
+    btnEl.disabled = false;
+  }
+}
+
+function launchWhatsAppSignup(){
+  FB.login((response) => {
+    if (response.authResponse) {
+      waSignupSendCodeToServer(response.authResponse.code);
+    } else {
+      const statusEl = document.getElementById('waConnectStatus');
+      statusEl.style.display = 'block';
+      statusEl.textContent = 'Login did not complete — check the browser console.';
+      console.log('WhatsApp signup login response:', response);
+    }
+  }, {
+    config_id: WA_SIGNUP_CONFIG_ID,
+    response_type: 'code',
+    override_default_response_type: true,
+    extras: { setup: {} }
+  });
 }
 
 /* ============ WHATSAPP BROADCAST ============ */
