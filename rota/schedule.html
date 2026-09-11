@@ -59,9 +59,12 @@
   .gridwrap{overflow-x:auto;background:#fff;}
   table.schedule{border-collapse:collapse;width:100%;min-width:1080px;}
   table.schedule th, table.schedule td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);}
-  table.schedule thead th{background:#FAFBFC;color:var(--slate);font-size:11.5px;letter-spacing:.6px;text-transform:uppercase;padding:12px 10px;text-align:left;font-weight:700;}
-  table.schedule thead th .sub{display:block;text-transform:none;font-size:12.5px;color:var(--ink);font-weight:700;margin-top:2px;letter-spacing:0;}
-  table.schedule thead th.namecol{position:sticky;left:0;z-index:2;background:#FAFBFC;min-width:220px;}
+  /* Header matches the printed/exported Rota PDF exactly: solid blue fill,
+     white text — see the "Employee / MON 31 / TUE 1 / ..." header row in
+     the reference PDF and the jsPDF headStyles further down this file. */
+  table.schedule thead th{background:var(--nav-blue);color:#fff;font-size:11.5px;letter-spacing:.6px;text-transform:uppercase;padding:12px 10px;text-align:left;font-weight:700;}
+  table.schedule thead th .sub{display:block;text-transform:none;font-size:12.5px;color:#fff;font-weight:700;margin-top:2px;letter-spacing:0;}
+  table.schedule thead th.namecol{position:sticky;left:0;z-index:2;background:var(--nav-blue);min-width:220px;}
   table.schedule tbody td.namecol{position:sticky;left:0;background:#fff;z-index:1;padding:10px 14px;min-width:220px;}
   .employee{display:flex;align-items:center;gap:10px;}
   .employee .initials{width:32px;height:32px;border-radius:50%;background:#E7ECF0;color:var(--slate);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none;}
@@ -79,8 +82,9 @@
   .daycell-add{flex:1;border:1px dashed #C7CFD6;border-radius:5px;background:none;font-size:10.5px;color:#8992A0;padding:4px 2px;cursor:pointer;text-align:center;font-family:inherit;}
   .daycell-add:hover{border-color:var(--nav-blue);color:var(--nav-blue);background:#F0F6FC;}
 
-  tfoot td{background:#FAFBFC;font-size:11.5px;color:var(--slate);font-weight:700;padding:10px;}
-  tfoot td.namecol{position:sticky;left:0;background:#FAFBFC;}
+  /* Same shade as the totals row in the exported PDF (#F0F3F5). */
+  tfoot td{background:#F0F3F5;font-size:11.5px;color:var(--ink);font-weight:700;padding:10px;}
+  tfoot td.namecol{position:sticky;left:0;background:#F0F3F5;}
 
   .paste-banner{
     position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;
@@ -296,12 +300,13 @@
         <button class="btn" id="csv-template-btn">Download CSV template</button>
         <button class="btn" id="upload-csv-btn">⬆ Upload CSV</button>
         <input type="file" id="csv-file-input" accept=".csv" style="display:none;">
+        <button class="btn" id="pdfimp-open-btn">⬆ Import from PDF</button>
         <button class="btn btn-primary" id="add-employee-btn">+ Add employee</button>
       </div>
     </div>
     <div id="csv-upload-summary" style="display:none;background:#EEF6EC;border:1px solid #CFE7C7;color:#2C6B22;font-size:13px;padding:10px 14px;border-radius:6px;margin-bottom:14px;"></div>
     <table class="simple">
-      <thead><tr><th>Name</th><th>Department</th><th>Personnel #</th><th>Shifts covered</th><th>Login ID</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>Department</th><th>Personnel #</th><th>Email</th><th>Shifts covered</th><th>Login ID</th><th></th></tr></thead>
       <tbody id="employees-body"></tbody>
     </table>
   </div>
@@ -477,6 +482,8 @@
     <input type="text" id="emp-dept-new" placeholder="New department name" style="display:none;margin-top:8px;">
     <label for="emp-personnel">Personnel number</label>
     <input type="text" id="emp-personnel" placeholder="e.g. 00124">
+    <label for="emp-email">Email</label>
+    <input type="email" id="emp-email" placeholder="e.g. priya@hallancashandcarry.co.uk">
     <label>Shifts this employee can cover</label>
     <div class="checkgrid" id="emp-shifts-checkgrid"></div>
     <div class="row2">
@@ -674,9 +681,47 @@
   <button id="paste-cancel">Cancel</button>
 </div>
 
+<!-- PDF import modal (Employees tab -> "Import from PDF") -->
+<div class="overlay" id="pdf-import-overlay">
+  <div class="modal" style="width:560px;max-width:92vw;">
+    <h3>Import from PDF</h3>
+    <div id="pdfimp-step-pick">
+      <div style="font-size:13px;color:var(--slate);margin-bottom:14px;">
+        Upload a Hallan Rota PDF export (like the ones this app already generates).
+        Every shift and time-off entry on it will be copied into the matching week here.
+        Any employee name on the PDF that doesn't already exist will be added to the
+        Employees list, and any shift type used on the PDF that doesn't already exist
+        will be added under Shift types.
+      </div>
+      <input type="file" id="pdfimp-file-input" accept="application/pdf" style="display:block;margin-bottom:6px;">
+      <div id="pdfimp-status" style="font-size:12.5px;color:var(--slate);min-height:18px;"></div>
+    </div>
+    <div id="pdfimp-step-preview" style="display:none;">
+      <div id="pdfimp-summary" style="font-size:13.5px;line-height:1.6;margin-bottom:10px;"></div>
+      <div id="pdfimp-warnings" style="font-size:12.5px;color:#B23A3A;margin-bottom:10px;"></div>
+      <div style="max-height:260px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:12.5px;color:var(--ink);" id="pdfimp-detail"></div>
+    </div>
+    <div class="modal-actions">
+      <div><button class="link-danger" id="pdfimp-cancel">Cancel</button></div>
+      <div>
+        <button class="btn btn-primary" id="pdfimp-confirm" style="display:none;">Import into Rota</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- PDF export (Download modal -> Download PDF) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<!-- PDF.js — used only by "Import from PDF" (Employees tab) to read shift
+     data back out of a previously-exported Rota PDF, since that needs each
+     text run's on-page position, not just the raw text. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  if (window['pdfjsLib']) {
+    window['pdfjsLib'].GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+</script>
 <script>
   /* =================================================================
      AUTH GUARD — reuses the Staff Portal login (see rota/index.html).
@@ -741,7 +786,7 @@
   function defaultState(){
     return {
       shiftTypes: DEFAULT_SHIFT_TYPES.map(r => ({...r})),
-      employees: [],   // { id, name, department, personnelNumber, shiftTypeIds:[], loginId, pin }
+      employees: [],   // { id, name, department, personnelNumber, shiftTypeIds:[], loginId, pin, email }
       shifts: {},      // shifts[employeeId][dateStr] = [{ id, shiftTypeId, start, end, breakMins }, ...] — an array, so a day can hold more than one shift (e.g. a split shift)
       timeOff: [],      // [{ id, employeeId, from: dateStr, to: dateStr, reason }] — a day can already be covered by more than one of these
       accessGrants: {
@@ -1592,6 +1637,7 @@
         <td>${emp.name}</td>
         <td>${emp.department || '—'}</td>
         <td>${emp.personnelNumber || '—'}</td>
+        <td>${emp.email || '—'}</td>
         <td>${emp.shiftTypeIds.map(id => {
           const st = shiftTypeById(id);
           return st ? `<span class="badge" style="background:${st.bg};color:${st.fg};">${st.name}</span>` : '';
@@ -1602,7 +1648,7 @@
           <button class="del" data-del-emp="${emp.id}">Delete</button>
         </td>
       </tr>
-    `).join('') || `<tr><td colspan="6" style="color:var(--slate);">No employees yet — click "Add employee" to create the first one.</td></tr>`;
+    `).join('') || `<tr><td colspan="7" style="color:var(--slate);">No employees yet — click "Add employee" to create the first one.</td></tr>`;
 
     body.querySelectorAll('[data-edit-emp]').forEach(btn => btn.addEventListener('click', () => openEmployeeModal(btn.dataset.editEmp)));
     body.querySelectorAll('[data-del-emp]').forEach(btn => btn.addEventListener('click', () => {
@@ -1664,6 +1710,7 @@
     document.getElementById('emp-name').value = emp ? emp.name : '';
     populateDeptSelect(emp ? emp.department : '');
     document.getElementById('emp-personnel').value = emp ? (emp.personnelNumber || '') : '';
+    document.getElementById('emp-email').value = emp ? (emp.email || '') : '';
     document.getElementById('emp-login').value = emp ? emp.loginId : '';
     document.getElementById('emp-pin').value = emp ? emp.pin : '';
 
@@ -1702,7 +1749,7 @@
   }
 
   document.getElementById('csv-template-btn').addEventListener('click', () => {
-    const csv = 'Name,Department\nAditi Rao,Front of House\nBen Coley,Warehouse\n';
+    const csv = 'Name,Department,Email\nAditi Rao,Front of House,aditi@hallancashandcarry.co.uk\nBen Coley,Warehouse,ben@hallancashandcarry.co.uk\n';
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1729,12 +1776,13 @@
       let added = 0, skippedDupes = 0, skippedBlank = 0;
 
       for (let i = startIdx; i < rows.length; i++) {
-        const [rawName, rawDept] = rows[i];
+        const [rawName, rawDept, rawEmail] = rows[i];
         const name = (rawName || '').trim();
         const department = (rawDept || '').trim();
+        const email = (rawEmail || '').trim();
         if (!name) { skippedBlank++; continue; }
         if (existingNames.has(name.toLowerCase())) { skippedDupes++; continue; }
-        state.employees.push({ id: uid('emp'), name, department, loginId: '', pin: '', shiftTypeIds: [] });
+        state.employees.push({ id: uid('emp'), name, department, email, loginId: '', pin: '', shiftTypeIds: [] });
         existingNames.add(name.toLowerCase());
         added++;
       }
@@ -1755,6 +1803,407 @@
     reader.readAsText(file);
   });
 
+  /* =================================================================
+     IMPORT FROM PDF
+     Reads a previously-exported/printed Hallan Rota PDF back into the
+     app: every shift and time-off chip becomes a real shift/time-off
+     entry on the matching calendar date, any employee name that isn't
+     already on the Employees list is added (blank department — pick
+     one afterwards), and any shift-type name used on the PDF that
+     isn't already under Shift types is added there too (with an
+     auto-generated colour).
+
+     The PDF has no machine-readable structure (it's a printed grid),
+     so this works purely from each text run's X/Y position on the
+     page via PDF.js — it rebuilds the table by:
+       1. reading the header row ("Employee | MON 31 | TUE 1 | ...")
+          to get each column's left edge,
+       2. grouping every other text run into fine text-lines by Y,
+       3. walking column 0 top-to-bottom to find each employee's row
+          band (a name, possibly wrapping over several lines, always
+          closed off by a trailing "Xh" / "Xh Ym" hours line),
+       4. within that Y band, reading each day column's lines in
+          pairs — (shift name, time range) or ("Time off", date span)
+          — since a cell can hold more than one entry stacked.
+     ================================================================= */
+  const pdfImportOverlay = document.getElementById('pdf-import-overlay');
+  const pdfimpFileInput = document.getElementById('pdfimp-file-input');
+  const pdfimpStatus = document.getElementById('pdfimp-status');
+  const pdfimpStepPick = document.getElementById('pdfimp-step-pick');
+  const pdfimpStepPreview = document.getElementById('pdfimp-step-preview');
+  const pdfimpConfirmBtn = document.getElementById('pdfimp-confirm');
+  let pendingPdfImport = null; // holds the parsed { weekDates, employeeRows, warnings } awaiting confirmation
+
+  function resetPdfImportModal(){
+    pdfimpFileInput.value = '';
+    pdfimpStatus.textContent = '';
+    pdfimpStepPick.style.display = 'block';
+    pdfimpStepPreview.style.display = 'none';
+    pdfimpConfirmBtn.style.display = 'none';
+    pendingPdfImport = null;
+  }
+  document.getElementById('pdfimp-open-btn').addEventListener('click', () => {
+    resetPdfImportModal();
+    pdfImportOverlay.classList.add('show');
+  });
+  document.getElementById('pdfimp-cancel').addEventListener('click', () => pdfImportOverlay.classList.remove('show'));
+
+  // ---- date-range title, e.g. "Hallan Rota — 31 Aug – 6 Sep 2026" or
+  // "Hallan Rota — 1 – 7 Sep 2026" -> the 7 real calendar dates (Mon..Sun)
+  // that the PDF's MON..SUN columns refer to.
+  const MONTH_LOOKUP = { jan:0, feb:1, mar:2, apr:3, may:4, jun:5, jul:6, aug:7, sep:8, oct:9, nov:10, dec:11 };
+  function parseRotaTitleDates(titleText){
+    const m = titleText.match(/(\d{1,2})\s*([A-Za-z]{3,})?\s*[–\-]\s*(\d{1,2})\s*([A-Za-z]{3,})\s*(\d{4})/);
+    if (!m) return null;
+    const [, d1, mon1, d2, mon2, year] = m;
+    const monKey2 = mon2.slice(0,3).toLowerCase();
+    if (!(monKey2 in MONTH_LOOKUP)) return null;
+    const month2 = MONTH_LOOKUP[monKey2];
+    const month1 = mon1 ? MONTH_LOOKUP[mon1.slice(0,3).toLowerCase()] : month2;
+    if (month1 === undefined) return null;
+    const start = new Date(Number(year), month1, Number(d1));
+    // handle a range that crosses a year boundary (Dec -> Jan) just in case
+    let endYear = Number(year);
+    if (month1 > month2) endYear += 1;
+    const end = new Date(endYear, month2, Number(d2));
+    if (isNaN(start) || isNaN(end)) return null;
+    const dates = [];
+    for (let d = new Date(start); d <= end && dates.length < 7; d.setDate(d.getDate()+1)) {
+      dates.push(toDateStr(new Date(d)));
+    }
+    return dates.length === 7 ? dates : null;
+  }
+
+  // Clusters raw PDF.js text items (each with str + transform [a,b,c,d,x,y])
+  // into "fine lines" — items that sit on (almost) the same Y — sorted top
+  // to bottom, each line's items sorted left to right.
+  function clusterIntoLines(items){
+    const withPos = items.filter(it => it.str.trim().length).map(it => ({
+      str: it.str.trim(), x: it.transform[4], y: it.transform[5]
+    }));
+    withPos.sort((a, b) => b.y - a.y);
+    const lines = [];
+    const TOL = 3;
+    withPos.forEach(it => {
+      let line = lines.find(l => Math.abs(l.y - it.y) <= TOL);
+      if (!line) { line = { y: it.y, items: [] }; lines.push(line); }
+      line.items.push(it);
+    });
+    lines.forEach(l => l.items.sort((a, b) => a.x - b.x));
+    lines.sort((a, b) => b.y - a.y);
+    return lines;
+  }
+
+  const WEEKDAY_HEADER_RE = /^(MON|TUE|WED|THU|FRI|SAT|SUN)$/i;
+
+  // Finds the header line on a page and returns the left-edge X of each of
+  // the 8 columns (Employee + 7 weekdays), or null if this page has no
+  // header row (shouldn't happen — every page of a Rota PDF repeats it).
+  function findColumnBoundaries(lines){
+    for (const line of lines) {
+      const dayItems = line.items.filter(it => WEEKDAY_HEADER_RE.test(it.str));
+      const empItem = line.items.find(it => /^employee$/i.test(it.str));
+      if (dayItems.length >= 5 && empItem) {
+        // Sort weekday items by their natural MON..SUN order using x position
+        // (they're printed left-to-right in that order already).
+        dayItems.sort((a, b) => a.x - b.x);
+        const bounds = [empItem.x, ...dayItems.map(it => it.x)];
+        return bounds;
+      }
+    }
+    return null;
+  }
+  // Given a boundaries array [empX, monX, tueX, ...sunX] and an item's x,
+  // returns which column index (0 = Employee, 1..7 = Mon..Sun) it belongs to.
+  function columnForX(bounds, x){
+    let col = 0;
+    for (let i = 1; i < bounds.length; i++) {
+      // a column's items start a little left of its header label
+      // (left-aligned cell content roughly matches the header's left edge)
+      if (x >= bounds[i] - 14) col = i; else break;
+    }
+    return col;
+  }
+
+  const HOURS_LINE_RE = /^(\d+h(\s*\d+m)?|0h|—)$/i;
+  const TIME_RANGE_RE = /^(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})$/;
+
+  // Parses one page's already-clustered lines into employee row blocks.
+  // Returns { rows: [{ nameLines:[...], hoursLine, dayLines: [ [line,...] x7 ] }], isDone }
+  function parsePageRows(lines, bounds){
+    const rows = [];
+    let buffer = null; // { nameLines:[], dayItemsByCol: [[],[],[],[],[],[],[]] } (cols 1..7)
+    function startBuffer(){ return { nameLines: [], dayItemsByCol: [[],[],[],[],[],[],[]] }; }
+    function closeBuffer(hoursLine){
+      if (buffer && buffer.nameLines.length) {
+        rows.push({ nameLines: buffer.nameLines, hoursLine, dayItemsByCol: buffer.dayItemsByCol });
+      }
+      buffer = null;
+    }
+
+    for (const line of lines) {
+      // Skip the header row itself and the "Scheduled hours" totals row —
+      // the totals row never has a trailing hours-line in column 0, so it
+      // would otherwise swallow the rest of the page into one giant block.
+      const col0 = line.items.filter(it => columnForX(bounds, it.x) === 0).map(it => it.str).join(' ').trim();
+      if (/^employee$/i.test(col0)) continue;
+      if (/^scheduled\s*hours$/i.test(col0)) { closeBuffer(null); buffer = null; continue; }
+      if (/^employees$/i.test(col0) && !buffer) continue; // second line of the totals row
+
+      if (!col0) continue; // a line with nothing in column 0 belongs to the currently-open row's shift cells only
+
+      if (!buffer) buffer = startBuffer();
+
+      if (HOURS_LINE_RE.test(col0)) {
+        // This line closes the current employee: its column-0 text is the
+        // "Xh Ym" total, and its day-column content (if any — shouldn't be,
+        // but just in case a time range lines up here) is folded in below
+        // before closing.
+        for (let c = 1; c <= 7; c++) {
+          line.items.filter(it => columnForX(bounds, it.x) === c).forEach(it => buffer.dayItemsByCol[c-1].push(it.str));
+        }
+        closeBuffer(col0);
+        continue;
+      }
+
+      buffer.nameLines.push(col0);
+      for (let c = 1; c <= 7; c++) {
+        line.items.filter(it => columnForX(bounds, it.x) === c).forEach(it => buffer.dayItemsByCol[c-1].push(it.str));
+      }
+    }
+    // Anything still buffered at the end of the page carries over to the
+    // next page (a name can wrap across a page break) — caller stitches it
+    // back in as the start of the next page's lines.
+    return { rows, leftover: buffer };
+  }
+
+  // Turns one day-column's stacked lines (e.g. ["Cashier 1","14:00 - 19:00",
+  // "Time off","All day"]) into shift/time-off entries, 2 lines at a time.
+  function parseDayCellLines(cellLines){
+    const entries = [];
+    for (let i = 0; i < cellLines.length; i += 2) {
+      const label = (cellLines[i] || '').trim();
+      const detail = (cellLines[i+1] || '').trim();
+      if (!label) continue;
+      if (/^time\s*off/i.test(label)) {
+        entries.push({ type: 'timeoff', reason: label.replace(/^time\s*off\s*—?\s*/i, '') || '' , detail });
+      } else {
+        const tm = detail.match(TIME_RANGE_RE);
+        if (tm) entries.push({ type: 'shift', shiftName: label, start: tm[1].padStart(5,'0'), end: tm[2].padStart(5,'0') });
+        // if the time range didn't parse, silently drop this one entry
+        // rather than the whole row — it'll show up in the warnings count.
+      }
+    }
+    return entries;
+  }
+
+  async function parseRotaPdf(file){
+    if (!window.pdfjsLib) throw new Error('PDF reader could not load (no internet connection?).');
+    const buf = await file.arrayBuffer();
+    const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+
+    let weekDates = null;
+    let bounds = null;
+    let carry = null; // leftover buffer from the previous page
+    const employeeRows = []; // [{ nameLines, hoursLine, dayItemsByCol }]
+    let droppedCells = 0;
+
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const content = await page.getTextContent();
+      let lines = clusterIntoLines(content.items);
+
+      if (pageNum === 1) {
+        const titleLine = lines.find(l => /hallan\s*rota/i.test(l.items.map(it=>it.str).join(' ')));
+        if (titleLine) weekDates = parseRotaTitleDates(titleLine.items.map(it=>it.str).join(' '));
+        lines = lines.filter(l => l !== titleLine);
+      }
+
+      const pageBounds = findColumnBoundaries(lines);
+      if (pageBounds) bounds = pageBounds;
+      if (!bounds) continue; // couldn't find a header yet — skip until we do
+
+      // Re-inject the carried-over partial row from the previous page as if
+      // it were more lines on this page, so a name wrapping across a page
+      // break still gets treated as one employee.
+      const { rows, leftover } = parsePageRows(lines, bounds);
+      if (carry) {
+        // Merge: the very first parsed row on this page is really a
+        // continuation of `carry` if `carry` had no hours-line yet — but
+        // since parsePageRows always starts fresh, just prepend carry's
+        // lines as though a synthetic first row, then let a following
+        // hours-line (already inside `rows[0]`) close it.
+        if (rows.length) {
+          rows[0].nameLines = [...carry.nameLines, ...rows[0].nameLines];
+          for (let c = 0; c < 7; c++) rows[0].dayItemsByCol[c] = [...carry.dayItemsByCol[c], ...rows[0].dayItemsByCol[c]];
+        } else if (leftover) {
+          leftover.nameLines = [...carry.nameLines, ...leftover.nameLines];
+          for (let c = 0; c < 7; c++) leftover.dayItemsByCol[c] = [...carry.dayItemsByCol[c], ...leftover.dayItemsByCol[c]];
+        }
+        carry = null;
+      }
+      employeeRows.push(...rows);
+      carry = leftover || null;
+    }
+    if (carry && carry.nameLines.length) {
+      // Trailing block with no closing hours-line (e.g. the PDF ends mid-row,
+      // or it's the "Scheduled hours" totals row on the very last line) —
+      // only keep it if it doesn't look like the totals row.
+      if (!/^scheduled\s*hours$/i.test(carry.nameLines[0])) {
+        employeeRows.push({ nameLines: carry.nameLines, hoursLine: null, dayItemsByCol: carry.dayItemsByCol });
+      }
+    }
+
+    if (!weekDates) throw new Error("Couldn't read the week's date range from the PDF title — expected something like \"Hallan Rota — 31 Aug – 6 Sep 2026\".");
+    if (!bounds) throw new Error("Couldn't find the header row (Employee / MON / TUE / ...) — this doesn't look like a Hallan Rota export.");
+
+    // Turn each raw row into { name, entries: [ [entries...] x7 ] }
+    const parsedEmployees = employeeRows.map(row => {
+      const name = row.nameLines.join(' ').replace(/\s+/g, ' ').trim();
+      const entriesByDay = row.dayItemsByCol.map(lines => parseDayCellLines(lines));
+      return { name, entriesByDay };
+    }).filter(r => r.name);
+
+    return { weekDates, employees: parsedEmployees, droppedCells };
+  }
+
+  // ---- Preview + apply ----
+  function normName(n){ return String(n||'').trim().toLowerCase().replace(/\s+/g,' '); }
+
+  function buildImportPlan(parsed){
+    const existingByName = new Map(state.employees.map(e => [normName(e.name), e]));
+    const existingShiftTypeByName = new Map(state.shiftTypes.map(st => [normName(st.name), st]));
+    const NEW_COLORS = ['#C8B6E2','#9FD6D2','#F2A6A6','#F6D186','#A6C8E8','#B7D9A0','#E2B6D0','#C9C0A6'];
+    let colorCursor = 0;
+
+    const newEmployees = [];
+    const newShiftTypes = [];
+    let shiftsAdded = 0, timeOffAdded = 0, skippedNoTime = 0;
+    const perEmployeePlan = [];
+
+    parsed.employees.forEach(row => {
+      const key = normName(row.name);
+      let emp = existingByName.get(key);
+      let isNewEmp = false;
+      if (!emp) {
+        emp = { id: uid('emp'), name: row.name, department: '', personnelNumber: '', email: '', loginId: '', pin: '', shiftTypeIds: [] };
+        existingByName.set(key, emp);
+        newEmployees.push(emp);
+        isNewEmp = true;
+      }
+
+      const dayPlans = [];
+      row.entriesByDay.forEach((entries, dayIdx) => {
+        const dateStr = parsed.weekDates[dayIdx];
+        entries.forEach(entry => {
+          if (entry.type === 'timeoff') {
+            dayPlans.push({ dateStr, kind: 'timeoff', reason: entry.reason });
+            timeOffAdded++;
+          } else {
+            let st = existingShiftTypeByName.get(normName(entry.shiftName));
+            let isNewSt = false;
+            if (!st) {
+              st = { id: uid('st'), name: entry.shiftName, bg: NEW_COLORS[colorCursor % NEW_COLORS.length], fg: '#2E2A1F' };
+              colorCursor++;
+              existingShiftTypeByName.set(normName(st.name), st);
+              newShiftTypes.push(st);
+              isNewSt = true;
+            }
+            if (!emp.shiftTypeIds.includes(st.id)) emp.shiftTypeIds.push(st.id);
+            dayPlans.push({ dateStr, kind: 'shift', shiftTypeId: st.id, shiftName: st.name, start: entry.start, end: entry.end, isNewShiftType: isNewSt });
+            shiftsAdded++;
+          }
+        });
+      });
+
+      if (dayPlans.length || isNewEmp) {
+        perEmployeePlan.push({ emp, isNewEmp, dayPlans });
+      }
+    });
+
+    return { newEmployees, newShiftTypes, shiftsAdded, timeOffAdded, skippedNoTime, perEmployeePlan };
+  }
+
+  function applyImportPlan(parsed, plan){
+    plan.newShiftTypes.forEach(st => state.shiftTypes.push(st));
+    plan.newEmployees.forEach(emp => state.employees.push(emp));
+
+    plan.perEmployeePlan.forEach(({ emp, dayPlans }) => {
+      dayPlans.forEach(dp => {
+        if (dp.kind === 'timeoff') {
+          state.timeOff.push({ id: uid('to'), employeeId: emp.id, from: dp.dateStr, to: dp.dateStr, reason: dp.reason || '' });
+        } else {
+          if (!state.shifts[emp.id]) state.shifts[emp.id] = {};
+          if (!state.shifts[emp.id][dp.dateStr]) state.shifts[emp.id][dp.dateStr] = [];
+          state.shifts[emp.id][dp.dateStr].push({ id: uid('shift'), shiftTypeId: dp.shiftTypeId, start: dp.start, end: dp.end, breakMins: 0 });
+        }
+      });
+    });
+
+    saveState();
+    renderEmployeesTab();
+    if (typeof renderShiftTypesTab === 'function') renderShiftTypesTab();
+    renderSchedule();
+  }
+
+  pdfimpFileInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    pdfimpStatus.textContent = 'Reading PDF…';
+    try {
+      const parsed = await parseRotaPdf(file);
+      const plan = buildImportPlan(parsed);
+      pendingPdfImport = { parsed, plan };
+
+      const first = fromDateStr(parsed.weekDates[0]), last = fromDateStr(parsed.weekDates[6]);
+      const weekLabel = `${first.getDate()} ${MONTH_NAMES[first.getMonth()]} – ${last.getDate()} ${MONTH_NAMES[last.getMonth()]} ${last.getFullYear()}`;
+
+      const summary = document.getElementById('pdfimp-summary');
+      summary.innerHTML = `
+        <b>Week:</b> ${weekLabel}<br>
+        <b>Shifts to add:</b> ${plan.shiftsAdded}<br>
+        <b>Time off entries to add:</b> ${plan.timeOffAdded}<br>
+        <b>New employees to create:</b> ${plan.newEmployees.length}${plan.newEmployees.length ? ' — ' + plan.newEmployees.map(e=>e.name).join(', ') : ''}<br>
+        <b>New shift types to create:</b> ${plan.newShiftTypes.length}${plan.newShiftTypes.length ? ' — ' + plan.newShiftTypes.map(s=>s.name).join(', ') : ''}
+      `;
+      const warningsEl = document.getElementById('pdfimp-warnings');
+      warningsEl.textContent = plan.newEmployees.length
+        ? 'New employees are added with no department set — open each on the Employees tab afterwards and pick one.'
+        : '';
+
+      const detail = document.getElementById('pdfimp-detail');
+      detail.innerHTML = plan.perEmployeePlan.map(p => `
+        <div style="margin-bottom:8px;">
+          <b>${p.emp.name}</b>${p.isNewEmp ? ' <span style="color:#2E6FA8;">(new)</span>' : ''}
+          ${p.dayPlans.length ? '<br>' + p.dayPlans.map(dp =>
+            dp.kind === 'timeoff'
+              ? `${dp.dateStr}: Time off${dp.reason ? ' — ' + dp.reason : ''}`
+              : `${dp.dateStr}: ${dp.shiftName} ${dp.start}-${dp.end}`
+          ).join('<br>') : '<span style="color:var(--slate);">No shifts this week</span>'}
+        </div>
+      `).join('') || '<span style="color:var(--slate);">Nothing found to import.</span>';
+
+      pdfimpStatus.textContent = '';
+      pdfimpStepPick.style.display = 'none';
+      pdfimpStepPreview.style.display = 'block';
+      pdfimpConfirmBtn.style.display = plan.perEmployeePlan.length ? 'inline-block' : 'none';
+    } catch (err) {
+      console.error('PDF import parse error', err);
+      pdfimpStatus.textContent = err.message || "Couldn't read that PDF — make sure it's a Hallan Rota export.";
+    }
+  });
+
+  pdfimpConfirmBtn.addEventListener('click', () => {
+    if (!pendingPdfImport) return;
+    pdfimpConfirmBtn.disabled = true;
+    pdfimpConfirmBtn.textContent = 'Importing…';
+    applyImportPlan(pendingPdfImport.parsed, pendingPdfImport.plan);
+    pdfimpConfirmBtn.disabled = false;
+    pdfimpConfirmBtn.textContent = 'Import into Rota';
+    pdfImportOverlay.classList.remove('show');
+    resetPdfImportModal();
+  });
+
   document.getElementById('emp-cancel').addEventListener('click', () => employeeOverlay.classList.remove('show'));
   document.getElementById('emp-delete').addEventListener('click', () => {
     if (!confirm('Delete this employee?')) return;
@@ -1773,14 +2222,15 @@
       : deptSelectVal.trim();
     if (!department) { alert('Enter or pick a department.'); return; }
     const personnelNumber = document.getElementById('emp-personnel').value.trim();
+    const email = document.getElementById('emp-email').value.trim();
     const loginId = document.getElementById('emp-login').value.trim();
     const pin = document.getElementById('emp-pin').value.trim();
     const shiftTypeIds = Array.from(document.querySelectorAll('#emp-shifts-checkgrid input:checked')).map(cb => cb.value);
 
     if (editingEmployeeId) {
-      Object.assign(employeeById(editingEmployeeId), { name, department, personnelNumber, loginId, pin, shiftTypeIds });
+      Object.assign(employeeById(editingEmployeeId), { name, department, personnelNumber, email, loginId, pin, shiftTypeIds });
     } else {
-      state.employees.push({ id: uid('emp'), name, department, personnelNumber, loginId, pin, shiftTypeIds });
+      state.employees.push({ id: uid('emp'), name, department, personnelNumber, email, loginId, pin, shiftTypeIds });
     }
     saveState(); renderEmployeesTab();
     employeeOverlay.classList.remove('show');
@@ -2382,7 +2832,7 @@
   });
 
   // Close modals by clicking the overlay background
-  [employeeOverlay, shiftOverlay, timeoffOverlay, downloadOverlay, bulkcopyOverlay,
+  [employeeOverlay, shiftOverlay, timeoffOverlay, downloadOverlay, bulkcopyOverlay, pdfImportOverlay,
    document.getElementById('password-overlay'), document.getElementById('access-editor-overlay'), document.getElementById('access-manager-overlay')
   ].forEach(ov => {
     ov.addEventListener('click', (e) => { if (e.target === ov) ov.classList.remove('show'); });
