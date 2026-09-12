@@ -701,6 +701,32 @@
   .wa-send-list-opt input{margin:0;}
   .wa-send-list-opt .wlname{flex:1;}
   .wa-send-list-opt .wlcount{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);}
+
+  /* ---- WhatsApp: flyer picker (Image message type) ----
+     Two side-by-side cards — Wholesale Colour Flyer / Wholesale Veg Flyer —
+     each remembers its own default image server-side, so sending doesn't
+     require attaching a file every time. */
+  .wa-flyer-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px;}
+  @media(max-width:520px){.wa-flyer-grid{grid-template-columns:1fr;}}
+  .wa-flyer-card{
+    border:1px solid var(--line);border-radius:8px;padding:12px;cursor:pointer;
+    background:var(--panel2);transition:border-color .15s;
+  }
+  .wa-flyer-card:hover{border-color:var(--accent);}
+  .wa-flyer-card.active{border-color:var(--accent);background:rgba(230,180,90,.08);}
+  .wa-flyer-card h4{margin:0 0 8px;font-size:13px;display:flex;align-items:center;gap:6px;font-weight:600;}
+  .wa-flyer-thumb{
+    width:100%;height:110px;object-fit:cover;border-radius:6px;border:1px solid var(--line);
+    background:var(--panel);display:block;
+  }
+  .wa-flyer-thumb-placeholder{
+    width:100%;height:110px;border-radius:6px;border:1px dashed var(--line);
+    display:flex;align-items:center;justify-content:center;color:var(--text-dim);
+    font-size:11px;text-align:center;padding:6px;
+  }
+  .wa-flyer-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
+  .wa-flyer-actions button{flex:1;min-width:0;padding:6px 8px;font-size:11px;}
+  .wa-flyer-note{font-size:10px;color:var(--accent-dim);margin-top:6px;font-weight:600;}
 </style>
 </head>
 <body>
@@ -917,14 +943,10 @@
         </div>
 
         <div id="waImageRow" style="display:none;">
-          <label class="wa-label" style="margin-top:16px;display:block;">Image</label>
-          <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap;">
-            <input type="file" id="waFileInputImage" accept="image/*" style="display:none;" onchange="onWaFileSelected(event)">
-            <button class="btn-ghost" onclick="document.getElementById('waFileInputImage').click()">📎 Attach Image</button>
-            <span id="waAttachNameImage" style="font-size:13px;color:var(--text-dim);"></span>
-            <button class="btn-danger-ghost" id="waAttachRemoveImage" style="display:none;padding:7px 12px;font-size:12px;" onclick="removeWaAttachment()">Remove</button>
-          </div>
-          <p class="wa-hint">JPG or PNG — up to 5MB (WhatsApp's own image limit).</p>
+          <label class="wa-label" style="margin-top:16px;display:block;">Flyer</label>
+          <div class="wa-flyer-grid" id="waFlyerGrid"></div>
+          <input type="file" id="waFlyerFileInput" accept="image/*" style="display:none;" onchange="onWaFlyerFileSelected(event)">
+          <p class="wa-hint">Each flyer keeps its own saved default image, so you don't need to attach one every time — use "Replace" only when you want to send something different, and "Save as default" to make it stick. JPG or PNG, up to 5MB (WhatsApp's own image limit).</p>
         </div>
 
         <label class="wa-label" style="margin-top:20px;display:block;">Send to lists</label>
@@ -948,6 +970,9 @@
         </div>
         <button class="btn-ghost" style="width:100%;margin-top:8px;" onclick="addWaContact()">+ Add Contact</button>
         <p class="wa-hint">Full international number, digits only — no "+" or spaces. UK mobile 07911 123456 → 447911123456. New contacts are added to the selected list above.</p>
+        <input type="file" id="waCsvInput" accept=".csv,text/csv" style="display:none;" onchange="onWaCsvSelected(event)">
+        <button class="btn-ghost" style="width:100%;margin-top:8px;" onclick="document.getElementById('waCsvInput').click()">⬆ Import from CSV</button>
+        <p class="wa-hint">CSV with name in the first column and phone in the second — a header row is fine, it's skipped automatically. Imported into the selected list above.</p>
         <div id="waContactList" style="margin-top:12px;"></div>
       </div>
     </div>
@@ -6044,21 +6069,34 @@ function launchWhatsAppSignup(){
 }
 
 /* ============ WHATSAPP BROADCAST ============ */
-let waAttachment = null; // { mimeType, filename, data (base64) }
+let waAttachment = null; // { mimeType, filename, data (base64) } — Document type only
 let waMessageType = 'text'; // 'text' | 'document' | 'image'
 let waLists = [];           // [{ list_id, name, contact_count }]
 let waActiveListId = null;  // list currently shown in the "Contact Lists" panel (for add/remove)
 let waSelectedSendListIds = new Set(); // which lists this broadcast will go out to
 let waContacts = [];        // contacts of waActiveListId
 
+// ---- Image type: choice of which approved flyer template to send ----
+const WA_FLYERS = [
+  { key: 'colour', label: 'Wholesale Colour Flyer' },
+  { key: 'veg', label: 'Wholesale Veg Flyer' }
+];
+let waFlyerDefaults = {};  // { colour: {data, filename}, veg: {...} } — saved server-side
+let waFlyerOverrides = {}; // same shape — a this-send-only replacement, per flyer key
+let waSelectedFlyer = 'colour';
+let waFlyerBeingReplaced = null; // which flyer key the shared file input is currently for
+
 function openWhatsappBroadcast(){
   showView('view-whatsapp');
   document.getElementById('waMessage').value = '';
   document.getElementById('waSendStatus').innerHTML = '';
   waSelectedSendListIds = new Set();
+  waFlyerOverrides = {};
+  waSelectedFlyer = 'colour';
   setWaMessageType('text');
   removeWaAttachment();
   loadWaLists();
+  loadWaFlyerDefaults();
 }
 
 /* ---- message type toggle: swaps which attachment control is visible ---- */
@@ -6069,8 +6107,113 @@ function setWaMessageType(type){
   });
   document.getElementById('waDocumentRow').style.display = type === 'document' ? '' : 'none';
   document.getElementById('waImageRow').style.display = type === 'image' ? '' : 'none';
-  // Switching type invalidates whatever was attached under the old type.
+  // Only the Document attachment resets when switching type — the flyer
+  // picker for Image keeps its own state (default/override) independently
+  // of the message-type toggle, since its images are meant to persist.
   removeWaAttachment();
+  if(type === 'image') renderWaFlyerGrid();
+}
+
+/* ---- Image type: pick between the two saved flyers (colour / veg) ----
+   Each flyer keeps a default image saved server-side, so a broadcast can
+   go out without attaching anything. "Replace" swaps the image for this
+   send only; "Save as default" makes that replacement stick for next time. */
+async function loadWaFlyerDefaults(){
+  try{
+    const data = await apiGet('whatsapp/flyer-images');
+    waFlyerDefaults = data.images || {};
+  }catch(e){
+    waFlyerDefaults = {};
+    console.error(e);
+  }
+  renderWaFlyerGrid();
+}
+function waFlyerImageFor(key){
+  // Whatever is currently attached for a flyer: a this-send-only override
+  // first, falling back to the saved default.
+  return waFlyerOverrides[key] || waFlyerDefaults[key] || null;
+}
+function renderWaFlyerGrid(){
+  const grid = document.getElementById('waFlyerGrid');
+  if(!grid) return;
+  grid.innerHTML = '';
+  WA_FLYERS.forEach(f => {
+    const img = waFlyerImageFor(f.key);
+    const overridden = !!waFlyerOverrides[f.key];
+    const card = document.createElement('div');
+    card.className = 'wa-flyer-card' + (waSelectedFlyer === f.key ? ' active' : '');
+    card.onclick = (ev) => {
+      if(ev.target.closest('button')) return;
+      waSelectedFlyer = f.key;
+      renderWaFlyerGrid();
+    };
+    const thumbHtml = (img && img.data)
+      ? `<img class="wa-flyer-thumb" src="${img.data}" alt="${escapeHtml(f.label)}">`
+      : `<div class="wa-flyer-thumb-placeholder">No image saved yet — use Replace below</div>`;
+    card.innerHTML = `
+      <h4>${waSelectedFlyer === f.key ? '✅' : '⬜'} ${escapeHtml(f.label)}</h4>
+      ${thumbHtml}
+      ${overridden ? '<div class="wa-flyer-note">Using a replacement for this send only</div>' : ''}
+    `;
+    const actions = document.createElement('div');
+    actions.className = 'wa-flyer-actions';
+    const replaceBtn = document.createElement('button');
+    replaceBtn.className = 'btn-ghost';
+    replaceBtn.textContent = 'Replace';
+    replaceBtn.onclick = () => {
+      waFlyerBeingReplaced = f.key;
+      document.getElementById('waFlyerFileInput').click();
+    };
+    actions.appendChild(replaceBtn);
+    if(overridden){
+      const saveBtn = document.createElement('button');
+      saveBtn.className = 'btn-ghost';
+      saveBtn.textContent = 'Save as default';
+      saveBtn.onclick = () => saveWaFlyerDefault(f.key);
+      actions.appendChild(saveBtn);
+      const revertBtn = document.createElement('button');
+      revertBtn.className = 'btn-danger-ghost';
+      revertBtn.textContent = 'Undo';
+      revertBtn.onclick = () => { delete waFlyerOverrides[f.key]; renderWaFlyerGrid(); };
+      actions.appendChild(revertBtn);
+    }
+    card.appendChild(actions);
+    grid.appendChild(card);
+  });
+}
+function onWaFlyerFileSelected(event){
+  const file = event.target.files && event.target.files[0];
+  event.target.value = '';
+  if(!file || !waFlyerBeingReplaced) return;
+  if(!file.type || !file.type.startsWith('image/')){
+    toast('Choose an image file');
+    return;
+  }
+  if(file.size > 5 * 1024 * 1024){
+    toast('File is too large — WhatsApp allows up to 5MB for an image');
+    return;
+  }
+  const key = waFlyerBeingReplaced;
+  const reader = new FileReader();
+  reader.onload = () => {
+    waFlyerOverrides[key] = { data: reader.result, filename: file.name, mimeType: file.type };
+    renderWaFlyerGrid();
+  };
+  reader.readAsDataURL(file);
+}
+async function saveWaFlyerDefault(key){
+  const img = waFlyerOverrides[key];
+  if(!img) return;
+  try{
+    await apiPost('whatsapp/flyer-images', { flyer_key: key, image_data: img.data, filename: img.filename });
+    waFlyerDefaults[key] = { data: img.data, filename: img.filename };
+    delete waFlyerOverrides[key];
+    toast('Saved as the new default image');
+    renderWaFlyerGrid();
+  }catch(e){
+    toast('Could not save default image');
+    console.error(e);
+  }
 }
 
 /* ---- lists: load, render chips, switch active list, add/remove list ---- */
@@ -6263,22 +6406,51 @@ async function removeWaContact(id, name){
   }
 }
 
-/* ---- attachment handling (shared by the document + image file inputs) ----
-   WhatsApp's own Cloud API caps differ by media kind: images top out at
-   5MB, documents at 100MB — so each type is checked against its own limit
-   rather than one blanket number. ---- */
+/* ---- bulk-add contacts from a CSV: name in column 1, phone in column 2 ----
+   A plain split is enough here — this expects simple name,phone rows, not
+   a full spreadsheet with escaped/quoted commas. An obvious header row
+   (e.g. "Name,Phone") is detected and skipped rather than saved as junk. */
+function parseWaContactsCsv(text){
+  const rows = [];
+  text.split(/\r\n|\n|\r/).forEach(line => {
+    const trimmed = line.trim();
+    if(!trimmed) return;
+    const cols = trimmed.split(',').map(c => c.trim().replace(/^"(.*)"$/, '$1'));
+    const name = cols[0] || '';
+    const phoneRaw = cols[1] || '';
+    if(/^name$/i.test(name) && /^phone/i.test(phoneRaw)) return; // header row
+    rows.push({ name, phone: phoneRaw });
+  });
+  return rows;
+}
+async function onWaCsvSelected(event){
+  const file = event.target.files && event.target.files[0];
+  event.target.value = '';
+  if(!file) return;
+  if(!waActiveListId){ toast('Create a list first'); return; }
+  try{
+    const text = await file.text();
+    const rows = parseWaContactsCsv(text);
+    if(rows.length === 0){ toast('No rows found in that CSV'); return; }
+    const data = await apiPost('whatsapp/contacts/bulk', { list_id: waActiveListId, contacts: rows });
+    const skippedCount = (data.skipped || []).length;
+    toast(data.inserted + ' contact(s) imported' + (skippedCount ? ', ' + skippedCount + ' skipped' : ''));
+    loadWaLists();
+  }catch(e){
+    toast('Could not import CSV');
+    console.error(e);
+  }
+}
+
+/* ---- attachment handling (Document type only — Image uses the flyer
+   picker's own state above) ----
+   WhatsApp's own Cloud API caps a document at 100MB. ---- */
 function onWaFileSelected(event){
   const file = event.target.files && event.target.files[0];
   if(!file) return;
-  if(waMessageType === 'image' && (!file.type || !file.type.startsWith('image/'))){
-    toast('Choose an image file for an image message');
-    event.target.value = '';
-    return;
-  }
-  const maxBytes = waMessageType === 'image' ? 5 * 1024 * 1024 : 100 * 1024 * 1024;
-  const maxLabel = waMessageType === 'image' ? '5MB' : '100MB';
+  const maxBytes = 100 * 1024 * 1024;
   if(file.size > maxBytes){
-    toast('File is too large — WhatsApp allows up to ' + maxLabel + ' for a ' + waMessageType);
+    toast('File is too large — WhatsApp allows up to 100MB for a document');
     event.target.value = '';
     return;
   }
@@ -6287,8 +6459,8 @@ function onWaFileSelected(event){
     const dataUrl = reader.result;
     const base64 = dataUrl.substring(dataUrl.indexOf(',') + 1);
     waAttachment = { mimeType: file.type || 'application/octet-stream', filename: file.name, data: base64 };
-    const nameEl = document.getElementById(waMessageType === 'document' ? 'waAttachNameDocument' : 'waAttachNameImage');
-    const rmBtn = document.getElementById(waMessageType === 'document' ? 'waAttachRemoveDocument' : 'waAttachRemoveImage');
+    const nameEl = document.getElementById('waAttachNameDocument');
+    const rmBtn = document.getElementById('waAttachRemoveDocument');
     if(nameEl) nameEl.textContent = file.name;
     if(rmBtn) rmBtn.style.display = 'inline-block';
   };
@@ -6297,17 +6469,11 @@ function onWaFileSelected(event){
 function removeWaAttachment(){
   waAttachment = null;
   const docInput = document.getElementById('waFileInputDocument');
-  const imgInput = document.getElementById('waFileInputImage');
   if(docInput) docInput.value = '';
-  if(imgInput) imgInput.value = '';
-  ['waAttachNameDocument','waAttachNameImage'].forEach(id => {
-    const el = document.getElementById(id);
-    if(el) el.textContent = '';
-  });
-  ['waAttachRemoveDocument','waAttachRemoveImage'].forEach(id => {
-    const el = document.getElementById(id);
-    if(el) el.style.display = 'none';
-  });
+  const nameEl = document.getElementById('waAttachNameDocument');
+  if(nameEl) nameEl.textContent = '';
+  const rmBtn = document.getElementById('waAttachRemoveDocument');
+  if(rmBtn) rmBtn.style.display = 'none';
 }
 
 async function sendWhatsappBroadcast(){
@@ -6316,9 +6482,22 @@ async function sendWhatsappBroadcast(){
   const listIds = [...waSelectedSendListIds];
   if(listIds.length === 0){ toast('Select at least one list to send to'); return; }
   if(waMessageType === 'document' && !waAttachment){ toast('Attach a document, or switch to the Text message type'); return; }
-  if(waMessageType === 'image' && !waAttachment){ toast('Attach an image, or switch to the Text message type'); return; }
+  let imageAttachment = null;
+  if(waMessageType === 'image'){
+    const img = waFlyerImageFor(waSelectedFlyer);
+    if(!img || !img.data){ toast('No image saved for this flyer yet — use Replace to attach one'); return; }
+    const dataUrl = img.data;
+    const mimeMatch = /^data:([^;]+);/.exec(dataUrl);
+    imageAttachment = {
+      mimeType: img.mimeType || (mimeMatch ? mimeMatch[1] : 'image/jpeg'),
+      filename: img.filename || (waSelectedFlyer + '-flyer.jpg'),
+      data: dataUrl.substring(dataUrl.indexOf(',') + 1)
+    };
+  }
   const countLabel = document.getElementById('waContactCount').textContent;
-  if(!confirm('Send this ' + waMessageType + ' message — ' + countLabel + '?')) return;
+  const flyerMeta = waMessageType === 'image' ? WA_FLYERS.find(f => f.key === waSelectedFlyer) : null;
+  const typeLabel = flyerMeta ? flyerMeta.label : waMessageType;
+  if(!confirm('Send this ' + typeLabel + ' message — ' + countLabel + '?')) return;
   const btn = document.getElementById('waSendBtn');
   const status = document.getElementById('waSendStatus');
   btn.disabled = true;
@@ -6328,7 +6507,8 @@ async function sendWhatsappBroadcast(){
     const data = await apiPost('whatsapp/send', {
       message,
       messageType: waMessageType,
-      attachment: waMessageType === 'text' ? null : waAttachment,
+      flyer: waMessageType === 'image' ? waSelectedFlyer : undefined,
+      attachment: waMessageType === 'text' ? null : (waMessageType === 'image' ? imageAttachment : waAttachment),
       list_ids: listIds
     });
     const results = data.results || [];
