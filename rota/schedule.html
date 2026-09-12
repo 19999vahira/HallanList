@@ -1744,7 +1744,10 @@
     const dayColWidth = availableWidth / (numDays + NAME_COL_WEIGHT);
     const nameColWidth = dayColWidth * NAME_COL_WEIGHT;
 
-    const columnStyles = { 0: { cellWidth: nameColWidth, fontStyle: 'bold' } };
+    // Name column and day headers get an explicit, larger fontSize here —
+    // bigger and bolder than the base body style, so the row labels read
+    // clearly at a glance instead of blending into the grid lines.
+    const columnStyles = { 0: { cellWidth: nameColWidth, fontStyle: 'bold', fontSize: 11 } };
     for (let i = 1; i <= numDays; i++) columnStyles[i] = { cellWidth: dayColWidth };
 
     function isDayColumn(colIndex){ return colIndex > 0; }
@@ -1760,11 +1763,13 @@
       // the old version wasted space with a full blank row of padding
       // between every person. Every row now sits directly against the
       // next, divided only by this thin line, exactly like Sling.
-      styles: { font: 'helvetica', fontSize: 8.5, cellPadding: { top: 6, right: 5, bottom: 6, left: 5 }, valign: 'top', lineColor: '#E1E5EA', lineWidth: 0.75, textColor: '#37424A', fontStyle: 'bold', minCellHeight: 40 },
+      // fontSize/minCellHeight bumped up from the previous pass — the
+      // chip text especially was too small to read at a glance.
+      styles: { font: 'helvetica', fontSize: 9.5, cellPadding: { top: 7, right: 6, bottom: 7, left: 6 }, valign: 'top', lineColor: '#E1E5EA', lineWidth: 0.75, textColor: '#37424A', fontStyle: 'bold', minCellHeight: 48 },
       // Plain, minimal header — no filled bar. Sling's own header is just
       // small-caps gray-blue text, bold, on white with a thin rule
       // underneath, not a bold color block.
-      headStyles: { fillColor: '#ffffff', textColor: '#7E8B99', fontStyle: 'bold', fontSize: 9.5, halign: 'center', cellPadding: { top: 8, bottom: 8, left: 5, right: 5 }, lineColor: '#D7DCE1', lineWidth: { top: 0, left: 0, right: 0, bottom: 1 } },
+      headStyles: { fillColor: '#ffffff', textColor: '#7E8B99', fontStyle: 'bold', fontSize: 11, halign: 'center', cellPadding: { top: 9, bottom: 9, left: 5, right: 5 }, lineColor: '#D7DCE1', lineWidth: { top: 0, left: 0, right: 0, bottom: 1 } },
       columnStyles,
 
       didParseCell: (data) => {
@@ -1794,36 +1799,39 @@
         if (!entries || !entries.length) return;
 
         const { x, y, width: w, height: h } = data.cell;
-        const pad = 4, gap = 4;
+        const pad = 4, gap = 5;
         const n = entries.length;
-        // A FIXED chip height (36pt) instead of stretching to fill
+        // A FIXED chip height (44pt) instead of stretching to fill
         // whatever height the row happens to be — this is what makes
         // Sling's boxes look identical everywhere: a cell with just one
         // entry in a tall row (because a neighbouring cell needed two
         // stacked entries) gets one normal-size box plus blank space
-        // below it, not one oversized box. Only shrinks below 36pt if a
+        // below it, not one oversized box. Only shrinks below 44pt if a
         // cell genuinely doesn't have room for it (more than ~2 stacked
-        // entries), so nothing ever gets clipped.
-        const idealChipH = 36;
+        // entries), so nothing ever gets clipped. Taller than before to
+        // fit the larger text below.
+        const idealChipH = 44;
         const chipH = Math.min(idealChipH, (h - pad * 2 - gap * (n - 1)) / n);
-        const twoLine = chipH >= 20; // enough room for a bold title + a subtitle line
+        const twoLine = chipH >= 24; // enough room for a bold title + a subtitle line
 
         entries.forEach((entry, i) => {
           const cy = y + pad + i * (chipH + gap);
           doc.setFillColor(entry.bg);
-          doc.roundedRect(x + pad, cy, w - pad * 2, chipH, 2.5, 2.5, 'F');
+          doc.roundedRect(x + pad, cy, w - pad * 2, chipH, 3, 3, 'F');
           doc.setTextColor(entry.fg);
           if (twoLine) {
+            // Both lines bold now, and noticeably larger — the previous
+            // sizes (8.5 / 7.5pt) were too small to read at a glance.
             doc.setFont('helvetica', 'bold');
-            doc.setFontSize(8.5);
-            doc.text(entry.title, x + pad + 5, cy + chipH / 2 - 3, { baseline: 'middle' });
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(7.5);
-            doc.text(entry.subtitle, x + pad + 5, cy + chipH / 2 + 9, { baseline: 'middle' });
+            doc.setFontSize(11);
+            doc.text(entry.title, x + pad + 6, cy + chipH / 2 - 5, { baseline: 'middle' });
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(9.5);
+            doc.text(entry.subtitle, x + pad + 6, cy + chipH / 2 + 11, { baseline: 'middle' });
           } else {
             doc.setFont('helvetica', 'bold');
-            doc.setFontSize(7);
-            doc.text(`${entry.title} · ${entry.subtitle}`, x + pad + 5, cy + chipH / 2, { baseline: 'middle' });
+            doc.setFontSize(9);
+            doc.text(`${entry.title} · ${entry.subtitle}`, x + pad + 6, cy + chipH / 2, { baseline: 'middle' });
           }
         });
       }
