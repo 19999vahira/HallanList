@@ -5262,7 +5262,19 @@ function buildFlyerWebpageHTML(mode, fromVal, toVal){
      is capped at max-width:900px and centred, so vw would size text off
      the whole screen width rather than the page itself, growing
      disproportionately large on wide monitors. */
-  .fw-page{position:relative;width:100%;max-width:900px;margin:0 auto;aspect-ratio:210/297;background-size:cover;background-position:center;container-type:inline-size;}
+  /* background-size MUST be a full non-uniform stretch (100% 100%), not
+     "cover". The PDF paints this same artwork with
+     doc.addImage(img, fmt, 0, 0, 210, 297, ...) — which stretches whatever
+     the source image's own proportions are to fill the full 210x297mm page
+     exactly, no cropping. "cover" instead preserves the image's own aspect
+     ratio and crops/zooms it to fill the box, which — unless your artwork
+     happens to be pixel-exact A4 proportions — shifts where its content
+     (the wave design, the baked-in cursive logo text, everything) actually
+     lands vs. the PDF. Every percentage-based position below (fw-validity's
+     top:61.28%, fw-dept-content's padding, the watermark circle positions)
+     was measured assuming a full undistorted stretch fill, so this was the
+     one thing making all of those numbers land in the wrong place. */
+  .fw-page{position:relative;width:100%;max-width:900px;margin:0 auto;aspect-ratio:210/297;background-size:100% 100%;background-position:center;container-type:inline-size;}
   .fw-cover{position:relative;}
   /* y=182mm on the PDF's cover page (see flyerDrawCenteredSegments call
      in generateColourFlyer) -> 182/297*100 = 61.28% of page HEIGHT. Unlike
