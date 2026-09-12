@@ -1667,18 +1667,22 @@
       const rowEntries = []; // rowEntries[dayIndex] = [{bg,fg,title,subtitle}, ...] — every chip
       // for that day, stacked in the same order the on-screen daycell shows
       // them (time off first, then shifts) — one below the other, like Sling.
+      // Each entry's TIME goes in `title` (drawn bold, on top) and its
+      // label/department goes in `subtitle` (drawn normal, underneath) —
+      // matching Sling's own chip layout of time-then-label, not the
+      // label-then-time order this used to draw in.
       const dayCells = dateStrs.map(dateStr => {
         const entries = [];
         const offs = timeOffsFor(emp.id, dateStr);
         const shifts = shiftsFor(emp.id, dateStr);
         offs.forEach(off => {
-          entries.push({ bg: TIMEOFF_CHIP_BG, fg: '#ffffff', title: `Time off${off.reason ? ' — ' + off.reason : ''}`, subtitle: 'All day' });
+          entries.push({ bg: TIMEOFF_CHIP_BG, fg: '#ffffff', title: 'All day', subtitle: `Time off${off.reason ? ' — ' + off.reason : ''}` });
         });
         shifts.forEach(s => {
           const st = shiftTypeById(s.shiftTypeId);
           totalMins += hoursMinusBreak(s.start, s.end, s.breakMins);
           const cc = chipColors(st || { bg: '#8A94A0' });
-          entries.push({ bg: cc.bg, fg: cc.fg, title: st ? st.name : 'Unassigned', subtitle: `${fmtTime12(s.start)} - ${fmtTime12(s.end)}` });
+          entries.push({ bg: cc.bg, fg: cc.fg, title: `${fmtTime12(s.start)} - ${fmtTime12(s.end)}`, subtitle: st ? st.name : 'Unassigned' });
         });
         rowEntries.push(entries);
         // This text isn't shown (we draw chips manually in didDrawCell) —
@@ -1724,27 +1728,42 @@
     doc.setTextColor('#2E6FE0');
     doc.text(weekLabelText(), 30, 54);
 
-    // Column widths: a fixed name column, the rest split evenly across the
-    // day columns — proportioned the same as a real Sling export (name
-    // column ≈ 1.1× a single day column) but scaled up for the larger A3 page.
-    const columnStyles = { 0: { cellWidth: 150, fontStyle: 'bold' } };
+    // Column widths — computed from the actual page width instead of a
+    // flat guess, so the name column can't end up disproportionately wide
+    // (the bug before) and every day column is FORCED to the same exact
+    // width. Previously only column 0 had an explicit cellWidth, so
+    // autoTable's "auto" layout sized the day columns by how much text
+    // each one happened to hold — that's why they came out uneven and the
+    // name column looked oversized by comparison. Giving every column an
+    // explicit width (name ≈ 1.15× a day column, matching Sling's own
+    // proportions) fixes both.
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const marginLeft = 28, marginRight = 28;
+    const availableWidth = pageWidth - marginLeft - marginRight;
+    const NAME_COL_WEIGHT = 1.15; // name column is ~1.15x a day column's width, same ratio as Sling's export
+    const dayColWidth = availableWidth / (numDays + NAME_COL_WEIGHT);
+    const nameColWidth = dayColWidth * NAME_COL_WEIGHT;
+
+    const columnStyles = { 0: { cellWidth: nameColWidth, fontStyle: 'bold' } };
+    for (let i = 1; i <= numDays; i++) columnStyles[i] = { cellWidth: dayColWidth };
 
     function isDayColumn(colIndex){ return colIndex > 0; }
 
     doc.autoTable({
       head, body,
       startY: 72,
-      margin: { left: 28, right: 28, bottom: 24 },
+      margin: { left: marginLeft, right: marginRight, bottom: 24 },
+      tableWidth: availableWidth,
       theme: 'grid',
       // Tighter, lighter grid lines and less internal padding than before —
       // this (not page size) is what was making the export feel clumsy:
       // the old version wasted space with a full blank row of padding
       // between every person. Every row now sits directly against the
       // next, divided only by this thin line, exactly like Sling.
-      styles: { fontSize: 8.5, cellPadding: { top: 6, right: 5, bottom: 6, left: 5 }, valign: 'top', lineColor: '#E1E5EA', lineWidth: 0.75, textColor: '#37424A', fontStyle: 'bold', minCellHeight: 40 },
+      styles: { font: 'helvetica', fontSize: 8.5, cellPadding: { top: 6, right: 5, bottom: 6, left: 5 }, valign: 'top', lineColor: '#E1E5EA', lineWidth: 0.75, textColor: '#37424A', fontStyle: 'bold', minCellHeight: 40 },
       // Plain, minimal header — no filled bar. Sling's own header is just
-      // small-caps gray-blue text on white with a thin rule underneath,
-      // not a bold color block.
+      // small-caps gray-blue text, bold, on white with a thin rule
+      // underneath, not a bold color block.
       headStyles: { fillColor: '#ffffff', textColor: '#7E8B99', fontStyle: 'bold', fontSize: 9.5, halign: 'center', cellPadding: { top: 8, bottom: 8, left: 5, right: 5 }, lineColor: '#D7DCE1', lineWidth: { top: 0, left: 0, right: 0, bottom: 1 } },
       columnStyles,
 
@@ -1777,7 +1796,16 @@
         const { x, y, width: w, height: h } = data.cell;
         const pad = 4, gap = 4;
         const n = entries.length;
-        const chipH = (h - pad * 2 - gap * (n - 1)) / n;
+        // A FIXED chip height (36pt) instead of stretching to fill
+        // whatever height the row happens to be — this is what makes
+        // Sling's boxes look identical everywhere: a cell with just one
+        // entry in a tall row (because a neighbouring cell needed two
+        // stacked entries) gets one normal-size box plus blank space
+        // below it, not one oversized box. Only shrinks below 36pt if a
+        // cell genuinely doesn't have room for it (more than ~2 stacked
+        // entries), so nothing ever gets clipped.
+        const idealChipH = 36;
+        const chipH = Math.min(idealChipH, (h - pad * 2 - gap * (n - 1)) / n);
         const twoLine = chipH >= 20; // enough room for a bold title + a subtitle line
 
         entries.forEach((entry, i) => {
