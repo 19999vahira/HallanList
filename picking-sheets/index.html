@@ -5089,7 +5089,14 @@ async function clearPriceChanges(){
    PDF's layout and the Hallan brand colours as closely as a scrolling
    page reasonably can. */
 let flyerWebpageTarget = 'whole';
-function openFlyerWebpageModal(mode){
+// flyerImages (cover/last/layout/department photos) is only ever populated
+// by loadFlyerImages(), which until now was only called from
+// openFlyerImagesModal() — so Download Colour Flyer only ever had images
+// because Upload Images happened to be opened earlier in the same
+// session. This button can't assume that, so it loads them itself here,
+// the same way openFlyerImagesModal does, before the person even gets to
+// Publish — see buildFlyerWebpageHTML, which reads flyerImages directly.
+async function openFlyerWebpageModal(mode){
   if(wholesaleRows.length === 0){ toast('Nothing to include yet'); return; }
   flyerWebpageTarget = mode;
   document.getElementById('flyerWebpageTitle').textContent =
@@ -5099,6 +5106,17 @@ function openFlyerWebpageModal(mode){
   const err = document.getElementById('flyerWebpageErr');
   err.style.display = 'none'; err.textContent = '';
   openModal('modalFlyerWebpage');
+  const btn = document.getElementById('flyerWebpageBtn');
+  btn.disabled = true;
+  try{
+    await loadFlyerImages();
+  }catch(e){
+    console.error('Could not load flyer images before publishing', e);
+    err.textContent = 'Could not load the uploaded flyer images — the page may publish without photos. ' + (e.message || '');
+    err.style.display = 'block';
+  }finally{
+    btn.disabled = false;
+  }
 }
 // The flyer's colour constants (FLYER_COLOR_BLUE etc.) are RGB arrays for
 // jsPDF — converted to CSS hex here once rather than keeping a second set
