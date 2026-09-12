@@ -5256,7 +5256,7 @@ function buildFlyerWebpageHTML(mode, fromVal, toVal){
 <style>
   :root{ --fw-blue:${FLYER_WEB_BLUE}; --fw-gold:${FLYER_WEB_GOLD}; --fw-light-gold:${FLYER_WEB_LIGHT_GOLD}; }
   *{box-sizing:border-box;}
-  body{margin:0;background:#fff;font-family:'Nunito Sans',sans-serif;color:var(--fw-blue);}
+  body{margin:0;background:#fff;font-family:'Nunito Sans',sans-serif;color:var(--fw-blue);overflow-x:auto;-webkit-overflow-scrolling:touch;}
   /* container-type lets font-size use cqw ("% of THIS element's own width")
      instead of vw ("% of the browser viewport") — needed because .fw-page
      is capped at max-width:900px and centred, so vw would size text off
@@ -5274,7 +5274,23 @@ function buildFlyerWebpageHTML(mode, fromVal, toVal){
      top:61.28%, fw-dept-content's padding, the watermark circle positions)
      was measured assuming a full undistorted stretch fill, so this was the
      one thing making all of those numbers land in the wrong place. */
-  .fw-page{position:relative;width:100%;max-width:900px;margin:0 auto;aspect-ratio:210/297;background-size:100% 100%;background-position:center;container-type:inline-size;}
+  /* min-width:820px is deliberate, not a random floor. Every clamp() below
+     (item font clamp(13px,1.6cqw,...), heading clamp(22px,4cqw,...)) was
+     tuned assuming a desktop-width preview, where the cqw value always
+     lands above its px floor. Below ~815px container width, 1.6cqw drops
+     under 13px and the browser locks item-row text to the flat 13px floor
+     instead — which is proportionally much bigger than 1.6cqw would be,
+     so rows eat more vertical space than the safe-zone math (topSafeY/
+     bottomSafeY/rowHeight, same numbers as the PDF) budgeted for, and the
+     last rows of a full page run into the artwork's bottom wave. That's
+     the exact bug this fixes: on a phone, .fw-page used to be forced down
+     to the device's own narrow width by the @media rule that used to sit
+     at the bottom of this block — squeezing every clamp() below its floor
+     at once. Enforcing min-width here means the page now never shrinks
+     past the point those floors were tuned for; body's overflow-x:auto
+     lets a phone scroll/pinch-zoom across it instead, the same way you'd
+     view any full A4 flyer image on a phone screen. */
+  .fw-page{position:relative;width:100%;max-width:900px;min-width:820px;margin:0 auto;aspect-ratio:210/297;background-size:100% 100%;background-position:center;container-type:inline-size;}
   .fw-cover{position:relative;}
   /* y=182mm on the PDF's cover page (see flyerDrawCenteredSegments call
      in generateColourFlyer) -> 182/297*100 = 61.28% of page HEIGHT. Unlike
@@ -5316,7 +5332,6 @@ function buildFlyerWebpageHTML(mode, fromVal, toVal){
   .fw-notes-page{padding:45.238% 11.905% 8%;}
   .fw-notes-page h2{color:var(--fw-blue);font-size:clamp(22px,4cqw,32px);}
   .fw-notes-page ul{color:var(--fw-gold);font-family:'Dancing Script',cursive;font-size:clamp(16px,2.2cqw,22px);line-height:1.7;padding-left:20px;}
-  @media(max-width:600px){ .fw-page{max-width:100%;} }
 </style>
 </head>
 <body>
