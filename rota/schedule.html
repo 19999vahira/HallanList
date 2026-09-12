@@ -537,6 +537,7 @@
         <input type="time" id="shift-end" value="17:00">
       </div>
     </div>
+    <div style="font-size:11.5px;color:var(--slate);margin-top:-6px;margin-bottom:8px;">Tip: hover a time and scroll to adjust it 15 min at a time (hold Shift for 1 hour).</div>
     <label for="shift-break">Break (minutes)</label>
     <input type="number" id="shift-break" value="0" min="0" step="5">
     <div class="modal-actions">
@@ -893,10 +894,27 @@
   function saveState(){
     setSyncStatus('syncing', 'Saving…');
     clearTimeout(syncTimer);
-    syncTimer = setTimeout(syncStateToServer, 700);
+    syncTimer = setTimeout(triggerSync, 700);
+  }
+
+  // Guards against a real bug that LOOKED like another person editing at
+  // the same time: if a save was still in flight (server hadn't responded
+  // yet) when the debounce timer fired again, a second PUT used to go out
+  // carrying the SAME `lastKnownUpdatedAt` as the first. Whichever one the
+  // server saw second then got rejected with 409 ("someone else changed
+  // this") and force-reloaded the page — even on a rota nobody else had
+  // open. Only ever one save in flight at a time now; anything that would
+  // have raced it just re-runs once the current save finishes, using the
+  // fresh `lastKnownUpdatedAt` that save returned.
+  let syncInFlight = false;
+  let resyncNeeded = false;
+  function triggerSync(){
+    if (syncInFlight) { resyncNeeded = true; return; }
+    syncStateToServer();
   }
 
   async function syncStateToServer(){
+    syncInFlight = true;
     try {
       const res = await fetch(`${API_BASE}/api/staff/rota-state`, {
         method: 'PUT',
@@ -906,11 +924,11 @@
       const payload = await res.json();
 
       if (res.status === 409) {
-        // Someone else saved from another device since we last loaded.
-        // Don't guess how to merge — reload the real thing and make the
-        // person redo their change against current data, since silently
-        // overwriting someone else's rota edit could cost someone a
-        // shift, or their pay.
+        // A genuine conflict: the server's updatedAt really doesn't match
+        // what we last loaded, meaning some OTHER save (a different
+        // device/tab, not one of ours still in flight — that case is
+        // handled above) landed since. Reloading to get the real current
+        // data is still the right call here.
         alert("Someone else saved changes to the rota since this page loaded. This page will now reload the latest version — you'll need to redo your last change.");
         window.location.reload();
         return;
@@ -922,6 +940,9 @@
       setTimeout(() => { document.getElementById('sync-status').style.display = 'none'; }, 1800);
     } catch (err) {
       setSyncStatus('offline', "Not saved — can't reach the server. Check your connection; this change has NOT been saved anywhere.");
+    } finally {
+      syncInFlight = false;
+      if (resyncNeeded) { resyncNeeded = false; syncStateToServer(); }
     }
   }
 
@@ -1080,8 +1101,18 @@
   // every checkbox is checked (= everything visible) by default, and any
   // shift type / employee added later is automatically checked too, since
   // it's simply absent from the hidden set.
-  let hiddenShiftTypeIds = new Set();
-  let hiddenEmployeeIds = new Set();
+  // Restored from localStorage (a per-browser view preference, not shared
+  // rota data) so the filters you had set stay set across a reload —
+  // previously these lived only in memory and silently reset to "show
+  // everyone" on every refresh, which was one of the reported problems.
+  function loadIdSet(key){
+    try { return new Set(JSON.parse(localStorage.getItem(key) || '[]')); }
+    catch { return new Set(); }
+  }
+  let hiddenShiftTypeIds = loadIdSet('rota_hidden_shift_type_ids');
+  let hiddenEmployeeIds = loadIdSet('rota_hidden_employee_ids');
+  function persistHiddenShiftTypeIds(){ localStorage.setItem('rota_hidden_shift_type_ids', JSON.stringify([...hiddenShiftTypeIds])); }
+  function persistHiddenEmployeeIds(){ localStorage.setItem('rota_hidden_employee_ids', JSON.stringify([...hiddenEmployeeIds])); }
 
   function renderShiftFilterPanel(){
     const panel = document.getElementById('shift-filter-panel');
@@ -1094,11 +1125,13 @@
       cb.addEventListener('change', () => {
         if (cb.checked) hiddenShiftTypeIds.delete(cb.dataset.filterShift);
         else hiddenShiftTypeIds.add(cb.dataset.filterShift);
+        persistHiddenShiftTypeIds();
         renderSchedule();
       });
     });
     document.getElementById('clear-shift-filter').addEventListener('click', () => {
       state.shiftTypes.forEach(st => hiddenShiftTypeIds.add(st.id));
+      persistHiddenShiftTypeIds();
       renderShiftFilterPanel(); renderSchedule();
     });
   }
@@ -1113,11 +1146,13 @@
       cb.addEventListener('change', () => {
         if (cb.checked) hiddenEmployeeIds.delete(cb.dataset.filterEmp);
         else hiddenEmployeeIds.add(cb.dataset.filterEmp);
+        persistHiddenEmployeeIds();
         renderSchedule();
       });
     });
     document.getElementById('clear-emp-filter').addEventListener('click', () => {
       state.employees.forEach(emp => hiddenEmployeeIds.add(emp.id));
+      persistHiddenEmployeeIds();
       renderEmpFilterPanel(); renderSchedule();
     });
   }
@@ -1526,6 +1561,39 @@
       : addShift(editingEmpId, editingDate, shiftData);
     if (ok) shiftOverlay.classList.remove('show');
   });
+
+  // ---- Mouse-wheel "roller" for Start/End/Break — hover the field and
+  // scroll instead of opening the native picker for every small
+  // adjustment. Scroll up = later/more, scroll down = earlier/less; hold
+  // Shift while scrolling for a bigger jump (an hour at a time, or a
+  // bigger break step) to cover more ground fast.
+  function attachTimeWheel(input, stepMinutes, bigStepMinutes){
+    input.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const [h, m] = (input.value || '09:00').split(':').map(Number);
+      const step = e.shiftKey ? bigStepMinutes : stepMinutes;
+      const delta = e.deltaY < 0 ? step : -step;
+      const wrapped = (((h * 60 + m) + delta) % 1440 + 1440) % 1440;
+      const nh = Math.floor(wrapped / 60), nm = wrapped % 60;
+      input.value = `${String(nh).padStart(2, '0')}:${String(nm).padStart(2, '0')}`;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }, { passive: false });
+  }
+  function attachNumberWheel(input, stepAmount, bigStepAmount, min, max){
+    input.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const cur = Number(input.value) || 0;
+      const step = e.shiftKey ? bigStepAmount : stepAmount;
+      let next = cur + (e.deltaY < 0 ? step : -step);
+      if (min != null) next = Math.max(min, next);
+      if (max != null) next = Math.min(max, next);
+      input.value = next;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    }, { passive: false });
+  }
+  attachTimeWheel(document.getElementById('shift-start'), 15, 60);
+  attachTimeWheel(document.getElementById('shift-end'), 15, 60);
+  attachNumberWheel(document.getElementById('shift-break'), 5, 15, 0, null);
 
   /* =================================================================
      TIME OFF MODAL (date range)
@@ -2928,6 +2996,7 @@
   }
 
   let tsdFocusEmpId = null; // set when opened via "View / edit days"; '' = all employees
+  let tsdFiltersRestoredFromStorage = false; // only pull the saved dept/name filter in once per page load
 
   function openTsDetail(empId){
     tsdFocusEmpId = empId;
@@ -2943,8 +3012,20 @@
     const prevDept = deptSel.value, prevUser = userSel.value;
     deptSel.innerHTML = '<option value="">All</option>' + depts.map(d => `<option value="${d}">${d}</option>`).join('');
     userSel.innerHTML = '<option value="">All</option>' + emps.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
-    deptSel.value = depts.includes(prevDept) ? prevDept : '';
-    userSel.value = (tsdFocusEmpId && emps.some(e => e.id === tsdFocusEmpId)) ? tsdFocusEmpId : (emps.some(e => e.id === prevUser) ? prevUser : '');
+
+    // The first time this screen renders after a page load, restore
+    // whichever department/name filter this browser last had selected
+    // here — previously these always reset to "All" on every refresh.
+    // After that first restore, later re-renders in the same session
+    // just keep whatever's currently in the dropdowns (prevDept/prevUser).
+    let wantDept = prevDept, wantUser = prevUser;
+    if (!tsdFiltersRestoredFromStorage) {
+      tsdFiltersRestoredFromStorage = true;
+      wantDept = localStorage.getItem('rota_tsd_dept_filter') || '';
+      wantUser = localStorage.getItem('rota_tsd_user_filter') || '';
+    }
+    deptSel.value = depts.includes(wantDept) ? wantDept : '';
+    userSel.value = (tsdFocusEmpId && emps.some(e => e.id === tsdFocusEmpId)) ? tsdFocusEmpId : (emps.some(e => e.id === wantUser) ? wantUser : '');
     tsdFocusEmpId = null; // only force the filter the first time the screen opens
   }
 
@@ -3042,12 +3123,18 @@
     });
   }
   ['tsd-dept-filter','tsd-user-filter','tsd-show-empty'].forEach(id => {
-    document.getElementById(id).addEventListener('change', renderTsDetail);
+    document.getElementById(id).addEventListener('change', () => {
+      localStorage.setItem('rota_tsd_dept_filter', document.getElementById('tsd-dept-filter').value);
+      localStorage.setItem('rota_tsd_user_filter', document.getElementById('tsd-user-filter').value);
+      renderTsDetail();
+    });
   });
   document.getElementById('tsd-clear-filters').addEventListener('click', () => {
     document.getElementById('tsd-dept-filter').value = '';
     document.getElementById('tsd-user-filter').value = '';
     document.getElementById('tsd-show-empty').checked = true;
+    localStorage.removeItem('rota_tsd_dept_filter');
+    localStorage.removeItem('rota_tsd_user_filter');
     renderTsDetail();
   });
   document.getElementById('tsd-print-btn').addEventListener('click', () => window.print());
