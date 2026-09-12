@@ -662,6 +662,45 @@
   .wa-status-row:last-child{border-bottom:none;}
   .wa-status-ok{color:var(--green);font-size:12px;font-family:'JetBrains Mono',monospace;}
   .wa-status-fail{color:var(--danger);font-size:12px;font-family:'JetBrains Mono',monospace;}
+
+  /* ---- WhatsApp: message type toggle ---- */
+  .wa-type-toggle{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;}
+  .wa-type-btn{
+    flex:1;min-width:100px;padding:10px 12px;border-radius:6px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--text-dim);font-size:13px;font-weight:600;cursor:pointer;
+    font-family:'Inter',sans-serif;text-align:center;transition:border-color .15s,color .15s;
+  }
+  .wa-type-btn:hover{border-color:var(--accent);color:var(--text);}
+  .wa-type-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(230,180,90,.08);}
+
+  /* ---- WhatsApp: contact lists ---- */
+  .wa-lists-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+  .wa-list-chip{
+    display:flex;align-items:center;gap:6px;padding:7px 10px 7px 12px;border-radius:20px;
+    border:1px solid var(--line);background:var(--panel2);color:var(--text-dim);font-size:12px;
+    font-weight:600;cursor:pointer;white-space:nowrap;
+  }
+  .wa-list-chip:hover{border-color:var(--accent);}
+  .wa-list-chip.active{border-color:var(--accent);color:var(--accent);background:rgba(230,180,90,.08);}
+  .wa-list-chip .wlcount{font-family:'JetBrains Mono',monospace;font-weight:400;opacity:.75;}
+  .wa-list-chip .wldel{
+    border:none;background:transparent;color:inherit;opacity:.55;cursor:pointer;font-size:12px;
+    line-height:1;padding:0 0 0 2px;
+  }
+  .wa-list-chip .wldel:hover{opacity:1;color:var(--danger);}
+  .wa-list-chip-add{
+    padding:7px 12px;border-radius:20px;border:1px dashed var(--line);background:transparent;
+    color:var(--text-dim);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;
+  }
+  .wa-list-chip-add:hover{border-color:var(--accent);color:var(--accent);}
+  .wa-send-lists{
+    display:flex;flex-direction:column;gap:6px;margin-top:6px;max-height:130px;overflow-y:auto;
+    background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:10px 12px;
+  }
+  .wa-send-list-opt{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;}
+  .wa-send-list-opt input{margin:0;}
+  .wa-send-list-opt .wlname{flex:1;}
+  .wa-send-list-opt .wlcount{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);}
 </style>
 </head>
 <body>
@@ -849,39 +888,62 @@
     <div class="hero">
       <div class="eyebrow">Notify</div>
       <h2>WhatsApp Broadcast</h2>
-      <p>Write a message, attach an image if needed, then send it to everyone in your saved contact list.</p>
+      <p>Write a message as text, a document, or an image, then send it to one or more of your saved contact lists.</p>
       <button class="btn-ghost" id="waConnectBtn" style="margin-top:10px;" onclick="launchWhatsAppSignup()">🔗 Connect a WhatsApp Number</button>
       <div id="waConnectStatus" style="display:none;margin-top:10px;font-size:12px;color:var(--text-dim);white-space:pre-wrap;font-family:monospace;background:rgba(0,0,0,.15);border-radius:6px;padding:10px;"></div>
     </div>
     <div class="wa-layout">
       <div class="wa-panel">
-        <label class="wa-label">Message</label>
+        <label class="wa-label">Message type</label>
+        <div class="wa-type-toggle" id="waTypeToggle">
+          <button type="button" class="wa-type-btn active" data-type="text" onclick="setWaMessageType('text')">💬 Text</button>
+          <button type="button" class="wa-type-btn" data-type="document" onclick="setWaMessageType('document')">📄 Document</button>
+          <button type="button" class="wa-type-btn" data-type="image" onclick="setWaMessageType('image')">🖼️ Image</button>
+        </div>
+
+        <label class="wa-label" style="margin-top:16px;display:block;">Message</label>
         <textarea id="waMessage" class="wa-textarea" rows="7" placeholder="Type your message…"></textarea>
         <p class="wa-hint">Sent through an approved WhatsApp message template, so it reaches every saved contact regardless of whether they've messaged you recently. A message is required — it fills the template's text — and each send is billed by Meta per recipient.</p>
 
-        <label class="wa-label" style="margin-top:16px;display:block;">Attachment (optional)</label>
-        <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap;">
-          <input type="file" id="waFileInput" accept="image/*" style="display:none;" onchange="onWaFileSelected(event)">
-          <button class="btn-ghost" onclick="document.getElementById('waFileInput').click()">📎 Attach Image</button>
-          <span id="waAttachName" style="font-size:13px;color:var(--text-dim);"></span>
-          <button class="btn-danger-ghost" id="waAttachRemove" style="display:none;padding:7px 12px;font-size:12px;" onclick="removeWaAttachment()">Remove</button>
+        <div id="waDocumentRow" style="display:none;">
+          <label class="wa-label" style="margin-top:16px;display:block;">Document</label>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap;">
+            <input type="file" id="waFileInputDocument" accept=".pdf,.doc,.docx,.xls,.xlsx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none;" onchange="onWaFileSelected(event)">
+            <button class="btn-ghost" onclick="document.getElementById('waFileInputDocument').click()">📎 Attach Document</button>
+            <span id="waAttachName" style="font-size:13px;color:var(--text-dim);"></span>
+            <button class="btn-danger-ghost" id="waAttachRemove" style="display:none;padding:7px 12px;font-size:12px;" onclick="removeWaAttachment()">Remove</button>
+          </div>
         </div>
 
-        <div class="actionbar" style="margin-top:22px;">
+        <div id="waImageRow" style="display:none;">
+          <label class="wa-label" style="margin-top:16px;display:block;">Image</label>
+          <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap;">
+            <input type="file" id="waFileInputImage" accept="image/*" style="display:none;" onchange="onWaFileSelected(event)">
+            <button class="btn-ghost" onclick="document.getElementById('waFileInputImage').click()">📎 Attach Image</button>
+          </div>
+        </div>
+
+        <label class="wa-label" style="margin-top:20px;display:block;">Send to lists</label>
+        <div class="wa-send-lists" id="waSendLists"></div>
+
+        <div class="actionbar" style="margin-top:18px;">
           <span class="mono" id="waContactCount" style="color:var(--text-dim);font-size:12px;"></span>
-          <button class="btn-amber" id="waSendBtn" onclick="sendWhatsappBroadcast()">Send to All</button>
+          <button class="btn-amber" id="waSendBtn" onclick="sendWhatsappBroadcast()">Send</button>
         </div>
         <div id="waSendStatus"></div>
       </div>
 
       <div class="wa-panel">
-        <label class="wa-label">Saved Contacts</label>
+        <label class="wa-label">Contact Lists</label>
+        <div class="wa-lists-row" id="waListsRow"></div>
+
+        <label class="wa-label" style="margin-top:18px;display:block;" id="waActiveListLabel">Contacts</label>
         <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;">
           <input type="text" id="waNewName" class="wa-input" placeholder="Name" autocomplete="off">
           <input type="text" id="waNewPhone" class="wa-input" placeholder="Phone e.g. 447911123456" autocomplete="off" onkeydown="if(event.key==='Enter')addWaContact()">
         </div>
         <button class="btn-ghost" style="width:100%;margin-top:8px;" onclick="addWaContact()">+ Add Contact</button>
-        <p class="wa-hint">Full international number, digits only — no "+" or spaces. UK mobile 07911 123456 → 447911123456.</p>
+        <p class="wa-hint">Full international number, digits only — no "+" or spaces. UK mobile 07911 123456 → 447911123456. New contacts are added to the selected list above.</p>
         <div id="waContactList" style="margin-top:12px;"></div>
       </div>
     </div>
@@ -5592,19 +5654,160 @@ function launchWhatsAppSignup(){
 
 /* ============ WHATSAPP BROADCAST ============ */
 let waAttachment = null; // { mimeType, filename, data (base64) }
-let waContacts = [];
+let waMessageType = 'text'; // 'text' | 'document' | 'image'
+let waLists = [];           // [{ list_id, name, contact_count }]
+let waActiveListId = null;  // list currently shown in the "Contact Lists" panel (for add/remove)
+let waSelectedSendListIds = new Set(); // which lists this broadcast will go out to
+let waContacts = [];        // contacts of waActiveListId
+
 function openWhatsappBroadcast(){
   showView('view-whatsapp');
   document.getElementById('waMessage').value = '';
   document.getElementById('waSendStatus').innerHTML = '';
+  waSelectedSendListIds = new Set();
+  setWaMessageType('text');
   removeWaAttachment();
+  loadWaLists();
+}
+
+/* ---- message type toggle: swaps which attachment control is visible ---- */
+function setWaMessageType(type){
+  waMessageType = type;
+  document.querySelectorAll('#waTypeToggle .wa-type-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.type === type);
+  });
+  document.getElementById('waDocumentRow').style.display = type === 'document' ? '' : 'none';
+  document.getElementById('waImageRow').style.display = type === 'image' ? '' : 'none';
+  // Switching type invalidates whatever was attached under the old type.
+  removeWaAttachment();
+}
+
+/* ---- lists: load, render chips, switch active list, add/remove list ---- */
+async function loadWaLists(){
+  const row = document.getElementById('waListsRow');
+  row.innerHTML = '<div class="loading">Loading lists…</div>';
+  try{
+    const data = await apiGet('whatsapp/lists');
+    waLists = data.items || [];
+    // A brand-new setup has no lists yet — create a default one so there's
+    // always somewhere to save contacts, instead of showing an empty page.
+    if(waLists.length === 0){
+      await apiPost('whatsapp/lists', { name: 'General' });
+      const data2 = await apiGet('whatsapp/lists');
+      waLists = data2.items || [];
+    }
+    if(!waActiveListId || !waLists.some(l => l.list_id === waActiveListId)){
+      waActiveListId = waLists[0].list_id;
+    }
+    // Default to sending to every list; the user can narrow it down with the checkboxes.
+    if(waSelectedSendListIds.size === 0){
+      waSelectedSendListIds = new Set(waLists.map(l => l.list_id));
+    }else{
+      waSelectedSendListIds = new Set([...waSelectedSendListIds].filter(id => waLists.some(l => l.list_id === id)));
+    }
+    renderWaLists();
+    renderWaSendLists();
+    loadWaContacts();
+  }catch(e){
+    row.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not load lists</div>';
+    console.error(e);
+  }
+}
+function renderWaLists(){
+  const row = document.getElementById('waListsRow');
+  row.innerHTML = '';
+  waLists.forEach(l => {
+    const chip = document.createElement('div');
+    chip.className = 'wa-list-chip' + (l.list_id === waActiveListId ? ' active' : '');
+    chip.innerHTML = `<span>${escapeHtml(l.name)}</span><span class="wlcount">${l.contact_count}</span>`;
+    chip.onclick = () => selectWaList(l.list_id);
+    const del = document.createElement('button');
+    del.className = 'wldel';
+    del.title = 'Delete list';
+    del.textContent = '✕';
+    del.onclick = (ev) => { ev.stopPropagation(); removeWaList(l.list_id, l.name); };
+    chip.appendChild(del);
+    row.appendChild(chip);
+  });
+  const addBtn = document.createElement('button');
+  addBtn.className = 'wa-list-chip-add';
+  addBtn.textContent = '+ New List';
+  addBtn.onclick = addWaList;
+  row.appendChild(addBtn);
+  const activeList = waLists.find(l => l.list_id === waActiveListId);
+  document.getElementById('waActiveListLabel').textContent = activeList ? 'Contacts — ' + activeList.name : 'Contacts';
+}
+function selectWaList(listId){
+  waActiveListId = listId;
+  renderWaLists();
   loadWaContacts();
 }
+async function addWaList(){
+  const name = (prompt('Name this list (e.g. "VIP customers", "Newsletter"):', '') || '').trim();
+  if(!name) return;
+  try{
+    const data = await apiPost('whatsapp/lists', { name });
+    waActiveListId = data.new_id;
+    waSelectedSendListIds.add(data.new_id);
+    toast('List created');
+    loadWaLists();
+  }catch(e){
+    toast('Could not create list');
+    console.error(e);
+  }
+}
+async function removeWaList(listId, name){
+  if(waLists.length <= 1){ toast('Keep at least one list'); return; }
+  if(!confirm('Delete the list "' + name + '"? This also removes every contact saved in it.')) return;
+  try{
+    await apiDelete('whatsapp/lists/' + listId);
+    if(waActiveListId === listId) waActiveListId = null;
+    waSelectedSendListIds.delete(listId);
+    toast('List deleted');
+    loadWaLists();
+  }catch(e){
+    toast('Could not delete list');
+    console.error(e);
+  }
+}
+
+/* ---- which lists this broadcast goes to (independent of the active list above) ---- */
+function renderWaSendLists(){
+  const box = document.getElementById('waSendLists');
+  box.innerHTML = '';
+  waLists.forEach(l => {
+    const opt = document.createElement('label');
+    opt.className = 'wa-send-list-opt';
+    const checked = waSelectedSendListIds.has(l.list_id);
+    opt.innerHTML = `<input type="checkbox" ${checked ? 'checked' : ''}><span class="wlname">${escapeHtml(l.name)}</span><span class="wlcount">${l.contact_count}</span>`;
+    opt.querySelector('input').onchange = (ev) => {
+      if(ev.target.checked) waSelectedSendListIds.add(l.list_id);
+      else waSelectedSendListIds.delete(l.list_id);
+      updateWaSendCount();
+    };
+    box.appendChild(opt);
+  });
+  updateWaSendCount();
+}
+function updateWaSendCount(){
+  // Estimated from each list's own contact count — the same phone saved in
+  // two selected lists is only messaged once server-side, so this is an
+  // upper bound rather than an exact figure.
+  const total = waLists.filter(l => waSelectedSendListIds.has(l.list_id))
+    .reduce((sum, l) => sum + l.contact_count, 0);
+  document.getElementById('waContactCount').textContent =
+    total === 0 ? 'No contacts selected' :
+    'up to ' + total + ' contact' + (total === 1 ? '' : 's') + ' will receive this';
+  document.getElementById('waSendBtn').disabled = total === 0;
+}
+
+/* ---- contacts of the active list ---- */
 async function loadWaContacts(){
   const list = document.getElementById('waContactList');
   list.innerHTML = '<div class="loading">Loading contacts…</div>';
+  if(!waActiveListId) return;
   try{
-    const data = await apiGet('whatsapp/contacts');
+    const data = await apiGet('whatsapp/contacts?list_id=' + waActiveListId);
     waContacts = data.items || [];
     renderWaContacts();
   }catch(e){
@@ -5614,12 +5817,8 @@ async function loadWaContacts(){
 }
 function renderWaContacts(){
   const list = document.getElementById('waContactList');
-  document.getElementById('waContactCount').textContent =
-    waContacts.length === 0 ? 'No saved contacts yet' :
-    waContacts.length + ' contact' + (waContacts.length === 1 ? '' : 's') + ' will receive this';
-  document.getElementById('waSendBtn').disabled = waContacts.length === 0;
   if(waContacts.length === 0){
-    list.innerHTML = '<div class="empty-hint">No contacts saved yet — add one above.</div>';
+    list.innerHTML = '<div class="empty-hint">No contacts saved in this list yet — add one above.</div>';
     return;
   }
   list.innerHTML = '';
@@ -5642,6 +5841,7 @@ function renderWaContacts(){
   });
 }
 async function addWaContact(){
+  if(!waActiveListId){ toast('Create a list first'); return; }
   const nameInput = document.getElementById('waNewName');
   const phoneInput = document.getElementById('waNewPhone');
   const name = nameInput.value.trim();
@@ -5649,39 +5849,39 @@ async function addWaContact(){
   if(!name){ toast('Enter a name'); return; }
   if(!phone || phone.length < 8){ toast('Enter a valid international phone number'); return; }
   try{
-    await apiPost('whatsapp/contacts', { name, phone });
+    await apiPost('whatsapp/contacts', { name, phone, list_id: waActiveListId });
     nameInput.value = '';
     phoneInput.value = '';
     nameInput.focus();
     toast('Contact saved');
-    loadWaContacts();
+    loadWaLists();
   }catch(e){
     toast('Could not save contact');
     console.error(e);
   }
 }
 async function removeWaContact(id, name){
-  if(!confirm('Remove "' + name + '" from the WhatsApp contact list?')) return;
+  if(!confirm('Remove "' + name + '" from this list?')) return;
   try{
     await apiDelete('whatsapp/contacts/' + id);
     toast('Contact removed');
-    loadWaContacts();
+    loadWaLists();
   }catch(e){
     toast('Could not remove contact');
     console.error(e);
   }
 }
+
+/* ---- attachment handling (shared by the document + image file inputs) ---- */
 function onWaFileSelected(event){
   const file = event.target.files && event.target.files[0];
   if(!file) return;
-  // Document attachments were dropped along with the document header on the
-  // approved template — only images go through the template's media header now.
-  if(!file.type || !file.type.startsWith('image/')){
-    toast('Only images can be attached — the document template was removed');
+  if(waMessageType === 'image' && (!file.type || !file.type.startsWith('image/'))){
+    toast('Choose an image file for an image message');
     event.target.value = '';
     return;
   }
-  // 16MB is WhatsApp's own hard cap on image uploads via the Cloud API.
+  // 16MB is WhatsApp's own hard cap on media uploads via the Cloud API.
   if(file.size > 16 * 1024 * 1024){
     toast('File is too large — WhatsApp allows up to 16MB');
     event.target.value = '';
@@ -5692,29 +5892,46 @@ function onWaFileSelected(event){
     const dataUrl = reader.result;
     const base64 = dataUrl.substring(dataUrl.indexOf(',') + 1);
     waAttachment = { mimeType: file.type || 'application/octet-stream', filename: file.name, data: base64 };
-    document.getElementById('waAttachName').textContent = file.name;
-    document.getElementById('waAttachRemove').style.display = 'inline-block';
+    if(waMessageType === 'document'){
+      document.getElementById('waAttachName').textContent = file.name;
+      document.getElementById('waAttachRemove').style.display = 'inline-block';
+    }
   };
   reader.readAsDataURL(file);
 }
 function removeWaAttachment(){
   waAttachment = null;
-  document.getElementById('waFileInput').value = '';
-  document.getElementById('waAttachName').textContent = '';
-  document.getElementById('waAttachRemove').style.display = 'none';
+  const docInput = document.getElementById('waFileInputDocument');
+  const imgInput = document.getElementById('waFileInputImage');
+  if(docInput) docInput.value = '';
+  if(imgInput) imgInput.value = '';
+  const nameEl = document.getElementById('waAttachName');
+  const rmBtn = document.getElementById('waAttachRemove');
+  if(nameEl) nameEl.textContent = '';
+  if(rmBtn) rmBtn.style.display = 'none';
 }
+
 async function sendWhatsappBroadcast(){
   const message = document.getElementById('waMessage').value.trim();
   if(!message){ toast('Write a message — it fills the template, so it\'s required even with an attachment'); return; }
-  if(waContacts.length === 0){ toast('No saved contacts to send to'); return; }
-  if(!confirm('Send this to all ' + waContacts.length + ' saved contact' + (waContacts.length === 1 ? '' : 's') + ' now?')) return;
+  const listIds = [...waSelectedSendListIds];
+  if(listIds.length === 0){ toast('Select at least one list to send to'); return; }
+  if(waMessageType === 'document' && !waAttachment){ toast('Attach a document, or switch to the Text message type'); return; }
+  if(waMessageType === 'image' && !waAttachment){ toast('Attach an image, or switch to the Text message type'); return; }
+  const countLabel = document.getElementById('waContactCount').textContent;
+  if(!confirm('Send this ' + waMessageType + ' message — ' + countLabel + '?')) return;
   const btn = document.getElementById('waSendBtn');
   const status = document.getElementById('waSendStatus');
   btn.disabled = true;
   btn.textContent = 'Sending…';
-  status.innerHTML = '<div class="loading">Sending to ' + waContacts.length + ' contact(s)…</div>';
+  status.innerHTML = '<div class="loading">Sending…</div>';
   try{
-    const data = await apiPost('whatsapp/send', { message, attachment: waAttachment });
+    const data = await apiPost('whatsapp/send', {
+      message,
+      messageType: waMessageType,
+      attachment: waMessageType === 'text' ? null : waAttachment,
+      list_ids: listIds
+    });
     const results = data.results || [];
     const okCount = results.filter(r => r.ok).length;
     const failCount = results.length - okCount;
@@ -5735,7 +5952,7 @@ async function sendWhatsappBroadcast(){
     console.error(e);
   }finally{
     btn.disabled = false;
-    btn.textContent = 'Send to All';
+    btn.textContent = 'Send';
   }
 }
 async function submitRestaurantPasscode(){
