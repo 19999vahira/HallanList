@@ -910,9 +910,10 @@
           <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap;">
             <input type="file" id="waFileInputDocument" accept=".pdf,.doc,.docx,.xls,.xlsx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none;" onchange="onWaFileSelected(event)">
             <button class="btn-ghost" onclick="document.getElementById('waFileInputDocument').click()">📎 Attach Document</button>
-            <span id="waAttachName" style="font-size:13px;color:var(--text-dim);"></span>
-            <button class="btn-danger-ghost" id="waAttachRemove" style="display:none;padding:7px 12px;font-size:12px;" onclick="removeWaAttachment()">Remove</button>
+            <span id="waAttachNameDocument" style="font-size:13px;color:var(--text-dim);"></span>
+            <button class="btn-danger-ghost" id="waAttachRemoveDocument" style="display:none;padding:7px 12px;font-size:12px;" onclick="removeWaAttachment()">Remove</button>
           </div>
+          <p class="wa-hint">PDF, Word, or Excel — up to 100MB (WhatsApp's own document limit).</p>
         </div>
 
         <div id="waImageRow" style="display:none;">
@@ -920,7 +921,10 @@
           <div style="display:flex;align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap;">
             <input type="file" id="waFileInputImage" accept="image/*" style="display:none;" onchange="onWaFileSelected(event)">
             <button class="btn-ghost" onclick="document.getElementById('waFileInputImage').click()">📎 Attach Image</button>
+            <span id="waAttachNameImage" style="font-size:13px;color:var(--text-dim);"></span>
+            <button class="btn-danger-ghost" id="waAttachRemoveImage" style="display:none;padding:7px 12px;font-size:12px;" onclick="removeWaAttachment()">Remove</button>
           </div>
+          <p class="wa-hint">JPG or PNG — up to 5MB (WhatsApp's own image limit).</p>
         </div>
 
         <label class="wa-label" style="margin-top:20px;display:block;">Send to lists</label>
@@ -5872,7 +5876,10 @@ async function removeWaContact(id, name){
   }
 }
 
-/* ---- attachment handling (shared by the document + image file inputs) ---- */
+/* ---- attachment handling (shared by the document + image file inputs) ----
+   WhatsApp's own Cloud API caps differ by media kind: images top out at
+   5MB, documents at 100MB — so each type is checked against its own limit
+   rather than one blanket number. ---- */
 function onWaFileSelected(event){
   const file = event.target.files && event.target.files[0];
   if(!file) return;
@@ -5881,9 +5888,10 @@ function onWaFileSelected(event){
     event.target.value = '';
     return;
   }
-  // 16MB is WhatsApp's own hard cap on media uploads via the Cloud API.
-  if(file.size > 16 * 1024 * 1024){
-    toast('File is too large — WhatsApp allows up to 16MB');
+  const maxBytes = waMessageType === 'image' ? 5 * 1024 * 1024 : 100 * 1024 * 1024;
+  const maxLabel = waMessageType === 'image' ? '5MB' : '100MB';
+  if(file.size > maxBytes){
+    toast('File is too large — WhatsApp allows up to ' + maxLabel + ' for a ' + waMessageType);
     event.target.value = '';
     return;
   }
@@ -5892,10 +5900,10 @@ function onWaFileSelected(event){
     const dataUrl = reader.result;
     const base64 = dataUrl.substring(dataUrl.indexOf(',') + 1);
     waAttachment = { mimeType: file.type || 'application/octet-stream', filename: file.name, data: base64 };
-    if(waMessageType === 'document'){
-      document.getElementById('waAttachName').textContent = file.name;
-      document.getElementById('waAttachRemove').style.display = 'inline-block';
-    }
+    const nameEl = document.getElementById(waMessageType === 'document' ? 'waAttachNameDocument' : 'waAttachNameImage');
+    const rmBtn = document.getElementById(waMessageType === 'document' ? 'waAttachRemoveDocument' : 'waAttachRemoveImage');
+    if(nameEl) nameEl.textContent = file.name;
+    if(rmBtn) rmBtn.style.display = 'inline-block';
   };
   reader.readAsDataURL(file);
 }
@@ -5905,10 +5913,14 @@ function removeWaAttachment(){
   const imgInput = document.getElementById('waFileInputImage');
   if(docInput) docInput.value = '';
   if(imgInput) imgInput.value = '';
-  const nameEl = document.getElementById('waAttachName');
-  const rmBtn = document.getElementById('waAttachRemove');
-  if(nameEl) nameEl.textContent = '';
-  if(rmBtn) rmBtn.style.display = 'none';
+  ['waAttachNameDocument','waAttachNameImage'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.textContent = '';
+  });
+  ['waAttachRemoveDocument','waAttachRemoveImage'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.style.display = 'none';
+  });
 }
 
 async function sendWhatsappBroadcast(){
