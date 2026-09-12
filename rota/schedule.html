@@ -1371,10 +1371,17 @@
     const items = [];
     visibleEmployees().forEach(emp => {
       dateStrs.forEach((dateStr, dayOffset) => {
-        if (timeOffsFor(emp.id, dateStr).length) return;
+        // Time off for this day copies too — as its own clipboard item
+        // (kind:'timeoff'), same as Sling does when you copy a week that
+        // has days off in it. A day can have both time off AND shifts
+        // (e.g. half-day off), so this no longer skips shifts on a day
+        // that also has time off.
+        timeOffsFor(emp.id, dateStr).forEach(off => {
+          items.push({ empId: emp.id, empName: emp.name, dayOffset, kind: 'timeoff', timeOffData: { reason: off.reason || '' } });
+        });
         shiftsFor(emp.id, dateStr).forEach(s => {
           const { id, ...shiftData } = s; // strip id so pasting creates a fresh shift, never edits the source
-          items.push({ empId: emp.id, empName: emp.name, dayOffset, shiftData });
+          items.push({ empId: emp.id, empName: emp.name, dayOffset, kind: 'shift', shiftData });
         });
       });
     });
@@ -1395,6 +1402,14 @@
       list.innerHTML = '<div style="color:var(--slate);font-size:13px;padding:10px 2px;">No shifts scheduled this week to copy.</div>';
     } else {
       list.innerHTML = bulkCopySourceItems.map((it, idx) => {
+        if (it.kind === 'timeoff') {
+          return `<label style="display:flex;align-items:center;gap:9px;padding:8px 4px;font-size:13px;border-bottom:1px solid var(--line);">
+            <input type="checkbox" class="bulkcopy-item" data-idx="${idx}" checked>
+            <span style="flex:1;">${it.empName} — ${DAY_NAMES[it.dayOffset]}
+              <span style="color:var(--slate);">Time off${it.timeOffData.reason ? ' · ' + it.timeOffData.reason : ''}</span>
+            </span>
+          </label>`;
+        }
         const st = shiftTypeById(it.shiftData.shiftTypeId) || { name: 'Unassigned' };
         return `<label style="display:flex;align-items:center;gap:9px;padding:8px 4px;font-size:13px;border-bottom:1px solid var(--line);">
           <input type="checkbox" class="bulkcopy-item" data-idx="${idx}" checked>
@@ -1423,18 +1438,19 @@
 
   document.getElementById('bulkcopy-copy').addEventListener('click', () => {
     const checkedIdxs = Array.from(document.querySelectorAll('.bulkcopy-item:checked')).map(cb => Number(cb.dataset.idx));
-    bulkClipboard = checkedIdxs.map(i => ({
-      empId: bulkCopySourceItems[i].empId,
-      dayOffset: bulkCopySourceItems[i].dayOffset,
-      shiftData: { ...bulkCopySourceItems[i].shiftData }
-    }));
+    bulkClipboard = checkedIdxs.map(i => {
+      const it = bulkCopySourceItems[i];
+      return it.kind === 'timeoff'
+        ? { empId: it.empId, dayOffset: it.dayOffset, kind: 'timeoff', timeOffData: { ...it.timeOffData } }
+        : { empId: it.empId, dayOffset: it.dayOffset, kind: 'shift', shiftData: { ...it.shiftData } };
+    });
     bulkcopyOverlay.classList.remove('show');
     if (!bulkClipboard.length) return;
 
     clipboardShift = null; // bulk mode replaces single-shift copy mode
     document.querySelectorAll('.daycell').forEach(x => x.classList.remove('copy-source'));
     document.getElementById('paste-banner-text').textContent =
-      `${bulkClipboard.length} shift${bulkClipboard.length === 1 ? '' : 's'} copied — go to the week you want and click "Paste to this week"`;
+      `${bulkClipboard.length} item${bulkClipboard.length === 1 ? '' : 's'} copied — go to the week you want and click "Paste to this week"`;
     document.getElementById('paste-here-btn').style.display = 'inline-block';
     document.getElementById('paste-banner').classList.add('show');
   });
@@ -1442,8 +1458,17 @@
   document.getElementById('paste-here-btn').addEventListener('click', () => {
     bulkClipboard.forEach(item => {
       const targetDateStr = toDateStr(addDays(currentWeekStart, item.dayOffset));
-      addShift(item.empId, targetDateStr, { ...item.shiftData }, { skipConfirm: true });
+      if (item.kind === 'timeoff') {
+        // Pasted as a single-day time off entry on the target date — kept
+        // separate per day (rather than merged into a from/to range) so
+        // it lines up with however the days were selected in the copy list.
+        state.timeOff.push({ id: uid('to'), employeeId: item.empId, from: targetDateStr, to: targetDateStr, reason: item.timeOffData.reason || '' });
+        saveState();
+      } else {
+        addShift(item.empId, targetDateStr, { ...item.shiftData }, { skipConfirm: true });
+      }
     });
+    renderSchedule();
     bulkClipboard = [];
     document.getElementById('paste-here-btn').style.display = 'none';
     document.getElementById('paste-banner').classList.remove('show');
@@ -1613,28 +1638,30 @@
       alert('PDF export could not load (no internet connection?). Try Download CSV instead.');
       return;
     }
+    const includeHours = document.getElementById('dl-hours').checked;
     const onlyFiltered = document.getElementById('dl-filtered').checked;
     const emps = onlyFiltered ? visibleEmployees() : state.employees;
     const dates = weekDates();
     const dateStrs = dates.map(toDateStr);
 
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+    // A3 landscape (rather than A4) — gives every column and chip the same
+    // amount of breathing room a real Sling export has, without needing
+    // artificial blank rows to avoid feeling cramped.
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a3' });
 
     const numDays = dates.length;
-    const numCols = numDays + 1; // Employee + one column per day — no
-    // separator columns. Measured against a real Sling export: day
-    // columns sit flush against each other, separated only by the
-    // table's own thin grid line, not a blank gap column — the "little
-    // card" look comes from the chip's own inset margin, not a spacer.
-
+    // Employee + one column per day — day columns sit flush against each
+    // other, separated only by the table's own thin grid line, matching a
+    // real Sling export (no blank separator column, no blank spacer rows
+    // between people — the grid line alone divides one person from the next).
     const head = [['Employee']];
     dates.forEach(d => head[0].push(`${DAY_NAMES[d.getDay()===0?6:d.getDay()-1].toUpperCase()} ${d.getDate()}`));
 
     function pushDayRow(label, dayValues) { body.push([label, ...dayValues]); }
 
     const body = [];
-    const rowMeta = []; // parallel to body: {type:'employee',entries} | {type:'gap'} | {type:'totals'}
+    const rowMeta = []; // parallel to body: {type:'employee',entries} | {type:'totals'}
     emps.forEach(emp => {
       let totalMins = 0;
       const rowEntries = []; // rowEntries[dayIndex] = [{bg,fg,title,subtitle}, ...] — every chip
@@ -1659,72 +1686,72 @@
         // row for however many chips this day needs to stack.
         return entries.map(e => `${e.title}\n${e.subtitle}`).join('\n\n');
       });
-      pushDayRow(`${emp.name}\n${fmtMins(totalMins)}`, dayCells);
+      // Hours only appear under the employee's name when "Include scheduled
+      // hours totals" is checked — previously this was always shown here
+      // even with the box unchecked, which was the bug.
+      pushDayRow(includeHours ? `${emp.name}\n${fmtMins(totalMins)}` : emp.name, dayCells);
       rowMeta.push({ type: 'employee', entries: rowEntries });
-
-      // A blank spacer row after each person — no border, no fill, so it
-      // just reads as breathing room rather than a rule. Sized to match
-      // the ~20pt gap Sling leaves between one person's row and the next.
-      body.push(new Array(numCols).fill(''));
-      rowMeta.push({ type: 'gap' });
     });
 
-    const totalsDays = dateStrs.map(dateStr => {
-      let mins = 0, headcount = 0;
-      emps.forEach(emp => {
-        if (timeOffsFor(emp.id, dateStr).length) return;
-        const dayShifts = shiftsFor(emp.id, dateStr);
-        if (dayShifts.length) headcount++;
-        dayShifts.forEach(s => { mins += hoursMinusBreak(s.start, s.end, s.breakMins); });
+    // The "Scheduled hours / Employees" footer row is itself an hours
+    // total, so it's part of the same toggle — skipped entirely when
+    // "Include scheduled hours totals" is unchecked, exactly like the CSV
+    // export already does with its Hours column.
+    if (includeHours) {
+      const totalsDays = dateStrs.map(dateStr => {
+        let mins = 0, headcount = 0;
+        emps.forEach(emp => {
+          if (timeOffsFor(emp.id, dateStr).length) return;
+          const dayShifts = shiftsFor(emp.id, dateStr);
+          if (dayShifts.length) headcount++;
+          dayShifts.forEach(s => { mins += hoursMinusBreak(s.start, s.end, s.breakMins); });
+        });
+        return `${mins ? fmtMins(mins) : '—'}\n${headcount} ${headcount === 1 ? 'person' : 'people'}`;
       });
-      return `${mins ? fmtMins(mins) : '—'}\n${headcount} ${headcount === 1 ? 'person' : 'people'}`;
-    });
-    pushDayRow('Scheduled hours\nEmployees', totalsDays);
-    rowMeta.push({ type: 'totals' });
+      pushDayRow('Scheduled hours\nEmployees', totalsDays);
+      rowMeta.push({ type: 'totals' });
+    }
 
-    // Heading — company name in bold, with the week range underneath.
+    // Heading — company name in bold, with the week range underneath in
+    // the app's own nav-blue, matching the weight/placement of a real
+    // Sling export's title block.
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(15);
+    doc.setFontSize(19);
     doc.setTextColor('#1B2733');
-    doc.text('Hallan Cash & Carry', 30, 26);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10.5);
-    doc.setTextColor('#5B6670');
-    doc.text(weekLabelText(), 30, 42);
+    doc.text('Hallan Cash & Carry', 30, 34);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13.5);
+    doc.setTextColor('#2E6FE0');
+    doc.text(weekLabelText(), 30, 54);
 
-    // Column widths measured off a real Sling export: a fixed ~110pt name
-    // column, the rest split evenly across the day columns (~97pt each
-    // on an A4 landscape page with the margins below — Sling's own day
-    // columns measure ~97pt wide against a ~110pt name column).
-    const columnStyles = { 0: { cellWidth: 110, fontStyle: 'bold' } };
+    // Column widths: a fixed name column, the rest split evenly across the
+    // day columns — proportioned the same as a real Sling export (name
+    // column ≈ 1.1× a single day column) but scaled up for the larger A3 page.
+    const columnStyles = { 0: { cellWidth: 150, fontStyle: 'bold' } };
 
     function isDayColumn(colIndex){ return colIndex > 0; }
 
     doc.autoTable({
       head, body,
-      startY: 60,
-      margin: { left: 24, right: 24 },
+      startY: 72,
+      margin: { left: 28, right: 28, bottom: 24 },
       theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 5, valign: 'top', lineColor: '#E3E7EB', lineWidth: 0.5, textColor: '#37424A', fontStyle: 'bold' },
+      // Tighter, lighter grid lines and less internal padding than before —
+      // this (not page size) is what was making the export feel clumsy:
+      // the old version wasted space with a full blank row of padding
+      // between every person. Every row now sits directly against the
+      // next, divided only by this thin line, exactly like Sling.
+      styles: { fontSize: 8.5, cellPadding: { top: 6, right: 5, bottom: 6, left: 5 }, valign: 'top', lineColor: '#E1E5EA', lineWidth: 0.75, textColor: '#37424A', fontStyle: 'bold', minCellHeight: 40 },
       // Plain, minimal header — no filled bar. Sling's own header is just
       // small-caps gray-blue text on white with a thin rule underneath,
       // not a bold color block.
-      headStyles: { fillColor: '#ffffff', textColor: '#7E8B99', fontStyle: 'bold', fontSize: 9, halign: 'center', lineColor: '#D7DCE1', lineWidth: { top: 0, left: 0, right: 0, bottom: 1 } },
+      headStyles: { fillColor: '#ffffff', textColor: '#7E8B99', fontStyle: 'bold', fontSize: 9.5, halign: 'center', cellPadding: { top: 8, bottom: 8, left: 5, right: 5 }, lineColor: '#D7DCE1', lineWidth: { top: 0, left: 0, right: 0, bottom: 1 } },
       columnStyles,
 
       didParseCell: (data) => {
         if (data.section !== 'body') return;
         const meta = rowMeta[data.row.index];
         if (!meta) return;
-        // Blank spacer row after each person — sized to match the ~20pt
-        // breathing room Sling leaves between rows.
-        if (meta.type === 'gap') {
-          data.cell.styles.fillColor = '#ffffff';
-          data.cell.styles.textColor = '#ffffff';
-          data.cell.styles.lineWidth = 0;
-          data.cell.styles.cellPadding = { top: 9, bottom: 9, left: 0, right: 0 };
-          return;
-        }
         // Bold + shade the totals row, like Sling does.
         if (meta.type === 'totals') {
           data.cell.styles.fillColor = '#F0F3F5';
@@ -1748,27 +1775,27 @@
         if (!entries || !entries.length) return;
 
         const { x, y, width: w, height: h } = data.cell;
-        const pad = 3, gap = 3;
+        const pad = 4, gap = 4;
         const n = entries.length;
         const chipH = (h - pad * 2 - gap * (n - 1)) / n;
-        const twoLine = chipH >= 18; // enough room for a bold title + a subtitle line
+        const twoLine = chipH >= 20; // enough room for a bold title + a subtitle line
 
         entries.forEach((entry, i) => {
           const cy = y + pad + i * (chipH + gap);
           doc.setFillColor(entry.bg);
-          doc.roundedRect(x + pad, cy, w - pad * 2, chipH, 2, 2, 'F');
+          doc.roundedRect(x + pad, cy, w - pad * 2, chipH, 2.5, 2.5, 'F');
           doc.setTextColor(entry.fg);
           if (twoLine) {
             doc.setFont('helvetica', 'bold');
-            doc.setFontSize(7.5);
-            doc.text(entry.title, x + pad + 4, cy + chipH / 2 - 2, { baseline: 'middle' });
+            doc.setFontSize(8.5);
+            doc.text(entry.title, x + pad + 5, cy + chipH / 2 - 3, { baseline: 'middle' });
             doc.setFont('helvetica', 'normal');
-            doc.setFontSize(7);
-            doc.text(entry.subtitle, x + pad + 4, cy + chipH / 2 + 8, { baseline: 'middle' });
+            doc.setFontSize(7.5);
+            doc.text(entry.subtitle, x + pad + 5, cy + chipH / 2 + 9, { baseline: 'middle' });
           } else {
             doc.setFont('helvetica', 'bold');
-            doc.setFontSize(6.5);
-            doc.text(`${entry.title} · ${entry.subtitle}`, x + pad + 4, cy + chipH / 2, { baseline: 'middle' });
+            doc.setFontSize(7);
+            doc.text(`${entry.title} · ${entry.subtitle}`, x + pad + 5, cy + chipH / 2, { baseline: 'middle' });
           }
         });
       }
