@@ -16,19 +16,36 @@
   :root{ --fw-blue:#162e4e; --fw-gold:#c79d11; --fw-light-gold:#c9993e; }
   *{box-sizing:border-box;}
   body{margin:0;background:#fff;font-family:'Nunito Sans',sans-serif;color:var(--fw-blue);}
-  .fw-page{position:relative;width:100%;max-width:900px;margin:0 auto;aspect-ratio:210/297;background-size:cover;background-position:center;overflow:hidden;}
+  /* container-type lets font-size use cqw ("% of THIS element's own width")
+     instead of vw ("% of the browser viewport") — needed because .fw-page
+     is capped at max-width:900px and centred, so vw would size text off
+     the whole screen width rather than the page itself, growing
+     disproportionately large on wide monitors. */
+  .fw-page{position:relative;width:100%;max-width:900px;margin:0 auto;aspect-ratio:210/297;background-size:cover;background-position:center;container-type:inline-size;}
   .fw-cover{display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:0 8%;}
-  .fw-cover h1{font-family:'Dancing Script',cursive;font-size:clamp(28px,6vw,54px);color:var(--fw-blue);margin:0 0 18px;}
-  .fw-cover .fw-validity{font-size:clamp(14px,2.4vw,22px);}
+  .fw-cover h1{font-family:'Dancing Script',cursive;font-size:clamp(28px,6cqw,54px);color:var(--fw-blue);margin:0 0 18px;}
+  .fw-cover .fw-validity{font-size:clamp(14px,2.4cqw,22px);}
   .fw-validity b{color:var(--fw-gold);font-weight:700;}
   .fw-dept-page{padding:0;}
-  .fw-dept-content{position:relative;z-index:2;padding:9% 12% 8%;}
-  .fw-dept-heading{font-size:clamp(22px,4vw,32px);margin:0 0 22px;color:var(--fw-blue);}
+  /* These match the PDF's own safe-zone constants exactly (see contentX,
+     contentWidth, topSafeY, headingGap in generateColourFlyer() further up
+     this file): contentX=25mm/contentWidth=160mm of a 210mm-wide page ->
+     11.905%/76.190%; topSafeY=95mm -> 45.238%; headingGap=26mm -> 12.381%.
+     Crucially, CSS resolves padding/margin percentages against the
+     containing block's WIDTH on every side — including padding-top/bottom
+     — never against its height. topSafeY is a vertical (mm) distance in
+     the PDF, but it still has to be expressed as a percentage of page
+     WIDTH here, or it lands nowhere near where the PDF puts it (this was
+     the actual bug: an earlier version used 95/297 here, a percentage of
+     height, which rendered far too small and let the heading collide with
+     the artwork's top wave/dot design). */
+  .fw-dept-content{position:relative;z-index:2;padding:45.238% 11.905% 8%;}
+  .fw-dept-heading{font-size:clamp(22px,4cqw,32px);margin:0 0 12.381%;color:var(--fw-blue);}
   .fw-watermark{position:absolute;border-radius:50%;background-size:cover;background-position:center;opacity:.1;z-index:1;}
   .fw-watermark-middle{left:11.9%;top:25.93%;width:76.19%;height:53.87%;}
   .fw-watermark-bottom{left:22.38%;top:76.09%;width:23.81%;height:16.84%;}
   .fw-item-list{display:flex;flex-direction:column;gap:10px;}
-  .fw-item{display:flex;align-items:baseline;gap:8px;font-size:clamp(13px,1.6vw,16px);}
+  .fw-item{display:flex;align-items:baseline;gap:8px;font-size:clamp(13px,1.6cqw,16px);}
   .fw-item-name{white-space:nowrap;}
   .fw-item-dots{flex:1;border-bottom:2px dotted var(--fw-light-gold);margin-bottom:4px;}
   .fw-item-price{color:var(--fw-gold);font-weight:700;white-space:nowrap;}
@@ -37,11 +54,11 @@
   .fw-featured-main{width:34%;}
   .fw-featured-item img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:10px;}
   .fw-featured-name{font-size:12px;margin-top:6px;}
-  .fw-featured-price{font-size:clamp(16px,2.4vw,22px);font-weight:700;color:#d40000;}
+  .fw-featured-price{font-size:clamp(16px,2.4cqw,22px);font-weight:700;color:#d40000;}
   .fw-featured-price small{font-size:11px;}
-  .fw-notes-page{padding:9% 12%;}
-  .fw-notes-page h2{color:var(--fw-blue);font-size:clamp(22px,4vw,32px);}
-  .fw-notes-page ul{color:var(--fw-gold);font-family:'Dancing Script',cursive;font-size:clamp(16px,2.2vw,22px);line-height:1.7;padding-left:20px;}
+  .fw-notes-page{padding:45.238% 11.905% 8%;}
+  .fw-notes-page h2{color:var(--fw-blue);font-size:clamp(22px,4cqw,32px);}
+  .fw-notes-page ul{color:var(--fw-gold);font-family:'Dancing Script',cursive;font-size:clamp(16px,2.2cqw,22px);line-height:1.7;padding-left:20px;}
   @media(max-width:600px){ .fw-page{max-width:100%;} }
 </style>
 </head>
