@@ -1043,15 +1043,24 @@
       <button class="btn-ghost wsflyerBtn" id="wsFlyerVegBtn" onclick="setWholesaleFlyerMode('veg')">Flyer Veg</button>
       <button class="btn-ghost wsflyerBtn" id="wsStockBtn" onclick="toggleWholesaleStockColumn()" style="margin-left:8px;">Stock</button>
     </div>
-    <div class="actionbar no-print">
+    <div class="actionbar no-print" style="flex-direction:column;align-items:stretch;gap:12px;">
       <input type="text" id="wholesaleSearch" class="historysearch" placeholder="Search item or department…" oninput="renderWholesaleTable()">
-      <div style="display:flex;gap:10px;">
-        <button class="btn-ghost" onclick="window.print()">Print</button>
+      <!-- Row 1: the six actions used most often, in a fixed requested order.
+           "Download PDF" (the old plain reference-list export) has been
+           removed entirely — see the removed modalWholesaleExport /
+           openWholesaleExportModal / confirmWholesaleExport / downloadWholesalePDF. -->
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <button class="btn-ghost" onclick="downloadWholesaleCSV()">Download CSV</button>
-        <button class="btn-ghost" onclick="downloadWholesaleCSV(true)" title="Downloads and imports just the first row, so you can check Vector's File Import - Stock error panel before running the full list">Test Download CSV (1 row)</button>
         <button class="btn-ghost" onclick="openWholesaleScheduleModal()" title="Schedule a Download CSV / Test Download CSV run for a future date and time, with the result emailed to you">Schedule</button>
-        <button class="btn-amber" onclick="openWholesaleExportModal('pdf')">Download PDF</button>
+        <button class="btn-amber" onclick="openPriceChangesModal()" title="Every price/margin you've changed on this list, with the barcode and the original synced price alongside it — for whoever updates Vector">Price Changes Sheet</button>
+        <button class="btn-amber" onclick="openFlyerWebpageModal('whole')" title="Publishes Flyer Whole as a public webpage on GitHub Pages — a link WhatsApp can preview and open, instead of a PDF">Update Wholesale Flyer Webpage</button>
+        <button class="btn-amber" onclick="openFlyerWebpageModal('veg')" title="Publishes Flyer Veg (Wholesale Vegetable) as a public webpage on GitHub Pages">Update Veg Flyer Website</button>
         <button class="btn-amber" onclick="openFlyerDownloadModal()">Download Colour Flyer</button>
+      </div>
+      <!-- Row 2: everything else. -->
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn-ghost" onclick="window.print()">Print</button>
+        <button class="btn-ghost" onclick="downloadWholesaleCSV(true)" title="Downloads and imports just the first row, so you can check Vector's File Import - Stock error panel before running the full list">Test Download CSV (1 row)</button>
         <button class="btn-ghost" onclick="openFlyerImagesModal()">Upload Images</button>
         <button class="btn-ghost" onclick="openPdfLibraryModal()">PDF Library</button>
         <button class="btn-ghost" onclick="emailWholesalePDF()">Email</button>
@@ -2702,35 +2711,10 @@
   </div>
 </div>
 
-<!-- WHOLESALE EXPORT: CHOOSE COLUMNS -->
-<div class="modal-backdrop" id="modalWholesaleExport">
-  <div class="modal" style="width:360px;">
-    <h3>Choose columns</h3>
-    <p class="modal-sub">Pick which columns to include in the file.</p>
-    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;">
-      <input type="checkbox" checked disabled> Item
-    </label>
-    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;">
-      <input type="checkbox" id="wsColDept" checked> Department
-    </label>
-    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;">
-      <input type="checkbox" id="wsColCost" checked> Supplier Cost
-    </label>
-    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;">
-      <input type="checkbox" id="wsColMargin" checked> Margin
-    </label>
-    <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;">
-      <input type="checkbox" id="wsColPrice" checked> Trade 3 Price
-    </label>
-    <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;font-size:14px;">
-      <input type="checkbox" id="wsColBarcode" checked> Barcode
-    </label>
-    <div class="modal-close-row">
-      <button class="btn-ghost" onclick="closeModal('modalWholesaleExport')">Cancel</button>
-      <button class="btn-amber" onclick="confirmWholesaleExport()">Export</button>
-    </div>
-  </div>
-</div>
+<!-- (Old "WHOLESALE EXPORT: CHOOSE COLUMNS" modal for the removed Download
+     PDF button lived here — deleted along with that button. Email still
+     uses buildWholesalePDFDoc() directly with every column, so that
+     function stays.) -->
 
 <!-- WHOLESALE SCHEDULE: schedule a Download CSV / Test Download CSV run, emails the result -->
 <div class="modal-backdrop" id="modalWholesaleSchedule">
@@ -2826,6 +2810,42 @@
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalFlyerDownload')">Cancel</button>
       <button class="btn-amber" id="flyerDownloadBtn" onclick="generateColourFlyer()">Download</button>
+    </div>
+  </div>
+</div>
+
+<!-- WHOLESALE PRICE CHANGES SHEET -->
+<div class="modal-backdrop" id="modalPriceChanges">
+  <div class="modal" style="width:680px;">
+    <h3>Price Changes Sheet</h3>
+    <p class="modal-sub">Every price or margin you've changed on the Wholesale Pricing List, with the barcode and the price actually synced from Vector alongside it — hand this to whoever updates Vector. Stays here until you clear it below.</p>
+    <div id="priceChangesContent" style="max-height:50vh;overflow:auto;">
+      <div class="loading">Loading…</div>
+    </div>
+    <div class="errdetail" id="priceChangesErr" style="display:none;"></div>
+    <div class="modal-close-row" style="justify-content:space-between;">
+      <button class="btn-danger-ghost" onclick="clearPriceChanges()">Mark all as updated in Vector</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-ghost" onclick="closeModal('modalPriceChanges')">Close</button>
+        <button class="btn-amber" onclick="downloadPriceChangesPDF()">Download PDF</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- WHOLESALE FLYER WEBPAGE: PUBLISH TO GITHUB PAGES -->
+<div class="modal-backdrop" id="modalFlyerWebpage">
+  <div class="modal" style="width:380px;">
+    <h3 id="flyerWebpageTitle">Update Flyer Webpage</h3>
+    <p class="modal-sub">These dates print on the webpage the same way they print on the colour flyer's cover page. This publishes a standalone webpage (not portal.hallans.co.uk) that WhatsApp can link to directly.</p>
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;">Valid from</label>
+    <input type="date" id="flyerWebFromDate">
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin:12px 0 4px;">Valid to</label>
+    <input type="date" id="flyerWebToDate">
+    <div class="errdetail" id="flyerWebpageErr" style="display:none;"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalFlyerWebpage')">Cancel</button>
+      <button class="btn-amber" id="flyerWebpageBtn" onclick="publishFlyerWebpage()">Publish</button>
     </div>
   </div>
 </div>
@@ -3425,6 +3445,27 @@ function persistWholesaleLockIfBlocked(stockName, adj){
   apiPost('wholesale/price-lock/update', { stock_name: stockName, price: adj.price, margin: adj.margin })
     .catch(e => console.error('Could not save blocked price for', stockName, e));
 }
+// ---- Price Changes Sheet: logs every price/margin edit, whether or not
+// prices are currently Blocked (persistWholesaleLockIfBlocked above only
+// ever saves while Blocked — this is separate and always fires). Always
+// logs against r.price_net, the value actually synced from Vector, so the
+// sheet keeps reading "was £X, now £Y" against the true original even
+// after several edits in a row — see /api/wholesale/price-changes/log,
+// which upserts one row per item rather than piling up history. Skips
+// logging if the price box is currently empty (nothing to compare yet).
+function logWholesalePriceChange(r, adj){
+  if(adj.price === '' || adj.price === undefined) return;
+  apiPost('wholesale/price-changes/log', {
+    stock_name: r.stock_name,
+    barcode: r.barcode || '',
+    department: r.department_name || '',
+    original_price: (r.price_net === null || r.price_net === undefined) ? null : Number(r.price_net),
+    original_margin: wholesaleMarginPct(r),
+    new_price: Number(adj.price),
+    new_margin: (adj.margin === '' || adj.margin === undefined) ? null : Number(adj.margin),
+    is_vat: r.vatid === 1
+  }).catch(e => console.error('Could not log price change for', r.stock_name, e));
+}
 function wholesaleMarginPct(r){
   if(!r.price_net || r.price_net <= 0 || r.suppcost_net === null || r.suppcost_net === undefined) return null;
   return ((r.price_net - r.suppcost_net) / r.price_net) * 100;
@@ -3614,6 +3655,7 @@ function buildWholesaleItemsTable(items){
         marginPrint.textContent = Number(adj.margin).toFixed(1) + '%';
       }
       persistWholesaleLockIfBlocked(r.stock_name, adj);
+      logWholesalePriceChange(r, adj);
     });
     marginInput.addEventListener('change', () => {
       const v = marginInput.value.trim();
@@ -3629,6 +3671,7 @@ function buildWholesaleItemsTable(items){
         incVatPrint.textContent = wholesaleIncVatDisplayText(adj.price, r.vatid === 1);
       }
       persistWholesaleLockIfBlocked(r.stock_name, adj);
+      logWholesalePriceChange(r, adj);
     });
     tbody.appendChild(tr);
   });
@@ -3660,23 +3703,6 @@ function wholesaleExportRows(){
    Trade 3 prices to Vector, is a separate fixed-column flow — see
    downloadWholesaleCSV below — since Vector needs an exact column set/order,
    not a person's reading preference.) ---- */
-let wholesaleExportTarget = null; // 'pdf'
-function openWholesaleExportModal(target){
-  if(wholesaleRows.length === 0){ toast('Nothing to export yet'); return; }
-  wholesaleExportTarget = target;
-  openModal('modalWholesaleExport');
-}
-function confirmWholesaleExport(){
-  const columns = {
-    department: document.getElementById('wsColDept').checked,
-    suppCost: document.getElementById('wsColCost').checked,
-    tradePrice: document.getElementById('wsColPrice').checked,
-    margin: document.getElementById('wsColMargin').checked,
-    barcode: document.getElementById('wsColBarcode').checked
-  };
-  closeModal('modalWholesaleExport');
-  downloadWholesalePDF(columns);
-}
 function wholesalePriceCellText(r){
   if(r.tradePrice === null) return '—';
   // "C" flags a price that was manually changed from the synced value, so
@@ -3725,16 +3751,6 @@ function buildWholesalePDFDoc(columns){
     margin: { left: 14, right: 14 }
   });
   return doc;
-}
-function downloadWholesalePDF(columns){
-  try{
-    const doc = buildWholesalePDFDoc(columns);
-    if(!doc) return;
-    doc.save('wholesale-pricing-' + new Date().toISOString().slice(0,10) + '.pdf');
-  }catch(e){
-    toast('Could not generate PDF');
-    console.error(e);
-  }
 }
 function emailWholesalePDF(){
   try{
@@ -4951,6 +4967,314 @@ async function generateColourFlyer(){
     console.error(e);
   }finally{
     btn.disabled = false;
+  }
+}
+
+/* ============ PRICE CHANGES SHEET ============
+   Shows/downloads everything logged by logWholesalePriceChange above —
+   see /api/wholesale/price-changes in server.js. Independent of Block/
+   Release: this fills up from any edit at all, not just ones made while
+   Blocked, and only empties when someone here confirms Vector's actually
+   been updated. */
+let priceChangesCache = [];
+async function openPriceChangesModal(){
+  openModal('modalPriceChanges');
+  const content = document.getElementById('priceChangesContent');
+  const err = document.getElementById('priceChangesErr');
+  err.style.display = 'none'; err.textContent = '';
+  content.innerHTML = '<div class="loading">Loading…</div>';
+  try{
+    const data = await apiGet('wholesale/price-changes');
+    priceChangesCache = data.items || [];
+    renderPriceChangesList();
+  }catch(e){
+    content.innerHTML = '';
+    err.textContent = 'Could not load the price changes sheet. ' + (e.message || '');
+    err.style.display = 'block';
+    console.error(e);
+  }
+}
+function renderPriceChangesList(){
+  const content = document.getElementById('priceChangesContent');
+  if(priceChangesCache.length === 0){
+    content.innerHTML = '<div class="empty-hint">No price changes recorded yet — edit a price or margin on the list and it will show up here.</div>';
+    return;
+  }
+  const rows = priceChangesCache.map(c => `
+    <tr>
+      <td>${escapeHtml(c.stock_name)}</td>
+      <td class="mono">${escapeHtml(c.barcode || '—')}</td>
+      <td>${escapeHtml(flyerDeptDisplayName(c.department))}</td>
+      <td class="qtycell">${c.original_price === null || c.original_price === undefined ? '—' : '£' + Number(c.original_price).toFixed(2)}</td>
+      <td class="qtycell" style="font-weight:700;color:var(--accent-dim);">${c.new_price === null || c.new_price === undefined ? '—' : '£' + Number(c.new_price).toFixed(2)}</td>
+    </tr>`).join('');
+  content.innerHTML = `
+    <table class="finaltable">
+      <thead><tr><th>Item</th><th>Barcode</th><th>Department</th><th class="qtycell">Was</th><th class="qtycell">Now</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+function buildPriceChangesPDFDoc(){
+  if(priceChangesCache.length === 0) return null;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.setFontSize(16);
+  doc.text('Wholesale Price Changes Sheet', 14, 18);
+  doc.setFontSize(9);
+  doc.setTextColor(120);
+  doc.text('Generated ' + ukDateTimeString(new Date()) + ' (UK time) — for updating Vector', 14, 24);
+  const body = priceChangesCache.map(c => [
+    c.stock_name,
+    c.barcode || '—',
+    flyerDeptDisplayName(c.department),
+    (c.original_price === null || c.original_price === undefined) ? '—' : Number(c.original_price).toFixed(2),
+    (c.new_price === null || c.new_price === undefined) ? '—' : Number(c.new_price).toFixed(2)
+  ]);
+  doc.autoTable({
+    startY: 30,
+    head: [['Item', 'Barcode', 'Department', 'Was', 'Now']],
+    body,
+    theme: 'grid',
+    headStyles: { fillColor: [30,34,42] },
+    styles: { fontSize: 9 },
+    columnStyles: {
+      3: { halign: 'right' },
+      4: { halign: 'right', fontStyle: 'bold', textColor: [184,134,11] }
+    },
+    margin: { left: 14, right: 14 }
+  });
+  return doc;
+}
+function downloadPriceChangesPDF(){
+  try{
+    const doc = buildPriceChangesPDFDoc();
+    if(!doc){ toast('No price changes to include yet'); return; }
+    doc.save('wholesale-price-changes-' + new Date().toISOString().slice(0,10) + '.pdf');
+  }catch(e){
+    toast('Could not generate PDF');
+    console.error(e);
+  }
+}
+async function clearPriceChanges(){
+  if(priceChangesCache.length === 0){ toast('Nothing to clear'); return; }
+  if(!confirm('Mark all ' + priceChangesCache.length + ' price change(s) as updated in Vector?\nThis clears the sheet — only do this once the new prices are actually live in Vector.')) return;
+  try{
+    await apiPost('wholesale/price-changes/clear', {});
+    priceChangesCache = [];
+    renderPriceChangesList();
+    toast('Price changes sheet cleared');
+  }catch(e){
+    toast('Could not clear the price changes sheet');
+    console.error(e);
+  }
+}
+
+/* ============ FLYER WEBPAGE (GitHub Pages) ============
+   "Update Wholesale Flyer Webpage" / "Update Veg Flyer Website" build a
+   self-contained static HTML replica of the colour flyer — same images
+   (flyerImages), same departments/prices (wholesaleRows/wholesaleAdjust)
+   already loaded on this page for Download Colour Flyer — and hand it to
+   the server to commit straight to a GitHub Pages repo (see
+   /api/wholesale/flyer/publish-webpage in server.js). Deliberately NOT
+   served from portal.hallans.co.uk: that domain sits behind the IP
+   allowlist (see the Add IP Address admin page) and isn't reachable by a
+   WhatsApp link click from a customer's phone; GitHub Pages is public
+   with no login wall.
+
+   A website scrolls; a PDF paginates. So unlike the PDF, a department's
+   item list here is never split across "pages" — every item for a
+   department just lists under its own heading, however many there are.
+   Everything else (cover, per-department watermark photos, featured
+   items strip, dot-leader item rows, Notes, thank-you page) mirrors the
+   PDF's layout and the Hallan brand colours as closely as a scrolling
+   page reasonably can. */
+let flyerWebpageTarget = 'whole';
+function openFlyerWebpageModal(mode){
+  if(wholesaleRows.length === 0){ toast('Nothing to include yet'); return; }
+  flyerWebpageTarget = mode;
+  document.getElementById('flyerWebpageTitle').textContent =
+    mode === 'veg' ? 'Update Veg Flyer Website' : 'Update Wholesale Flyer Webpage';
+  document.getElementById('flyerWebFromDate').value = '';
+  document.getElementById('flyerWebToDate').value = '';
+  const err = document.getElementById('flyerWebpageErr');
+  err.style.display = 'none'; err.textContent = '';
+  openModal('modalFlyerWebpage');
+}
+// The flyer's colour constants (FLYER_COLOR_BLUE etc.) are RGB arrays for
+// jsPDF — converted to CSS hex here once rather than keeping a second set
+// of colour constants that could drift out of sync with the PDF's.
+function flyerRgbToHex(rgb){
+  return '#' + rgb.map(v => v.toString(16).padStart(2,'0')).join('');
+}
+const FLYER_WEB_BLUE = flyerRgbToHex(FLYER_COLOR_BLUE);
+const FLYER_WEB_GOLD = flyerRgbToHex(FLYER_COLOR_GOLD);
+const FLYER_WEB_LIGHT_GOLD = flyerRgbToHex(FLYER_COLOR_LIGHT_GOLD);
+function flyerWebItemRowHtml(name, priceText){
+  return `<div class="fw-item"><span class="fw-item-name">${escapeHtml(name)}</span><span class="fw-item-dots"></span><span class="fw-item-price">${escapeHtml(priceText)}</span></div>`;
+}
+function flyerWebFeaturedHtml(prepared){
+  if(!prepared.length) return '';
+  return '<div class="fw-featured">' + prepared.map((p,i) => `
+      <div class="fw-featured-item${i===0 ? ' fw-featured-main':''}">
+        ${p.image ? `<img src="${p.image}" alt="${escapeHtml(p.name)}">` : ''}
+        <div class="fw-featured-name">${escapeHtml(p.name)}</div>
+        ${p.price !== null ? `<div class="fw-featured-price">£${p.price.toFixed(2)}${p.isVat ? ' <small>+VAT</small>' : ''}</div>` : ''}
+      </div>`).join('') + '</div>';
+}
+// Same source data/filter as Download Colour Flyer (filteredWholesaleRows'
+// underlying mode filter, applied explicitly here by `mode` instead of
+// reading the on-screen toggle — these two buttons are unambiguous about
+// which flyer they mean regardless of what Flyer Whole/Veg currently shows).
+function buildFlyerWebpageHTML(mode, fromVal, toVal){
+  const modeLabel = mode === 'veg' ? 'Wholesale Vegetable Flyer' : 'Wholesale Flyer';
+  const sourceRows = wholesaleRows.filter(r => mode === 'veg' ? isWholesaleVegRow(r) : !isWholesaleVegRow(r));
+  const groups = groupRowsByDepartment(sourceRows);
+
+  const deptSections = groups.map(g => {
+    const items = g.items.map(r => {
+      const adj = wholesaleAdjust[r.stock_name] || {};
+      const priceVal = (adj.price !== undefined && adj.price !== '')
+        ? Number(adj.price)
+        : (r.price_net === null || r.price_net === undefined ? null : Number(r.price_net));
+      return { name: r.stock_name, price: priceVal, isVat: r.vatid === 1 };
+    }).filter(it => it.price !== null);
+    if(items.length === 0) return '';
+
+    const deptHeading = flyerDeptDisplayName(g.department);
+    const layoutBg = flyerImages.layout ? ` style="background-image:url('${flyerImages.layout}')"` : '';
+    const middlePhoto = flyerImages.deptMiddle[g.department] || '';
+    const bottomPhoto = flyerImages.deptBottom[g.department] || '';
+    const featured = flyerFeaturedGet(g.department);
+    const priceByName = new Map(items.map(it => [it.name, it]));
+    const preparedFeatured = featured.items.slice(0, featured.count).map(it => {
+      const priceInfo = priceByName.get(it.name);
+      return { name: it.name, image: it.image, price: priceInfo ? priceInfo.price : null, isVat: priceInfo ? priceInfo.isVat : false };
+    });
+    const rowsHtml = items.map(it => flyerWebItemRowHtml(it.name, '£' + it.price.toFixed(2) + (it.isVat ? ' +VAT' : ''))).join('');
+
+    return `
+    <section class="fw-page fw-dept-page"${layoutBg}>
+      ${middlePhoto ? `<div class="fw-watermark fw-watermark-middle" style="background-image:url('${middlePhoto}')"></div>` : ''}
+      ${bottomPhoto ? `<div class="fw-watermark fw-watermark-bottom" style="background-image:url('${bottomPhoto}')"></div>` : ''}
+      <div class="fw-dept-content">
+        ${flyerWebFeaturedHtml(preparedFeatured)}
+        <h2 class="fw-dept-heading">${escapeHtml(deptHeading)}</h2>
+        <div class="fw-item-list">${rowsHtml}</div>
+      </div>
+    </section>`;
+  }).join('');
+
+  const notesHtml = FLYER_NOTES.map(n => `<li>${escapeHtml(n)}</li>`).join('');
+  const coverBg = flyerImages.first ? ` style="background-image:url('${flyerImages.first}')"` : '';
+  const lastBg = flyerImages.last ? ` style="background-image:url('${flyerImages.last}')"` : '';
+  // og:image/og:url start out as the raw data URI / blank — fine for
+  // opening this file locally — and get swapped for real hosted URLs by
+  // the server once it's actually published (see replaceMetaContent in
+  // server.js), since only the server knows the final GitHub Pages URL.
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hallan Cash &amp; Carry — ${escapeHtml(modeLabel)}</title>
+<meta property="og:title" content="Hallan Cash &amp; Carry — ${escapeHtml(modeLabel)}">
+<meta property="og:description" content="Offers valid from ${flyerDdmmyyyy(fromVal)} to ${flyerDdmmyyyy(toVal)}">
+<meta property="og:image" content="${flyerImages.first || ''}">
+<meta property="og:url" content="">
+<meta name="theme-color" content="${FLYER_WEB_BLUE}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&family=Dancing+Script:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --fw-blue:${FLYER_WEB_BLUE}; --fw-gold:${FLYER_WEB_GOLD}; --fw-light-gold:${FLYER_WEB_LIGHT_GOLD}; }
+  *{box-sizing:border-box;}
+  body{margin:0;background:#fff;font-family:'Nunito Sans',sans-serif;color:var(--fw-blue);}
+  .fw-page{position:relative;width:100%;max-width:900px;margin:0 auto;aspect-ratio:210/297;background-size:cover;background-position:center;overflow:hidden;}
+  .fw-cover{display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:0 8%;}
+  .fw-cover h1{font-family:'Dancing Script',cursive;font-size:clamp(28px,6vw,54px);color:var(--fw-blue);margin:0 0 18px;}
+  .fw-cover .fw-validity{font-size:clamp(14px,2.4vw,22px);}
+  .fw-validity b{color:var(--fw-gold);font-weight:700;}
+  .fw-dept-page{padding:0;}
+  .fw-dept-content{position:relative;z-index:2;padding:9% 12% 8%;}
+  .fw-dept-heading{font-size:clamp(22px,4vw,32px);margin:0 0 22px;color:var(--fw-blue);}
+  .fw-watermark{position:absolute;border-radius:50%;background-size:cover;background-position:center;opacity:.1;z-index:1;}
+  .fw-watermark-middle{left:11.9%;top:25.93%;width:76.19%;height:53.87%;}
+  .fw-watermark-bottom{left:22.38%;top:76.09%;width:23.81%;height:16.84%;}
+  .fw-item-list{display:flex;flex-direction:column;gap:10px;}
+  .fw-item{display:flex;align-items:baseline;gap:8px;font-size:clamp(13px,1.6vw,16px);}
+  .fw-item-name{white-space:nowrap;}
+  .fw-item-dots{flex:1;border-bottom:2px dotted var(--fw-light-gold);margin-bottom:4px;}
+  .fw-item-price{color:var(--fw-gold);font-weight:700;white-space:nowrap;}
+  .fw-featured{display:flex;justify-content:center;align-items:flex-end;gap:14px;margin-bottom:24px;flex-wrap:wrap;}
+  .fw-featured-item{text-align:center;width:22%;}
+  .fw-featured-main{width:34%;}
+  .fw-featured-item img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:10px;}
+  .fw-featured-name{font-size:12px;margin-top:6px;}
+  .fw-featured-price{font-size:clamp(16px,2.4vw,22px);font-weight:700;color:#d40000;}
+  .fw-featured-price small{font-size:11px;}
+  .fw-notes-page{padding:9% 12%;}
+  .fw-notes-page h2{color:var(--fw-blue);font-size:clamp(22px,4vw,32px);}
+  .fw-notes-page ul{color:var(--fw-gold);font-family:'Dancing Script',cursive;font-size:clamp(16px,2.2vw,22px);line-height:1.7;padding-left:20px;}
+  @media(max-width:600px){ .fw-page{max-width:100%;} }
+</style>
+</head>
+<body>
+  <section class="fw-page fw-cover"${coverBg}>
+    <h1>Hallan Cash &amp; Carry</h1>
+    <div class="fw-validity">Offers valid from <b>${flyerDdmmyyyy(fromVal)}</b> to <b>${flyerDdmmyyyy(toVal)}</b></div>
+  </section>
+  ${deptSections}
+  <section class="fw-page fw-notes-page">
+    <h2>Notes</h2>
+    <ul>${notesHtml}</ul>
+  </section>
+  ${flyerImages.last ? `<section class="fw-page fw-last-page"${lastBg}></section>` : ''}
+</body>
+</html>`;
+}
+async function publishFlyerWebpage(){
+  const fromVal = document.getElementById('flyerWebFromDate').value;
+  const toVal = document.getElementById('flyerWebToDate').value;
+  const err = document.getElementById('flyerWebpageErr');
+  if(!fromVal || !toVal){
+    err.textContent = 'Choose both a "valid from" and a "valid to" date.';
+    err.style.display = 'block';
+    return;
+  }
+  err.style.display = 'none';
+  const btn = document.getElementById('flyerWebpageBtn');
+  const originalText = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Publishing…';
+  try{
+    const mode = flyerWebpageTarget;
+    const html = buildFlyerWebpageHTML(mode, fromVal, toVal);
+    const data = await apiPost('wholesale/flyer/publish-webpage', {
+      mode, html, cover_image_base64: flyerImages.first || null
+    });
+    if(data.ok){
+      closeModal('modalFlyerWebpage');
+      toast('Published: ' + data.url);
+    } else {
+      // Not configured server-side yet (no GITHUB_TOKEN/OWNER/REPO) — fall
+      // back to a plain download so the page still gets made; see
+      // publish-webpage in server.js for what to set to make this a
+      // one-click publish instead of a manual add-to-repo.
+      const blob = new Blob([html], { type: 'text/html' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = (mode === 'veg' ? 'veg-flyer' : 'wholesale-flyer') + '.html';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      closeModal('modalFlyerWebpage');
+      toast(data.message || 'Downloaded — GitHub Pages publishing isn\'t set up on the server yet');
+    }
+  }catch(e){
+    err.textContent = 'Could not publish the webpage. ' + (e.message || '');
+    err.style.display = 'block';
+    console.error(e);
+  }finally{
+    btn.disabled = false; btn.textContent = originalText;
   }
 }
 
