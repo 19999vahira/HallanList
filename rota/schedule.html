@@ -1622,22 +1622,16 @@
     const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
 
     const numDays = dates.length;
-    const numCols = numDays + (numDays - 1) + 1; // day cols + narrow gap cols between them + employee col
+    const numCols = numDays + 1; // Employee + one column per day — no
+    // separator columns. Measured against a real Sling export: day
+    // columns sit flush against each other, separated only by the
+    // table's own thin grid line, not a blank gap column — the "little
+    // card" look comes from the chip's own inset margin, not a spacer.
 
-    // Column layout: Employee, Day0, gap, Day1, gap, ... Day(n-1) — a
-    // narrow blank column between each day so the days read as separate
-    // little cards, like the Sling export.
     const head = [['Employee']];
-    dates.forEach((d, i) => {
-      head[0].push(`${DAY_NAMES[d.getDay()===0?6:d.getDay()-1].toUpperCase()} ${d.getDate()}`);
-      if (i < numDays - 1) head[0].push('');
-    });
+    dates.forEach(d => head[0].push(`${DAY_NAMES[d.getDay()===0?6:d.getDay()-1].toUpperCase()} ${d.getDate()}`));
 
-    function pushDayRow(label, dayValues) {
-      const row = [label];
-      dayValues.forEach((v, i) => { row.push(v); if (i < numDays - 1) row.push(''); });
-      body.push(row);
-    }
+    function pushDayRow(label, dayValues) { body.push([label, ...dayValues]); }
 
     const body = [];
     const rowMeta = []; // parallel to body: {type:'employee',entries} | {type:'gap'} | {type:'totals'}
@@ -1668,8 +1662,9 @@
       pushDayRow(`${emp.name}\n${fmtMins(totalMins)}`, dayCells);
       rowMeta.push({ type: 'employee', entries: rowEntries });
 
-      // A slim blank row after each person, purely for breathing room —
-      // no border, no fill, so it just reads as a gap rather than a rule.
+      // A blank spacer row after each person — no border, no fill, so it
+      // just reads as breathing room rather than a rule. Sized to match
+      // the ~20pt gap Sling leaves between one person's row and the next.
       body.push(new Array(numCols).fill(''));
       rowMeta.push({ type: 'gap' });
     });
@@ -1697,38 +1692,37 @@
     doc.setTextColor('#5B6670');
     doc.text(weekLabelText(), 30, 42);
 
+    // Column widths measured off a real Sling export: a fixed ~110pt name
+    // column, the rest split evenly across the day columns (~97pt each
+    // on an A4 landscape page with the margins below — Sling's own day
+    // columns measure ~97pt wide against a ~110pt name column).
     const columnStyles = { 0: { cellWidth: 110, fontStyle: 'bold' } };
-    for (let i = 1; i < numCols; i++) {
-      if (i % 2 === 0) columnStyles[i] = { cellWidth: 5, lineWidth: 0 };
-    }
 
-    // A day column is any non-employee, non-gap column — i.e. odd index.
-    function isDayColumn(colIndex){ return colIndex > 0 && colIndex % 2 !== 0; }
+    function isDayColumn(colIndex){ return colIndex > 0; }
 
     doc.autoTable({
       head, body,
-      startY: 54,
+      startY: 60,
+      margin: { left: 24, right: 24 },
       theme: 'grid',
       styles: { fontSize: 8, cellPadding: 5, valign: 'top', lineColor: '#E3E7EB', lineWidth: 0.5, textColor: '#37424A', fontStyle: 'bold' },
-      headStyles: { fillColor: '#3E97E8', textColor: '#ffffff', fontStyle: 'bold', halign: 'center' },
+      // Plain, minimal header — no filled bar. Sling's own header is just
+      // small-caps gray-blue text on white with a thin rule underneath,
+      // not a bold color block.
+      headStyles: { fillColor: '#ffffff', textColor: '#7E8B99', fontStyle: 'bold', fontSize: 9, halign: 'center', lineColor: '#D7DCE1', lineWidth: { top: 0, left: 0, right: 0, bottom: 1 } },
       columnStyles,
+
       didParseCell: (data) => {
-        // Narrow blank column between each day — a visual gap, not a rule.
-        if (data.column.index > 0 && data.column.index % 2 === 0) {
-          data.cell.styles.fillColor = '#ffffff';
-          data.cell.styles.textColor = '#ffffff';
-          data.cell.styles.lineWidth = 0;
-          return;
-        }
         if (data.section !== 'body') return;
         const meta = rowMeta[data.row.index];
         if (!meta) return;
-        // Blank spacer row after each person.
+        // Blank spacer row after each person — sized to match the ~20pt
+        // breathing room Sling leaves between rows.
         if (meta.type === 'gap') {
           data.cell.styles.fillColor = '#ffffff';
           data.cell.styles.textColor = '#ffffff';
           data.cell.styles.lineWidth = 0;
-          data.cell.styles.cellPadding = 2;
+          data.cell.styles.cellPadding = { top: 9, bottom: 9, left: 0, right: 0 };
           return;
         }
         // Bold + shade the totals row, like Sling does.
@@ -1749,7 +1743,7 @@
         if (data.section !== 'body' || !isDayColumn(data.column.index)) return;
         const meta = rowMeta[data.row.index];
         if (!meta || meta.type !== 'employee') return;
-        const dayIndex = (data.column.index - 1) / 2;
+        const dayIndex = data.column.index - 1;
         const entries = meta.entries[dayIndex];
         if (!entries || !entries.length) return;
 
