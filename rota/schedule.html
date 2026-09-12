@@ -10,7 +10,7 @@
   :root{
     --nav-blue:#3E97E8; --nav-blue-dark:#2E7FD1;
     --ink:#37424A; --slate:#6B7684; --line:#E3E7EB;
-    --page-bg:#F5F7F8; --timeoff-bg:#9AA3AC; --timeoff-fg:#ffffff;
+    --page-bg:#F5F7F8; --timeoff-bg:#69727C; --timeoff-fg:#ffffff;
   }
   *{box-sizing:border-box;}
   body{margin:0;font-family:'Inter',sans-serif;color:var(--ink);background:var(--page-bg);}
@@ -830,6 +830,33 @@
   let lastKnownUpdatedAt = null;   // server's updatedAt for the version of `state` we last loaded/saved — used for conflict detection
 
   function shiftTypeById(id){ return state.shiftTypes.find(r => r.id === id); }
+
+  /* ---- Sling-style chip colors: every chip (on-screen and in the PDF
+     export) always shows WHITE text on a solidly-saturated background,
+     regardless of how pastel a shift type's stored color happens to be.
+     Rather than migrating everyone's stored shiftType.fg/bg, we compute
+     the effective display color at render time — darkening bg just
+     enough for white text to stay legible, hue preserved. ---- */
+  function hexToRgb(hex){
+    const h = String(hex || '').replace('#', '');
+    const n = h.length === 3 ? h.split('').map(c => c + c).join('') : h.padEnd(6, '0');
+    const int = parseInt(n, 16) || 0;
+    return { r: (int >> 16) & 255, g: (int >> 8) & 255, b: int & 255 };
+  }
+  function rgbToHex(r, g, b){
+    return '#' + [r, g, b].map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+  }
+  function relLuminance({ r, g, b }){ return (0.299 * r + 0.587 * g + 0.114 * b) / 255; }
+  function chipBg(hex){
+    let { r, g, b } = hexToRgb(hex);
+    let guard = 0;
+    while (relLuminance({ r, g, b }) > 0.45 && guard < 8) { r *= 0.85; g *= 0.85; b *= 0.85; guard++; }
+    return rgbToHex(r, g, b);
+  }
+  function chipColors(st){
+    return { bg: chipBg(st && st.bg ? st.bg : '#8A94A0'), fg: '#ffffff' };
+  }
+  const TIMEOFF_CHIP_BG = chipBg('#9AA3AC');
   function employeeById(id){ return state.employees.find(e => e.id === id); }
   function uid(prefix){ return prefix + '_' + Math.random().toString(36).slice(2, 9); }
 
@@ -1151,11 +1178,12 @@
           </div>`).join('');
 
         const shiftChipsHtml = shifts.map(s => {
-          const st = shiftTypeById(s.shiftTypeId) || { name: 'Unassigned', bg: '#E7ECF0', fg: '#37424A' };
+          const st = shiftTypeById(s.shiftTypeId) || { name: 'Unassigned', bg: '#8A94A0' };
+          const cc = chipColors(st);
           const mins = hoursMinusBreak(s.start, s.end, s.breakMins);
           totalMins += mins;
           const breakNote = s.breakMins ? ` · ${s.breakMins}m break` : '';
-          return `<div class="chip shift-chip" data-shift-id="${s.id}" data-emp="${emp.id}" data-date="${dateStr}" style="background:${st.bg};color:${st.fg};">
+          return `<div class="chip shift-chip" data-shift-id="${s.id}" data-emp="${emp.id}" data-date="${dateStr}" style="background:${cc.bg};color:${cc.fg};">
             <div class="t">${fmtTime12(s.start)}–${fmtTime12(s.end)}</div><div class="l">${st.name}${breakNote}</div>
           </div>`;
         }).join('');
@@ -1612,37 +1640,33 @@
     }
 
     const body = [];
-    const rowMeta = []; // parallel to body: {type:'employee',colors} | {type:'gap'} | {type:'totals'}
+    const rowMeta = []; // parallel to body: {type:'employee',entries} | {type:'gap'} | {type:'totals'}
     emps.forEach(emp => {
       let totalMins = 0;
-      const rowColors = [];
+      const rowEntries = []; // rowEntries[dayIndex] = [{bg,fg,title,subtitle}, ...] — every chip
+      // for that day, stacked in the same order the on-screen daycell shows
+      // them (time off first, then shifts) — one below the other, like Sling.
       const dayCells = dateStrs.map(dateStr => {
-        const lines = [];
+        const entries = [];
         const offs = timeOffsFor(emp.id, dateStr);
         const shifts = shiftsFor(emp.id, dateStr);
         offs.forEach(off => {
-          lines.push(`Time off${off.reason ? ' — ' + off.reason : ''}\nAll day`);
+          entries.push({ bg: TIMEOFF_CHIP_BG, fg: '#ffffff', title: `Time off${off.reason ? ' — ' + off.reason : ''}`, subtitle: 'All day' });
         });
         shifts.forEach(s => {
           const st = shiftTypeById(s.shiftTypeId);
           totalMins += hoursMinusBreak(s.start, s.end, s.breakMins);
-          lines.push(`${st ? st.name : 'Unassigned'}\n${fmtTime12(s.start)} - ${fmtTime12(s.end)}`);
+          const cc = chipColors(st || { bg: '#8A94A0' });
+          entries.push({ bg: cc.bg, fg: cc.fg, title: st ? st.name : 'Unassigned', subtitle: `${fmtTime12(s.start)} - ${fmtTime12(s.end)}` });
         });
-        // Only color the cell when there's a single, unambiguous thing in
-        // it — matches the on-screen chip color. Mixed/multi-entry cells
-        // stay plain so nothing misleading gets painted one color.
-        if (offs.length === 1 && !shifts.length) {
-          rowColors.push({ bg: '#9AA3AC', fg: '#ffffff' });
-        } else if (shifts.length === 1 && !offs.length) {
-          const st = shiftTypeById(shifts[0].shiftTypeId);
-          rowColors.push(st ? { bg: st.bg, fg: st.fg } : null);
-        } else {
-          rowColors.push(null);
-        }
-        return lines.join('\n\n');
+        rowEntries.push(entries);
+        // This text isn't shown (we draw chips manually in didDrawCell) —
+        // it only exists so autoTable's layout pass reserves a tall enough
+        // row for however many chips this day needs to stack.
+        return entries.map(e => `${e.title}\n${e.subtitle}`).join('\n\n');
       });
       pushDayRow(`${emp.name}\n${fmtMins(totalMins)}`, dayCells);
-      rowMeta.push({ type: 'employee', colors: rowColors });
+      rowMeta.push({ type: 'employee', entries: rowEntries });
 
       // A slim blank row after each person, purely for breathing room —
       // no border, no fill, so it just reads as a gap rather than a rule.
@@ -1678,6 +1702,9 @@
       if (i % 2 === 0) columnStyles[i] = { cellWidth: 5, lineWidth: 0 };
     }
 
+    // A day column is any non-employee, non-gap column — i.e. odd index.
+    function isDayColumn(colIndex){ return colIndex > 0 && colIndex % 2 !== 0; }
+
     doc.autoTable({
       head, body,
       startY: 54,
@@ -1704,20 +1731,52 @@
           data.cell.styles.cellPadding = 2;
           return;
         }
-        // Paint day cells with the same color as their on-screen chip.
-        if (meta.type === 'employee' && data.column.index > 0) {
-          const dayIndex = (data.column.index - 1) / 2;
-          const color = meta.colors[dayIndex];
-          if (color) {
-            data.cell.styles.fillColor = color.bg;
-            data.cell.styles.textColor = color.fg;
-          }
-        }
         // Bold + shade the totals row, like Sling does.
         if (meta.type === 'totals') {
           data.cell.styles.fillColor = '#F0F3F5';
           data.cell.styles.fontStyle = 'bold';
         }
+      },
+      // Suppress the default (plain, merged-text) rendering for day cells —
+      // we draw each entry as its own rounded, colored chip in didDrawCell
+      // below instead, stacked one under the other like the Sling export.
+      willDrawCell: (data) => {
+        if (data.section !== 'body' || !isDayColumn(data.column.index)) return;
+        const meta = rowMeta[data.row.index];
+        if (meta && meta.type === 'employee') data.cell.text = [];
+      },
+      didDrawCell: (data) => {
+        if (data.section !== 'body' || !isDayColumn(data.column.index)) return;
+        const meta = rowMeta[data.row.index];
+        if (!meta || meta.type !== 'employee') return;
+        const dayIndex = (data.column.index - 1) / 2;
+        const entries = meta.entries[dayIndex];
+        if (!entries || !entries.length) return;
+
+        const { x, y, width: w, height: h } = data.cell;
+        const pad = 3, gap = 3;
+        const n = entries.length;
+        const chipH = (h - pad * 2 - gap * (n - 1)) / n;
+        const twoLine = chipH >= 18; // enough room for a bold title + a subtitle line
+
+        entries.forEach((entry, i) => {
+          const cy = y + pad + i * (chipH + gap);
+          doc.setFillColor(entry.bg);
+          doc.roundedRect(x + pad, cy, w - pad * 2, chipH, 2, 2, 'F');
+          doc.setTextColor(entry.fg);
+          if (twoLine) {
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(7.5);
+            doc.text(entry.title, x + pad + 4, cy + chipH / 2 - 2, { baseline: 'middle' });
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(7);
+            doc.text(entry.subtitle, x + pad + 4, cy + chipH / 2 + 8, { baseline: 'middle' });
+          } else {
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(6.5);
+            doc.text(`${entry.title} · ${entry.subtitle}`, x + pad + 4, cy + chipH / 2, { baseline: 'middle' });
+          }
+        });
       }
     });
 
