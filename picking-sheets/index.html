@@ -5127,6 +5127,19 @@ function flyerRgbToHex(rgb){
 const FLYER_WEB_BLUE = flyerRgbToHex(FLYER_COLOR_BLUE);
 const FLYER_WEB_GOLD = flyerRgbToHex(FLYER_COLOR_GOLD);
 const FLYER_WEB_LIGHT_GOLD = flyerRgbToHex(FLYER_COLOR_LIGHT_GOLD);
+// Same safe-zone/row-height constants as generateColourFlyer's PDF build
+// (topSafeY, bottomSafeY, headingGap, DEFAULT_ROW_HEIGHT there) — reused
+// here so a department's item list is capped at the same number of rows
+// per "page" and spills onto a fresh page (same heading, same watermark
+// photos, no background) instead of running into the artwork's bottom
+// wave/dot design the way an unpaginated scrolling list would.
+const FLYER_WEB_TOP_SAFE_Y = 95;
+const FLYER_WEB_BOTTOM_SAFE_Y = 220;
+const FLYER_WEB_HEADING_GAP = 26;
+const FLYER_WEB_ROW_HEIGHT = 9;
+const FLYER_WEB_MAX_ROWS_PER_PAGE = Math.max(1, Math.floor(
+  (FLYER_WEB_BOTTOM_SAFE_Y - FLYER_WEB_TOP_SAFE_Y - FLYER_WEB_HEADING_GAP) / FLYER_WEB_ROW_HEIGHT
+));
 function flyerWebItemRowHtml(name, priceText){
   return `<div class="fw-item"><span class="fw-item-name">${escapeHtml(name)}</span><span class="fw-item-dots"></span><span class="fw-item-price">${escapeHtml(priceText)}</span></div>`;
 }
@@ -5168,18 +5181,30 @@ function buildFlyerWebpageHTML(mode, fromVal, toVal){
       const priceInfo = priceByName.get(it.name);
       return { name: it.name, image: it.image, price: priceInfo ? priceInfo.price : null, isVat: priceInfo ? priceInfo.isVat : false };
     });
-    const rowsHtml = items.map(it => flyerWebItemRowHtml(it.name, '£' + it.price.toFixed(2) + (it.isVat ? ' +VAT' : ''))).join('');
 
-    return `
+    // Split into fixed-size pages the same way the PDF does — see
+    // FLYER_WEB_MAX_ROWS_PER_PAGE above — rather than one long flowing
+    // list, so item text never runs into the layout artwork's bottom
+    // design. Every page this department spans repeats the heading and
+    // watermark photos (no "(cont.)" suffix, matching the PDF); the
+    // featured strip only prints on the first page, also matching it.
+    const pages = [];
+    for(let i = 0; i < items.length; i += FLYER_WEB_MAX_ROWS_PER_PAGE){
+      pages.push(items.slice(i, i + FLYER_WEB_MAX_ROWS_PER_PAGE));
+    }
+    return pages.map((pageItems, pageIdx) => {
+      const rowsHtml = pageItems.map(it => flyerWebItemRowHtml(it.name, '£' + it.price.toFixed(2) + (it.isVat ? ' +VAT' : ''))).join('');
+      return `
     <section class="fw-page fw-dept-page"${layoutBg}>
       ${middlePhoto ? `<div class="fw-watermark fw-watermark-middle" style="background-image:url('${middlePhoto}')"></div>` : ''}
       ${bottomPhoto ? `<div class="fw-watermark fw-watermark-bottom" style="background-image:url('${bottomPhoto}')"></div>` : ''}
       <div class="fw-dept-content">
-        ${flyerWebFeaturedHtml(preparedFeatured)}
+        ${pageIdx === 0 ? flyerWebFeaturedHtml(preparedFeatured) : ''}
         <h2 class="fw-dept-heading">${escapeHtml(deptHeading)}</h2>
         <div class="fw-item-list">${rowsHtml}</div>
       </div>
     </section>`;
+    }).join('');
   }).join('');
 
   const notesHtml = FLYER_NOTES.map(n => `<li>${escapeHtml(n)}</li>`).join('');
@@ -5213,9 +5238,13 @@ function buildFlyerWebpageHTML(mode, fromVal, toVal){
      the whole screen width rather than the page itself, growing
      disproportionately large on wide monitors. */
   .fw-page{position:relative;width:100%;max-width:900px;margin:0 auto;aspect-ratio:210/297;background-size:cover;background-position:center;container-type:inline-size;}
-  .fw-cover{display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:0 8%;}
-  .fw-cover h1{font-family:'Dancing Script',cursive;font-size:clamp(28px,6cqw,54px);color:var(--fw-blue);margin:0 0 18px;}
-  .fw-cover .fw-validity{font-size:clamp(14px,2.4cqw,22px);}
+  .fw-cover{position:relative;}
+  /* y=182mm on the PDF's cover page (see flyerDrawCenteredSegments call
+     in generateColourFlyer) -> 182/297*100 = 61.28% of page HEIGHT. Unlike
+     the padding-based offsets elsewhere, position:absolute's top property
+     correctly resolves against the container's height already, so no
+     width/height conversion trap here. */
+  .fw-cover .fw-validity{position:absolute;left:0;right:0;top:61.28%;transform:translateY(-50%);text-align:center;padding:0 8%;font-size:clamp(14px,2.4cqw,22px);}
   .fw-validity b{color:var(--fw-gold);font-weight:700;}
   .fw-dept-page{padding:0;}
   /* These match the PDF's own safe-zone constants exactly (see contentX,
@@ -5255,7 +5284,6 @@ function buildFlyerWebpageHTML(mode, fromVal, toVal){
 </head>
 <body>
   <section class="fw-page fw-cover"${coverBg}>
-    <h1>Hallan Cash &amp; Carry</h1>
     <div class="fw-validity">Offers valid from <b>${flyerDdmmyyyy(fromVal)}</b> to <b>${flyerDdmmyyyy(toVal)}</b></div>
   </section>
   ${deptSections}
