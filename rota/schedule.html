@@ -877,6 +877,45 @@
     el.style.display = 'block';
   }
 
+  // ONE-TIME FIX: before toDateStr() was corrected to return the
+  // browser's own local calendar date instead of converting through UTC,
+  // every shift added by clicking a day cell was saved under the UTC
+  // date — one day EARLIER than the cell actually clicked, in any
+  // timezone ahead of UTC (the UK's BST, currently in effect, included).
+  // The bug was invisible while it was live because the grid always read
+  // shifts back using that same wrong date, so a shift reliably
+  // reappeared under the cell it was clicked on. Now that the grid
+  // reads/writes the correct calendar date instead, shifts saved under
+  // the old wrong date show up one day too early. This runs once
+  // (guarded by state._shiftDateFixApplied, saved back to the server, so
+  // it can never double-apply even if two devices load at the same
+  // moment) and moves every existing shift forward a day to land back on
+  // the day it was actually scheduled for. Time off is untouched — it's
+  // always typed straight from a plain date field, never passed through
+  // toDateStr(), so it was never affected by this bug in the first place.
+  function applyShiftDateFix(){
+    if (state._shiftDateFixApplied) return;
+    let moved = 0;
+    const fixed = {};
+    Object.keys(state.shifts || {}).forEach(empId => {
+      fixed[empId] = {};
+      const byDate = state.shifts[empId] || {};
+      Object.keys(byDate).forEach(dateStr => {
+        const list = byDate[dateStr];
+        if (!list || !list.length) return;
+        const nextDate = toDateStr(addDays(fromDateStr(dateStr), 1));
+        // Merge rather than overwrite in the unlikely case two source
+        // dates both land on the same corrected date — a shift never
+        // silently disappears if that happens.
+        fixed[empId][nextDate] = (fixed[empId][nextDate] || []).concat(list);
+        moved += list.length;
+      });
+    });
+    state.shifts = fixed;
+    state._shiftDateFixApplied = true;
+    if (moved > 0) saveState();
+  }
+
   // Fetches the current shared state from the server. Returns true on
   // success (state/lastKnownUpdatedAt are updated), false on failure.
   async function loadStateFromServer(){
@@ -888,6 +927,7 @@
     merged.shifts = migrateShiftsToArrays(merged.shifts);
     state = merged;
     lastKnownUpdatedAt = payload.updatedAt;
+    applyShiftDateFix();
     return true;
   }
 
