@@ -74,6 +74,9 @@
   table.schedule td.daycell{padding:6px;vertical-align:top;min-width:140px;}
   table.schedule td.daycell:hover{background:#F8FAFB;}
   table.schedule td.daycell.copy-source{outline:2px dashed var(--nav-blue);outline-offset:-2px;}
+  table.schedule td.daycell.drop-target{outline:2px dashed var(--nav-blue);outline-offset:-2px;background:#EAF4FD;}
+  .chip.shift-chip{cursor:grab;}
+  .chip.shift-chip.dragging{opacity:.35;cursor:grabbing;}
   .daycell-stack{display:flex;flex-direction:column;gap:4px;}
   .chip{border-radius:5px;padding:6px 8px;font-size:11.5px;line-height:1.35;cursor:pointer;font-weight:600;}
   .chip .t{font-weight:800;}
@@ -946,8 +949,29 @@
     }
   }
 
-  /* ---- date helpers ---- */
-  function toDateStr(d){ return d.toISOString().slice(0,10); }
+  /* ---- date helpers ----
+     toDateStr() used to be `d.toISOString().slice(0,10)`. toISOString()
+     always converts to UTC, but every Date object in this file (from
+     fromDateStr, getMonday, addDays, new Date()) is built in the
+     browser's LOCAL time at local midnight. In any timezone ahead of UTC
+     (e.g. UK on BST, UTC+1) local midnight is still the previous day in
+     UTC, so that conversion silently shifted the date back a day. Since
+     the day-column headers were built separately from local d.getDate()
+     (never touching UTC), the two disagreed by a day: a time-off saved
+     against "17" (typed straight from an <input type=date>, no Date
+     object involved) would land under the column visually labelled "18",
+     because that visual "18" column's toDateStr() — going through UTC —
+     resolved to "...-17" and matched it. Same root cause hit the rota
+     grid, the Timesheet tab, and every CSV/PDF export, since they all
+     call this same function. Building the string from the Date's own
+     local Y/M/D fields instead keeps it in the same calendar day the
+     column header shows, with no UTC conversion at all. */
+  function toDateStr(d){
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
   function fromDateStr(s){ const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
   function getMonday(d){
     const date = new Date(d);
@@ -1045,13 +1069,18 @@
 
   function applyRoleNav(){
     const nav = id => document.getElementById(id);
-    [nav('nav-timesheet'), nav('nav-analytics'), nav('nav-access')].forEach(n => n.classList.add('nav-hidden'));
+    // "Time Clock" (nav-clockin) is now HR-only — it's a link to the
+    // clockin.html kiosk page, and the kiosk itself logs in as its own
+    // dedicated Time Clock account, so ordinary staff/manager logins
+    // never need this link and it's hidden for them below.
+    [nav('nav-timesheet'), nav('nav-analytics'), nav('nav-access'), nav('nav-clockin')].forEach(n => n.classList.add('nav-hidden'));
     [nav('nav-schedule'), nav('nav-employees'), nav('nav-shifts')].forEach(n => n.classList.remove('nav-hidden'));
 
     if (currentRole === 'hr') {
       nav('nav-timesheet').classList.remove('nav-hidden');
       nav('nav-analytics').classList.remove('nav-hidden');
       nav('nav-access').classList.remove('nav-hidden');
+      nav('nav-clockin').classList.remove('nav-hidden');
     } else if (currentRole === 'manager') {
       nav('nav-schedule').classList.add('nav-hidden');
       nav('nav-employees').classList.add('nav-hidden');
@@ -1218,7 +1247,7 @@
           const mins = hoursMinusBreak(s.start, s.end, s.breakMins);
           totalMins += mins;
           const breakNote = s.breakMins ? ` · ${s.breakMins}m break` : '';
-          return `<div class="chip shift-chip" data-shift-id="${s.id}" data-emp="${emp.id}" data-date="${dateStr}" style="background:${cc.bg};color:${cc.fg};">
+          return `<div class="chip shift-chip" draggable="true" data-shift-id="${s.id}" data-emp="${emp.id}" data-date="${dateStr}" style="background:${cc.bg};color:${cc.fg};">
             <div class="t">${fmtTime12(s.start)}–${fmtTime12(s.end)}</div><div class="l">${st.name}${breakNote}</div>
           </div>`;
         }).join('');
@@ -1313,6 +1342,87 @@
         document.getElementById('paste-banner').classList.remove('show');
         document.querySelectorAll('.daycell').forEach(x => x.classList.remove('copy-source'));
       }
+    });
+  }
+
+  /* =================================================================
+     DRAG AND DROP — grab any shift chip and drop it on another day/
+     employee cell to MOVE it there. Hold Ctrl (or Alt/Option on Mac)
+     while dropping to COPY it instead, leaving the original in place —
+     the same modifier convention the Ctrl+click copy above already
+     uses, so the two ways of duplicating a shift behave consistently.
+     This is on top of (not a replacement for) the existing Ctrl+click
+     "copy" / click-to-paste flow above; both work side by side.
+     Bound once via delegation on the grid body, same as wireGridEvents.
+     ================================================================= */
+  let dragShift = null; // { empId, dateStr, shiftId } of the chip currently being dragged
+
+  function wireGridDragDrop(){
+    const body = document.getElementById('grid-body');
+
+    body.addEventListener('dragstart', (e) => {
+      const chip = e.target.closest('.shift-chip');
+      if (!chip) { e.preventDefault(); return; }
+      // Starting a drag cancels any pending click-to-paste, so the two
+      // gestures never end up fighting over the same clipboard.
+      clipboardShift = null;
+      bulkClipboard = [];
+      document.getElementById('paste-here-btn').style.display = 'none';
+      document.getElementById('paste-banner').classList.remove('show');
+      document.querySelectorAll('.daycell').forEach(x => x.classList.remove('copy-source'));
+
+      dragShift = { empId: chip.dataset.emp, dateStr: chip.dataset.date, shiftId: chip.dataset.shiftId };
+      e.dataTransfer.effectAllowed = 'copyMove';
+      // Firefox refuses to start a drag at all unless some data is set.
+      e.dataTransfer.setData('text/plain', chip.dataset.shiftId);
+      chip.classList.add('dragging');
+    });
+
+    body.addEventListener('dragend', (e) => {
+      const chip = e.target.closest('.shift-chip');
+      if (chip) chip.classList.remove('dragging');
+      document.querySelectorAll('.daycell.drop-target').forEach(x => x.classList.remove('drop-target'));
+      dragShift = null;
+    });
+
+    body.addEventListener('dragover', (e) => {
+      if (!dragShift) return;
+      const td = e.target.closest('.daycell');
+      if (!td) return;
+      e.preventDefault(); // a drop target must cancel dragover to accept the drop
+      e.dataTransfer.dropEffect = (e.ctrlKey || e.altKey) ? 'copy' : 'move';
+      document.querySelectorAll('.daycell.drop-target').forEach(x => { if (x !== td) x.classList.remove('drop-target'); });
+      td.classList.add('drop-target');
+    });
+
+    body.addEventListener('dragleave', (e) => {
+      const td = e.target.closest('.daycell');
+      if (td && !td.contains(e.relatedTarget)) td.classList.remove('drop-target');
+    });
+
+    body.addEventListener('drop', (e) => {
+      if (!dragShift) return;
+      const td = e.target.closest('.daycell');
+      if (!td) return;
+      e.preventDefault();
+      td.classList.remove('drop-target');
+
+      const destEmp = td.dataset.emp, destDate = td.dataset.date;
+      const { empId: srcEmp, dateStr: srcDate, shiftId: srcShiftId } = dragShift;
+      const isCopy = e.ctrlKey || e.altKey;
+      dragShift = null;
+
+      if (destEmp === srcEmp && destDate === srcDate) return; // dropped back where it started — no-op
+
+      const s = shiftsFor(srcEmp, srcDate).find(x => x.id === srcShiftId);
+      if (!s) return;
+      const { id, ...rest } = s;
+
+      // addShift() can refuse (e.g. the "doesn't usually cover this shift
+      // type" confirm is declined) — if it does, leave the source shift
+      // alone rather than deleting it out from under the user.
+      if (!addShift(destEmp, destDate, { ...rest })) return;
+      if (!isCopy) deleteShift(srcEmp, srcDate, srcShiftId);
     });
   }
 
@@ -3354,6 +3464,7 @@
       state.shiftTypes.forEach(st => hiddenShiftTypeIds.add(st.id));
       document.getElementById('sync-blocker').style.display = 'none';
       wireGridEvents();
+      wireGridDragDrop();
       activateTab(currentRole === 'manager' ? 'analytics' : 'schedule');
     } catch (err) {
       // Couldn't reach the server. The server is the only place the rota
