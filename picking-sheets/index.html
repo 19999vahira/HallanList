@@ -5256,95 +5256,78 @@ function buildFlyerWebpageHTML(mode, fromVal, toVal){
 <style>
   :root{ --fw-blue:${FLYER_WEB_BLUE}; --fw-gold:${FLYER_WEB_GOLD}; --fw-light-gold:${FLYER_WEB_LIGHT_GOLD}; }
   *{box-sizing:border-box;}
-  body{margin:0;background:#fff;font-family:'Nunito Sans',sans-serif;color:var(--fw-blue);overflow-x:auto;-webkit-overflow-scrolling:touch;}
-  /* WhatsApp's in-app browser (Android AND iOS) opens links in its own
-     bundled WebView, not your actual Chrome/Safari app — and that bundled
-     WebView can lag years behind on newer CSS. This page used to rely on
-     two fairly recent features that break silently (not with an error —
-     the browser just drops the rule and falls back to something else):
-       - aspect-ratio: if unsupported, .fw-page stops being locked to A4
-         proportions and shrinks to fit its own content height instead. The
-         background artwork is stretched to fill that box's full height —
-         so on a shorter-than-intended box, the artwork's bottom wave
-         design gets squeezed upward into the price list, even though the
-         text itself sits exactly where the safe-zone maths says it should.
-       - container queries (the cqw unit every clamp() below used to use
-         for font sizing): if unsupported, the whole clamp() value is
-         invalid, so the browser drops the font-size declaration entirely
-         and falls back to the browser default — not the tuned proportional
-         size, and not any of the clamp()'s own min/max values either.
-     Chrome renders this page correctly because Chrome ships current;
-     WhatsApp's in-app browser doesn't necessarily update on the same
-     schedule. Fix: don't depend on either feature. .fw-page is now a
-     fixed, explicit width AND height (plain px, supported by literally
-     every browser ever shipped) instead of aspect-ratio, and every
-     font-size below is a fixed px number computed once against that same
-     880px reference width instead of a live cqw calculation — so there's
-     nothing left for an older engine to silently fail to parse. The page
-     is no longer fluid (it was already effectively a fixed-size preview,
-     not truly reflowable body text), so nothing about how it looks is
-     lost by pinning it down. body's overflow-x:auto still lets a phone
-     scroll/pinch-zoom across it, same as before. */
-  /* background-size MUST be a full non-uniform stretch (100% 100%), not
-     "cover". The PDF paints this same artwork with
-     doc.addImage(img, fmt, 0, 0, 210, 297, ...) — which stretches whatever
-     the source image's own proportions are to fill the full 210x297mm page
-     exactly, no cropping. "cover" instead preserves the image's own aspect
-     ratio and crops/zooms it to fill the box, which — unless your artwork
-     happens to be pixel-exact A4 proportions — shifts where its content
-     (the wave design, the baked-in cursive logo text, everything) actually
-     lands vs. the PDF. Every position below (fw-validity's top:61.28%,
-     fw-dept-content's padding, the watermark circle positions) was
-     measured assuming a full undistorted stretch fill, so this was the one
-     thing making all of those numbers land in the wrong place. */
-  /* Reference width for every fixed px value below: 880px. pageHeight =
-     880 * 297/210 = 1244.57px — this is the one place the 210:297 ratio
-     is now encoded, as plain arithmetic instead of the aspect-ratio
-     property. */
-  .fw-page{position:relative;width:880px;height:1244.57px;margin:0 auto;background-size:100% 100%;background-position:center;}
+  body{margin:0;background:#fff;font-family:'Nunito Sans',sans-serif;color:var(--fw-blue);overflow-x:hidden;}
+  /* The page must be FLUID (width:100%, capped at max-width:900px for huge
+     monitors) so it always shrinks to exactly fit whatever screen opens
+     it — that's what "looks perfect in Chrome" actually was: Chrome
+     rendering a page whose own width already equals the screen width, not
+     Chrome zooming out to fit an oversized page. A fixed px width (what
+     this block used to set) is ALWAYS going to look zoomed-in and cropped
+     on any screen narrower than that fixed value — WhatsApp's in-app
+     browser doesn't auto-shrink oversized content to fit the way Chrome
+     does, so a fixed width shows up exactly as wide as declared, giant and
+     cropped. There is no CSS-compatibility trick around that: a fixed-px
+     box is not going to fit a screen narrower than itself in any browser,
+     compatible or not. So: fluid width, no fixed floor.
+     The original overlap bug (rows creeping into the bottom wave on a
+     narrow phone) was never actually about that — it was that item text
+     had a hard 13px FLOOR (clamp(13px, 1.6cqw, 16px)), so once the fluid
+     page got narrow enough that 1.6% of its width dropped under 13px, the
+     floor forced text to render bigger than its proportional share of the
+     page, and 11 rows of oversized text no longer fit in the vertical
+     budget the safe-zone maths allowed. Below, every font-size uses
+     min(Xvw, CAP) instead of clamp(FLOOR, Xcqw, CAP) — vw instead of cqw
+     because vw needs no container-query support at all (it's been
+     supported forever, in absolutely everything), and min() instead of
+     clamp() because there is deliberately no floor: text is always exactly
+     its proportional share of the viewport, all the way down, so nothing
+     can ever get proportionally bigger than intended and overflow the
+     safe zone — at any width, on any device, compatible or not. It will
+     get small on a small phone, same as any full A4 page would if you
+     photographed it and viewed the photo at phone width; that's expected,
+     and someone can always pinch-zoom to read a specific line, same as
+     they would with any flyer image. */
+  .fw-page{position:relative;width:100%;max-width:900px;margin:0 auto;aspect-ratio:210/297;background-size:100% 100%;background-position:center;}
   .fw-cover{position:relative;}
   /* y=182mm on the PDF's cover page (see flyerDrawCenteredSegments call
      in generateColourFlyer) -> 182/297*100 = 61.28% of page HEIGHT. This
      is a percentage top on an absolutely positioned element, which has
      always resolved against the container's own height in every browser —
-     no aspect-ratio/container-query dependency here, so this one was never
-     actually broken by an older WebView; left unchanged. */
-  .fw-cover .fw-validity{position:absolute;left:0;right:0;top:61.28%;transform:translateY(-50%);text-align:center;padding:0 8%;font-size:21.1px;}
+     nothing to fix here. */
+  .fw-cover .fw-validity{position:absolute;left:0;right:0;top:61.28%;transform:translateY(-50%);text-align:center;padding:0 8%;font-size:min(2.4vw,22px);}
   .fw-validity b{color:var(--fw-gold);font-weight:700;}
   .fw-dept-page{padding:0;}
   /* These match the PDF's own safe-zone constants exactly (see contentX,
      contentWidth, topSafeY, headingGap in generateColourFlyer() further up
      this file): contentX=25mm/contentWidth=160mm of a 210mm-wide page ->
      11.905%/76.190% of width; topSafeY=95mm -> 45.238% of width;
-     headingGap=26mm -> 12.381% of width. Written here as the fixed px
-     result of applying those percentages to the 880px reference width
-     (398.1px / 104.8px+104.8px / 108.9px) rather than as live percentages,
-     for the same reason .fw-page's width is now fixed — nothing here
-     depends on any CSS feature an older WebView might not have. */
-  .fw-dept-content{position:relative;z-index:2;padding:398.1px 104.8px 70.4px;}
-  .fw-dept-heading{font-size:32px;margin:0 0 108.9px;color:var(--fw-blue);}
+     headingGap=26mm -> 12.381% of width. CSS resolves padding/margin
+     percentages (including padding-top/bottom) against the containing
+     block's WIDTH, which is exactly what we want since topSafeY etc. were
+     always meant as a fraction of the 210mm page WIDTH, not height. */
+  .fw-dept-content{position:relative;z-index:2;padding:45.238% 11.905% 8%;}
+  .fw-dept-heading{font-size:min(4vw,32px);margin:0 0 12.381%;color:var(--fw-blue);}
   .fw-watermark{position:absolute;border-radius:50%;background-size:cover;background-position:center;opacity:.1;z-index:1;}
   .fw-watermark-middle{left:11.9%;top:25.93%;width:76.19%;height:53.87%;}
   .fw-watermark-bottom{left:22.38%;top:76.09%;width:23.81%;height:16.84%;}
-  .fw-item-list{display:flex;flex-direction:column;gap:10px;}
-  .fw-item{display:flex;align-items:baseline;gap:8px;font-size:14.1px;}
+  /* gap is also min(vw, px) now, not a flat 10px — a fixed gap becomes a
+     disproportionately bigger slice of a shrunk row on a narrow phone,
+     the same distortion the font floor caused, just smaller in scale. */
+  .fw-item-list{display:flex;flex-direction:column;gap:min(1.1vw,10px);}
+  .fw-item{display:flex;align-items:baseline;gap:8px;font-size:min(1.6vw,16px);}
   .fw-item-name{white-space:nowrap;}
   .fw-item-dots{flex:1;border-bottom:2px dotted var(--fw-light-gold);margin-bottom:4px;}
   .fw-item-price{color:var(--fw-gold);font-weight:700;white-space:nowrap;}
   .fw-featured{display:flex;justify-content:center;align-items:flex-end;gap:14px;margin-bottom:24px;flex-wrap:wrap;}
   .fw-featured-item{text-align:center;width:22%;}
   .fw-featured-main{width:34%;}
-  /* aspect-ratio:1/1 replaced with an explicit height per size class (22%
-     and 34% of the 880px reference width) for the same older-WebView
-     reason as .fw-page above. */
-  .fw-featured-item img{width:100%;height:193.6px;object-fit:cover;border-radius:10px;}
-  .fw-featured-main img{height:299.2px;}
+  .fw-featured-item img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:10px;}
   .fw-featured-name{font-size:12px;margin-top:6px;}
-  .fw-featured-price{font-size:21.1px;font-weight:700;color:#d40000;}
+  .fw-featured-price{font-size:min(2.4vw,22px);font-weight:700;color:#d40000;}
   .fw-featured-price small{font-size:11px;}
-  .fw-notes-page{padding:398.1px 104.8px 70.4px;}
-  .fw-notes-page h2{color:var(--fw-blue);font-size:32px;}
-  .fw-notes-page ul{color:var(--fw-gold);font-family:'Dancing Script',cursive;font-size:19.4px;line-height:1.7;padding-left:20px;}
+  .fw-notes-page{padding:45.238% 11.905% 8%;}
+  .fw-notes-page h2{color:var(--fw-blue);font-size:min(4vw,32px);}
+  .fw-notes-page ul{color:var(--fw-gold);font-family:'Dancing Script',cursive;font-size:min(2.2vw,22px);line-height:1.7;padding-left:20px;}
 </style>
 </head>
 <body>
