@@ -5256,78 +5256,75 @@ function buildFlyerWebpageHTML(mode, fromVal, toVal){
 <style>
   :root{ --fw-blue:${FLYER_WEB_BLUE}; --fw-gold:${FLYER_WEB_GOLD}; --fw-light-gold:${FLYER_WEB_LIGHT_GOLD}; }
   *{box-sizing:border-box;}
-  body{margin:0;background:#fff;font-family:'Nunito Sans',sans-serif;color:var(--fw-blue);overflow-x:hidden;}
-  /* The page must be FLUID (width:100%, capped at max-width:900px for huge
-     monitors) so it always shrinks to exactly fit whatever screen opens
-     it — that's what "looks perfect in Chrome" actually was: Chrome
-     rendering a page whose own width already equals the screen width, not
-     Chrome zooming out to fit an oversized page. A fixed px width (what
-     this block used to set) is ALWAYS going to look zoomed-in and cropped
-     on any screen narrower than that fixed value — WhatsApp's in-app
-     browser doesn't auto-shrink oversized content to fit the way Chrome
-     does, so a fixed width shows up exactly as wide as declared, giant and
-     cropped. There is no CSS-compatibility trick around that: a fixed-px
-     box is not going to fit a screen narrower than itself in any browser,
-     compatible or not. So: fluid width, no fixed floor.
-     The original overlap bug (rows creeping into the bottom wave on a
-     narrow phone) was never actually about that — it was that item text
-     had a hard 13px FLOOR (clamp(13px, 1.6cqw, 16px)), so once the fluid
-     page got narrow enough that 1.6% of its width dropped under 13px, the
-     floor forced text to render bigger than its proportional share of the
-     page, and 11 rows of oversized text no longer fit in the vertical
-     budget the safe-zone maths allowed. Below, every font-size uses
-     min(Xvw, CAP) instead of clamp(FLOOR, Xcqw, CAP) — vw instead of cqw
-     because vw needs no container-query support at all (it's been
-     supported forever, in absolutely everything), and min() instead of
-     clamp() because there is deliberately no floor: text is always exactly
-     its proportional share of the viewport, all the way down, so nothing
-     can ever get proportionally bigger than intended and overflow the
-     safe zone — at any width, on any device, compatible or not. It will
-     get small on a small phone, same as any full A4 page would if you
-     photographed it and viewed the photo at phone width; that's expected,
-     and someone can always pinch-zoom to read a specific line, same as
-     they would with any flyer image. */
-  .fw-page{position:relative;width:100%;max-width:900px;margin:0 auto;aspect-ratio:210/297;background-size:100% 100%;background-position:center;}
+  body{margin:0;background:#e5e7eb;font-family:'Nunito Sans',sans-serif;color:var(--fw-blue);overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  /* Going back to a FIXED size, deliberately, because it's the only
+     approach that gave correct proportions with zero ambiguity — the
+     fluid/vw version depends on the browser doing sensible math with a
+     live percentage of the viewport, and different browsers (WhatsApp's
+     in-app WebView vs. Chrome) clearly don't agree closely enough for a
+     zero-slack layout like this one. A fixed size removes that variable
+     completely: every number below is a plain, pre-calculated pixel value,
+     the same on every device.
+     Reference width chosen this time: 420px — deliberately close to an
+     actual phone's screen width (not the ~880px "desktop preview" size
+     used before), so it opens at a sane, near-full-screen size instead of
+     needing to be zoomed OUT from something huge. It's also exactly
+     210mm x 2, so every measurement below is just "the mm value from the
+     PDF, x2" — no rounding, no approximation:
+       page:      420 x 594px   (210mm x 297mm x 2)
+       contentX:  50px inset each side (25mm x 2)
+       heading starts:     top:190px  (95mm x 2)
+       item list starts:   top:242px  (121mm x 2 = topSafeY+headingGap)
+       bottom safe line:   440px     (220mm x 2) — 242 + 11 rows x 18px = 440 exactly
+     The page will be a bit wider than the very narrowest phones (~360-
+     375px) and a fixed small box in the middle of a desktop screen — by
+     request, trading a little horizontal scroll/pinch-zoom for guaranteed
+     correct proportions everywhere, the same way you'd view a fixed-size
+     flyer image. */
+  .fw-page{position:relative;width:420px;height:594px;margin:16px auto;background-size:100% 100%;background-position:center;box-shadow:0 2px 10px rgba(0,0,0,.15);}
   .fw-cover{position:relative;}
-  /* y=182mm on the PDF's cover page (see flyerDrawCenteredSegments call
-     in generateColourFlyer) -> 182/297*100 = 61.28% of page HEIGHT. This
-     is a percentage top on an absolutely positioned element, which has
-     always resolved against the container's own height in every browser —
-     nothing to fix here. */
-  .fw-cover .fw-validity{position:absolute;left:0;right:0;top:61.28%;transform:translateY(-50%);text-align:center;padding:0 8%;font-size:min(2.4vw,22px);}
+  /* y=182mm on the PDF's cover page -> 182*2=364px from the top. A plain
+     top:364px on an absolutely positioned element — no dependency on
+     percentages, viewport units or container queries at all. */
+  .fw-cover .fw-validity{position:absolute;left:0;right:0;top:364px;transform:translateY(-50%);text-align:center;padding:0 8%;font-size:10px;}
   .fw-validity b{color:var(--fw-gold);font-weight:700;}
   .fw-dept-page{padding:0;}
-  /* These match the PDF's own safe-zone constants exactly (see contentX,
-     contentWidth, topSafeY, headingGap in generateColourFlyer() further up
-     this file): contentX=25mm/contentWidth=160mm of a 210mm-wide page ->
-     11.905%/76.190% of width; topSafeY=95mm -> 45.238% of width;
-     headingGap=26mm -> 12.381% of width. CSS resolves padding/margin
-     percentages (including padding-top/bottom) against the containing
-     block's WIDTH, which is exactly what we want since topSafeY etc. were
-     always meant as a fraction of the 210mm page WIDTH, not height. */
-  .fw-dept-content{position:relative;z-index:2;padding:45.238% 11.905% 8%;}
-  .fw-dept-heading{font-size:min(4vw,32px);margin:0 0 12.381%;color:var(--fw-blue);}
+  .fw-dept-content{position:relative;z-index:2;height:100%;}
+  /* Heading and item list are each independently pinned to a fixed
+     top offset from the page's own top-left corner — exactly how the PDF
+     itself works (doc.text(x, y) draws at an explicit coordinate; nothing
+     downstream shifts based on how tall the text above it happened to
+     render). That match matters here specifically because it means the
+     item list's start position can never drift even if a browser's font
+     metrics for the heading differ slightly from another's. */
+  .fw-dept-heading{position:absolute;left:50px;right:50px;top:190px;margin:0;font-size:16px;line-height:1.2;color:var(--fw-blue);}
   .fw-watermark{position:absolute;border-radius:50%;background-size:cover;background-position:center;opacity:.1;z-index:1;}
   .fw-watermark-middle{left:11.9%;top:25.93%;width:76.19%;height:53.87%;}
   .fw-watermark-bottom{left:22.38%;top:76.09%;width:23.81%;height:16.84%;}
-  /* gap is also min(vw, px) now, not a flat 10px — a fixed gap becomes a
-     disproportionately bigger slice of a shrunk row on a narrow phone,
-     the same distortion the font floor caused, just smaller in scale. */
-  .fw-item-list{display:flex;flex-direction:column;gap:min(1.1vw,10px);}
-  .fw-item{display:flex;align-items:baseline;gap:8px;font-size:min(1.6vw,16px);}
+  /* Each row is a fixed 18px-tall box (9mm x 2, the PDF's own per-row
+     pitch), with the text vertically centred inside it. Because the
+     height is explicit rather than derived from the font's line-height,
+     11 rows always add up to exactly 198px — 242px start + 198px =
+     440px, landing exactly on the bottom safe line — regardless of how
+     any particular browser measures this font's metrics. Text that runs
+     a little tall just centres inside its own 18px slot; it can't push
+     the next row down. */
+  .fw-item-list{position:absolute;left:50px;right:50px;top:242px;display:flex;flex-direction:column;}
+  .fw-item{height:18px;display:flex;align-items:center;gap:6px;font-size:11px;overflow:hidden;}
   .fw-item-name{white-space:nowrap;}
-  .fw-item-dots{flex:1;border-bottom:2px dotted var(--fw-light-gold);margin-bottom:4px;}
+  .fw-item-dots{flex:1;border-bottom:2px dotted var(--fw-light-gold);margin-bottom:2px;}
   .fw-item-price{color:var(--fw-gold);font-weight:700;white-space:nowrap;}
-  .fw-featured{display:flex;justify-content:center;align-items:flex-end;gap:14px;margin-bottom:24px;flex-wrap:wrap;}
+  .fw-featured{display:flex;justify-content:center;align-items:flex-end;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
   .fw-featured-item{text-align:center;width:22%;}
   .fw-featured-main{width:34%;}
-  .fw-featured-item img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:10px;}
-  .fw-featured-name{font-size:12px;margin-top:6px;}
-  .fw-featured-price{font-size:min(2.4vw,22px);font-weight:700;color:#d40000;}
-  .fw-featured-price small{font-size:11px;}
-  .fw-notes-page{padding:45.238% 11.905% 8%;}
-  .fw-notes-page h2{color:var(--fw-blue);font-size:min(4vw,32px);}
-  .fw-notes-page ul{color:var(--fw-gold);font-family:'Dancing Script',cursive;font-size:min(2.2vw,22px);line-height:1.7;padding-left:20px;}
+  .fw-featured-item img{width:100%;height:80px;object-fit:cover;border-radius:8px;}
+  .fw-featured-main img{height:124px;}
+  .fw-featured-name{font-size:9px;margin-top:4px;}
+  .fw-featured-price{font-size:10px;font-weight:700;color:#d40000;}
+  .fw-featured-price small{font-size:8px;}
+  .fw-notes-page{position:relative;height:100%;}
+  .fw-notes-page h2{position:absolute;left:50px;right:50px;top:190px;margin:0;color:var(--fw-blue);font-size:16px;}
+  .fw-notes-page ul{position:absolute;left:50px;right:50px;top:242px;color:var(--fw-gold);font-family:'Dancing Script',cursive;font-size:13px;line-height:1.6;padding-left:20px;margin:0;}
 </style>
 </head>
 <body>
