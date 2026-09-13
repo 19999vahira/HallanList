@@ -5165,6 +5165,23 @@ const FLYER_WEB_ROW_HEIGHT = 9;
 const FLYER_WEB_MAX_ROWS_PER_PAGE = Math.max(1, Math.floor(
   (FLYER_WEB_BOTTOM_SAFE_Y - FLYER_WEB_TOP_SAFE_Y - FLYER_WEB_HEADING_GAP) / FLYER_WEB_ROW_HEIGHT
 ));
+// ---- Exact point-size -> pixel-size conversion ----
+// Every font size on the PDF is set with doc.setFontSize(pt) while the doc's
+// own unit is 'mm' (new jsPDF('p','mm','a4')). jsPDF's internal scale factor
+// for a 'mm' document is 72/25.4 (pt-per-mm), so 1pt of PDF text is exactly
+// 25.4/72 mm tall. This page's own mm->px scale is fixed at 2 (594px page
+// height / 297mm page height — see the reference-width comment below), so:
+//   px = pt * (25.4/72) * 2
+// This was previously hand-picked per element (16px for a 28pt heading,
+// 11px for a 13pt item, 10px for a 24pt validity line, etc.) and those
+// guesses didn't track the PDF's actual sizes — that's why department pages
+// were rendering with the wrong type size/rhythm and text was crowding into
+// the layout artwork's top/bottom design bands instead of sitting inside
+// the same safe zone the PDF uses. Every font-size below is now derived
+// from this one constant so a department page can never drift from the PDF
+// again.
+const FLYER_WEB_PT_TO_PX = (25.4 / 72) * 2;
+function flyerPtPx(pt){ return (pt * FLYER_WEB_PT_TO_PX).toFixed(2) + 'px'; }
 function flyerWebItemRowHtml(name, priceText){
   return `<div class="fw-item"><span class="fw-item-name">${escapeHtml(name)}</span><span class="fw-item-dots"></span><span class="fw-item-price">${escapeHtml(priceText)}</span></div>`;
 }
@@ -5174,7 +5191,7 @@ function flyerWebFeaturedHtml(prepared){
       <div class="fw-featured-item${i===0 ? ' fw-featured-main':''}">
         ${p.image ? `<img src="${p.image}" alt="${escapeHtml(p.name)}">` : ''}
         <div class="fw-featured-name">${escapeHtml(p.name)}</div>
-        ${p.price !== null ? `<div class="fw-featured-price">£${p.price.toFixed(2)}${p.isVat ? ' <small>+VAT</small>' : ''}</div>` : ''}
+        ${p.price !== null ? `<div class="fw-featured-price${i===0 ? ' fw-featured-price-main':''}">£${p.price.toFixed(2)}${p.isVat ? ' <small>+VAT</small>' : ''}</div>` : ''}
       </div>`).join('') + '</div>';
 }
 // Same source data/filter as Download Colour Flyer (filteredWholesaleRows'
@@ -5286,7 +5303,10 @@ function buildFlyerWebpageHTML(mode, fromVal, toVal){
   /* y=182mm on the PDF's cover page -> 182*2=364px from the top. A plain
      top:364px on an absolutely positioned element — no dependency on
      percentages, viewport units or container queries at all. */
-  .fw-cover .fw-validity{position:absolute;left:0;right:0;top:364px;transform:translateY(-50%);text-align:center;padding:0 8%;font-size:10px;}
+  /* Validity line: PDF draws this at 24pt (generateColourFlyer) — was
+     hard-coded to 10px here, which is why it read much smaller/thinner
+     than the downloaded flyer. Now flyerPtPx(24). */
+  .fw-cover .fw-validity{position:absolute;left:0;right:0;top:364px;transform:translateY(-50%);text-align:center;padding:0 8%;font-size:${flyerPtPx(24)};}
   .fw-validity b{color:var(--fw-gold);font-weight:700;}
   .fw-dept-page{padding:0;}
   .fw-dept-content{position:relative;z-index:2;height:100%;}
@@ -5296,8 +5316,10 @@ function buildFlyerWebpageHTML(mode, fromVal, toVal){
      downstream shifts based on how tall the text above it happened to
      render). That match matters here specifically because it means the
      item list's start position can never drift even if a browser's font
-     metrics for the heading differ slightly from another's. */
-  .fw-dept-heading{position:absolute;left:50px;right:50px;top:190px;margin:0;font-size:16px;line-height:1.2;color:var(--fw-blue);}
+     metrics for the heading differ slightly from another's.
+     Font size: PDF's DEPT_HEADING_FONT is 28pt -> flyerPtPx(28). Was fixed
+     at 16px before, well under the PDF's actual size. */
+  .fw-dept-heading{position:absolute;left:50px;right:50px;top:190px;margin:0;font-size:${flyerPtPx(28)};line-height:1.2;color:var(--fw-blue);}
   .fw-watermark{position:absolute;border-radius:50%;background-size:cover;background-position:center;opacity:.1;z-index:1;}
   .fw-watermark-middle{left:11.9%;top:25.93%;width:76.19%;height:53.87%;}
   .fw-watermark-bottom{left:22.38%;top:76.09%;width:23.81%;height:16.84%;}
@@ -5308,9 +5330,12 @@ function buildFlyerWebpageHTML(mode, fromVal, toVal){
      440px, landing exactly on the bottom safe line — regardless of how
      any particular browser measures this font's metrics. Text that runs
      a little tall just centres inside its own 18px slot; it can't push
-     the next row down. */
+     the next row down.
+     Font size: PDF's DEFAULT_ITEM_FONT is 13pt -> flyerPtPx(13). Was fixed
+     at 11px before — close, but not the same size/rhythm as the PDF, and
+     enough to throw off how the item list balances inside its safe zone. */
   .fw-item-list{position:absolute;left:50px;right:50px;top:242px;display:flex;flex-direction:column;}
-  .fw-item{height:18px;display:flex;align-items:center;gap:6px;font-size:11px;overflow:hidden;}
+  .fw-item{height:18px;display:flex;align-items:center;gap:6px;font-size:${flyerPtPx(13)};overflow:hidden;}
   .fw-item-name{white-space:nowrap;}
   .fw-item-dots{flex:1;border-bottom:2px dotted var(--fw-light-gold);margin-bottom:2px;}
   .fw-item-price{color:var(--fw-gold);font-weight:700;white-space:nowrap;}
@@ -5319,12 +5344,21 @@ function buildFlyerWebpageHTML(mode, fromVal, toVal){
   .fw-featured-main{width:34%;}
   .fw-featured-item img{width:100%;height:80px;object-fit:cover;border-radius:8px;}
   .fw-featured-main img{height:124px;}
-  .fw-featured-name{font-size:9px;margin-top:4px;}
-  .fw-featured-price{font-size:10px;font-weight:700;color:#d40000;}
-  .fw-featured-price small{font-size:8px;}
+  /* PDF: featured caption name is 6.5pt for every item (flyerDrawFeaturedStrip);
+     the price is 20pt for the main/first item and 15pt for the rest — two
+     different sizes, which this stylesheet previously flattened into one
+     10px price size for all of them. */
+  .fw-featured-name{font-size:${flyerPtPx(6.5)};margin-top:4px;}
+  .fw-featured-price{font-size:${flyerPtPx(15)};font-weight:700;color:#d40000;}
+  .fw-featured-price-main{font-size:${flyerPtPx(20)};}
+  .fw-featured-price small{font-size:.7em;}
   .fw-notes-page{position:relative;height:100%;}
-  .fw-notes-page h2{position:absolute;left:50px;right:50px;top:190px;margin:0;color:var(--fw-blue);font-size:16px;}
-  .fw-notes-page ul{position:absolute;left:50px;right:50px;top:242px;color:var(--fw-gold);font-family:'Dancing Script',cursive;font-size:13px;line-height:1.6;padding-left:20px;margin:0;}
+  /* Notes heading matches the department heading — PDF draws both with
+     DEPT_HEADING_FONT (28pt). Notes body copy is drawn at 15pt in the PDF
+     (generateColourFlyer's Notes-page block), not the 13px this used to be
+     fixed at. */
+  .fw-notes-page h2{position:absolute;left:50px;right:50px;top:190px;margin:0;color:var(--fw-blue);font-size:${flyerPtPx(28)};}
+  .fw-notes-page ul{position:absolute;left:50px;right:50px;top:242px;color:var(--fw-gold);font-family:'Dancing Script',cursive;font-size:${flyerPtPx(15)};line-height:1.6;padding-left:20px;margin:0;}
 </style>
 </head>
 <body>
