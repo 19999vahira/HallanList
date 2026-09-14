@@ -663,6 +663,22 @@
   .wa-status-ok{color:var(--green);font-size:12px;font-family:'JetBrains Mono',monospace;}
   .wa-status-fail{color:var(--danger);font-size:12px;font-family:'JetBrains Mono',monospace;}
 
+  /* ---- WhatsApp: incoming replies ---- */
+  .wa-inbox-row{
+    display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+    background:var(--panel2);border:1px solid var(--line);border-radius:6px;
+    padding:12px 14px;margin-bottom:8px;
+  }
+  .wa-inbox-row.unread{border-color:var(--accent);}
+  .wa-inbox-row .winame{font-size:13px;font-weight:600;}
+  .wa-inbox-row .wiphone{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);margin-top:2px;}
+  .wa-inbox-row .wibody{font-size:13px;margin-top:6px;line-height:1.5;white-space:pre-wrap;}
+  .wa-inbox-row .witime{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);white-space:nowrap;}
+  .wa-badge{
+    display:inline-block;min-width:16px;padding:1px 5px;border-radius:10px;background:var(--danger);
+    color:#fff;font-size:10px;font-weight:700;line-height:1.5;text-align:center;margin-left:6px;
+  }
+
   /* ---- WhatsApp: message type toggle ---- */
   .wa-type-toggle{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;}
   .wa-type-btn{
@@ -918,6 +934,13 @@
       <button class="btn-ghost" id="waConnectBtn" style="margin-top:10px;" onclick="launchWhatsAppSignup()">🔗 Connect a WhatsApp Number</button>
       <div id="waConnectStatus" style="display:none;margin-top:10px;font-size:12px;color:var(--text-dim);white-space:pre-wrap;font-family:monospace;background:rgba(0,0,0,.15);border-radius:6px;padding:10px;"></div>
     </div>
+
+    <div class="wa-type-toggle" id="waTopTabs" style="max-width:320px;">
+      <button type="button" class="wa-type-btn active" data-tab="broadcast" onclick="setWaTab('broadcast')">📣 Broadcast</button>
+      <button type="button" class="wa-type-btn" data-tab="inbox" onclick="setWaTab('inbox')">📥 Replies<span class="wa-badge" id="waInboxBadge" style="display:none;"></span></button>
+    </div>
+
+    <div id="waBroadcastTab" style="margin-top:16px;">
     <div class="wa-layout">
       <div class="wa-panel">
         <label class="wa-label">Message type</label>
@@ -974,6 +997,21 @@
         <button class="btn-ghost" style="width:100%;margin-top:8px;" onclick="document.getElementById('waCsvInput').click()">⬆ Import from CSV</button>
         <p class="wa-hint">CSV with name in the first column and phone in the second — a header row is fine, it's skipped automatically. Imported into the selected list above.</p>
         <div id="waContactList" style="margin-top:12px;"></div>
+      </div>
+    </div>
+    </div>
+
+    <div id="waInboxTab" style="display:none;margin-top:16px;">
+      <div class="wa-panel">
+        <div class="actionbar" style="margin-bottom:4px;">
+          <label class="wa-label" style="margin:0;">Incoming replies</label>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-ghost" onclick="loadWaInbox()">↻ Refresh</button>
+            <button class="btn-ghost" onclick="markAllWaInboxRead()">Mark all as read</button>
+          </div>
+        </div>
+        <p class="wa-hint">The last 200 messages customers have sent to your WhatsApp number, most recent first. This number isn't actively monitored — each sender automatically gets a reply pointing them to <span class="mono">wa.me/447718041859</span> — so check here for anything that needs a real response.</p>
+        <div id="waInboxList" style="margin-top:12px;"><div class="loading">Loading…</div></div>
       </div>
     </div>
   </div>
@@ -6149,8 +6187,116 @@ function openWhatsappBroadcast(){
   waSelectedFlyer = 'colour';
   setWaMessageType('text');
   removeWaAttachment();
+  setWaTab('broadcast');
   loadWaLists();
   loadWaFlyerDefaults();
+  loadWaInbox(); // also refreshes the unread badge on the Replies tab
+}
+
+/* ---- top-level tabs: Broadcast (compose + send) vs Replies (inbox) ---- */
+let waActiveTab = 'broadcast';
+let waInboundItems = [];
+function setWaTab(tab){
+  waActiveTab = tab;
+  document.querySelectorAll('#waTopTabs .wa-type-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+  document.getElementById('waBroadcastTab').style.display = tab === 'broadcast' ? '' : 'none';
+  document.getElementById('waInboxTab').style.display = tab === 'inbox' ? '' : 'none';
+  if(tab === 'inbox') renderWaInbox();
+}
+
+/* ---- Replies: load, render, mark read ---- */
+async function loadWaInbox(){
+  if(waActiveTab === 'inbox'){
+    document.getElementById('waInboxList').innerHTML = '<div class="loading">Loading…</div>';
+  }
+  try{
+    const data = await apiGet('whatsapp/inbound');
+    waInboundItems = data.items || [];
+    renderWaInboxBadge(data.unread_count || 0);
+    if(waActiveTab === 'inbox') renderWaInbox();
+  }catch(e){
+    if(waActiveTab === 'inbox'){
+      document.getElementById('waInboxList').innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not load replies</div>';
+    }
+    console.error(e);
+  }
+}
+function renderWaInboxBadge(count){
+  const badge = document.getElementById('waInboxBadge');
+  if(count > 0){
+    badge.textContent = count > 99 ? '99+' : String(count);
+    badge.style.display = '';
+  }else{
+    badge.style.display = 'none';
+  }
+}
+function renderWaInbox(){
+  const list = document.getElementById('waInboxList');
+  if(waInboundItems.length === 0){
+    list.innerHTML = '<div class="empty-hint">No replies yet.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  waInboundItems.forEach(m => {
+    const row = document.createElement('div');
+    row.className = 'wa-inbox-row' + (m.is_read ? '' : ' unread');
+    const who = m.contact_name ? escapeHtml(m.contact_name) : escapeHtml(m.phone);
+    row.innerHTML = `
+      <div style="flex:1;min-width:0;">
+        <div class="winame">${who}</div>
+        <div class="wiphone">${escapeHtml(m.phone)}</div>
+        <div class="wibody">${escapeHtml(m.body || '')}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+        <span class="witime">${formatWaInboundTime(m.received_at)}</span>
+      </div>
+    `;
+    if(!m.is_read){
+      const markBtn = document.createElement('button');
+      markBtn.className = 'btn-ghost';
+      markBtn.style.cssText = 'padding:4px 8px;font-size:11px;';
+      markBtn.textContent = 'Mark read';
+      markBtn.onclick = () => markWaInboxRead(m.inbound_id, row);
+      row.querySelector('div:last-child').appendChild(markBtn);
+    }
+    list.appendChild(row);
+  });
+}
+function formatWaInboundTime(ts){
+  if(!ts) return '';
+  const d = new Date(ts);
+  if(isNaN(d.getTime())) return String(ts);
+  return d.toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
+}
+async function markWaInboxRead(id, rowEl){
+  try{
+    await apiPost('whatsapp/inbound/' + id + '/read', {});
+    const item = waInboundItems.find(m => m.inbound_id === id);
+    if(item) item.is_read = 1;
+    renderWaInboxBadge(waInboundItems.filter(m => !m.is_read).length);
+    if(rowEl){
+      rowEl.classList.remove('unread');
+      const btn = rowEl.querySelector('button');
+      if(btn) btn.remove();
+    }
+  }catch(e){
+    toast('Could not mark as read');
+    console.error(e);
+  }
+}
+async function markAllWaInboxRead(){
+  try{
+    await apiPost('whatsapp/inbound/read-all', {});
+    waInboundItems.forEach(m => { m.is_read = 1; });
+    renderWaInboxBadge(0);
+    if(waActiveTab === 'inbox') renderWaInbox();
+    toast('All marked as read');
+  }catch(e){
+    toast('Could not mark all as read');
+    console.error(e);
+  }
 }
 
 /* ---- message type toggle: swaps which attachment control is visible ---- */
