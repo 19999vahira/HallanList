@@ -1004,6 +1004,15 @@
     <div id="waInboxTab" style="display:none;margin-top:16px;">
       <div class="wa-panel">
         <div class="actionbar" style="margin-bottom:4px;">
+          <label class="wa-label" style="margin:0;">Auto-reply message</label>
+          <span id="waAutoreplyStatus" class="wa-hint" style="margin:0;"></span>
+        </div>
+        <p class="wa-hint">Sent automatically to anyone who messages this WhatsApp number.</p>
+        <textarea id="waAutoreplyText" class="wa-input" rows="3" maxlength="900" style="width:100%;resize:vertical;" placeholder="Loading…"></textarea>
+        <button class="btn-primary" style="margin-top:8px;" onclick="saveWaAutoreplyText()">Save auto-reply</button>
+      </div>
+      <div class="wa-panel" style="margin-top:16px;">
+        <div class="actionbar" style="margin-bottom:4px;">
           <label class="wa-label" style="margin:0;">Incoming replies</label>
           <div style="display:flex;gap:8px;">
             <button class="btn-ghost" onclick="loadWaInbox()">↻ Refresh</button>
@@ -6203,7 +6212,44 @@ function setWaTab(tab){
   });
   document.getElementById('waBroadcastTab').style.display = tab === 'broadcast' ? '' : 'none';
   document.getElementById('waInboxTab').style.display = tab === 'inbox' ? '' : 'none';
-  if(tab === 'inbox') renderWaInbox();
+  if(tab === 'inbox'){
+    renderWaInbox();
+    if(!waAutoreplyLoaded) loadWaAutoreplyText();
+  }
+}
+
+/* ---- Auto-reply text: load once, save on demand ---- */
+let waAutoreplyLoaded = false;
+async function loadWaAutoreplyText(){
+  const box = document.getElementById('waAutoreplyText');
+  const status = document.getElementById('waAutoreplyStatus');
+  try{
+    const data = await apiGet('whatsapp/autoreply-text');
+    box.value = data.text || '';
+    waAutoreplyLoaded = true;
+    status.textContent = '';
+  }catch(e){
+    box.placeholder = 'Could not load — try Refresh';
+    status.textContent = '';
+    console.error(e);
+  }
+}
+async function saveWaAutoreplyText(){
+  const box = document.getElementById('waAutoreplyText');
+  const status = document.getElementById('waAutoreplyStatus');
+  const text = box.value.trim();
+  if(!text){ status.textContent = 'Message cannot be empty'; status.style.color = 'var(--danger)'; return; }
+  status.textContent = 'Saving…';
+  status.style.color = '';
+  try{
+    await apiPost('whatsapp/autoreply-text', { text });
+    status.textContent = 'Saved ✓';
+    status.style.color = 'var(--accent)';
+  }catch(e){
+    status.textContent = 'Failed to save';
+    status.style.color = 'var(--danger)';
+    console.error(e);
+  }
 }
 
 /* ---- Replies: load, render, mark read ---- */
