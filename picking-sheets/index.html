@@ -426,6 +426,12 @@
   .retloc-cell.empty{color:var(--text-dim);}
   .retclose{position:absolute;top:8px;right:10px;font-size:15px;line-height:1;color:var(--text-dim);cursor:pointer;padding:4px 6px;border-radius:6px;}
   .retclose:hover{color:var(--danger);background:rgba(0,0,0,.06);}
+  .reasongrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .reasonbtn{padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);font-size:13px;cursor:pointer;text-align:left;}
+  .reasonbtn:hover{border-color:var(--accent);}
+  .reasonbtn.selected{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .qtystepper{display:flex;align-items:center;gap:8px;}
+  .qtystepper button{width:44px;font-size:18px;padding:8px 0;}
   .ibbarcode{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-dim);opacity:.75;margin-top:-2px;}
 
   /* ---- picking checklist (partial pick) ---- */
@@ -2612,6 +2618,33 @@
     </div>
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="cancelReturnsSupplierPick()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- RETURNS: QUANTITY + REASON, after a supplier is chosen -->
+<div class="modal-backdrop" id="modalReturnsDetails">
+  <div class="modal" style="width:430px;">
+    <h3 id="returnsDetailsProduct">Product</h3>
+    <p class="modal-sub" id="returnsDetailsSupplier"></p>
+
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;">Quantity</label>
+    <div class="qtystepper" style="margin-bottom:16px;">
+      <button class="btn-ghost" onclick="bumpReturnsQty(-1)">−</button>
+      <input type="number" id="returnsQtyInput" value="1" min="1" step="1"
+        style="width:80px;text-align:center;padding:10px;" onkeydown="if(event.key==='Enter')confirmReturnsDetails()">
+      <button class="btn-ghost" onclick="bumpReturnsQty(1)">+</button>
+    </div>
+
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;">Return reason</label>
+    <div id="returnsReasonGrid" class="reasongrid"></div>
+    <input type="text" id="returnsReasonCustom" placeholder="Or type your own reason…" autocomplete="off"
+      style="width:100%;padding:10px;margin-top:8px;" oninput="onReturnsCustomReason()"
+      onkeydown="if(event.key==='Enter')confirmReturnsDetails()">
+
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="backToReturnsSupplierPick()">Back</button>
+      <button class="btn-amber" onclick="confirmReturnsDetails()">Add to return list</button>
     </div>
   </div>
 </div>
@@ -10292,6 +10325,17 @@ async function finishScanGoodsSession(){
    "Credit Notes Received" moves it on to Returned Goods. */
 let returnsScanFeedItems = [];
 let returnsPendingProduct = null; // { stockid, name, barcode, suppliers } — awaiting a supplier tap
+let returnsPendingSupplier = null; // { suppid, name, cost_net } — chosen, awaiting qty + reason
+let returnsSelectedReason = null;  // a tapped preset; a typed custom reason wins over this
+const RETURN_REASONS = [
+  'Out of date',
+  'Packaging',
+  'Damaged',
+  'Customer complaint',
+  'Received short dated',
+  'Not ordered',
+  'Wrong quantity received'
+];
 let currentReturnsSupplier = null; // { suppid, name }
 let currentReturnsSupplierLists = []; // every batch (any status) for currentReturnsSupplier
 let returnsCurrentPendingList = null; // the one PENDING batch for currentReturnsSupplier, if any
@@ -10407,24 +10451,67 @@ async function runReturnsPickSupplierSearch(){
   }catch(e){ console.error(e); }
 }
 async function chooseReturnsSupplier(suppid, supplierName, costNet){
-  const p = returnsPendingProduct;
-  if(!p) return;
+  if(!returnsPendingProduct) return;
+  // Supplier is settled — now collect quantity and reason before saving.
+  returnsPendingSupplier = { suppid, name: supplierName, cost_net: costNet };
+  returnsSelectedReason = null;
+  closeModal('modalReturnsSupplierPick');
+  document.getElementById('returnsDetailsProduct').textContent = returnsPendingProduct.name;
+  document.getElementById('returnsDetailsSupplier').textContent = 'Going back to ' + supplierName;
+  document.getElementById('returnsQtyInput').value = '1';
+  document.getElementById('returnsReasonCustom').value = '';
+  renderReturnsReasonGrid();
+  openModal('modalReturnsDetails');
+  setTimeout(() => document.getElementById('returnsQtyInput').select(), 80);
+}
+function renderReturnsReasonGrid(){
+  document.getElementById('returnsReasonGrid').innerHTML = RETURN_REASONS.map(r => `
+    <div class="reasonbtn${returnsSelectedReason === r ? ' selected' : ''}" onclick="pickReturnsReason(${JSON.stringify(r).replace(/"/g,'&quot;')})">${escapeHtml(r)}</div>
+  `).join('');
+}
+function pickReturnsReason(reason){
+  // Tapping a preset clears any typed reason, so there's only ever one answer.
+  returnsSelectedReason = (returnsSelectedReason === reason) ? null : reason;
+  if(returnsSelectedReason) document.getElementById('returnsReasonCustom').value = '';
+  renderReturnsReasonGrid();
+}
+function onReturnsCustomReason(){
+  // Typing a custom reason deselects the presets, for the same reason.
+  if(document.getElementById('returnsReasonCustom').value.trim() && returnsSelectedReason){
+    returnsSelectedReason = null;
+    renderReturnsReasonGrid();
+  }
+}
+function bumpReturnsQty(delta){
+  const el = document.getElementById('returnsQtyInput');
+  el.value = Math.max(1, (parseInt(el.value, 10) || 1) + delta);
+}
+function backToReturnsSupplierPick(){
+  closeModal('modalReturnsDetails');
+  openReturnsSupplierPick();
+}
+async function confirmReturnsDetails(){
+  const p = returnsPendingProduct, s = returnsPendingSupplier;
+  if(!p || !s) return;
+  const qty = Math.max(1, parseInt(document.getElementById('returnsQtyInput').value, 10) || 1);
+  const custom = document.getElementById('returnsReasonCustom').value.trim();
+  const reason = custom || returnsSelectedReason;
+  if(!reason){ toast('Pick a return reason, or type your own'); return; }
   try{
     await apiPost('returns/scan-add/', {
-      suppid, supplier_name: supplierName,
+      suppid: s.suppid, supplier_name: s.name,
       stockid: p.stockid, item_name: p.name, barcode: p.barcode,
-      cost_price: costNet, created_by: localStorage.getItem('hallan_staff_name') || null
+      cost_price: s.cost_net, quantity: qty, return_reason: reason,
+      created_by: localStorage.getItem('hallan_staff_name') || null
     });
-    returnsScanFeedItems.unshift({ item_name: p.name, supplier_name: supplierName, cost_net: costNet });
+    returnsScanFeedItems.unshift({ item_name: p.name, supplier_name: s.name, cost_net: s.cost_net, quantity: qty, reason });
     renderReturnsScanFeed();
-    closeModal('modalReturnsSupplierPick');
+    closeModal('modalReturnsDetails');
     returnsPendingProduct = null;
-    toast('Added to ' + supplierName + '’s return list');
+    returnsPendingSupplier = null;
+    toast('Added to ' + s.name + '’s return list');
     openReturnsScannerModal();
   }catch(e){
-    // Show the server's actual message — a silent "could not add" hides
-    // things like a missing table or a bad column, which you'd otherwise
-    // have to go digging in the Render logs to find.
     toast('Could not add item: ' + (e && e.message ? e.message : 'unknown error'));
     console.error(e);
   }
@@ -10443,8 +10530,8 @@ function renderReturnsScanFeed(){
   box.innerHTML = returnsScanFeedItems.map(it => `
     <div class="pickrow">
       <div class="pickinfo">
-        <div class="pname">${escapeHtml(it.item_name)}</div>
-        <div class="pbarcode">Added to ${escapeHtml(it.supplier_name)}${it.cost_net !== null && it.cost_net !== undefined ? (' — £' + Number(it.cost_net).toFixed(2)) : ''}</div>
+        <div class="pname">${escapeHtml(it.item_name)} <span style="color:var(--text-dim);font-weight:400;">× ${it.quantity}</span></div>
+        <div class="pbarcode">${escapeHtml(it.supplier_name)}${it.cost_net !== null && it.cost_net !== undefined ? (' — £' + Number(it.cost_net).toFixed(2)) : ''} &middot; ${escapeHtml(it.reason || '')}</div>
       </div>
     </div>
   `).join('');
@@ -10619,12 +10706,13 @@ function renderReturnsDetailTable(){
       <td>${escapeHtml(it.item_name)}</td>
       <td class="qtycell">${it.cost_price === null || it.cost_price === undefined ? '—' : ('£' + Number(it.cost_price).toFixed(2))}</td>
       <td class="qtycell">${it.quantity}</td>
+      <td>${escapeHtml(it.return_reason || '—')}</td>
       <td class="retloc-cell${it.location ? '' : ' empty'}" ${editable ? `onclick="openReturnsLocationModal(${it.item_id})"` : ''}>${it.location ? escapeHtml(it.location) : (editable ? 'Tap to add' : '—')}</td>
       ${editable ? `<td class="no-print"><a href="#" onclick="event.preventDefault(); removeReturnsItem(${it.item_id})" style="color:var(--danger);">✕</a></td>` : ''}
     </tr>
   `).join('');
   table.innerHTML = `
-    <thead><tr><th>Item</th><th class="qtycell">Cost Price</th><th class="qtycell">Qty</th><th>Location</th>${editable ? '<th class="no-print"></th>' : ''}</tr></thead>
+    <thead><tr><th>Item</th><th class="qtycell">Cost Price</th><th class="qtycell">Qty</th><th>Reason</th><th>Location</th>${editable ? '<th class="no-print"></th>' : ''}</tr></thead>
     <tbody>${rows}</tbody>
   `;
 }
@@ -10721,11 +10809,12 @@ function downloadReturnsListPDF(){
       it.item_name,
       it.cost_price === null || it.cost_price === undefined ? '—' : ('£' + Number(it.cost_price).toFixed(2)),
       String(it.quantity),
+      it.return_reason || '',
       it.location || ''
     ]);
     doc.autoTable({
       startY: 39,
-      head: [['Item', 'Cost Price', 'Qty', 'Location']],
+      head: [['Item', 'Cost Price', 'Qty', 'Reason', 'Location']],
       body: rows,
       theme: 'grid',
       headStyles: { fillColor: [30,34,42] },
