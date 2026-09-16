@@ -416,6 +416,14 @@
   .scanresult-card .srrow .btn-amber{padding:9px 16px;font-size:13px;}
   .scanresult-card .srrow .btn-ghost{padding:9px 14px;font-size:13px;}
   .scanfail{color:var(--danger);font-size:13px;padding:8px 0;}
+  /* ---- returns ---- */
+  .supplier-pick-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;cursor:pointer;background:var(--panel);}
+  .supplier-pick-row:hover{border-color:var(--accent);}
+  .supplier-pick-row .spname{font-weight:600;font-size:14px;}
+  .supplier-pick-row .spcost{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-dim);}
+  .supplier-pick-row .spbadge{display:inline-block;font-size:10px;text-transform:uppercase;letter-spacing:.5px;background:var(--accent);color:#fff;padding:2px 7px;border-radius:20px;margin-left:8px;}
+  .retloc-cell{cursor:pointer;color:var(--accent-dim);text-decoration:underline dotted;}
+  .retloc-cell.empty{color:var(--text-dim);}
   .ibbarcode{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-dim);opacity:.75;margin-top:-2px;}
 
   /* ---- picking checklist (partial pick) ---- */
@@ -906,6 +914,12 @@
         <div class="num">10 &middot; NOTIFY</div>
         <h3>WhatsApp Broadcast</h3>
         <p>Write a message with an optional image and send it to your saved contact list.</p>
+      </div>
+      <div class="tile" data-module="returns" style="--tile-color:#be123c;" onclick="openReturnsHub()">
+        <div class="tile-icon">↩️</div>
+        <div class="num">11 &middot; RETURN</div>
+        <h3>Returns</h3>
+        <p>Scan stock back to a supplier, then track it to Awaiting Credit Note and Returned Goods.</p>
       </div>
       <div class="tile" data-admin-only="1" style="--tile-color:#475569;display:none;" onclick="openManageUsers()">
         <div class="tile-icon">👤</div>
@@ -2127,6 +2141,135 @@
     <div id="scanGoodsSessionResults"><div class="empty-hint">No items scanned yet. Tap "Scan Barcode" to start.</div></div>
   </div>
 
+  <!-- RETURNS: HUB (choose Scan or Lists) -->
+  <div id="view-returns-hub" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <span class="current">Returns</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Supplier Returns</div>
+      <h2>Returns</h2>
+      <p>Scan faulty or unwanted stock back to a supplier, then track it through to a credit note.</p>
+    </div>
+    <div class="catgrid">
+      <div class="bincard" onclick="openReturnsScan()">
+        <h4>📷 Scan</h4>
+        <div class="count">Scan products in, one by one, and pick the supplier each is going back to</div>
+      </div>
+      <div class="bincard" onclick="openReturnsListsHub()">
+        <h4>📋 Lists</h4>
+        <div class="count">Find a supplier's returns — pending, awaiting credit note, or returned</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RETURNS: SCAN -->
+  <div id="view-returns-scan" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openReturnsHub()">Returns</button><span class="sep">/</span>
+      <span class="current">Scan</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Supplier Returns</div>
+      <h2>Scan Returns</h2>
+      <p>Scan a product, then tap the supplier it's going back to — it's added to that supplier's return list straight away.</p>
+    </div>
+    <div class="actionbar">
+      <span></span>
+      <button class="btn-amber" onclick="openReturnsScannerModal()">Scan Barcode</button>
+    </div>
+    <div id="returnsScanFeed"><div class="empty-hint">Nothing scanned yet this session. Tap "Scan Barcode" to start.</div></div>
+  </div>
+
+  <!-- RETURNS: LISTS — supplier search / browse -->
+  <div id="view-returns-lists-search" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openReturnsHub()">Returns</button><span class="sep">/</span>
+      <span class="current">Lists</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Supplier Returns</div>
+      <h2>Lists</h2>
+      <p>Search a supplier, or pick one below, to see what's pending, awaiting credit, or returned.</p>
+    </div>
+    <input type="text" id="returnsSupplierSearch" placeholder="Search supplier…" autocomplete="off"
+      oninput="onReturnsSupplierSearch()" style="width:100%;padding:12px;margin-bottom:14px;">
+    <div id="returnsSupplierSearchResults"></div>
+    <div id="returnsSupplierBrowse"><div class="loading">Loading…</div></div>
+  </div>
+
+  <!-- RETURNS: SUPPLIER DETAIL — 3 status blocks -->
+  <div id="view-returns-supplier-detail" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openReturnsHub()">Returns</button><span class="sep">/</span>
+      <button onclick="openReturnsListsHub()">Lists</button><span class="sep">/</span>
+      <span class="current" id="returnsSupplierCrumb"></span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Supplier Returns</div>
+      <h2 id="returnsSupplierTitle"></h2>
+    </div>
+    <div class="catgrid">
+      <div class="bincard" style="--tile-color:#d97706;" onclick="openReturnsPendingBlock()">
+        <h4>⏳ Pending for Return</h4>
+        <div class="count" id="returnsPendingCount">—</div>
+      </div>
+      <div class="bincard" style="--tile-color:#2563eb;" onclick="openReturnsSublist('AWAITING_CREDIT')">
+        <h4>📨 Awaiting Credit Note</h4>
+        <div class="count" id="returnsAwaitingCount">—</div>
+      </div>
+      <div class="bincard" style="--tile-color:#059669;" onclick="openReturnsSublist('RETURNED')">
+        <h4>✅ Returned Goods</h4>
+        <div class="count" id="returnsReturnedCount">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RETURNS: SUBLIST — just the batch names, for Awaiting Credit Note / Returned Goods -->
+  <div id="view-returns-sublist" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openReturnsHub()">Returns</button><span class="sep">/</span>
+      <button onclick="openReturnsListsHub()">Lists</button><span class="sep">/</span>
+      <button onclick="backToReturnsSupplierDetail()" id="returnsSublistSupplierCrumb"></button><span class="sep">/</span>
+      <span class="current" id="returnsSublistCrumb"></span>
+    </div>
+    <div class="hero">
+      <h2 id="returnsSublistTitle"></h2>
+    </div>
+    <div class="catgrid" id="returnsSublistGrid"></div>
+  </div>
+
+  <!-- RETURNS: LIST DETAIL — items, print/PDF, stage actions -->
+  <div id="view-returns-list-detail" class="view">
+    <div class="crumbrow no-print">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openReturnsHub()">Returns</button><span class="sep">/</span>
+      <button onclick="openReturnsListsHub()">Lists</button><span class="sep">/</span>
+      <button onclick="backToReturnsSupplierDetail()" id="returnsDetailSupplierCrumb"></button><span class="sep">/</span>
+      <span class="current">Return list</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Hallan Cash &amp; Carry</div>
+      <h2 id="returnsDetailSupplierName"></h2>
+      <p id="returnsDetailMeta"></p>
+    </div>
+    <div class="actionbar no-print">
+      <span class="mono" id="returnsDetailCount" style="color:var(--text-dim);font-size:12px;"></span>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn-ghost" onclick="window.print()">Print</button>
+        <button class="btn-ghost" onclick="downloadReturnsListPDF()">Download PDF</button>
+        <button class="btn-amber" id="returnsItemsReturnedBtn" style="display:none;" onclick="markReturnsItemsReturned()">Items Returned</button>
+        <button class="btn-amber" id="returnsCreditNoteBtn" style="display:none;" onclick="markReturnsCreditNoteReceived()">Credit Notes Received</button>
+      </div>
+    </div>
+    <table class="finaltable" id="returnsDetailTable"></table>
+  </div>
+
   <!-- INVOICES: NOTE DETAIL -->
   <div id="view-invoice-detail" class="view">
     <div class="crumbrow">
@@ -2433,6 +2576,70 @@
     <div id="goodsInScanFeedback"></div>
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalGoodsInScanner')">Done scanning</button>
+    </div>
+  </div>
+</div>
+
+<!-- RETURNS: BARCODE SCANNER -->
+<div class="modal-backdrop" id="modalReturnsScanner">
+  <div class="modal" style="width:400px;">
+    <h3>Scan barcode</h3>
+    <p class="modal-sub">Scan now — it looks up automatically</p>
+    <div class="scanmanual">
+      <input type="text" id="returnsBarcodeInput" placeholder="Waiting for scan…" autocomplete="off" autocapitalize="off"
+        inputmode="none" onkeydown="if(event.key==='Enter')submitReturnsBarcode()" oninput="onReturnsBarcodeInput()">
+      <button class="btn-ghost" onclick="submitReturnsBarcode()">Look up</button>
+    </div>
+    <div id="returnsScanFeedback"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalReturnsScanner')">Done scanning</button>
+    </div>
+  </div>
+</div>
+
+<!-- RETURNS: PICK SUPPLIER after a scan -->
+<div class="modal-backdrop" id="modalReturnsSupplierPick">
+  <div class="modal" style="width:440px;">
+    <h3 id="returnsPickProduct">Product</h3>
+    <p class="modal-sub">Tap the supplier this is going back to.</p>
+    <div id="returnsPickSupplierList"></div>
+    <div style="margin-top:10px;">
+      <input type="text" id="returnsPickSupplierSearch" placeholder="Search a different supplier…" autocomplete="off"
+        oninput="onReturnsPickSupplierSearch()" style="width:100%;padding:10px;margin-bottom:6px;">
+      <div id="returnsPickSupplierSearchResults"></div>
+    </div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="cancelReturnsSupplierPick()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- RETURNS: EDIT LOCATION (typed or scanned) -->
+<div class="modal-backdrop" id="modalReturnsLocation">
+  <div class="modal" style="width:380px;">
+    <h3>Location</h3>
+    <p class="modal-sub" id="returnsLocationItemName"></p>
+    <input type="text" id="returnsLocationInput" placeholder="e.g. Aisle 3 / Bay 2" autocomplete="off" style="width:100%;padding:10px;margin-bottom:10px;">
+    <button class="btn-ghost" style="width:100%;margin-bottom:6px;" onclick="openReturnsLocationScanner()">Scan Barcode</button>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalReturnsLocation')">Cancel</button>
+      <button class="btn-amber" onclick="saveReturnsLocation()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- RETURNS: SCAN A LOCATION BARCODE -->
+<div class="modal-backdrop" id="modalReturnsLocationScanner">
+  <div class="modal" style="width:380px;">
+    <h3>Scan location barcode</h3>
+    <p class="modal-sub">Scan now — the code is used as the location</p>
+    <div class="scanmanual">
+      <input type="text" id="returnsLocationBarcodeInput" placeholder="Waiting for scan…" autocomplete="off" autocapitalize="off"
+        inputmode="none" onkeydown="if(event.key==='Enter')submitReturnsLocationBarcode()">
+      <button class="btn-ghost" onclick="submitReturnsLocationBarcode()">Use this</button>
+    </div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalReturnsLocationScanner')">Cancel</button>
     </div>
   </div>
 </div>
@@ -10070,6 +10277,442 @@ async function finishScanGoodsSession(){
     openScanGoodsHub();
   }catch(e){
     toast('Could not finish scan');
+    console.error(e);
+  }
+}
+
+/* ============ RETURNS ============
+   Scan flow: scan a barcode -> pick which linked supplier it's going back
+   to -> item lands straight on that supplier's current PENDING batch (one
+   call, no separate "create list" step). Lists flow: search/browse a
+   supplier -> Pending for Return / Awaiting Credit Note / Returned Goods.
+   "Items Returned" locks a batch and moves it to Awaiting Credit Note;
+   "Credit Notes Received" moves it on to Returned Goods. */
+let returnsScanFeedItems = [];
+let returnsPendingProduct = null; // { stockid, name, barcode, suppliers } — awaiting a supplier tap
+let currentReturnsSupplier = null; // { suppid, name }
+let currentReturnsSupplierLists = []; // every batch (any status) for currentReturnsSupplier
+let returnsCurrentPendingList = null; // the one PENDING batch for currentReturnsSupplier, if any
+let currentReturnsSublistStatus = null; // 'AWAITING_CREDIT' | 'RETURNED'
+let currentReturnsList = null;
+let currentReturnsItems = [];
+let returnsEditingItemId = null;
+let returnsBarcodeDebounce = null;
+let returnsSupplierSearchDebounce = null;
+let returnsPickSupplierSearchDebounce = null;
+
+function openReturnsHub(){ showView('view-returns-hub'); }
+
+/* ---- Scan ---- */
+function openReturnsScan(){
+  returnsScanFeedItems = [];
+  renderReturnsScanFeed();
+  showView('view-returns-scan');
+}
+function openReturnsScannerModal(){
+  document.getElementById('returnsBarcodeInput').value = '';
+  document.getElementById('returnsScanFeedback').innerHTML = '';
+  openModal('modalReturnsScanner');
+  document.getElementById('returnsBarcodeInput').focus();
+}
+function onReturnsBarcodeInput(){
+  clearTimeout(returnsBarcodeDebounce);
+  const val = document.getElementById('returnsBarcodeInput').value.trim();
+  if(!val) return;
+  // Same auto-submit pattern as Scan Goods — a short pause after typing
+  // stops means the scan is finished, so look it up automatically.
+  returnsBarcodeDebounce = setTimeout(submitReturnsBarcode, 300);
+}
+function submitReturnsBarcode(){
+  clearTimeout(returnsBarcodeDebounce);
+  const code = document.getElementById('returnsBarcodeInput').value.trim();
+  if(!code) return;
+  handleReturnsScannedCode(code);
+}
+async function handleReturnsScannedCode(code){
+  const input = document.getElementById('returnsBarcodeInput');
+  input.value = '';
+  const box = document.getElementById('returnsScanFeedback');
+  const loadingEl = document.createElement('div');
+  loadingEl.className = 'loading';
+  loadingEl.textContent = 'Looking up ' + code + '…';
+  box.prepend(loadingEl);
+  try{
+    const data = await apiGet('returns/scan-lookup/' + encodeURIComponent(code) + '/');
+    loadingEl.remove();
+    if(!data.item){
+      const fail = document.createElement('div');
+      fail.className = 'scanfail';
+      fail.textContent = 'No stock item found for barcode ' + code;
+      box.prepend(fail);
+      input.focus();
+      return;
+    }
+    returnsPendingProduct = data.item;
+    closeModal('modalReturnsScanner');
+    openReturnsSupplierPick();
+  }catch(e){
+    loadingEl.remove();
+    const fail = document.createElement('div');
+    fail.className = 'scanfail';
+    fail.textContent = 'Lookup failed for ' + code;
+    box.prepend(fail);
+    console.error(e);
+    input.focus();
+  }
+}
+function openReturnsSupplierPick(){
+  const p = returnsPendingProduct;
+  document.getElementById('returnsPickProduct').textContent = p.name;
+  document.getElementById('returnsPickSupplierSearch').value = '';
+  document.getElementById('returnsPickSupplierSearchResults').innerHTML = '';
+  renderReturnsPickSupplierList(p.suppliers || []);
+  openModal('modalReturnsSupplierPick');
+}
+function renderReturnsPickSupplierList(suppliers){
+  const box = document.getElementById('returnsPickSupplierList');
+  if(!suppliers.length){
+    box.innerHTML = '<div class="empty-hint">No suppliers linked to this product — search for one below.</div>';
+    return;
+  }
+  box.innerHTML = suppliers.map(s => `
+    <div class="supplier-pick-row" onclick="chooseReturnsSupplier(${s.suppid}, ${JSON.stringify(s.supplier_name).replace(/"/g,'&quot;')}, ${s.cost_net === null || s.cost_net === undefined ? 'null' : s.cost_net})">
+      <div>
+        <span class="spname">${escapeHtml(s.supplier_name)}</span>
+        ${s.preferred ? '<span class="spbadge">Preferred</span>' : ''}
+      </div>
+      <div class="spcost">${s.cost_net === null || s.cost_net === undefined ? '' : ('£' + Number(s.cost_net).toFixed(2))}</div>
+    </div>
+  `).join('');
+}
+function onReturnsPickSupplierSearch(){
+  clearTimeout(returnsPickSupplierSearchDebounce);
+  returnsPickSupplierSearchDebounce = setTimeout(runReturnsPickSupplierSearch, 250);
+}
+async function runReturnsPickSupplierSearch(){
+  const q = document.getElementById('returnsPickSupplierSearch').value.trim();
+  const results = document.getElementById('returnsPickSupplierSearchResults');
+  if(q.length < 2){ results.innerHTML = ''; return; }
+  try{
+    const data = await apiGet('suppliers/search/?q=' + encodeURIComponent(q));
+    const items = data.items || [];
+    if(items.length === 0){ results.innerHTML = '<div class="empty-hint" style="font-size:12px;">No suppliers found.</div>'; return; }
+    results.innerHTML = items.map(s => `
+      <div class="supplier-pick-row" onclick="chooseReturnsSupplier(${s.suppid}, ${JSON.stringify(s.name).replace(/"/g,'&quot;')}, null)">
+        <div><span class="spname">${escapeHtml(s.name)}</span></div>
+      </div>
+    `).join('');
+  }catch(e){ console.error(e); }
+}
+async function chooseReturnsSupplier(suppid, supplierName, costNet){
+  const p = returnsPendingProduct;
+  if(!p) return;
+  try{
+    await apiPost('returns/scan-add/', {
+      suppid, supplier_name: supplierName,
+      stockid: p.stockid, item_name: p.name, barcode: p.barcode,
+      cost_price: costNet, created_by: localStorage.getItem('hallan_staff_name') || null
+    });
+    returnsScanFeedItems.unshift({ item_name: p.name, supplier_name: supplierName, cost_net: costNet });
+    renderReturnsScanFeed();
+    closeModal('modalReturnsSupplierPick');
+    returnsPendingProduct = null;
+    toast('Added to ' + supplierName + '’s return list');
+    openReturnsScannerModal();
+  }catch(e){
+    toast('Could not add item to return list');
+    console.error(e);
+  }
+}
+function cancelReturnsSupplierPick(){
+  closeModal('modalReturnsSupplierPick');
+  returnsPendingProduct = null;
+  openReturnsScannerModal();
+}
+function renderReturnsScanFeed(){
+  const box = document.getElementById('returnsScanFeed');
+  if(returnsScanFeedItems.length === 0){
+    box.innerHTML = '<div class="empty-hint">Nothing scanned yet this session. Tap "Scan Barcode" to start.</div>';
+    return;
+  }
+  box.innerHTML = returnsScanFeedItems.map(it => `
+    <div class="pickrow">
+      <div class="pickinfo">
+        <div class="pname">${escapeHtml(it.item_name)}</div>
+        <div class="pbarcode">Added to ${escapeHtml(it.supplier_name)}${it.cost_net !== null && it.cost_net !== undefined ? (' — £' + Number(it.cost_net).toFixed(2)) : ''}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+/* ---- Lists: supplier search / browse ---- */
+function openReturnsListsHub(){
+  showView('view-returns-lists-search');
+  document.getElementById('returnsSupplierSearch').value = '';
+  document.getElementById('returnsSupplierSearchResults').innerHTML = '';
+  document.getElementById('returnsSupplierBrowse').style.display = '';
+  loadReturnsSupplierBrowse();
+}
+async function loadReturnsSupplierBrowse(){
+  const box = document.getElementById('returnsSupplierBrowse');
+  box.innerHTML = '<div class="loading">Loading…</div>';
+  try{
+    const data = await apiGet('returns/suppliers/');
+    const suppliers = data.suppliers || [];
+    if(suppliers.length === 0){
+      box.innerHTML = '<div class="empty-hint">No returns yet — start one from Scan.</div>';
+      return;
+    }
+    box.innerHTML = suppliers.map(s => `
+      <div class="pickrow" style="cursor:pointer;" onclick="openReturnsSupplierDetail(${s.suppid}, ${JSON.stringify(s.supplier_name).replace(/"/g,'&quot;')})">
+        <div class="pickinfo">
+          <div class="pname">${escapeHtml(s.supplier_name)}</div>
+          <div class="pbarcode">${s.pending_lists > 0 ? s.pending_lists + ' pending' : 'None pending'} &middot; ${s.awaiting_lists} awaiting credit &middot; ${s.returned_lists} returned</div>
+        </div>
+      </div>
+    `).join('');
+  }catch(e){
+    box.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not load suppliers</div>';
+    console.error(e);
+  }
+}
+function onReturnsSupplierSearch(){
+  clearTimeout(returnsSupplierSearchDebounce);
+  returnsSupplierSearchDebounce = setTimeout(runReturnsSupplierSearch, 250);
+}
+async function runReturnsSupplierSearch(){
+  const q = document.getElementById('returnsSupplierSearch').value.trim();
+  const results = document.getElementById('returnsSupplierSearchResults');
+  const browse = document.getElementById('returnsSupplierBrowse');
+  if(q.length < 2){ results.innerHTML = ''; browse.style.display = ''; return; }
+  browse.style.display = 'none';
+  try{
+    const data = await apiGet('suppliers/search/?q=' + encodeURIComponent(q));
+    const items = data.items || [];
+    if(items.length === 0){ results.innerHTML = '<div class="empty-hint">No suppliers found.</div>'; return; }
+    results.innerHTML = items.map(s => `
+      <div class="pickrow" style="cursor:pointer;" onclick="openReturnsSupplierDetail(${s.suppid}, ${JSON.stringify(s.name).replace(/"/g,'&quot;')})">
+        <div class="pickinfo"><div class="pname">${escapeHtml(s.name)}</div></div>
+      </div>
+    `).join('');
+  }catch(e){ console.error(e); }
+}
+
+/* ---- Supplier detail: 3 status blocks ---- */
+async function openReturnsSupplierDetail(suppid, supplierName){
+  currentReturnsSupplier = { suppid, name: supplierName };
+  document.getElementById('returnsSupplierCrumb').textContent = supplierName;
+  document.getElementById('returnsSupplierTitle').textContent = supplierName;
+  document.getElementById('returnsPendingCount').textContent = 'Loading…';
+  document.getElementById('returnsAwaitingCount').textContent = 'Loading…';
+  document.getElementById('returnsReturnedCount').textContent = 'Loading…';
+  showView('view-returns-supplier-detail');
+  try{
+    const data = await apiGet('returns/lists/?suppid=' + suppid);
+    const lists = data.lists || [];
+    currentReturnsSupplierLists = lists;
+    const pending = lists.filter(l => l.status === 'PENDING');
+    const awaiting = lists.filter(l => l.status === 'AWAITING_CREDIT');
+    const returned = lists.filter(l => l.status === 'RETURNED');
+    const pendingItems = pending.reduce((n,l) => n + l.item_count, 0);
+    document.getElementById('returnsPendingCount').textContent = pendingItems > 0 ? (pendingItems + ' item' + (pendingItems===1?'':'s') + ' waiting') : 'Nothing pending';
+    document.getElementById('returnsAwaitingCount').textContent = awaiting.length + ' list' + (awaiting.length===1?'':'s');
+    document.getElementById('returnsReturnedCount').textContent = returned.length + ' list' + (returned.length===1?'':'s');
+    returnsCurrentPendingList = pending[0] || null;
+  }catch(e){
+    toast('Could not load returns for this supplier');
+    console.error(e);
+  }
+}
+function openReturnsPendingBlock(){
+  if(!returnsCurrentPendingList){ toast('Nothing pending for return for this supplier yet'); return; }
+  openReturnsListDetail(returnsCurrentPendingList.return_id);
+}
+function backToReturnsSupplierDetail(){
+  if(!currentReturnsSupplier){ openReturnsListsHub(); return; }
+  openReturnsSupplierDetail(currentReturnsSupplier.suppid, currentReturnsSupplier.name);
+}
+
+/* ---- Sublist: just the batch names, for Awaiting Credit Note / Returned Goods ---- */
+function openReturnsSublist(status){
+  currentReturnsSublistStatus = status;
+  const label = status === 'AWAITING_CREDIT' ? 'Awaiting Credit Note' : 'Returned Goods';
+  document.getElementById('returnsSublistSupplierCrumb').textContent = currentReturnsSupplier.name;
+  document.getElementById('returnsSublistCrumb').textContent = label;
+  document.getElementById('returnsSublistTitle').textContent = currentReturnsSupplier.name + ' — ' + label;
+  showView('view-returns-sublist');
+  renderReturnsSublist();
+}
+function renderReturnsSublist(){
+  const grid = document.getElementById('returnsSublistGrid');
+  const lists = (currentReturnsSupplierLists || []).filter(l => l.status === currentReturnsSublistStatus);
+  if(lists.length === 0){
+    grid.innerHTML = '<div class="empty-hint">Nothing here yet.</div>';
+    return;
+  }
+  // "just the list name" per the batch — supplier name plus the date it moved into this stage
+  grid.innerHTML = lists.map(l => `
+    <div class="bincard" onclick="openReturnsListDetail(${l.return_id})">
+      <h4>${escapeHtml(currentReturnsSupplier.name)}</h4>
+      <div class="count">${new Date(l.created_at).toLocaleDateString('en-GB')} &middot; ${l.item_count} item${l.item_count===1?'':'s'}</div>
+    </div>
+  `).join('');
+}
+
+/* ---- List detail: items, print/PDF, stage actions ---- */
+async function openReturnsListDetail(returnId){
+  showView('view-returns-list-detail');
+  document.getElementById('returnsDetailTable').innerHTML = '';
+  document.getElementById('returnsItemsReturnedBtn').style.display = 'none';
+  document.getElementById('returnsCreditNoteBtn').style.display = 'none';
+  try{
+    const data = await apiGet('returns/lists/' + returnId + '/');
+    currentReturnsList = data.list;
+    currentReturnsItems = data.items || [];
+    if(!currentReturnsSupplier || currentReturnsSupplier.suppid !== currentReturnsList.suppid){
+      currentReturnsSupplier = { suppid: currentReturnsList.suppid, name: currentReturnsList.supplier_name };
+    }
+    document.getElementById('returnsDetailSupplierCrumb').textContent = currentReturnsList.supplier_name;
+    document.getElementById('returnsDetailSupplierName').textContent = currentReturnsList.supplier_name;
+    document.getElementById('returnsDetailMeta').textContent =
+      'Date list printed: ' + new Date().toLocaleDateString('en-GB') + ' — Batch started ' + new Date(currentReturnsList.created_at).toLocaleString();
+    document.getElementById('returnsDetailCount').textContent = currentReturnsItems.length + ' item' + (currentReturnsItems.length===1?'':'s');
+    document.getElementById('returnsItemsReturnedBtn').style.display = currentReturnsList.status === 'PENDING' ? 'inline-block' : 'none';
+    document.getElementById('returnsCreditNoteBtn').style.display = currentReturnsList.status === 'AWAITING_CREDIT' ? 'inline-block' : 'none';
+    renderReturnsDetailTable();
+  }catch(e){
+    toast('Could not load return list');
+    console.error(e);
+  }
+}
+function renderReturnsDetailTable(){
+  const table = document.getElementById('returnsDetailTable');
+  const editable = currentReturnsList.status === 'PENDING';
+  if(currentReturnsItems.length === 0){
+    table.innerHTML = '<caption class="empty-hint">No items yet.</caption>';
+    return;
+  }
+  const rows = currentReturnsItems.map(it => `
+    <tr>
+      <td>${escapeHtml(it.item_name)}</td>
+      <td class="qtycell">${it.cost_price === null || it.cost_price === undefined ? '—' : ('£' + Number(it.cost_price).toFixed(2))}</td>
+      <td class="qtycell">${it.quantity}</td>
+      <td class="retloc-cell${it.location ? '' : ' empty'}" ${editable ? `onclick="openReturnsLocationModal(${it.item_id})"` : ''}>${it.location ? escapeHtml(it.location) : (editable ? 'Tap to add' : '—')}</td>
+      ${editable ? `<td class="no-print"><a href="#" onclick="event.preventDefault(); removeReturnsItem(${it.item_id})" style="color:var(--danger);">✕</a></td>` : ''}
+    </tr>
+  `).join('');
+  table.innerHTML = `
+    <thead><tr><th>Item</th><th class="qtycell">Cost Price</th><th class="qtycell">Qty</th><th>Location</th>${editable ? '<th class="no-print"></th>' : ''}</tr></thead>
+    <tbody>${rows}</tbody>
+  `;
+}
+async function markReturnsItemsReturned(){
+  if(!currentReturnsList) return;
+  if(currentReturnsItems.length === 0){ toast('Add at least one item first'); return; }
+  if(!confirm('Mark this batch as returned? It moves to Awaiting Credit Note, and the next item scanned for this supplier starts a new list.')) return;
+  try{
+    await apiPost('returns/lists/' + currentReturnsList.return_id + '/items-returned/', {});
+    toast('Moved to Awaiting Credit Note');
+    backToReturnsSupplierDetail();
+  }catch(e){
+    toast('Could not update this list');
+    console.error(e);
+  }
+}
+async function markReturnsCreditNoteReceived(){
+  if(!currentReturnsList) return;
+  if(!confirm('Mark the credit note as received? This moves the batch to Returned Goods.')) return;
+  try{
+    await apiPost('returns/lists/' + currentReturnsList.return_id + '/credit-note-received/', {});
+    toast('Moved to Returned Goods');
+    backToReturnsSupplierDetail();
+  }catch(e){
+    toast('Could not update this list');
+    console.error(e);
+  }
+}
+async function removeReturnsItem(itemId){
+  if(!confirm('Remove this item from the return list?')) return;
+  try{
+    await apiDelete('returns/items/' + itemId + '/');
+    currentReturnsItems = currentReturnsItems.filter(i => i.item_id !== itemId);
+    document.getElementById('returnsDetailCount').textContent = currentReturnsItems.length + ' item' + (currentReturnsItems.length===1?'':'s');
+    renderReturnsDetailTable();
+  }catch(e){
+    toast('Could not remove item');
+    console.error(e);
+  }
+}
+
+/* ---- Location: typed or scanned — both just save into the same field ---- */
+function openReturnsLocationModal(itemId){
+  returnsEditingItemId = itemId;
+  const item = currentReturnsItems.find(i => i.item_id === itemId);
+  document.getElementById('returnsLocationItemName').textContent = item ? item.item_name : '';
+  document.getElementById('returnsLocationInput').value = (item && item.location) || '';
+  openModal('modalReturnsLocation');
+  setTimeout(() => document.getElementById('returnsLocationInput').focus(), 80);
+}
+function openReturnsLocationScanner(){
+  document.getElementById('returnsLocationBarcodeInput').value = '';
+  closeModal('modalReturnsLocation');
+  openModal('modalReturnsLocationScanner');
+  document.getElementById('returnsLocationBarcodeInput').focus();
+}
+function submitReturnsLocationBarcode(){
+  const code = document.getElementById('returnsLocationBarcodeInput').value.trim();
+  if(!code) return;
+  document.getElementById('returnsLocationInput').value = code;
+  closeModal('modalReturnsLocationScanner');
+  openModal('modalReturnsLocation');
+}
+async function saveReturnsLocation(){
+  const location = document.getElementById('returnsLocationInput').value.trim();
+  const item = currentReturnsItems.find(i => i.item_id === returnsEditingItemId);
+  if(!item) return;
+  try{
+    await apiPut('returns/items/' + returnsEditingItemId + '/', { quantity: item.quantity, cost_price: item.cost_price, location: location || null });
+    item.location = location || null;
+    closeModal('modalReturnsLocation');
+    renderReturnsDetailTable();
+  }catch(e){
+    toast('Could not save location');
+    console.error(e);
+  }
+}
+
+/* ---- PDF: Hallan Cash & Carry header, supplier name, date printed, items with cost price + location ---- */
+function downloadReturnsListPDF(){
+  if(!currentReturnsList) return;
+  try{
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text('Hallan Cash & Carry — Supplier Return', 14, 18);
+    doc.setFontSize(11);
+    doc.setTextColor(20);
+    doc.text('Supplier: ' + currentReturnsList.supplier_name, 14, 27);
+    doc.setFontSize(10);
+    doc.setTextColor(120);
+    doc.text('Date list printed: ' + new Date().toLocaleDateString('en-GB'), 14, 33);
+    const rows = currentReturnsItems.map(it => [
+      it.item_name,
+      it.cost_price === null || it.cost_price === undefined ? '—' : ('£' + Number(it.cost_price).toFixed(2)),
+      String(it.quantity),
+      it.location || ''
+    ]);
+    doc.autoTable({
+      startY: 39,
+      head: [['Item', 'Cost Price', 'Qty', 'Location']],
+      body: rows,
+      theme: 'grid',
+      headStyles: { fillColor: [30,34,42] },
+      styles: { fontSize: 9 },
+      margin: { left: 14, right: 14 }
+    });
+    doc.save('return-' + currentReturnsList.supplier_name.replace(/[^a-z0-9]+/gi,'-') + '-' + new Date().toISOString().slice(0,10) + '.pdf');
+  }catch(e){
+    toast('Could not generate PDF');
     console.error(e);
   }
 }
