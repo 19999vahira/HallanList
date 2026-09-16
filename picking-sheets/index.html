@@ -424,6 +424,8 @@
   .supplier-pick-row .spbadge{display:inline-block;font-size:10px;text-transform:uppercase;letter-spacing:.5px;background:var(--accent);color:#fff;padding:2px 7px;border-radius:20px;margin-left:8px;}
   .retloc-cell{cursor:pointer;color:var(--accent-dim);text-decoration:underline dotted;}
   .retloc-cell.empty{color:var(--text-dim);}
+  .retclose{position:absolute;top:8px;right:10px;font-size:15px;line-height:1;color:var(--text-dim);cursor:pointer;padding:4px 6px;border-radius:6px;}
+  .retclose:hover{color:var(--danger);background:rgba(0,0,0,.06);}
   .ibbarcode{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-dim);opacity:.75;margin-top:-2px;}
 
   /* ---- picking checklist (partial pick) ---- */
@@ -10420,7 +10422,10 @@ async function chooseReturnsSupplier(suppid, supplierName, costNet){
     toast('Added to ' + supplierName + '’s return list');
     openReturnsScannerModal();
   }catch(e){
-    toast('Could not add item to return list');
+    // Show the server's actual message — a silent "could not add" hides
+    // things like a missing table or a bad column, which you'd otherwise
+    // have to go digging in the Render logs to find.
+    toast('Could not add item: ' + (e && e.message ? e.message : 'unknown error'));
     console.error(e);
   }
 }
@@ -10550,13 +10555,30 @@ function renderReturnsSublist(){
     grid.innerHTML = '<div class="empty-hint">Nothing here yet.</div>';
     return;
   }
-  // "just the list name" per the batch — supplier name plus the date it moved into this stage
+  // "just the list name" per the batch — supplier name plus the date it moved into this stage.
+  // Returned Goods batches are finished, so they get an ✕ to close them off the screen.
+  const closable = currentReturnsSublistStatus === 'RETURNED';
   grid.innerHTML = lists.map(l => `
-    <div class="bincard" onclick="openReturnsListDetail(${l.return_id})">
+    <div class="bincard" style="position:relative;" onclick="openReturnsListDetail(${l.return_id})">
+      ${closable ? `<span class="retclose" title="Close this list" onclick="event.stopPropagation(); closeReturnsList(${l.return_id})">✕</span>` : ''}
       <h4>${escapeHtml(currentReturnsSupplier.name)}</h4>
       <div class="count">${new Date(l.created_at).toLocaleDateString('en-GB')} &middot; ${l.item_count} item${l.item_count===1?'':'s'}</div>
     </div>
   `).join('');
+}
+async function closeReturnsList(returnId){
+  if(!confirm('Close this returned list? It disappears from Returned Goods, but the record is kept.')) return;
+  try{
+    await apiPost('returns/lists/' + returnId + '/close/', {});
+    // Refetch so the supplier's counts and the grid agree with the server
+    const data = await apiGet('returns/lists/?suppid=' + currentReturnsSupplier.suppid);
+    currentReturnsSupplierLists = data.lists || [];
+    renderReturnsSublist();
+    toast('List closed');
+  }catch(e){
+    toast('Could not close list: ' + (e && e.message ? e.message : 'unknown error'));
+    console.error(e);
+  }
 }
 
 /* ---- List detail: items, print/PDF, stage actions ---- */
