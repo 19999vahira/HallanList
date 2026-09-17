@@ -166,7 +166,15 @@
     const res = await fetch(`${API_BASE}/api/staff/timesheet-entry`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ employeeId, date: dateStr, ...rec })
+      body: JSON.stringify({
+        employeeId: employeeId,
+        date: dateStr,
+        in: rec.in || null,
+        breakStart: rec.breakStart || null,
+        breakEnd: rec.breakEnd || null,
+        out: rec.out || null,
+        comment: rec.comment || null
+      })
     });
     const payload = await res.json();
     if (!res.ok || !payload.ok) throw new Error(payload.error || 'save failed');
