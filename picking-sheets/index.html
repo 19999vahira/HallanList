@@ -10614,7 +10614,7 @@ async function loadReturnsSupplierBrowse(){
       <div class="pickrow" style="cursor:pointer;" onclick="openReturnsSupplierDetail(${s.suppid}, ${JSON.stringify(s.supplier_name).replace(/"/g,'&quot;')})">
         <div class="pickinfo">
           <div class="pname">${escapeHtml(s.supplier_name)}</div>
-          <div class="pbarcode">${s.pending_lists > 0 ? s.pending_lists + ' pending' : 'None pending'} &middot; ${s.awaiting_lists} awaiting credit &middot; ${s.returned_lists} returned</div>
+          <div class="pbarcode">${s.pending_items > 0 ? s.pending_items + ' item' + (s.pending_items===1?'':'s') + ' pending' : 'None pending'} &middot; ${s.awaiting_lists} awaiting credit &middot; ${s.returned_lists} returned</div>
         </div>
       </div>
     `).join('');
