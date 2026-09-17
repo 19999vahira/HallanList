@@ -10780,7 +10780,6 @@ function renderReturnsDetailTable(){
   }
   const rows = currentReturnsItems.map(it => `
     <tr>
-      <td class="checkbox-col"><span class="printbox"></span></td>
       <td>${escapeHtml(it.item_name)}</td>
       <td class="qtycell">${it.cost_price === null || it.cost_price === undefined ? '—' : ('£' + Number(it.cost_price).toFixed(2))}</td>
       <td class="qtycell">${it.quantity}</td>
@@ -10791,18 +10790,19 @@ function renderReturnsDetailTable(){
           <a href="#" class="minibtn minibtn-bin" onclick="event.preventDefault(); moveReturnsItem(${it.item_id}, 'BIN')">🗑️ Bin</a>
           <a href="#" class="minibtn minibtn-remove" onclick="event.preventDefault(); removeReturnsItem(${it.item_id})">✕</a>
         </td>` : ''}
+      <td class="checkbox-col"><span class="printbox"></span></td>
     </tr>
   `).join('');
   const total = returnsItemsTotal(currentReturnsItems);
   table.innerHTML = `
-    <thead><tr><th class="checkbox-col"></th><th>Item</th><th class="qtycell">Cost Price</th><th class="qtycell">Qty</th><th>Reason</th><th class="loc-col">Location</th>${editable ? '<th class="no-print"></th>' : ''}</tr></thead>
+    <thead><tr><th>Item</th><th class="qtycell">Cost Price</th><th class="qtycell">Qty</th><th>Reason</th><th class="loc-col">Location</th>${editable ? '<th class="no-print"></th>' : ''}<th class="checkbox-col"></th></tr></thead>
     <tbody>${rows}</tbody>
     <tfoot><tr>
-      <td class="checkbox-col"></td>
       <td style="font-weight:700;">Total</td>
       <td class="qtycell" style="font-weight:700;">£${total.toFixed(2)}</td>
       <td></td><td></td><td class="loc-col"></td>
       ${editable ? '<td class="no-print"></td>' : ''}
+      <td class="checkbox-col"></td>
     </tr></tfoot>
   `;
 }
@@ -11008,24 +11008,26 @@ function downloadReturnsListPDF(includeLocation){
     doc.setFontSize(10);
     doc.setTextColor(120);
     doc.text('Date list printed: ' + new Date().toLocaleDateString('en-GB'), 14, 33);
-    // Blank checkbox column first, so a printed copy can be ticked off by hand.
-    const head = ['\u2713', 'Item', 'Cost Price', 'Qty', 'Reason'];
+    // Blank checkbox column last, so a printed copy can be ticked off by hand.
+    const head = ['Item', 'Cost Price', 'Qty', 'Reason'];
     if(includeLocation) head.push('Location');
+    const checkboxCol = head.length;
+    head.push('\u2713');
     const rows = currentReturnsItems.map(it => {
       const row = [
-        '',
         it.item_name,
         it.cost_price === null || it.cost_price === undefined ? '—' : ('£' + Number(it.cost_price).toFixed(2)),
         String(it.quantity),
         it.return_reason || ''
       ];
       if(includeLocation) row.push(it.location || '');
+      row.push('');
       return row;
     });
     const total = returnsItemsTotal(currentReturnsItems);
     const totalRow = new Array(head.length).fill('');
-    totalRow[1] = 'Total';
-    totalRow[2] = '£' + total.toFixed(2);
+    totalRow[0] = 'Total';
+    totalRow[1] = '£' + total.toFixed(2);
     rows.push(totalRow);
     doc.autoTable({
       startY: 39,
@@ -11034,17 +11036,17 @@ function downloadReturnsListPDF(includeLocation){
       theme: 'grid',
       headStyles: { fillColor: [30,34,42] },
       styles: { fontSize: 9 },
-      columnStyles: { 0: { cellWidth: 12 } },
+      columnStyles: { [checkboxCol]: { cellWidth: 12 } },
       margin: { left: 14, right: 14 },
       didParseCell: function(data){
         // Draw an empty tick-box in each body row of the checkbox column
         // instead of the raw text, so it renders as a box, not a character.
-        if(data.section === 'body' && data.column.index === 0){
+        if(data.section === 'body' && data.column.index === checkboxCol){
           data.cell.text = [];
         }
       },
       didDrawCell: function(data){
-        if(data.section === 'body' && data.column.index === 0 && data.row.index < currentReturnsItems.length){
+        if(data.section === 'body' && data.column.index === checkboxCol && data.row.index < currentReturnsItems.length){
           const size = 3.2;
           const x = data.cell.x + (data.cell.width - size) / 2;
           const y = data.cell.y + (data.cell.height - size) / 2;
