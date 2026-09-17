@@ -2169,6 +2169,14 @@
         <h4>📋 Lists</h4>
         <div class="count">Find a supplier's returns — pending, awaiting credit note, or returned</div>
       </div>
+      <div class="bincard" style="--tile-color:#7c3aed;" onclick="openReturnsDisposal('CHARITY')">
+        <h4>💜 Charity List</h4>
+        <div class="count">Items sent to charity instead of back to a supplier</div>
+      </div>
+      <div class="bincard" style="--tile-color:#57534e;" onclick="openReturnsDisposal('BIN')">
+        <h4>🗑️ Bin List</h4>
+        <div class="count">Items binned instead of sent back to a supplier</div>
+      </div>
     </div>
   </div>
 
@@ -2270,12 +2278,34 @@
       <span class="mono" id="returnsDetailCount" style="color:var(--text-dim);font-size:12px;"></span>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <button class="btn-ghost" onclick="window.print()">Print</button>
-        <button class="btn-ghost" onclick="downloadReturnsListPDF()">Download PDF</button>
+        <button class="btn-ghost" onclick="promptReturnsPdfDownload('list')">Download PDF</button>
         <button class="btn-amber" id="returnsItemsReturnedBtn" style="display:none;" onclick="markReturnsItemsReturned()">Items Returned</button>
         <button class="btn-amber" id="returnsCreditNoteBtn" style="display:none;" onclick="markReturnsCreditNoteReceived()">Credit Notes Received</button>
       </div>
     </div>
     <table class="finaltable" id="returnsDetailTable"></table>
+  </div>
+
+  <!-- RETURNS: DISPOSAL — Charity List / Bin List (shared view, one per destination) -->
+  <div id="view-returns-disposal" class="view">
+    <div class="crumbrow no-print">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openReturnsHub()">Returns</button><span class="sep">/</span>
+      <span class="current" id="returnsDisposalCrumb"></span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Hallan Cash &amp; Carry</div>
+      <h2 id="returnsDisposalTitle"></h2>
+      <p id="returnsDisposalMeta"></p>
+    </div>
+    <div class="actionbar no-print">
+      <span class="mono" id="returnsDisposalCount" style="color:var(--text-dim);font-size:12px;"></span>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn-ghost" onclick="window.print()">Print</button>
+        <button class="btn-ghost" onclick="promptReturnsPdfDownload(currentReturnsDisposalType)">Download PDF</button>
+      </div>
+    </div>
+    <table class="finaltable" id="returnsDisposalTable"></table>
   </div>
 
   <!-- INVOICES: NOTE DETAIL -->
@@ -2584,6 +2614,21 @@
     <div id="goodsInScanFeedback"></div>
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalGoodsInScanner')">Done scanning</button>
+    </div>
+  </div>
+</div>
+
+<!-- RETURNS: PDF DOWNLOAD — with or without the location column -->
+<div class="modal-backdrop" id="modalReturnsPdfChoice">
+  <div class="modal" style="width:360px;">
+    <h3>Download PDF</h3>
+    <p class="modal-sub">Include the location column?</p>
+    <div class="modal-close-row" style="justify-content:flex-end;gap:10px;">
+      <button class="btn-ghost" onclick="chooseReturnsPdfLocation(false)">Without location</button>
+      <button class="btn-amber" onclick="chooseReturnsPdfLocation(true)">With location</button>
+    </div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalReturnsPdfChoice')">Cancel</button>
     </div>
   </div>
 </div>
@@ -10694,6 +10739,13 @@ async function openReturnsListDetail(returnId){
     console.error(e);
   }
 }
+function returnsItemsTotal(items){
+  return (items || []).reduce((sum, it) => {
+    const cost = it.cost_price === null || it.cost_price === undefined ? 0 : Number(it.cost_price);
+    const qty = Number(it.quantity) || 0;
+    return sum + (cost * qty);
+  }, 0);
+}
 function renderReturnsDetailTable(){
   const table = document.getElementById('returnsDetailTable');
   const editable = currentReturnsList.status === 'PENDING';
@@ -10708,12 +10760,18 @@ function renderReturnsDetailTable(){
       <td class="qtycell">${it.quantity}</td>
       <td>${escapeHtml(it.return_reason || '—')}</td>
       <td class="retloc-cell${it.location ? '' : ' empty'}" ${editable ? `onclick="openReturnsLocationModal(${it.item_id})"` : ''}>${it.location ? escapeHtml(it.location) : (editable ? 'Tap to add' : '—')}</td>
-      ${editable ? `<td class="no-print"><a href="#" onclick="event.preventDefault(); removeReturnsItem(${it.item_id})" style="color:var(--danger);">✕</a></td>` : ''}
+      ${editable ? `<td class="no-print" style="white-space:nowrap;">
+          <a href="#" onclick="event.preventDefault(); moveReturnsItem(${it.item_id}, 'CHARITY')" style="color:#7c3aed;margin-right:10px;">Charity</a>
+          <a href="#" onclick="event.preventDefault(); moveReturnsItem(${it.item_id}, 'BIN')" style="color:#57534e;margin-right:10px;">Bin</a>
+          <a href="#" onclick="event.preventDefault(); removeReturnsItem(${it.item_id})" style="color:var(--danger);">✕</a>
+        </td>` : ''}
     </tr>
   `).join('');
+  const total = returnsItemsTotal(currentReturnsItems);
   table.innerHTML = `
     <thead><tr><th>Item</th><th class="qtycell">Cost Price</th><th class="qtycell">Qty</th><th>Reason</th><th>Location</th>${editable ? '<th class="no-print"></th>' : ''}</tr></thead>
     <tbody>${rows}</tbody>
+    <tfoot><tr><td colspan="4" style="text-align:right;font-weight:700;">Total</td><td class="qtycell" style="font-weight:700;">£${total.toFixed(2)}</td>${editable ? '<td class="no-print"></td>' : ''}</tr></tfoot>
   `;
 }
 async function markReturnsItemsReturned(){
@@ -10750,6 +10808,23 @@ async function removeReturnsItem(itemId){
     renderReturnsDetailTable();
   }catch(e){
     toast('Could not remove item');
+    console.error(e);
+  }
+}
+// ---- Sends an item to the Charity List or Bin List instead of back to the
+//      supplier. It disappears from this pending list immediately — the
+//      server excludes anything moved once DESTINATION is set. ----
+async function moveReturnsItem(itemId, destination){
+  const label = destination === 'CHARITY' ? 'charity' : 'the bin';
+  if(!confirm('Move this item to ' + label + '? It will leave this return list.')) return;
+  try{
+    await apiPost('returns/items/' + itemId + '/move/', { destination });
+    currentReturnsItems = currentReturnsItems.filter(i => i.item_id !== itemId);
+    document.getElementById('returnsDetailCount').textContent = currentReturnsItems.length + ' item' + (currentReturnsItems.length===1?'':'s');
+    renderReturnsDetailTable();
+    toast('Moved to ' + (destination === 'CHARITY' ? 'Charity List' : 'Bin List'));
+  }catch(e){
+    toast('Could not move item: ' + (e && e.message ? e.message : 'unknown error'));
     console.error(e);
   }
 }
@@ -10791,8 +10866,80 @@ async function saveReturnsLocation(){
   }
 }
 
-/* ---- PDF: Hallan Cash & Carry header, supplier name, date printed, items with cost price + location ---- */
-function downloadReturnsListPDF(){
+/* ---- Charity List / Bin List — flat, cross-supplier, items land here via
+   moveReturnsItem() above and stay until someone deals with them. ---- */
+let currentReturnsDisposalType = null; // 'CHARITY' | 'BIN'
+let currentReturnsDisposalItems = [];
+async function openReturnsDisposal(type){
+  currentReturnsDisposalType = type;
+  const label = type === 'CHARITY' ? 'Charity List' : 'Bin List';
+  document.getElementById('returnsDisposalCrumb').textContent = label;
+  document.getElementById('returnsDisposalTitle').textContent = label;
+  document.getElementById('returnsDisposalMeta').textContent = 'Date list printed: ' + new Date().toLocaleDateString('en-GB');
+  document.getElementById('returnsDisposalTable').innerHTML = '';
+  document.getElementById('returnsDisposalCount').textContent = 'Loading…';
+  showView('view-returns-disposal');
+  try{
+    const data = await apiGet('returns/bin-charity/' + type + '/');
+    currentReturnsDisposalItems = data.items || [];
+    document.getElementById('returnsDisposalCount').textContent = currentReturnsDisposalItems.length + ' item' + (currentReturnsDisposalItems.length===1?'':'s');
+    renderReturnsDisposalTable();
+  }catch(e){
+    toast('Could not load ' + label);
+    console.error(e);
+  }
+}
+function renderReturnsDisposalTable(){
+  const table = document.getElementById('returnsDisposalTable');
+  if(currentReturnsDisposalItems.length === 0){
+    table.innerHTML = '<caption class="empty-hint">Nothing here yet.</caption>';
+    return;
+  }
+  const rows = currentReturnsDisposalItems.map(it => `
+    <tr>
+      <td>${escapeHtml(it.item_name)}</td>
+      <td>${escapeHtml(it.supplier_name)}</td>
+      <td class="qtycell">${it.cost_price === null || it.cost_price === undefined ? '—' : ('£' + Number(it.cost_price).toFixed(2))}</td>
+      <td class="qtycell">${it.quantity}</td>
+      <td>${escapeHtml(it.location || '—')}</td>
+      <td class="no-print"><a href="#" onclick="event.preventDefault(); unmoveReturnsDisposalItem(${it.item_id})" style="color:var(--text-dim);">Undo</a></td>
+    </tr>
+  `).join('');
+  const total = returnsItemsTotal(currentReturnsDisposalItems);
+  table.innerHTML = `
+    <thead><tr><th>Item</th><th>Supplier</th><th class="qtycell">Cost Price</th><th class="qtycell">Qty</th><th>Location</th><th class="no-print"></th></tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr><td colspan="3" style="text-align:right;font-weight:700;">Total</td><td class="qtycell" style="font-weight:700;">£${total.toFixed(2)}</td><td></td><td class="no-print"></td></tr></tfoot>
+  `;
+}
+async function unmoveReturnsDisposalItem(itemId){
+  if(!confirm('Move this item back out of this list? It returns to its original pending return.')) return;
+  try{
+    await apiPost('returns/items/' + itemId + '/unmove/', {});
+    currentReturnsDisposalItems = currentReturnsDisposalItems.filter(i => i.item_id !== itemId);
+    document.getElementById('returnsDisposalCount').textContent = currentReturnsDisposalItems.length + ' item' + (currentReturnsDisposalItems.length===1?'':'s');
+    renderReturnsDisposalTable();
+  }catch(e){
+    toast('Could not undo this move');
+    console.error(e);
+  }
+}
+
+/* ---- PDF download — with or without the location column, chosen via a
+   small prompt so the printed copy can be trimmed for other people to see
+   without giving away exactly where stock lives in the shop. ---- */
+let returnsPdfContext = null; // 'list' | 'CHARITY' | 'BIN'
+function promptReturnsPdfDownload(context){
+  returnsPdfContext = context;
+  openModal('modalReturnsPdfChoice');
+}
+function chooseReturnsPdfLocation(includeLocation){
+  closeModal('modalReturnsPdfChoice');
+  if(returnsPdfContext === 'list') downloadReturnsListPDF(includeLocation);
+  else downloadReturnsDisposalPDF(returnsPdfContext, includeLocation);
+}
+/* ---- PDF: Hallan Cash & Carry header, supplier name, date printed, items with cost price + total ---- */
+function downloadReturnsListPDF(includeLocation){
   if(!currentReturnsList) return;
   try{
     const { jsPDF } = window.jspdf;
@@ -10805,16 +10952,26 @@ function downloadReturnsListPDF(){
     doc.setFontSize(10);
     doc.setTextColor(120);
     doc.text('Date list printed: ' + new Date().toLocaleDateString('en-GB'), 14, 33);
-    const rows = currentReturnsItems.map(it => [
-      it.item_name,
-      it.cost_price === null || it.cost_price === undefined ? '—' : ('£' + Number(it.cost_price).toFixed(2)),
-      String(it.quantity),
-      it.return_reason || '',
-      it.location || ''
-    ]);
+    const head = ['Item', 'Cost Price', 'Qty', 'Reason'];
+    if(includeLocation) head.push('Location');
+    const rows = currentReturnsItems.map(it => {
+      const row = [
+        it.item_name,
+        it.cost_price === null || it.cost_price === undefined ? '—' : ('£' + Number(it.cost_price).toFixed(2)),
+        String(it.quantity),
+        it.return_reason || ''
+      ];
+      if(includeLocation) row.push(it.location || '');
+      return row;
+    });
+    const total = returnsItemsTotal(currentReturnsItems);
+    const totalRow = new Array(head.length).fill('');
+    totalRow[0] = 'Total';
+    totalRow[1] = '£' + total.toFixed(2);
+    rows.push(totalRow);
     doc.autoTable({
       startY: 39,
-      head: [['Item', 'Cost Price', 'Qty', 'Reason', 'Location']],
+      head: [head],
       body: rows,
       theme: 'grid',
       headStyles: { fillColor: [30,34,42] },
@@ -10822,6 +10979,49 @@ function downloadReturnsListPDF(){
       margin: { left: 14, right: 14 }
     });
     doc.save('return-' + currentReturnsList.supplier_name.replace(/[^a-z0-9]+/gi,'-') + '-' + new Date().toISOString().slice(0,10) + '.pdf');
+  }catch(e){
+    toast('Could not generate PDF');
+    console.error(e);
+  }
+}
+function downloadReturnsDisposalPDF(type, includeLocation){
+  if(!currentReturnsDisposalItems) return;
+  try{
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const label = type === 'CHARITY' ? 'Charity List' : 'Bin List';
+    doc.setFontSize(16);
+    doc.text('Hallan Cash & Carry — ' + label, 14, 18);
+    doc.setFontSize(10);
+    doc.setTextColor(120);
+    doc.text('Date list printed: ' + new Date().toLocaleDateString('en-GB'), 14, 27);
+    const head = ['Item', 'Supplier', 'Cost Price', 'Qty'];
+    if(includeLocation) head.push('Location');
+    const rows = currentReturnsDisposalItems.map(it => {
+      const row = [
+        it.item_name,
+        it.supplier_name,
+        it.cost_price === null || it.cost_price === undefined ? '—' : ('£' + Number(it.cost_price).toFixed(2)),
+        String(it.quantity)
+      ];
+      if(includeLocation) row.push(it.location || '');
+      return row;
+    });
+    const total = returnsItemsTotal(currentReturnsDisposalItems);
+    const totalRow = new Array(head.length).fill('');
+    totalRow[0] = 'Total';
+    totalRow[2] = '£' + total.toFixed(2);
+    rows.push(totalRow);
+    doc.autoTable({
+      startY: 33,
+      head: [head],
+      body: rows,
+      theme: 'grid',
+      headStyles: { fillColor: [30,34,42] },
+      styles: { fontSize: 9 },
+      margin: { left: 14, right: 14 }
+    });
+    doc.save((type === 'CHARITY' ? 'charity-list-' : 'bin-list-') + new Date().toISOString().slice(0,10) + '.pdf');
   }catch(e){
     toast('Could not generate PDF');
     console.error(e);
