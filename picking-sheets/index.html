@@ -432,6 +432,16 @@
   .reasonbtn.selected{background:var(--accent);color:#fff;border-color:var(--accent);}
   .qtystepper{display:flex;align-items:center;gap:8px;}
   .qtystepper button{width:44px;font-size:18px;padding:8px 0;}
+  .minibtn{display:inline-block;padding:4px 11px;border-radius:14px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid transparent;margin-right:6px;text-decoration:none;letter-spacing:.2px;}
+  .minibtn-charity{background:rgba(124,58,237,.12);color:#7c3aed;}
+  .minibtn-charity:hover{background:rgba(124,58,237,.22);}
+  .minibtn-bin{background:rgba(87,83,78,.12);color:#57534e;}
+  .minibtn-bin:hover{background:rgba(87,83,78,.22);}
+  .minibtn-remove{background:rgba(220,38,38,.1);color:var(--danger);padding:4px 8px;}
+  .minibtn-remove:hover{background:rgba(220,38,38,.2);}
+  .minibtn-undo{background:rgba(0,0,0,.06);color:var(--text-dim);}
+  .minibtn-undo:hover{background:rgba(0,0,0,.12);}
+  table.hide-location .loc-col{display:none;}
   .ibbarcode{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-dim);opacity:.75;margin-top:-2px;}
 
   /* ---- picking checklist (partial pick) ---- */
@@ -2170,7 +2180,7 @@
         <div class="count">Find a supplier's returns — pending, awaiting credit note, or returned</div>
       </div>
       <div class="bincard" style="--tile-color:#7c3aed;" onclick="openReturnsDisposal('CHARITY')">
-        <h4>💜 Charity List</h4>
+        <h4>🎁 Charity List</h4>
         <div class="count">Items sent to charity instead of back to a supplier</div>
       </div>
       <div class="bincard" style="--tile-color:#57534e;" onclick="openReturnsDisposal('BIN')">
@@ -2277,8 +2287,8 @@
     <div class="actionbar no-print">
       <span class="mono" id="returnsDetailCount" style="color:var(--text-dim);font-size:12px;"></span>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <button class="btn-ghost" onclick="window.print()">Print</button>
-        <button class="btn-ghost" onclick="promptReturnsPdfDownload('list')">Download PDF</button>
+        <button class="btn-ghost" onclick="promptReturnsAction('list','print')">Print</button>
+        <button class="btn-ghost" onclick="promptReturnsAction('list','pdf')">Download PDF</button>
         <button class="btn-amber" id="returnsItemsReturnedBtn" style="display:none;" onclick="markReturnsItemsReturned()">Items Returned</button>
         <button class="btn-amber" id="returnsCreditNoteBtn" style="display:none;" onclick="markReturnsCreditNoteReceived()">Credit Notes Received</button>
       </div>
@@ -2301,8 +2311,8 @@
     <div class="actionbar no-print">
       <span class="mono" id="returnsDisposalCount" style="color:var(--text-dim);font-size:12px;"></span>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <button class="btn-ghost" onclick="window.print()">Print</button>
-        <button class="btn-ghost" onclick="promptReturnsPdfDownload(currentReturnsDisposalType)">Download PDF</button>
+        <button class="btn-ghost" onclick="promptReturnsAction(currentReturnsDisposalType,'print')">Print</button>
+        <button class="btn-ghost" onclick="promptReturnsAction(currentReturnsDisposalType,'pdf')">Download PDF</button>
       </div>
     </div>
     <table class="finaltable" id="returnsDisposalTable"></table>
@@ -2621,11 +2631,11 @@
 <!-- RETURNS: PDF DOWNLOAD — with or without the location column -->
 <div class="modal-backdrop" id="modalReturnsPdfChoice">
   <div class="modal" style="width:360px;">
-    <h3>Download PDF</h3>
+    <h3 id="returnsActionChoiceTitle">Download PDF</h3>
     <p class="modal-sub">Include the location column?</p>
     <div class="modal-close-row" style="justify-content:flex-end;gap:10px;">
-      <button class="btn-ghost" onclick="chooseReturnsPdfLocation(false)">Without location</button>
-      <button class="btn-amber" onclick="chooseReturnsPdfLocation(true)">With location</button>
+      <button class="btn-ghost" onclick="chooseReturnsLocationOption(false)">Without location</button>
+      <button class="btn-amber" onclick="chooseReturnsLocationOption(true)">With location</button>
     </div>
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalReturnsPdfChoice')">Cancel</button>
@@ -10657,7 +10667,13 @@ async function openReturnsSupplierDetail(suppid, supplierName){
     document.getElementById('returnsReturnedCount').textContent = returned.length + ' list' + (returned.length===1?'':'s');
     returnsCurrentPendingList = pending[0] || null;
   }catch(e){
-    toast('Could not load returns for this supplier');
+    // Show the real server error rather than a generic message — three
+    // "Loading…" blocks with no detail underneath was exactly what made
+    // the last version of this bug hard to pin down.
+    toast('Could not load returns: ' + (e && e.message ? e.message : 'unknown error'));
+    document.getElementById('returnsPendingCount').textContent = '—';
+    document.getElementById('returnsAwaitingCount').textContent = '—';
+    document.getElementById('returnsReturnedCount').textContent = '—';
     console.error(e);
   }
 }
@@ -10735,7 +10751,7 @@ async function openReturnsListDetail(returnId){
     document.getElementById('returnsCreditNoteBtn').style.display = currentReturnsList.status === 'AWAITING_CREDIT' ? 'inline-block' : 'none';
     renderReturnsDetailTable();
   }catch(e){
-    toast('Could not load return list');
+    toast('Could not load return list: ' + (e && e.message ? e.message : 'unknown error'));
     console.error(e);
   }
 }
@@ -10759,19 +10775,24 @@ function renderReturnsDetailTable(){
       <td class="qtycell">${it.cost_price === null || it.cost_price === undefined ? '—' : ('£' + Number(it.cost_price).toFixed(2))}</td>
       <td class="qtycell">${it.quantity}</td>
       <td>${escapeHtml(it.return_reason || '—')}</td>
-      <td class="retloc-cell${it.location ? '' : ' empty'}" ${editable ? `onclick="openReturnsLocationModal(${it.item_id})"` : ''}>${it.location ? escapeHtml(it.location) : (editable ? 'Tap to add' : '—')}</td>
+      <td class="retloc-cell loc-col${it.location ? '' : ' empty'}" ${editable ? `onclick="openReturnsLocationModal(${it.item_id})"` : ''}>${it.location ? escapeHtml(it.location) : (editable ? 'Tap to add' : '—')}</td>
       ${editable ? `<td class="no-print" style="white-space:nowrap;">
-          <a href="#" onclick="event.preventDefault(); moveReturnsItem(${it.item_id}, 'CHARITY')" style="color:#7c3aed;margin-right:10px;">Charity</a>
-          <a href="#" onclick="event.preventDefault(); moveReturnsItem(${it.item_id}, 'BIN')" style="color:#57534e;margin-right:10px;">Bin</a>
-          <a href="#" onclick="event.preventDefault(); removeReturnsItem(${it.item_id})" style="color:var(--danger);">✕</a>
+          <a href="#" class="minibtn minibtn-charity" onclick="event.preventDefault(); moveReturnsItem(${it.item_id}, 'CHARITY')">🎁 Charity</a>
+          <a href="#" class="minibtn minibtn-bin" onclick="event.preventDefault(); moveReturnsItem(${it.item_id}, 'BIN')">🗑️ Bin</a>
+          <a href="#" class="minibtn minibtn-remove" onclick="event.preventDefault(); removeReturnsItem(${it.item_id})">✕</a>
         </td>` : ''}
     </tr>
   `).join('');
   const total = returnsItemsTotal(currentReturnsItems);
   table.innerHTML = `
-    <thead><tr><th>Item</th><th class="qtycell">Cost Price</th><th class="qtycell">Qty</th><th>Reason</th><th>Location</th>${editable ? '<th class="no-print"></th>' : ''}</tr></thead>
+    <thead><tr><th>Item</th><th class="qtycell">Cost Price</th><th class="qtycell">Qty</th><th>Reason</th><th class="loc-col">Location</th>${editable ? '<th class="no-print"></th>' : ''}</tr></thead>
     <tbody>${rows}</tbody>
-    <tfoot><tr><td colspan="4" style="text-align:right;font-weight:700;">Total</td><td class="qtycell" style="font-weight:700;">£${total.toFixed(2)}</td>${editable ? '<td class="no-print"></td>' : ''}</tr></tfoot>
+    <tfoot><tr>
+      <td style="font-weight:700;">Total</td>
+      <td class="qtycell" style="font-weight:700;">£${total.toFixed(2)}</td>
+      <td></td><td></td><td class="loc-col"></td>
+      ${editable ? '<td class="no-print"></td>' : ''}
+    </tr></tfoot>
   `;
 }
 async function markReturnsItemsReturned(){
@@ -10885,7 +10906,7 @@ async function openReturnsDisposal(type){
     document.getElementById('returnsDisposalCount').textContent = currentReturnsDisposalItems.length + ' item' + (currentReturnsDisposalItems.length===1?'':'s');
     renderReturnsDisposalTable();
   }catch(e){
-    toast('Could not load ' + label);
+    toast('Could not load ' + label + ': ' + (e && e.message ? e.message : 'unknown error'));
     console.error(e);
   }
 }
@@ -10901,15 +10922,20 @@ function renderReturnsDisposalTable(){
       <td>${escapeHtml(it.supplier_name)}</td>
       <td class="qtycell">${it.cost_price === null || it.cost_price === undefined ? '—' : ('£' + Number(it.cost_price).toFixed(2))}</td>
       <td class="qtycell">${it.quantity}</td>
-      <td>${escapeHtml(it.location || '—')}</td>
-      <td class="no-print"><a href="#" onclick="event.preventDefault(); unmoveReturnsDisposalItem(${it.item_id})" style="color:var(--text-dim);">Undo</a></td>
+      <td class="loc-col">${escapeHtml(it.location || '—')}</td>
+      <td class="no-print"><a href="#" class="minibtn minibtn-undo" onclick="event.preventDefault(); unmoveReturnsDisposalItem(${it.item_id})">Undo</a></td>
     </tr>
   `).join('');
   const total = returnsItemsTotal(currentReturnsDisposalItems);
   table.innerHTML = `
-    <thead><tr><th>Item</th><th>Supplier</th><th class="qtycell">Cost Price</th><th class="qtycell">Qty</th><th>Location</th><th class="no-print"></th></tr></thead>
+    <thead><tr><th>Item</th><th>Supplier</th><th class="qtycell">Cost Price</th><th class="qtycell">Qty</th><th class="loc-col">Location</th><th class="no-print"></th></tr></thead>
     <tbody>${rows}</tbody>
-    <tfoot><tr><td colspan="3" style="text-align:right;font-weight:700;">Total</td><td class="qtycell" style="font-weight:700;">£${total.toFixed(2)}</td><td></td><td class="no-print"></td></tr></tfoot>
+    <tfoot><tr>
+      <td style="font-weight:700;">Total</td>
+      <td></td>
+      <td class="qtycell" style="font-weight:700;">£${total.toFixed(2)}</td>
+      <td></td><td class="loc-col"></td><td class="no-print"></td>
+    </tr></tfoot>
   `;
 }
 async function unmoveReturnsDisposalItem(itemId){
@@ -10925,18 +10951,37 @@ async function unmoveReturnsDisposalItem(itemId){
   }
 }
 
-/* ---- PDF download — with or without the location column, chosen via a
-   small prompt so the printed copy can be trimmed for other people to see
-   without giving away exactly where stock lives in the shop. ---- */
-let returnsPdfContext = null; // 'list' | 'CHARITY' | 'BIN'
-function promptReturnsPdfDownload(context){
-  returnsPdfContext = context;
+/* ---- Print / PDF — both ask "with or without location" first via the
+   same small modal, so a copy can be handed to someone outside the shop
+   without giving away exactly where stock lives on the shelves. Print
+   toggles the Location column off in the actual on-screen table for the
+   duration of the print, then restores it; PDF builds its own document
+   and never touches the on-screen table. ---- */
+let returnsActionTarget = null; // 'list' | 'CHARITY' | 'BIN' — which list this action is for
+let returnsActionType = null;   // 'print' | 'pdf'
+function promptReturnsAction(target, type){
+  returnsActionTarget = target;
+  returnsActionType = type;
+  document.getElementById('returnsActionChoiceTitle').textContent = type === 'print' ? 'Print' : 'Download PDF';
   openModal('modalReturnsPdfChoice');
 }
-function chooseReturnsPdfLocation(includeLocation){
+function chooseReturnsLocationOption(includeLocation){
   closeModal('modalReturnsPdfChoice');
-  if(returnsPdfContext === 'list') downloadReturnsListPDF(includeLocation);
-  else downloadReturnsDisposalPDF(returnsPdfContext, includeLocation);
+  if(returnsActionType === 'print'){
+    const tableId = returnsActionTarget === 'list' ? 'returnsDetailTable' : 'returnsDisposalTable';
+    const table = document.getElementById(tableId);
+    if(!table) return;
+    table.classList.toggle('hide-location', !includeLocation);
+    window.print();
+    // window.print() blocks until the print dialog is dismissed on desktop
+    // browsers, so by the time this line runs it's safe to put the column
+    // back for normal on-screen viewing.
+    table.classList.remove('hide-location');
+  } else if(returnsActionTarget === 'list'){
+    downloadReturnsListPDF(includeLocation);
+  } else {
+    downloadReturnsDisposalPDF(returnsActionTarget, includeLocation);
+  }
 }
 /* ---- PDF: Hallan Cash & Carry header, supplier name, date printed, items with cost price + total ---- */
 function downloadReturnsListPDF(includeLocation){
