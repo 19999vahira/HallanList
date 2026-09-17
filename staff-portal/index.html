@@ -93,6 +93,13 @@
   .btn-ghost-full:hover{border-color:var(--gold);}
   .logout{color:var(--slate);font-size:13px;background:none;border:none;cursor:pointer;padding:0;margin-top:18px;font-family:'Inter',sans-serif;}
   .logout:hover{color:var(--ink);}
+  .linkrow{text-align:center;margin-top:16px;}
+  .linkbtn{
+    color:var(--blue-accent);font-size:13px;background:none;border:none;cursor:pointer;
+    padding:0;font-family:'Inter',sans-serif;text-decoration:underline;
+  }
+  .linkbtn:hover{color:var(--navy-deep);}
+  .backrow{text-align:center;margin-top:14px;}
 
   .reqrow{
     display:flex;justify-content:space-between;align-items:center;gap:12px;
@@ -109,6 +116,7 @@
   .badge.approved{background:rgba(22,163,74,.12);color:#0e7a3b;}
   .badge.declined{background:rgba(220,38,38,.1);color:var(--danger);}
   .empty-hint{color:var(--slate);font-size:13px;padding:8px 0;}
+  .otp-input{letter-spacing:6px;font-size:20px;text-align:center;font-family:'JetBrains Mono',monospace;}
 </style>
 </head>
 <body>
@@ -143,6 +151,47 @@
         <option value="hr">HR</option>
       </select>
       <button class="btn-primary full" id="loginBtn" onclick="submitLogin()">Sign In</button>
+      <div class="linkrow"><button class="linkbtn" onclick="openForgotPassword()">Forgot password?</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- OTP VERIFY -->
+<div id="view-otp" class="view">
+  <div class="wrap">
+    <div class="card">
+      <div class="eyebrow">Verify</div>
+      <h2>Enter your code</h2>
+      <p class="sub" id="otpSub">We've emailed a 6-digit code to your registered email address. Enter it below to continue.</p>
+      <div class="errbox" id="otpErr"></div>
+      <div class="okbox" id="otpOk"></div>
+      <label for="otpCode">6-digit code</label>
+      <input type="text" id="otpCode" class="otp-input" inputmode="numeric" maxlength="6" autocomplete="one-time-code" onkeydown="if(event.key==='Enter')submitOtp()">
+      <button class="btn-primary full" id="otpBtn" onclick="submitOtp()">Verify &amp; Sign In</button>
+      <div class="linkrow"><button class="linkbtn" id="resendBtn" onclick="resendCode()">Resend code</button></div>
+      <div class="backrow"><button class="logout" onclick="backToLogin()">← Back to Sign In</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- FORGOT PASSWORD -->
+<div id="view-forgot" class="view">
+  <div class="wrap">
+    <div class="card">
+      <div class="eyebrow">Reset Password</div>
+      <h2>Forgot Password</h2>
+      <p class="sub">Confirm the details HR has on file for you, then set a new password. We'll email you a code to confirm it's really you before it takes effect.</p>
+      <div class="errbox" id="forgotErr"></div>
+      <label for="forgotId">Staff ID</label>
+      <input type="text" id="forgotId" autocomplete="username">
+      <label for="forgotDept">Department</label>
+      <input type="text" id="forgotDept" placeholder="Exactly as HR has it on file">
+      <label for="forgotPassword">New password</label>
+      <input type="password" id="forgotPassword" autocomplete="new-password">
+      <label for="forgotPasswordConfirm">Confirm new password</label>
+      <input type="password" id="forgotPasswordConfirm" autocomplete="new-password" onkeydown="if(event.key==='Enter')submitForgotPassword()">
+      <button class="btn-primary full" id="forgotBtn" onclick="submitForgotPassword()">Send Reset Code</button>
+      <div class="backrow"><button class="logout" onclick="backToLogin()">← Back to Sign In</button></div>
     </div>
   </div>
 </div>
@@ -196,8 +245,19 @@
 
 <script>
 const API_BASE = "https://hallan-picking-backend.onrender.com/api/";
-let authToken = sessionStorage.getItem('hallanStaffToken') || null;
+
+// Persistent login: localStorage (not sessionStorage) so the session
+// survives closing the browser entirely, not just this tab. The only thing
+// that clears it is an explicit Sign Out (see logout()) or the server
+// itself rejecting the token (e.g. revoked) — never just time passing or
+// the browser being closed. Backend TOKEN_TTL was also extended to match.
+const TOKEN_KEY = 'hallanStaffToken';
+let authToken = localStorage.getItem(TOKEN_KEY) || null;
 let currentEmp = null;
+
+// Set while an OTP is in flight (login or forgot-password) so the verify
+// screen knows which employee it's confirming a code for.
+let pendingEmployeeId = null;
 
 function showView(id){
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -212,10 +272,10 @@ function hideLoginError(){
   document.getElementById('loginErr').style.display = 'none';
 }
 
+// ---- Step 1: Staff ID + password -> triggers an emailed code ----
 async function submitLogin(){
   const employeeId = document.getElementById('staffId').value.trim();
   const password = document.getElementById('staffPassword').value;
-  const role = document.getElementById('staffRole').value;
   hideLoginError();
 
   if(!employeeId || !password){
@@ -231,25 +291,195 @@ async function submitLogin(){
     const res = await fetch(API_BASE + 'staff/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ employeeId, password, role })
+      body: JSON.stringify({ employeeId, password })
     });
     const data = await res.json();
     if(!res.ok || !data.ok){
       showLoginError(data.error || 'Could not sign in — check your details and try again.');
       return;
     }
-    authToken = data.token;
-    sessionStorage.setItem('hallanStaffToken', authToken);
-    currentEmp = data.emp;
-    renderHolidayPortal(currentEmp);
-    showView('view-holiday');
-    loadMyRequests();
+    // Step 1 only ever returns { ok, requiresOtp, employeeId } — never a
+    // token — so hand off to the code-entry screen rather than trying to
+    // render the portal from this response.
+    pendingEmployeeId = data.employeeId || employeeId;
+    openOtpScreen('We\'ve emailed a 6-digit sign-in code to your registered email address.');
   }catch(e){
     showLoginError('Could not reach the server — check your connection and try again.');
     console.error(e);
   }finally{
     btn.disabled = false;
     btn.textContent = 'Sign In';
+  }
+}
+
+// ---- OTP screen ----
+function openOtpScreen(subtitle){
+  document.getElementById('otpSub').textContent = subtitle;
+  document.getElementById('otpCode').value = '';
+  document.getElementById('otpErr').style.display = 'none';
+  document.getElementById('otpOk').style.display = 'none';
+  showView('view-otp');
+  document.getElementById('otpCode').focus();
+}
+
+async function submitOtp(){
+  const code = document.getElementById('otpCode').value.trim();
+  const errBox = document.getElementById('otpErr');
+  const okBox = document.getElementById('otpOk');
+  errBox.style.display = 'none';
+  okBox.style.display = 'none';
+
+  if(!pendingEmployeeId){
+    errBox.textContent = 'Session lost — please sign in again.';
+    errBox.style.display = 'block';
+    return;
+  }
+  if(!code){
+    errBox.textContent = 'Enter the code from your email.';
+    errBox.style.display = 'block';
+    return;
+  }
+
+  const btn = document.getElementById('otpBtn');
+  btn.disabled = true;
+  btn.textContent = 'Verifying…';
+
+  try{
+    const res = await fetch(API_BASE + 'staff/login/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employeeId: pendingEmployeeId, code })
+    });
+    const data = await res.json();
+    if(!res.ok || !data.ok){
+      errBox.textContent = data.error || 'Could not verify that code — check it and try again.';
+      errBox.style.display = 'block';
+      return;
+    }
+    // This response has the real shape: { ok, token, emp: { name, department,
+    // holidayAllocation, ... }, role, isAdmin, isManager }
+    authToken = data.token;
+    localStorage.setItem(TOKEN_KEY, authToken);
+    currentEmp = data.emp;
+    pendingEmployeeId = null;
+    renderHolidayPortal(currentEmp);
+    showView('view-holiday');
+    loadMyRequests();
+  }catch(e){
+    errBox.textContent = 'Could not reach the server — check your connection and try again.';
+    errBox.style.display = 'block';
+    console.error(e);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = 'Verify & Sign In';
+  }
+}
+
+async function resendCode(){
+  if(!pendingEmployeeId) return;
+  const errBox = document.getElementById('otpErr');
+  const okBox = document.getElementById('otpOk');
+  errBox.style.display = 'none';
+  okBox.style.display = 'none';
+
+  const btn = document.getElementById('resendBtn');
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = 'Sending…';
+
+  try{
+    const res = await fetch(API_BASE + 'staff/login/resend-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employeeId: pendingEmployeeId })
+    });
+    const data = await res.json();
+    if(!res.ok || !data.ok){
+      errBox.textContent = data.error || 'Could not resend the code.';
+      errBox.style.display = 'block';
+      return;
+    }
+    okBox.textContent = 'A new code is on its way to your email.';
+    okBox.style.display = 'block';
+  }catch(e){
+    errBox.textContent = 'Could not reach the server — check your connection and try again.';
+    errBox.style.display = 'block';
+    console.error(e);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
+function backToLogin(){
+  pendingEmployeeId = null;
+  hideLoginError();
+  document.getElementById('forgotErr').style.display = 'none';
+  showView('view-login');
+}
+
+// ---- Forgot password ----
+function openForgotPassword(){
+  document.getElementById('forgotId').value = document.getElementById('staffId').value.trim();
+  document.getElementById('forgotDept').value = '';
+  document.getElementById('forgotPassword').value = '';
+  document.getElementById('forgotPasswordConfirm').value = '';
+  document.getElementById('forgotErr').style.display = 'none';
+  showView('view-forgot');
+}
+
+async function submitForgotPassword(){
+  const employeeId = document.getElementById('forgotId').value.trim();
+  const department = document.getElementById('forgotDept').value.trim();
+  const password = document.getElementById('forgotPassword').value;
+  const confirmPassword = document.getElementById('forgotPasswordConfirm').value;
+  const errBox = document.getElementById('forgotErr');
+  errBox.style.display = 'none';
+
+  if(!employeeId || !department || !password || !confirmPassword){
+    errBox.textContent = 'Fill in your Staff ID, department, and new password.';
+    errBox.style.display = 'block';
+    return;
+  }
+  if(password.length < 6){
+    errBox.textContent = 'New password must be at least 6 characters.';
+    errBox.style.display = 'block';
+    return;
+  }
+  if(password !== confirmPassword){
+    errBox.textContent = 'Passwords do not match.';
+    errBox.style.display = 'block';
+    return;
+  }
+
+  const btn = document.getElementById('forgotBtn');
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+
+  try{
+    const res = await fetch(API_BASE + 'staff/forgot-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employeeId, department, password })
+    });
+    const data = await res.json();
+    if(!res.ok || !data.ok){
+      errBox.textContent = data.error || 'Could not reset your password — check your details and try again.';
+      errBox.style.display = 'block';
+      return;
+    }
+    // Same as login: only { ok, requiresOtp, employeeId } comes back here —
+    // the new password is already saved, but a code still has to be
+    // confirmed before a token is issued.
+    pendingEmployeeId = data.employeeId || employeeId;
+    openOtpScreen('Your password has been updated. We\'ve emailed a 6-digit code to confirm it\'s you — enter it below to sign in.');
+  }catch(e){
+    errBox.textContent = 'Could not reach the server — check your connection and try again.';
+    errBox.style.display = 'block';
+    console.error(e);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = 'Send Reset Code';
   }
 }
 
@@ -271,6 +501,12 @@ async function loadMyRequests(){
   try{
     const res = await fetch(API_BASE + 'staff/leave-requests', { headers: authHeaders() });
     const data = await res.json();
+    if(res.status === 401){
+      // Token was rejected server-side (e.g. revoked) — the one case where
+      // we do have to ask for login again.
+      logout();
+      return;
+    }
     if(!res.ok || !data.ok){
       list.innerHTML = '<div class="empty-hint">Could not load your requests.</div>';
       return;
@@ -343,6 +579,10 @@ async function submitHolidayRequest(){
       body: JSON.stringify({ startDate, endDate, daysRequested: daysRequested || null, reason: reason || null })
     });
     const data = await res.json();
+    if(res.status === 401){
+      logout();
+      return;
+    }
     if(!res.ok || !data.ok){
       errBox.textContent = data.error || 'Could not submit the request.';
       errBox.style.display = 'block';
@@ -363,14 +603,17 @@ async function submitHolidayRequest(){
 function logout(){
   authToken = null;
   currentEmp = null;
-  sessionStorage.removeItem('hallanStaffToken');
+  pendingEmployeeId = null;
+  localStorage.removeItem(TOKEN_KEY);
   document.getElementById('staffId').value = '';
   document.getElementById('staffPassword').value = '';
   hideLoginError();
   showView('view-login');
 }
 
-// If a token's already saved for this browser tab, try to resume the session
+// If a token's already saved on this device, resume the session straight
+// away — this is what makes login persist across closing the browser
+// entirely, not just the tab, and is the only automatic check we do.
 (async function tryResumeSession(){
   if(!authToken) return;
   try{
@@ -388,7 +631,7 @@ function logout(){
       showView('view-holiday');
       loadMyRequests();
     }else{
-      sessionStorage.removeItem('hallanStaffToken');
+      localStorage.removeItem(TOKEN_KEY);
       authToken = null;
     }
   }catch(e){
