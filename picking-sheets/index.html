@@ -442,6 +442,11 @@
   .minibtn-undo{background:rgba(0,0,0,.06);color:var(--text-dim);}
   .minibtn-undo:hover{background:rgba(0,0,0,.12);}
   table.hide-location .loc-col{display:none;}
+  .checkbox-col{display:none;width:28px;text-align:center;}
+  .printbox{display:inline-block;width:13px;height:13px;border:1.4px solid #333;border-radius:2px;}
+  @media print{
+    .checkbox-col{display:table-cell !important;}
+  }
   .ibbarcode{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-dim);opacity:.75;margin-top:-2px;}
 
   /* ---- picking checklist (partial pick) ---- */
@@ -10605,7 +10610,11 @@ async function loadReturnsSupplierBrowse(){
   box.innerHTML = '<div class="loading">Loading…</div>';
   try{
     const data = await apiGet('returns/suppliers/');
-    const suppliers = data.suppliers || [];
+    // Only show suppliers that actually have something going on — hide the
+    // ones sitting at "None pending · 0 awaiting credit · 0 returned".
+    const suppliers = (data.suppliers || []).filter(s =>
+      (s.pending_items > 0) || (s.awaiting_lists > 0) || (s.returned_lists > 0)
+    );
     if(suppliers.length === 0){
       box.innerHTML = '<div class="empty-hint">No returns yet — start one from Scan.</div>';
       return;
@@ -10771,6 +10780,7 @@ function renderReturnsDetailTable(){
   }
   const rows = currentReturnsItems.map(it => `
     <tr>
+      <td class="checkbox-col"><span class="printbox"></span></td>
       <td>${escapeHtml(it.item_name)}</td>
       <td class="qtycell">${it.cost_price === null || it.cost_price === undefined ? '—' : ('£' + Number(it.cost_price).toFixed(2))}</td>
       <td class="qtycell">${it.quantity}</td>
@@ -10785,9 +10795,10 @@ function renderReturnsDetailTable(){
   `).join('');
   const total = returnsItemsTotal(currentReturnsItems);
   table.innerHTML = `
-    <thead><tr><th>Item</th><th class="qtycell">Cost Price</th><th class="qtycell">Qty</th><th>Reason</th><th class="loc-col">Location</th>${editable ? '<th class="no-print"></th>' : ''}</tr></thead>
+    <thead><tr><th class="checkbox-col"></th><th>Item</th><th class="qtycell">Cost Price</th><th class="qtycell">Qty</th><th>Reason</th><th class="loc-col">Location</th>${editable ? '<th class="no-print"></th>' : ''}</tr></thead>
     <tbody>${rows}</tbody>
     <tfoot><tr>
+      <td class="checkbox-col"></td>
       <td style="font-weight:700;">Total</td>
       <td class="qtycell" style="font-weight:700;">£${total.toFixed(2)}</td>
       <td></td><td></td><td class="loc-col"></td>
@@ -10997,10 +11008,12 @@ function downloadReturnsListPDF(includeLocation){
     doc.setFontSize(10);
     doc.setTextColor(120);
     doc.text('Date list printed: ' + new Date().toLocaleDateString('en-GB'), 14, 33);
-    const head = ['Item', 'Cost Price', 'Qty', 'Reason'];
+    // Blank checkbox column first, so a printed copy can be ticked off by hand.
+    const head = ['\u2713', 'Item', 'Cost Price', 'Qty', 'Reason'];
     if(includeLocation) head.push('Location');
     const rows = currentReturnsItems.map(it => {
       const row = [
+        '',
         it.item_name,
         it.cost_price === null || it.cost_price === undefined ? '—' : ('£' + Number(it.cost_price).toFixed(2)),
         String(it.quantity),
@@ -11011,8 +11024,8 @@ function downloadReturnsListPDF(includeLocation){
     });
     const total = returnsItemsTotal(currentReturnsItems);
     const totalRow = new Array(head.length).fill('');
-    totalRow[0] = 'Total';
-    totalRow[1] = '£' + total.toFixed(2);
+    totalRow[1] = 'Total';
+    totalRow[2] = '£' + total.toFixed(2);
     rows.push(totalRow);
     doc.autoTable({
       startY: 39,
@@ -11021,7 +11034,24 @@ function downloadReturnsListPDF(includeLocation){
       theme: 'grid',
       headStyles: { fillColor: [30,34,42] },
       styles: { fontSize: 9 },
-      margin: { left: 14, right: 14 }
+      columnStyles: { 0: { cellWidth: 12 } },
+      margin: { left: 14, right: 14 },
+      didParseCell: function(data){
+        // Draw an empty tick-box in each body row of the checkbox column
+        // instead of the raw text, so it renders as a box, not a character.
+        if(data.section === 'body' && data.column.index === 0){
+          data.cell.text = [];
+        }
+      },
+      didDrawCell: function(data){
+        if(data.section === 'body' && data.column.index === 0 && data.row.index < currentReturnsItems.length){
+          const size = 3.2;
+          const x = data.cell.x + (data.cell.width - size) / 2;
+          const y = data.cell.y + (data.cell.height - size) / 2;
+          doc.setDrawColor(60);
+          doc.rect(x, y, size, size);
+        }
+      }
     });
     doc.save('return-' + currentReturnsList.supplier_name.replace(/[^a-z0-9]+/gi,'-') + '-' + new Date().toISOString().slice(0,10) + '.pdf');
   }catch(e){
