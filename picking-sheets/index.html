@@ -9916,7 +9916,7 @@ async function createNewInvoiceFromPdf(){
         matched_name: m.item_name || null,
         qty_box: (oi.case_qty === undefined || oi.case_qty === null) ? null : oi.case_qty, // number of boxes/cases only — never multiplied by units_per_case, editable
         qty_per_box: null, // the ONE field left blank on purpose — filled in by hand while checking each box
-        box_price: (oi.unit_price === undefined || oi.unit_price === null) ? null : oi.unit_price, // cost for one whole box, editable
+        box_price: (oi.case_price === undefined || oi.case_price === null) ? null : oi.case_price, // FIX: was oi.unit_price, which is already case_price ÷ units_per_case — using it here as the box price meant it got divided by units_per_case a second time downstream (e.g. Cost/Unit = box_price ÷ qty_per_box). box_price must hold the whole-box price.
         retail_price: null, // editable, set by staff on the pricing step
         _matchedVia: m.matched_via || null // 'notes_exact' | null — frontend hint only, not saved
       };
@@ -11369,7 +11369,12 @@ function renderCreatedInvoiceQtyTable(){
 // behaviour) — just updates the value and the Total Qty cell, no
 // deviation check (that's only for Qty per Box).
 function updateCreatedInvoiceQtyStepField(idx, field, value){
-  currentCreatedInvoice.items[idx][field] = value === '' ? null : Number(value);
+  const parsed = value === '' ? null : Number(value);
+  if(parsed !== null && isNaN(parsed)){
+    toast('"' + value + '" isn\'t a valid number — value not changed');
+    return;
+  }
+  currentCreatedInvoice.items[idx][field] = parsed;
   const it = currentCreatedInvoice.items[idx];
   const totalCell = document.getElementById('createdInvoiceQtyTotalCell-' + idx);
   const totalQty = createdInvoiceTotalQty(it);
@@ -11382,17 +11387,17 @@ function updateCreatedInvoiceQtyStepField(idx, field, value){
 // pack-size change from the supplier is real and shouldn't be blocked,
 // just double-checked. Cancelling leaves the previous value in place.
 function updateCreatedInvoiceQtyPerBox(idx, value){
+  // FIX: this used to pop a blocking confirm() whenever the typed value
+  // deviated from the on-file pack size, and DISCARDED the typed value if
+  // Cancel/Escape was hit — easy to do by accident while tabbing quickly
+  // through a long invoice, and it happened silently (nothing but a table
+  // re-render to notice). The table already renders a non-blocking ⚠
+  // warning for the same deviation (see checkCreatedInvoiceQtyDeviation /
+  // the civ-qty-warn-note span below) — that's the "go check again" nudge;
+  // it no longer also gets to veto and erase what staff typed.
   const it = currentCreatedInvoice.items[idx];
   const newVal = value === '' ? null : Number(value);
-  if(newVal !== null && it.pack_size_previous !== null && it.pack_size_previous !== undefined){
-    const diff = Math.abs(newVal - Number(it.pack_size_previous));
-    if(diff > 0.9){
-      const name = it.matched_name || it.ocr_product_name || 'this item';
-      const ok = confirm(`Qty per Box for "${name}" is ${newVal}, but last time it was ${it.pack_size_previous}. Are you sure that's correct?`);
-      if(!ok){ renderCreatedInvoiceQtyTable(); return; }
-    }
-  }
-  it.qty_per_box = newVal;
+  it.qty_per_box = isNaN(newVal) ? null : newVal;
   renderCreatedInvoiceQtyTable();
   scheduleCreatedInvoiceAutosave();
 }
@@ -11726,7 +11731,12 @@ function scheduleCreatedInvoiceAutosave(){
   }, 800);
 }
 function updateCreatedInvoiceField(idx, field, value){
-  currentCreatedInvoice.items[idx][field] = value === '' ? null : Number(value);
+  const parsed = value === '' ? null : Number(value);
+  if(parsed !== null && isNaN(parsed)){
+    toast('"' + value + '" isn\'t a valid number — value not changed');
+    return; // leave the stored value untouched rather than silently saving null
+  }
+  currentCreatedInvoice.items[idx][field] = parsed;
   const it = currentCreatedInvoice.items[idx];
 
   const costPerUnit = createdInvoiceCostPerUnit(it);
