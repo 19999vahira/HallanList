@@ -1876,6 +1876,7 @@
             <option value="simple">Sold ÷ Pack Size (Simple)</option>
             <option value="trend">Trend Weighted</option>
             <option value="velocity">Stock-Aware Velocity</option>
+            <option value="smart">Smart Reorder (Velocity + Reorder Point)</option>
           </select>
         </div>
         <div class="po-field-sep"></div>
@@ -8862,13 +8863,14 @@ const SUPPLIER_PO_METHOD_HINTS = {
   minmax: 'Min / Max: orders only once In Stock is at or below the Reorder Level, then tops back up to the Max Stock Level. Doesn\'t use Sales History or Predicted For at all (those two fields are greyed out below) — needs both levels set (from Vector, or edited here), and shows "—" where they\'re missing.',
   simple: 'Simple: total sold over the sales-history window, scaled up to the number of weeks you\'re predicting for, then divided by pack size.',
   trend: 'Trend Weighted: like Simple, but weights the more recent half of the sales-history window more heavily (60/40), so it reacts faster to items speeding up or slowing down.',
-  velocity: 'Stock-Aware Velocity: like Simple, but subtracts what\'s already In Stock so it doesn\'t over-order.'
+  velocity: 'Stock-Aware Velocity: like Simple, but subtracts what\'s already In Stock so it doesn\'t over-order. Also adds a safety-stock buffer (the Reorder Level if set, else half a pack) before netting off stock, so slow movers with only a couple of units left still get flagged instead of showing 0.',
+  smart: 'Smart Reorder: combines Min/Max\'s trigger (nothing suggested until stock is genuinely low — Reorder Level if set, else half a pack) with Velocity\'s proportional, sales-driven order quantity. Works even on items with no Reorder Level configured in Vector, unlike Min/Max on its own.'
 };
 // Which methods actually use the "Sales history" / "Predicted for" week
 // dropdowns — Min/Max is purely a stock-level trigger and ignores both, so
 // leaving them enabled just made it look like changing weeks "did nothing".
 // Now those two fields are visibly disabled whenever they wouldn't matter.
-const SUPPLIER_PO_METHODS_USING_WEEKS = { simple: true, trend: true, velocity: true, minmax: false };
+const SUPPLIER_PO_METHODS_USING_WEEKS = { simple: true, trend: true, velocity: true, minmax: false, smart: true };
 
 function updateSupplierPOMethodFieldsUI(){
   const method = getSupplierPOMethod();
@@ -9000,7 +9002,9 @@ function renderSupplierPlaceOrderTable(){
     tr.dataset.stockid = it.stockid;
     if(supplierOrderCart.hasOwnProperty(it.stockid)) tr.style.background = 'rgba(22,163,74,.08)';
     const minmaxNote = method === 'minmax' && it.minmax_triggered === false
-      ? '<div style="font-size:11px;color:var(--text-dim);">above reorder level</div>' : '';
+      ? '<div style="font-size:11px;color:var(--text-dim);">above reorder level</div>'
+      : method === 'smart' && it.smart_triggered === false
+      ? '<div style="font-size:11px;color:var(--text-dim);">above reorder point</div>' : '';
     tr.innerHTML = `
       <td>${escapeHtml(it.name)}</td>
       <td class="qtycell">${it.sold}</td>
