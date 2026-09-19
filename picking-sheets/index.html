@@ -1161,6 +1161,7 @@
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <button class="btn-ghost" onclick="downloadWholesaleCSV()">Download CSV</button>
         <button class="btn-ghost" onclick="openWholesaleScheduleModal()" title="Schedule a Download CSV / Test Download CSV run for a future date and time, with the result emailed to you">Schedule</button>
+        <button class="btn-ghost" onclick="openWholesaleWaScheduleModal()" title="Schedule a WhatsApp flyer image + message to go out automatically to the contact groups you choose, at a set date and time">💬 WhatsApp Schedule</button>
         <button class="btn-amber" onclick="openPriceChangesModal()" title="Every price/margin you've changed on this list, with the barcode and the original synced price alongside it — for whoever updates Vector">Price Changes Sheet</button>
         <button class="btn-amber" onclick="openFlyerWebpageModal('whole')" title="Publishes Flyer Whole as a public webpage on GitHub Pages — a link WhatsApp can preview and open, instead of a PDF">Update Wholesale Flyer Webpage</button>
         <button class="btn-amber" onclick="openFlyerWebpageModal('veg')" title="Publishes Flyer Veg (Wholesale Vegetable) as a public webpage on GitHub Pages">Update Veg Flyer Website</button>
@@ -3138,6 +3139,63 @@
   </div>
 </div>
 
+<!-- WHOLESALE WHATSAPP SCHEDULE: pick a flyer image, message, contact groups and a time; the server sends it automatically -->
+<div class="modal-backdrop" id="modalWholesaleWaSchedule">
+  <div class="modal" style="width:600px;max-height:84vh;overflow-y:auto;">
+    <h3>Schedule WhatsApp Flyer</h3>
+    <p class="modal-sub">Sends a flyer image with your message to the contact groups you tick, automatically, at the date/time below — through the same approved WhatsApp templates as the WhatsApp Broadcast page. Each message is billed by Meta per recipient.</p>
+
+    <label class="wa-label" style="display:block;">1 · Flyer image</label>
+    <div class="wa-flyer-grid" id="wsWaFlyerGrid"><div class="loading">Loading…</div></div>
+    <input type="file" id="wsWaImageInput" accept="image/jpeg,image/png" style="display:none;" onchange="onWsWaImageSelected(event)">
+    <p class="wa-hint">Tap a flyer to select it. It sends that flyer's saved default image (looked up when the schedule runs, so any newer default is picked up) unless you use "Choose image" to attach a different one for this schedule only. JPG or PNG, up to 5MB.</p>
+
+    <label class="wa-label" style="display:block;margin-top:14px;">2 · Message</label>
+    <textarea id="wsWaMessage" class="wa-textarea" rows="4" maxlength="1024" placeholder="Type the message that goes with the flyer…" oninput="updateWsWaMessageCount()"></textarea>
+    <div style="display:flex;justify-content:space-between;gap:8px;">
+      <p class="wa-hint" style="margin:4px 0 0;">Required — it fills the template's text.</p>
+      <p class="wa-hint mono" id="wsWaMessageCount" style="margin:4px 0 0;">0 / 1024</p>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;">
+      <label class="wa-label">3 · Send to groups</label>
+      <span style="font-size:11px;">
+        <a href="#" onclick="wsWaSelectAllLists(true);return false;" style="color:var(--accent);">Select all</a>
+        <span style="color:var(--text-dim);"> · </span>
+        <a href="#" onclick="wsWaSelectAllLists(false);return false;" style="color:var(--accent);">Clear</a>
+      </span>
+    </div>
+    <div class="wa-send-lists" id="wsWaLists"><div class="loading">Loading…</div></div>
+    <p class="wa-hint mono" id="wsWaCount" style="margin:6px 0 0;"></p>
+    <p class="wa-hint" style="margin:2px 0 0;">Contacts are looked up when it sends, so numbers added to or removed from a group later are picked up automatically. The same number in two ticked groups is only messaged once.</p>
+
+    <label class="wa-label" style="display:block;margin-top:14px;">4 · Date &amp; time</label>
+    <input type="datetime-local" id="wsWaRunAt" onchange="this.blur()" style="margin-top:6px;">
+    <p style="font-size:11px;color:var(--text-dim);margin:0;">UK time (GMT/BST), whatever your device's time zone is set to.</p>
+
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin:12px 0 4px;">Repeat</label>
+    <select id="wsWaRecurrence" style="width:100%;padding:10px 12px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:14px;font-family:'Inter',sans-serif;">
+      <option value="ONCE">Once</option>
+      <option value="DAILY">Every day</option>
+      <option value="WEEKLY">Every week</option>
+    </select>
+
+    <div class="errdetail" id="wsWaErr" style="display:none;color:var(--danger);"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalWholesaleWaSchedule')">Close</button>
+      <button class="btn-amber" id="wsWaSubmitBtn" onclick="submitWholesaleWaSchedule()">Schedule</button>
+    </div>
+
+    <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <h4 style="margin:0;font-size:14px;">Scheduled &amp; recent sends</h4>
+        <button class="btn-ghost" style="padding:3px 8px;font-size:11px;" onclick="loadWholesaleWaSchedules()">↻ Refresh</button>
+      </div>
+      <div id="wsWaSchedList" style="max-height:240px;overflow:auto;"><div class="loading">Loading…</div></div>
+    </div>
+  </div>
+</div>
+
 <!-- WHOLESALE FLYER: UPLOAD IMAGES (first page, last page, one per department) -->
 <div class="modal-backdrop" id="modalFlyerImages">
   <div class="modal" style="width:640px;">
@@ -4381,6 +4439,310 @@ async function dismissWholesaleSchedule(id){
   try{
     await apiDelete('wholesale/schedule/' + id + '/dismiss');
     loadWholesaleSchedules();
+  }catch(e){
+    console.error(e);
+    toast('Could not remove that entry');
+  }
+}
+
+/* ============ WHOLESALE WHATSAPP SCHEDULE: schedule a flyer image + message
+   to go out to chosen WhatsApp contact groups at a set date/time. Sits next to
+   the CSV "Schedule" above; the server (see WHOLESALE_WA_SCHEDULES) does the
+   actual sending, so this only has to collect the choices and show the list
+   of scheduled / recent sends. The flyer choices and contact groups are the
+   same ones the WhatsApp Broadcast page uses. ============ */
+const WS_WA_FLYERS = [
+  { key: 'colour', label: 'Wholesale Colour Flyer' },
+  { key: 'veg', label: 'Wholesale Veg Flyer' }
+];
+const WS_WA_MAX_IMAGE_BYTES = 5 * 1024 * 1024; // WhatsApp's own image limit
+let wsWaLists = [];                  // [{ list_id, name, contact_count }]
+let wsWaSelectedListIds = new Set(); // groups ticked for the schedule being created
+let wsWaFlyerDefaults = {};          // { colour: {data, filename}, veg: {...} } — saved defaults (server-side)
+let wsWaCustom = {};                 // { colour: {data, filename, mimeType} } — chosen for THIS schedule only
+let wsWaSelectedFlyer = 'colour';
+let wsWaFlyerBeingChosen = null;     // which flyer the shared file input is currently choosing an image for
+
+function wsWaShowErr(msg){
+  const el = document.getElementById('wsWaErr');
+  el.textContent = msg; el.style.display = 'block';
+}
+function wsWaHideErr(){
+  const el = document.getElementById('wsWaErr');
+  el.style.display = 'none'; el.textContent = '';
+}
+// apiThrow() puts the server's own message in err.body.error — prefer that
+// over the generic "POST … failed: 400" wrapper text.
+function wsWaErrMessage(e, fallback){
+  return (e && e.body && e.body.error) || (e && e.message) || fallback;
+}
+
+async function openWholesaleWaScheduleModal(){
+  wsWaHideErr();
+  document.getElementById('wsWaRunAt').value = '';
+  document.getElementById('wsWaRecurrence').value = 'ONCE';
+  document.getElementById('wsWaMessage').value = '';
+  updateWsWaMessageCount();
+  wsWaCustom = {};
+  wsWaSelectedListIds = new Set();
+  // Default to whichever flyer is showing on the pricing page right now.
+  wsWaSelectedFlyer = (typeof wholesaleFlyerMode !== 'undefined' && wholesaleFlyerMode === 'veg') ? 'veg' : 'colour';
+  document.getElementById('wsWaFlyerGrid').innerHTML = '<div class="loading">Loading…</div>';
+  document.getElementById('wsWaLists').innerHTML = '<div class="loading">Loading…</div>';
+  openModal('modalWholesaleWaSchedule');
+  await Promise.all([loadWsWaOptions(), loadWholesaleWaSchedules()]);
+}
+
+async function loadWsWaOptions(){
+  try{
+    const data = await apiGet('wholesale/whatsapp-schedule/options');
+    wsWaLists = data.lists || [];
+    wsWaFlyerDefaults = data.flyers || {};
+    if(data.configured === false){
+      wsWaShowErr('WhatsApp isn\'t configured on the server yet (WHATSAPP_ACCESS_TOKEN / WHATSAPP_PHONE_NUMBER_ID) — schedules can\'t be created until it is.');
+    }
+  }catch(e){
+    console.error(e);
+    wsWaLists = [];
+    wsWaFlyerDefaults = {};
+    wsWaShowErr('Could not load the contact groups and flyer images. ' + wsWaErrMessage(e, ''));
+  }
+  renderWsWaFlyerGrid();
+  renderWsWaLists();
+}
+
+/* ---- 1 · flyer image ---- */
+function wsWaImageFor(key){
+  // Whatever will actually go out for a flyer: an image chosen for this
+  // schedule first, falling back to the flyer's saved default.
+  return wsWaCustom[key] || wsWaFlyerDefaults[key] || null;
+}
+function renderWsWaFlyerGrid(){
+  const grid = document.getElementById('wsWaFlyerGrid');
+  if(!grid) return;
+  grid.innerHTML = '';
+  WS_WA_FLYERS.forEach(f => {
+    const img = wsWaImageFor(f.key);
+    const custom = !!wsWaCustom[f.key];
+    const selected = wsWaSelectedFlyer === f.key;
+    const card = document.createElement('div');
+    card.className = 'wa-flyer-card' + (selected ? ' active' : '');
+    card.onclick = (ev) => {
+      if(ev.target.closest('button')) return;
+      wsWaSelectedFlyer = f.key;
+      renderWsWaFlyerGrid();
+    };
+    const thumbHtml = (img && img.data)
+      ? `<img class="wa-flyer-thumb" src="${img.data}" alt="${escapeHtml(f.label)}">`
+      : `<div class="wa-flyer-thumb-placeholder">No image saved yet — use Choose image below</div>`;
+    const noteHtml = custom
+      ? '<div class="wa-flyer-note">Custom image — this schedule only</div>'
+      : (img && img.data ? '<div class="wa-flyer-note" style="color:var(--text-dim);font-weight:400;">Using the saved default image</div>' : '');
+    card.innerHTML = `
+      <h4>${selected ? '✅' : '⬜'} ${escapeHtml(f.label)}</h4>
+      ${thumbHtml}
+      ${noteHtml}
+    `;
+    const actions = document.createElement('div');
+    actions.className = 'wa-flyer-actions';
+    const chooseBtn = document.createElement('button');
+    chooseBtn.className = 'btn-ghost';
+    chooseBtn.textContent = custom ? 'Change image' : 'Choose image';
+    chooseBtn.onclick = () => {
+      wsWaFlyerBeingChosen = f.key;
+      document.getElementById('wsWaImageInput').click();
+    };
+    actions.appendChild(chooseBtn);
+    if(custom){
+      const undoBtn = document.createElement('button');
+      undoBtn.className = 'btn-danger-ghost';
+      undoBtn.textContent = 'Use saved';
+      undoBtn.onclick = () => { delete wsWaCustom[f.key]; renderWsWaFlyerGrid(); };
+      actions.appendChild(undoBtn);
+    }
+    card.appendChild(actions);
+    grid.appendChild(card);
+  });
+}
+function onWsWaImageSelected(event){
+  const file = event.target.files && event.target.files[0];
+  event.target.value = '';
+  if(!file || !wsWaFlyerBeingChosen) return;
+  if(file.type !== 'image/jpeg' && file.type !== 'image/png'){
+    wsWaShowErr('Choose a JPG or PNG image — those are the only image types WhatsApp accepts.');
+    return;
+  }
+  if(file.size > WS_WA_MAX_IMAGE_BYTES){
+    wsWaShowErr('That image is too large — WhatsApp allows up to 5MB for an image.');
+    return;
+  }
+  wsWaHideErr();
+  const key = wsWaFlyerBeingChosen;
+  const reader = new FileReader();
+  reader.onload = () => {
+    wsWaCustom[key] = { data: reader.result, filename: file.name, mimeType: file.type };
+    wsWaSelectedFlyer = key; // choosing an image for a flyer also selects that flyer
+    renderWsWaFlyerGrid();
+  };
+  reader.onerror = () => wsWaShowErr('Could not read that image file.');
+  reader.readAsDataURL(file);
+}
+
+/* ---- 2 · message ---- */
+function updateWsWaMessageCount(){
+  const len = document.getElementById('wsWaMessage').value.length;
+  document.getElementById('wsWaMessageCount').textContent = len + ' / 1024';
+}
+
+/* ---- 3 · groups (contact lists) ---- */
+function renderWsWaLists(){
+  const box = document.getElementById('wsWaLists');
+  if(!box) return;
+  box.innerHTML = '';
+  if(wsWaLists.length === 0){
+    box.innerHTML = '<span style="font-size:12px;color:var(--text-dim);">No contact groups yet — create one on the WhatsApp Broadcast page first.</span>';
+    updateWsWaCount();
+    return;
+  }
+  wsWaLists.forEach(l => {
+    const opt = document.createElement('label');
+    opt.className = 'wa-send-list-opt';
+    const checked = wsWaSelectedListIds.has(l.list_id);
+    opt.innerHTML = `<input type="checkbox" ${checked ? 'checked' : ''}><span class="wlname">${escapeHtml(l.name)}</span><span class="wlcount">${Number(l.contact_count) || 0}</span>`;
+    opt.querySelector('input').onchange = (ev) => {
+      if(ev.target.checked) wsWaSelectedListIds.add(l.list_id);
+      else wsWaSelectedListIds.delete(l.list_id);
+      updateWsWaCount();
+    };
+    box.appendChild(opt);
+  });
+  updateWsWaCount();
+}
+function wsWaSelectAllLists(select){
+  wsWaSelectedListIds = select ? new Set(wsWaLists.map(l => l.list_id)) : new Set();
+  renderWsWaLists();
+}
+function updateWsWaCount(){
+  // An upper bound: the same phone saved in two ticked groups is only
+  // messaged once server-side.
+  const total = wsWaLists.filter(l => wsWaSelectedListIds.has(l.list_id))
+    .reduce((sum, l) => sum + (Number(l.contact_count) || 0), 0);
+  document.getElementById('wsWaCount').textContent =
+    total === 0 ? 'No contacts selected — tick at least one group' :
+    'up to ' + total + ' contact' + (total === 1 ? '' : 's') + ' will receive this each time it runs';
+}
+
+/* ---- create ---- */
+async function submitWholesaleWaSchedule(){
+  wsWaHideErr();
+  const runAtVal = document.getElementById('wsWaRunAt').value;
+  if(!runAtVal){ wsWaShowErr('Choose a date and time.'); return; }
+  const runAtDate = ukInputValueToDate(runAtVal); // entered as UK wall-clock time
+  if(isNaN(runAtDate.getTime())){ wsWaShowErr('That date/time doesn\'t look valid.'); return; }
+  if(runAtDate.getTime() <= Date.now()){
+    wsWaShowErr('Pick a time in the future — to send right now, use the WhatsApp Broadcast page.');
+    return;
+  }
+  const message = document.getElementById('wsWaMessage').value.trim();
+  if(!message){ wsWaShowErr('Write a message — it fills the template, so it\'s required even when sending an image.'); return; }
+  const listIds = [...wsWaSelectedListIds];
+  if(listIds.length === 0){ wsWaShowErr('Tick at least one group to send to.'); return; }
+  const custom = wsWaCustom[wsWaSelectedFlyer];
+  const saved = wsWaFlyerDefaults[wsWaSelectedFlyer];
+  if(!custom && !(saved && saved.data)){
+    wsWaShowErr('No image saved for this flyer yet — use Choose image to attach one.');
+    return;
+  }
+  const btn = document.getElementById('wsWaSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Scheduling…';
+  try{
+    await apiPost('wholesale/whatsapp-schedule', {
+      run_at: runAtDate.toISOString(),
+      recurrence: document.getElementById('wsWaRecurrence').value,
+      flyer: wsWaSelectedFlyer,
+      message,
+      list_ids: listIds,
+      image: custom ? { data: custom.data, filename: custom.filename } : undefined
+    });
+    toast('Scheduled — it will send automatically at ' + ukDateTimeString(runAtDate) + ' (UK time)');
+    // Reset the form so it's obvious it went through (it shows in the list
+    // below) and a stray second click can't create a duplicate.
+    document.getElementById('wsWaRunAt').value = '';
+    document.getElementById('wsWaRecurrence').value = 'ONCE';
+    document.getElementById('wsWaMessage').value = '';
+    updateWsWaMessageCount();
+    wsWaCustom = {};
+    wsWaSelectedListIds = new Set();
+    renderWsWaFlyerGrid();
+    renderWsWaLists();
+    loadWholesaleWaSchedules();
+  }catch(e){
+    console.error(e);
+    wsWaShowErr(wsWaErrMessage(e, 'Could not create the schedule.'));
+  }finally{
+    btn.disabled = false;
+    btn.textContent = 'Schedule';
+  }
+}
+
+/* ---- scheduled & recent sends ---- */
+async function loadWholesaleWaSchedules(){
+  const list = document.getElementById('wsWaSchedList');
+  try{
+    const data = await apiGet('wholesale/whatsapp-schedule');
+    renderWholesaleWaSchedules(data.schedules || []);
+  }catch(e){
+    console.error(e);
+    list.innerHTML = '<div class="empty-hint">Could not load scheduled sends.</div>';
+  }
+}
+function renderWholesaleWaSchedules(schedules){
+  const list = document.getElementById('wsWaSchedList');
+  if(schedules.length === 0){ list.innerHTML = '<div class="empty-hint">No WhatsApp schedules yet.</div>'; return; }
+  list.innerHTML = schedules.map(s => {
+    const when = ukDateTimeString(new Date(s.run_at));
+    const flyerMeta = WS_WA_FLYERS.find(f => f.key === s.flyer_key);
+    const flyerLabel = flyerMeta ? flyerMeta.label : s.flyer_key;
+    const rec = s.recurrence === 'ONCE' ? '' : (s.recurrence === 'DAILY' ? ' · repeats daily' : ' · repeats weekly');
+    const image = s.has_custom_image ? ' · custom image' : '';
+    const groups = (s.list_names || []).join(', ') || '—';
+    const by = s.created_by ? ' · by ' + s.created_by : '';
+    const msg = String(s.message || '');
+    const preview = msg.length > 90 ? msg.slice(0, 90) + '…' : msg;
+    const cancelBtn = s.status === 'PENDING'
+      ? `<button class="btn-ghost" style="padding:3px 8px;font-size:11px;" onclick="cancelWholesaleWaSchedule(${Number(s.schedule_id)})">Cancel</button>` : '';
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--line);font-size:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <strong>${escapeHtml(when)}</strong>
+        <span style="display:flex;align-items:center;gap:6px;">
+          ${escapeHtml(wsSchedStatusLabel(s.status))}${cancelBtn}
+          <span onclick="dismissWholesaleWaSchedule(${Number(s.schedule_id)})" title="Remove this from the list" style="cursor:pointer;font-size:15px;line-height:1;color:var(--text-dim);padding:0 2px;">&times;</span>
+        </span>
+      </div>
+      <div style="color:var(--text-dim);">${escapeHtml(flyerLabel)} → ${escapeHtml(groups)}${escapeHtml(rec + image + by)}</div>
+      <div style="color:var(--text-dim);margin-top:2px;">“${escapeHtml(preview)}”</div>
+      ${s.last_result ? `<div style="color:var(--text-dim);margin-top:2px;">${escapeHtml(s.last_result)}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+async function cancelWholesaleWaSchedule(id){
+  if(!confirm('Cancel this scheduled WhatsApp send?')) return;
+  try{
+    await apiDelete('wholesale/whatsapp-schedule/' + id);
+    loadWholesaleWaSchedules();
+  }catch(e){
+    console.error(e);
+    toast('Could not cancel — it may have already started sending.');
+  }
+}
+// The "×" on each entry: just removes it from the list (Done/Failed/Cancelled
+// history you no longer want to see). It doesn't stop anything — for a
+// not-yet-sent schedule, use Cancel instead/first.
+async function dismissWholesaleWaSchedule(id){
+  try{
+    await apiDelete('wholesale/whatsapp-schedule/' + id + '/dismiss');
+    loadWholesaleWaSchedules();
   }catch(e){
     console.error(e);
     toast('Could not remove that entry');
