@@ -2210,7 +2210,7 @@
       <p>Scan a product, then tap the supplier it's going back to — it's added to that supplier's return list straight away.</p>
     </div>
     <div class="actionbar">
-      <span></span>
+      <span id="returnsQueueIndicator" class="mono" style="color:var(--text-dim);font-size:12px;"></span>
       <button class="btn-amber" onclick="openReturnsScannerModal()">Scan Barcode</button>
     </div>
     <div id="returnsScanFeed"><div class="empty-hint">Nothing scanned yet this session. Tap "Scan Barcode" to start.</div></div>
@@ -2660,6 +2660,14 @@
         inputmode="none" onkeydown="if(event.key==='Enter')submitReturnsBarcode()" oninput="onReturnsBarcodeInput()">
       <button class="btn-ghost" onclick="submitReturnsBarcode()">Look up</button>
     </div>
+    <div style="margin:-4px 0 10px;">
+      <a href="#" onclick="event.preventDefault(); toggleReturnsNameSearch()" style="font-size:13px;">Search by name instead</a>
+    </div>
+    <div id="returnsNameSearchBox" style="display:none;margin-bottom:10px;">
+      <input type="text" id="returnsNameSearchInput" placeholder="Search item name…" autocomplete="off" oninput="onReturnsNameSearch()">
+      <div id="returnsNameSearchResults" class="searchresults"></div>
+    </div>
+    <div id="returnsScanQueueNote" class="mono" style="display:none;color:var(--text-dim);font-size:12px;margin-bottom:6px;"></div>
     <div id="returnsScanFeedback"></div>
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalReturnsScanner')">Done scanning</button>
@@ -2694,7 +2702,9 @@
     <div class="qtystepper" style="margin-bottom:16px;">
       <button class="btn-ghost" onclick="bumpReturnsQty(-1)">−</button>
       <input type="number" id="returnsQtyInput" value="1" min="1" step="1"
-        style="width:80px;text-align:center;padding:10px;" onkeydown="if(event.key==='Enter')confirmReturnsDetails()">
+        style="width:80px;text-align:center;padding:10px;"
+        onpointerdown="returnsQtySafeToType=true" onblur="returnsQtySafeToType=false"
+        onkeydown="if(event.key==='Enter')confirmReturnsDetails()">
       <button class="btn-ghost" onclick="bumpReturnsQty(1)">+</button>
     </div>
 
@@ -3703,6 +3713,9 @@ document.getElementById('loginPass').addEventListener('keydown', e=>{ if(e.key==
 function showView(id){
   if(activeTimer.phase === 'making' && id !== 'view-making-detail') stopActiveTimer();
   if(activeTimer.phase === 'picking' && id !== 'view-picking-detail') stopActiveTimer();
+  // Leaving the Scan Returns page — stop the ambient scan capture below so
+  // a scanner used elsewhere in the app can't get hoovered up by it.
+  if(returnsScanModeActive && id !== 'view-returns-scan') deactivateReturnsScanMode();
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   window.scrollTo(0,0);
@@ -10753,6 +10766,32 @@ let returnsScanFeedItems = [];
 let returnsPendingProduct = null; // { stockid, name, barcode, suppliers } — awaiting a supplier tap
 let returnsPendingSupplier = null; // { suppid, name, cost_net } — chosen, awaiting qty + reason
 let returnsSelectedReason = null;  // a tapped preset; a typed custom reason wins over this
+
+/* ---- Ambient scan capture ----
+   The Returns flow needs a supplier + quantity + reason for every item, so
+   (unlike the simpler scanners elsewhere, which just keep stacking cards in
+   one open modal) the scanner modal here closes after every successful scan
+   while that's collected. If someone keeps firing a handheld scanner during
+   that step — which is exactly what happens when staff work through a stack
+   of returns — the injected keystrokes used to land wherever focus happened
+   to be: the quantity box (turning "1" into a barcode-length number), the
+   supplier search box, or nowhere at all. Either way the scan was lost.
+   This listens at the document level, in the capture phase, for the
+   "burst of keystrokes ending in Enter" signature of a hardware scanner —
+   real people can't type that fast — independently of whatever currently
+   has focus. A genuine scan is queued and processed once the item ahead of
+   it is done; deliberate typing in the quantity/search/reason boxes is left
+   alone (see returnsQtySafeToType and the safeIds list below). */
+let returnsScanModeActive = false;   // true for as long as the person is on the Scan Returns page
+let returnsScanBusy = false;         // a lookup, or the supplier/qty/reason flow, is under way for one item
+let returnsScanQueue = [];           // codes scanned while returnsScanBusy is true
+let returnsScanBuffer = '';
+let returnsScanLastKeyTime = 0;
+let returnsScanBufferTimer = null;
+let returnsQtySafeToType = false;    // only true once the person has actually tapped the qty box themselves
+const RETURNS_SCAN_MAX_KEY_GAP_MS = 60; // hardware scanners fire keys far faster than any human types
+const RETURNS_SCAN_MIN_LENGTH = 4;      // shortest plausible barcode/product code
+
 const RETURN_REASONS = [
   'Out of date',
   'Packaging',
@@ -10778,14 +10817,85 @@ function openReturnsHub(){ showView('view-returns-hub'); }
 /* ---- Scan ---- */
 function openReturnsScan(){
   returnsScanFeedItems = [];
+  returnsScanQueue = [];
+  returnsScanBusy = false;
+  returnsScanBuffer = '';
+  returnsScanModeActive = true;
   renderReturnsScanFeed();
+  updateReturnsQueueIndicator();
   showView('view-returns-scan');
+}
+function deactivateReturnsScanMode(){
+  returnsScanModeActive = false;
+  returnsScanBusy = false;
+  returnsScanQueue = [];
+  returnsScanBuffer = '';
+  clearTimeout(returnsScanBufferTimer);
 }
 function openReturnsScannerModal(){
   document.getElementById('returnsBarcodeInput').value = '';
   document.getElementById('returnsScanFeedback').innerHTML = '';
+  document.getElementById('returnsNameSearchBox').style.display = 'none';
+  document.getElementById('returnsNameSearchInput').value = '';
+  document.getElementById('returnsNameSearchResults').innerHTML = '';
+  updateReturnsQueueIndicator();
   openModal('modalReturnsScanner');
   document.getElementById('returnsBarcodeInput').focus();
+  // Anything that piled up in the queue while a previous item's supplier/
+  // qty/reason was being filled in gets picked up straight away.
+  processReturnsScanQueue();
+}
+function toggleReturnsNameSearch(){
+  const box = document.getElementById('returnsNameSearchBox');
+  const showing = box.style.display !== 'none';
+  box.style.display = showing ? 'none' : 'block';
+  if(!showing){
+    document.getElementById('returnsNameSearchInput').value = '';
+    document.getElementById('returnsNameSearchResults').innerHTML = '';
+    setTimeout(() => document.getElementById('returnsNameSearchInput').focus(), 80);
+  }
+}
+let returnsNameSearchDebounce = null;
+function onReturnsNameSearch(){
+  clearTimeout(returnsNameSearchDebounce);
+  const q = document.getElementById('returnsNameSearchInput').value.trim();
+  const results = document.getElementById('returnsNameSearchResults');
+  if(q.length < 2){ results.innerHTML = ''; return; }
+  results.innerHTML = '<div class="empty-hint">Searching…</div>';
+  returnsNameSearchDebounce = setTimeout(async () => {
+    try{
+      const data = await apiGet('stock/search/?q=' + encodeURIComponent(q));
+      const items = data.items || [];
+      if(items.length === 0){
+        results.innerHTML = '<div class="empty-hint">No matches</div>';
+        return;
+      }
+      results.innerHTML = '';
+      items.forEach(it => {
+        const div = document.createElement('div');
+        div.className = 'searchresult';
+        div.innerHTML = `<div class="sname">${escapeHtml(it.name)}</div><div class="sstock">${it.quantity} in stock</div>`;
+        div.onclick = () => pickReturnsNameSearchResult(it);
+        results.appendChild(div);
+      });
+    }catch(e){
+      results.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Search failed</div>';
+      console.error(e);
+    }
+  }, 300);
+}
+async function pickReturnsNameSearchResult(it){
+  // Only reachable while the scanner modal is open (i.e. not busy with a
+  // previous item), same as a real scan succeeding.
+  returnsScanBusy = true;
+  try{
+    const data = await apiGet('returns/stock-suppliers/' + it.stockid + '/');
+    returnsScanFound({ stockid: it.stockid, name: it.name, barcode: null, suppliers: data.suppliers || [] });
+  }catch(e){
+    console.error(e);
+    // Still let them carry on and pick a supplier manually even if this failed.
+    returnsScanFound({ stockid: it.stockid, name: it.name, barcode: null, suppliers: [] });
+  }
 }
 function onReturnsBarcodeInput(){
   clearTimeout(returnsBarcodeDebounce);
@@ -10799,11 +10909,41 @@ function submitReturnsBarcode(){
   clearTimeout(returnsBarcodeDebounce);
   const code = document.getElementById('returnsBarcodeInput').value.trim();
   if(!code) return;
+  startReturnsScan(code);
+}
+function startReturnsScan(code){
+  if(returnsScanBusy){
+    // Something from an earlier scan is still being handled (the supplier/
+    // qty/reason screen is up) — don't interrupt it. This one is picked up
+    // automatically the moment that item is confirmed or cancelled.
+    returnsScanQueue.push(code);
+    updateReturnsQueueIndicator();
+    toast(returnsScanQueue.length + ' more scan' + (returnsScanQueue.length===1?'':'s') + ' waiting');
+    return;
+  }
   handleReturnsScannedCode(code);
 }
+function processReturnsScanQueue(){
+  updateReturnsQueueIndicator();
+  if(returnsScanBusy || !returnsScanQueue.length) return;
+  const code = returnsScanQueue.shift();
+  updateReturnsQueueIndicator();
+  handleReturnsScannedCode(code);
+}
+function updateReturnsQueueIndicator(){
+  const n = returnsScanQueue.length;
+  const note = document.getElementById('returnsScanQueueNote');
+  if(note){
+    note.style.display = n ? 'block' : 'none';
+    note.textContent = n ? (n + ' more scan' + (n===1?'':'s') + ' waiting to be looked up') : '';
+  }
+  const bar = document.getElementById('returnsQueueIndicator');
+  if(bar) bar.textContent = n ? (n + ' scan' + (n===1?'':'s') + ' queued') : '';
+}
 async function handleReturnsScannedCode(code){
+  returnsScanBusy = true;
   const input = document.getElementById('returnsBarcodeInput');
-  input.value = '';
+  if(input) input.value = '';
   const box = document.getElementById('returnsScanFeedback');
   const loadingEl = document.createElement('div');
   loadingEl.className = 'loading';
@@ -10817,12 +10957,12 @@ async function handleReturnsScannedCode(code){
       fail.className = 'scanfail';
       fail.textContent = 'No stock item found for barcode ' + code;
       box.prepend(fail);
-      input.focus();
+      if(input) input.focus();
+      returnsScanBusy = false;
+      processReturnsScanQueue();
       return;
     }
-    returnsPendingProduct = data.item;
-    closeModal('modalReturnsScanner');
-    openReturnsSupplierPick();
+    returnsScanFound(data.item);
   }catch(e){
     loadingEl.remove();
     const fail = document.createElement('div');
@@ -10830,8 +10970,23 @@ async function handleReturnsScannedCode(code){
     fail.textContent = 'Lookup failed for ' + code;
     box.prepend(fail);
     console.error(e);
-    input.focus();
+    if(input) input.focus();
+    returnsScanBusy = false;
+    processReturnsScanQueue();
   }
+}
+function returnsScanFound(item){
+  returnsPendingProduct = item;
+  closeModal('modalReturnsScanner');
+  openReturnsSupplierPick();
+}
+function returnsAdvanceScan(){
+  // Called once an item is fully dealt with (added or cancelled) — either
+  // gets straight on with whatever scanned in the meantime, or leaves the
+  // scanner ready and waiting.
+  returnsScanBusy = false;
+  if(returnsScanQueue.length){ processReturnsScanQueue(); }
+  else { openReturnsScannerModal(); }
 }
 function openReturnsSupplierPick(){
   const p = returnsPendingProduct;
@@ -10885,10 +11040,13 @@ async function chooseReturnsSupplier(suppid, supplierName, costNet){
   document.getElementById('returnsDetailsProduct').textContent = returnsPendingProduct.name;
   document.getElementById('returnsDetailsSupplier').textContent = 'Going back to ' + supplierName;
   document.getElementById('returnsQtyInput').value = '1';
+  returnsQtySafeToType = false; // reset — only a genuine tap on the box allows typing into it
   document.getElementById('returnsReasonCustom').value = '';
   renderReturnsReasonGrid();
   openModal('modalReturnsDetails');
-  setTimeout(() => document.getElementById('returnsQtyInput').select(), 80);
+  // No auto-focus/select here any more: auto-focusing this box used to be
+  // exactly where the next scan's digits would land instead of the barcode
+  // field, silently turning a scanned item into a bogus quantity.
 }
 function renderReturnsReasonGrid(){
   document.getElementById('returnsReasonGrid').innerHTML = RETURN_REASONS.map(r => `
@@ -10936,7 +11094,7 @@ async function confirmReturnsDetails(){
     returnsPendingProduct = null;
     returnsPendingSupplier = null;
     toast('Added to ' + s.name + '’s return list');
-    openReturnsScannerModal();
+    returnsAdvanceScan();
   }catch(e){
     toast('Could not add item: ' + (e && e.message ? e.message : 'unknown error'));
     console.error(e);
@@ -10945,7 +11103,7 @@ async function confirmReturnsDetails(){
 function cancelReturnsSupplierPick(){
   closeModal('modalReturnsSupplierPick');
   returnsPendingProduct = null;
-  openReturnsScannerModal();
+  returnsAdvanceScan();
 }
 function renderReturnsScanFeed(){
   const box = document.getElementById('returnsScanFeed');
@@ -10962,6 +11120,56 @@ function renderReturnsScanFeed(){
     </div>
   `).join('');
 }
+
+/* ---- Ambient scan capture listener (see the comment on returnsScanModeActive
+   above for why this exists). Runs in the capture phase so it sees keystrokes
+   before whatever's currently focused does, but only while the person is on
+   the Scan Returns page, and never interferes with the boxes that are
+   genuinely meant for typing (barcode field, supplier search, custom reason,
+   name search, and the quantity box once it's been deliberately tapped). ---- */
+document.addEventListener('keydown', function(e){
+  if(!returnsScanModeActive) return;
+  const t = e.target;
+  const safeIds = ['returnsBarcodeInput','returnsPickSupplierSearch','returnsReasonCustom','returnsNameSearchInput'];
+  if(t && safeIds.includes(t.id)) return;
+  if(t && t.id === 'returnsQtyInput' && returnsQtySafeToType) return;
+  if(e.key.length !== 1 && e.key !== 'Enter') return; // leave Tab/Escape/arrows/etc alone
+  if(e.ctrlKey || e.metaKey || e.altKey) return;       // leave real shortcuts alone
+  const now = Date.now();
+  const gap = now - returnsScanLastKeyTime;
+  returnsScanLastKeyTime = now;
+  if(e.key === 'Enter'){
+    const code = returnsScanBuffer.trim();
+    returnsScanBuffer = '';
+    clearTimeout(returnsScanBufferTimer);
+    if(code.length >= RETURNS_SCAN_MIN_LENGTH){
+      e.preventDefault();
+      e.stopPropagation();
+      startReturnsScan(code);
+    }
+    return;
+  }
+  if(gap > RETURNS_SCAN_MAX_KEY_GAP_MS){
+    // Too slow to be a scanner burst — a fresh sequence starts here.
+    returnsScanBuffer = '';
+  }
+  returnsScanBuffer += e.key;
+  if(returnsScanBuffer.length >= 2){
+    // Two keystrokes this fast, landing nowhere sensible to type, is a
+    // scanner firing — not a person. Swallow it so it can't corrupt a field
+    // or trigger whatever button happens to be focused.
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  clearTimeout(returnsScanBufferTimer);
+  returnsScanBufferTimer = setTimeout(() => {
+    // No Enter arrived — some scanners don't send one. Use it anyway if it
+    // looks like a complete code, rather than losing it.
+    const code = returnsScanBuffer.trim();
+    returnsScanBuffer = '';
+    if(code.length >= RETURNS_SCAN_MIN_LENGTH) startReturnsScan(code);
+  }, 400);
+}, true);
 
 /* ---- Lists: supplier search / browse ---- */
 function openReturnsListsHub(){
