@@ -3338,6 +3338,23 @@ let wholesaleShowStock = false; // Feature 4: whether the Stock column is curren
 let currentHistoryList = null;
 let currentHistoryItems = null;
 
+/* ---- Returns: ambient scan capture state ----
+   Declared up here (not down with the rest of the Returns code) because
+   showView() below reads returnsScanModeActive, and showView() can run
+   very early — via showApp() as soon as a saved session is restored, a few
+   lines down — before the script has reached the Returns section. Declaring
+   it later would leave it in the temporal-dead-zone at that point and throw.
+   See the full explanation next to where it's used, in the Returns section. */
+let returnsScanModeActive = false;   // true for as long as the person is on the Scan Returns page
+let returnsScanBusy = false;         // a lookup, or the supplier/qty/reason flow, is under way for one item
+let returnsScanQueue = [];           // codes scanned while returnsScanBusy is true
+let returnsScanBuffer = '';
+let returnsScanLastKeyTime = 0;
+let returnsScanBufferTimer = null;
+let returnsQtySafeToType = false;    // only true once the person has actually tapped the qty box themselves
+const RETURNS_SCAN_MAX_KEY_GAP_MS = 60; // hardware scanners fire keys far faster than any human types
+const RETURNS_SCAN_MIN_LENGTH = 4;      // shortest plausible barcode/product code
+
 /* Shared active-time tracker for Making List / Picking List.
    Counts only time actually spent with the list open on screen — pauses when the
    tab is hidden/backgrounded and resumes on return, instead of running off wall-clock
@@ -10766,31 +10783,6 @@ let returnsScanFeedItems = [];
 let returnsPendingProduct = null; // { stockid, name, barcode, suppliers } — awaiting a supplier tap
 let returnsPendingSupplier = null; // { suppid, name, cost_net } — chosen, awaiting qty + reason
 let returnsSelectedReason = null;  // a tapped preset; a typed custom reason wins over this
-
-/* ---- Ambient scan capture ----
-   The Returns flow needs a supplier + quantity + reason for every item, so
-   (unlike the simpler scanners elsewhere, which just keep stacking cards in
-   one open modal) the scanner modal here closes after every successful scan
-   while that's collected. If someone keeps firing a handheld scanner during
-   that step — which is exactly what happens when staff work through a stack
-   of returns — the injected keystrokes used to land wherever focus happened
-   to be: the quantity box (turning "1" into a barcode-length number), the
-   supplier search box, or nowhere at all. Either way the scan was lost.
-   This listens at the document level, in the capture phase, for the
-   "burst of keystrokes ending in Enter" signature of a hardware scanner —
-   real people can't type that fast — independently of whatever currently
-   has focus. A genuine scan is queued and processed once the item ahead of
-   it is done; deliberate typing in the quantity/search/reason boxes is left
-   alone (see returnsQtySafeToType and the safeIds list below). */
-let returnsScanModeActive = false;   // true for as long as the person is on the Scan Returns page
-let returnsScanBusy = false;         // a lookup, or the supplier/qty/reason flow, is under way for one item
-let returnsScanQueue = [];           // codes scanned while returnsScanBusy is true
-let returnsScanBuffer = '';
-let returnsScanLastKeyTime = 0;
-let returnsScanBufferTimer = null;
-let returnsQtySafeToType = false;    // only true once the person has actually tapped the qty box themselves
-const RETURNS_SCAN_MAX_KEY_GAP_MS = 60; // hardware scanners fire keys far faster than any human types
-const RETURNS_SCAN_MIN_LENGTH = 4;      // shortest plausible barcode/product code
 
 const RETURN_REASONS = [
   'Out of date',
