@@ -6859,8 +6859,11 @@ function launchWhatsAppSignup(){
     config_id: WA_SIGNUP_CONFIG_ID,
     response_type: 'code',
     override_default_response_type: true,
-    redirect_uri: 'https://portal.hallans.co.uk/picking-sheets/',
-    extras: { setup: {} }
+    extras: {
+      setup: {},
+      featureType: 'whatsapp_business_app_onboarding',
+      sessionInfoVersion: '3'
+    }
   });
 }
 
