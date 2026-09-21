@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hallan Cash &amp; Carry — Portal</title>
+<link rel="icon" href="/assets/hallan-logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy-deep:#0e1e33; --navy-mid:#173763; --blue-accent:#1d4b8f;
+    --gold:#b8860b; --gold-light:#f2c85b;
+    --paper:#f7f8fa; --panel:#ffffff; --line:#e2e6ec;
+    --ink:#1a2233; --slate:#667085;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;background:var(--paper);color:var(--ink);
+    font-family:'Inter',sans-serif;min-height:100vh;
+  }
+  h1,h2,h3,.display{font-family:'Space Grotesk',sans-serif;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+  a{color:inherit;}
+  ::selection{background:var(--gold);color:var(--navy-deep);}
+
+  /* ---- header ---- */
+  header.topbar{
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
+    padding:16px 28px;background:var(--navy-deep);
+    position:sticky;top:0;z-index:20;border-bottom:1px solid rgba(255,255,255,.08);
+  }
+  .brand{display:flex;align-items:center;gap:14px;}
+  .brand .tag{width:42px;height:42px;display:flex;align-items:center;justify-content:center;}
+  .brand .tag img{width:100%;height:100%;object-fit:contain;}
+  .brand h1{font-size:19px;margin:0;letter-spacing:.2px;color:#f2f1ec;}
+  .brand .sub{font-size:11px;color:#93a8c4;text-transform:uppercase;letter-spacing:1.6px;margin-top:2px;}
+  .staffbtn{
+    background:transparent;border:1px solid rgba(255,255,255,.25);color:#dbe4f2;
+    padding:9px 18px;border-radius:7px;font-size:13px;text-decoration:none;
+    transition:.15s;white-space:nowrap;
+  }
+  .staffbtn:hover{border-color:var(--gold);color:var(--gold-light);}
+
+  /* ---- hero ---- */
+  .hero{
+    background:
+      radial-gradient(circle at 85% 20%, rgba(184,134,11,.30), transparent 55%),
+      linear-gradient(120deg,var(--navy-deep) 0%,var(--navy-mid) 55%,var(--blue-accent) 100%);
+    padding:100px 28px;text-align:center;position:relative;overflow:hidden;
+  }
+  .hero .wordmark{
+    color:#fff;font-size:clamp(56px,11vw,108px);margin:0;line-height:1;font-weight:700;
+    letter-spacing:.5px;
+  }
+  .hero .wordmark-sub{
+    color:var(--gold-light);font-size:clamp(15px,2.4vw,22px);letter-spacing:8px;
+    text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-top:14px;
+  }
+
+  /* ---- services section ---- */
+  .services{max-width:1080px;margin:0 auto;padding:64px 28px 80px;}
+  .services-head{text-align:center;margin-bottom:44px;}
+  .services-head .eyebrow{
+    color:var(--gold);font-size:12px;letter-spacing:2.5px;text-transform:uppercase;
+    font-family:'JetBrains Mono',monospace;margin-bottom:10px;
+  }
+  .services-head h3{font-size:28px;margin:0 0 8px;color:var(--ink);}
+  .services-head p{color:var(--slate);margin:0;font-size:15px;}
+
+  .cardgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:22px;}
+  .card{
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:28px 26px;text-decoration:none;color:var(--ink);
+    display:flex;flex-direction:column;gap:10px;position:relative;
+    transition:.18s;
+  }
+  .card:hover{transform:translateY(-3px);box-shadow:0 14px 30px -16px rgba(14,30,51,.28);border-color:#c9d2df;}
+  .card .icon{font-size:26px;line-height:1;}
+  .card h4{margin:2px 0 0;font-size:18px;}
+  .card p{margin:0;color:var(--slate);font-size:13.5px;line-height:1.55;flex:1;}
+  .card .status{
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:1px;text-transform:uppercase;
+    padding:4px 10px;border-radius:20px;width:fit-content;
+  }
+  .card .status.live{background:rgba(184,134,11,.14);color:#8a6c1f;}
+  .card .status.soon{background:#eef0f3;color:var(--slate);}
+  .card .goto{font-size:13px;color:var(--gold);font-weight:600;display:flex;align-items:center;gap:6px;margin-top:4px;}
+  .card.disabled{cursor:default;opacity:.85;}
+  .card.disabled:hover{transform:none;box-shadow:none;border-color:var(--line);}
+
+  /* ---- footer ---- */
+  footer{
+    border-top:1px solid var(--line);padding:28px;text-align:center;
+    color:var(--slate);font-size:12.5px;
+  }
+  footer .fmark{font-family:'JetBrains Mono',monospace;letter-spacing:.5px;}
+
+  @media(max-width:600px){
+    .hero{padding:56px 20px 48px;}
+    .services{padding:48px 20px 60px;}
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="tag"><img src="/assets/hallan-logo.png" alt="Hallan"></div>
+    <div>
+      <h1>Hallan Cash &amp; Carry</h1>
+      <div class="sub">Portal</div>
+    </div>
+  </div>
+  <a class="staffbtn" href="/staff-portal/">Staff Sign In →</a>
+</header>
+
+<section class="hero">
+  <h2 class="wordmark">Hallan</h2>
+  <div class="wordmark-sub">Cash &amp; Carry</div>
+</section>
+
+<section class="services">
+  <div class="services-head">
+    <div class="eyebrow">Get Started</div>
+    <h3>What are you here for?</h3>
+    <p>Pick a service to continue.</p>
+  </div>
+  <div class="cardgrid">
+
+    <!-- TODO: replace href with the real Account Opening Form URL -->
+    <a class="card" id="account-opening" href="#">
+      <div class="icon">📝</div>
+      <div class="status live">Live</div>
+      <h4>Open a Trade Account</h4>
+      <p>Apply for a Hallan trade account online and start ordering within days.</p>
+      <div class="goto">Start application →</div>
+    </a>
+
+    <div class="card disabled">
+      <div class="icon">🍽️</div>
+      <div class="status soon">Coming soon</div>
+      <h4>Restaurant Orders</h4>
+      <p>Order stock for your kitchen online, on your own schedule.</p>
+    </div>
+
+    <a class="card" href="/staff-portal/">
+      <div class="icon">👥</div>
+      <div class="status live">Live</div>
+      <h4>Staff Portal</h4>
+      <p>Holiday requests, rotas, and everything HR, in one login.</p>
+      <div class="goto">Sign in →</div>
+    </a>
+
+    <a class="card" href="/picking-sheets/">
+      <div class="icon">📦</div>
+      <div class="status live">Live</div>
+      <h4>Picking Sheets</h4>
+      <p>Build and print picking lists straight from live stock, by department.</p>
+      <div class="goto">Open Picking Sheets →</div>
+    </a>
+
+    <a class="card" href="/management/">
+      <div class="icon">🗂️</div>
+      <div class="status live">Live</div>
+      <h4>Management</h4>
+      <p>Walk the store, tick off each location, and see who checked it and when.</p>
+      <div class="goto">Sign in →</div>
+    </a>
+
+    <a class="card" href="/rota/">
+      <div class="icon">🗓️</div>
+      <div class="status live">Live</div>
+      <h4>Rota</h4>
+      <p>Build the weekly schedule, manage shifts, and see who's working when.</p>
+      <div class="goto">Sign in →</div>
+    </a>
+
+  </div>
+</section>
+
+<footer>
+  <div class="fmark">HALLAN CASH &amp; CARRY</div>
+  <div style="margin-top:6px;">&copy; <span id="yr"></span> Hallan Cash &amp; Carry. All rights reserved.</div>
+</footer>
+
+<script>
+  document.getElementById('yr').textContent = new Date().getFullYear();
+</script>
+</body>
+</html>
