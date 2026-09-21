@@ -972,6 +972,12 @@
       <div id="waConnectStatus" style="display:none;margin-top:10px;font-size:12px;color:var(--text-dim);white-space:pre-wrap;font-family:monospace;background:rgba(0,0,0,.15);border-radius:6px;padding:10px;"></div>
     </div>
 
+    <div class="wa-type-toggle" id="waChannelToggle" style="max-width:340px;">
+      <button type="button" class="wa-type-btn active" data-channel="api" onclick="setWaChannel('api')">📱 API Number</button>
+      <button type="button" class="wa-type-btn" data-channel="coex" onclick="setWaChannel('coex')">🤝 Coexistence</button>
+    </div>
+    <p class="wa-hint" id="waChannelHint" style="margin-top:6px;"></p>
+
     <div class="wa-type-toggle" id="waTopTabs" style="max-width:320px;">
       <button type="button" class="wa-type-btn active" data-tab="broadcast" onclick="setWaTab('broadcast')">📣 Broadcast</button>
       <button type="button" class="wa-type-btn" data-tab="inbox" onclick="setWaTab('inbox')">📥 Replies<span class="wa-badge" id="waInboxBadge" style="display:none;"></span></button>
@@ -1039,7 +1045,7 @@
     </div>
 
     <div id="waInboxTab" style="display:none;margin-top:16px;">
-      <div class="wa-panel">
+      <div class="wa-panel" id="waAutoreplyPanel">
         <div class="actionbar" style="margin-bottom:4px;">
           <label class="wa-label" style="margin:0;">Auto-reply message</label>
           <span id="waAutoreplyStatus" class="wa-hint" style="margin:0;"></span>
@@ -1056,7 +1062,7 @@
             <button class="btn-ghost" onclick="markAllWaInboxRead()">Mark all as read</button>
           </div>
         </div>
-        <p class="wa-hint">The last 200 messages customers have sent to your WhatsApp number, most recent first. This number isn't actively monitored — each sender automatically gets a reply pointing them to <span class="mono">wa.me/447718041859</span> — so check here for anything that needs a real response.</p>
+        <p class="wa-hint" id="waInboxHint">The last 200 messages customers have sent to your WhatsApp number, most recent first. This number isn't actively monitored — each sender automatically gets a reply pointing them to <span class="mono">wa.me/447718041859</span> — so check here for anything that needs a real response.</p>
         <div id="waInboxList" style="margin-top:12px;"><div class="loading">Loading…</div></div>
       </div>
     </div>
@@ -6894,10 +6900,40 @@ function openWhatsappBroadcast(){
   waSelectedFlyer = 'colour';
   setWaMessageType('text');
   removeWaAttachment();
+  setWaChannel('api');
   setWaTab('broadcast');
   loadWaLists();
   loadWaFlyerDefaults();
   loadWaInbox(); // also refreshes the unread badge on the Replies tab
+}
+
+/* ---- which number this page is currently acting on: the API-only number
+   used for broadcasts to non-regular customers, or the coexistence number
+   that's also used day-to-day in the WhatsApp Business app on a phone.
+   Drives which number a broadcast sends from and which replies are shown —
+   and, since the coexistence number is genuinely answered by a person,
+   hides the auto-reply editor entirely when it's selected. ---- */
+let waActiveChannel = 'api'; // 'api' | 'coex'
+function setWaChannel(channel){
+  waActiveChannel = channel;
+  document.querySelectorAll('#waChannelToggle .wa-type-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.channel === channel);
+  });
+  const hint = document.getElementById('waChannelHint');
+  if(hint){
+    hint.textContent = channel === 'coex'
+      ? 'Coexistence number selected — broadcasts below send from it, and it\'s answered directly by a person in the WhatsApp Business app, so no automatic reply is sent.'
+      : 'API number selected — broadcasts below send from it, and unanswered replies get an automatic reply.';
+  }
+  const autoreplyPanel = document.getElementById('waAutoreplyPanel');
+  if(autoreplyPanel) autoreplyPanel.style.display = channel === 'coex' ? 'none' : '';
+  const inboxHint = document.getElementById('waInboxHint');
+  if(inboxHint){
+    inboxHint.innerHTML = channel === 'coex'
+      ? 'The last 200 messages customers have sent to your coexistence WhatsApp number, most recent first. This number is genuinely monitored — it\'s also used directly in the WhatsApp Business app — so no automatic reply is sent here; it\'s just for visibility.'
+      : 'The last 200 messages customers have sent to your API WhatsApp number, most recent first. This number isn\'t actively monitored — each sender automatically gets a reply pointing them to <span class="mono">wa.me/447718041859</span> — so check here for anything that needs a real response.';
+  }
+  if(waActiveTab === 'inbox') renderWaInbox();
 }
 
 /* ---- top-level tabs: Broadcast (compose + send) vs Replies (inbox) ---- */
@@ -6978,12 +7014,13 @@ function renderWaInboxBadge(count){
 }
 function renderWaInbox(){
   const list = document.getElementById('waInboxList');
-  if(waInboundItems.length === 0){
+  const items = waInboundItems.filter(m => (m.channel || 'api') === waActiveChannel);
+  if(items.length === 0){
     list.innerHTML = '<div class="empty-hint">No replies yet.</div>';
     return;
   }
   list.innerHTML = '';
-  waInboundItems.forEach(m => {
+  items.forEach(m => {
     const row = document.createElement('div');
     row.className = 'wa-inbox-row' + (m.is_read ? '' : ' unread');
     const who = m.contact_name ? escapeHtml(m.contact_name) : escapeHtml(m.phone);
@@ -7032,9 +7069,9 @@ async function markWaInboxRead(id, rowEl){
 }
 async function markAllWaInboxRead(){
   try{
-    await apiPost('whatsapp/inbound/read-all', {});
-    waInboundItems.forEach(m => { m.is_read = 1; });
-    renderWaInboxBadge(0);
+    await apiPost('whatsapp/inbound/read-all', { channel: waActiveChannel });
+    waInboundItems.forEach(m => { if((m.channel || 'api') === waActiveChannel) m.is_read = 1; });
+    renderWaInboxBadge(waInboundItems.filter(m => !m.is_read).length);
     if(waActiveTab === 'inbox') renderWaInbox();
     toast('All marked as read');
   }catch(e){
@@ -7441,7 +7478,8 @@ async function sendWhatsappBroadcast(){
   const countLabel = document.getElementById('waContactCount').textContent;
   const flyerMeta = waMessageType === 'image' ? WA_FLYERS.find(f => f.key === waSelectedFlyer) : null;
   const typeLabel = flyerMeta ? flyerMeta.label : waMessageType;
-  if(!confirm('Send this ' + typeLabel + ' message — ' + countLabel + '?')) return;
+  const channelLabel = waActiveChannel === 'coex' ? 'coexistence' : 'API';
+  if(!confirm('Send this ' + typeLabel + ' message from your ' + channelLabel + ' number — ' + countLabel + '?')) return;
   const btn = document.getElementById('waSendBtn');
   const status = document.getElementById('waSendStatus');
   btn.disabled = true;
@@ -7453,7 +7491,8 @@ async function sendWhatsappBroadcast(){
       messageType: waMessageType,
       flyer: waMessageType === 'image' ? waSelectedFlyer : undefined,
       attachment: waMessageType === 'text' ? null : (waMessageType === 'image' ? imageAttachment : waAttachment),
-      list_ids: listIds
+      list_ids: listIds,
+      channel: waActiveChannel
     });
     const results = data.results || [];
     const okCount = results.filter(r => r.ok).length;
