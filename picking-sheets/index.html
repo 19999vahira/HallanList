@@ -17,7 +17,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <!-- Meta's SDK, used only by the "Connect a WhatsApp Number" button on the WhatsApp Broadcast page -->
-<script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
+<!-- Facebook SDK is no longer loaded on every page: it is loaded on demand by ensureFacebookSdk() when the WhatsApp signup button is used. -->
 <style>
   :root{
     --bg:#ffffff; --panel:#f4f6f9; --panel2:#eceff3; --panel3:#e4e8ee;
@@ -3562,7 +3562,7 @@ async function loadPortalUsers(){
         </div>
         <div style="display:flex;gap:8px;">
           <button class="btn-ghost" onclick='openPortalUserForm(${JSON.stringify(u).replace(/'/g,"&apos;")})'>Edit</button>
-          <button class="btn-danger-ghost" onclick="deletePortalUser(${u.user_id}, '${escapeHtml(u.name).replace(/'/g,"\\'")}')">Delete</button>
+          <button class="btn-danger-ghost" onclick="deletePortalUser(${u.user_id}, ${jsArg(u.name)})">Delete</button>
         </div>
       </div>
     `).join('');
@@ -3631,6 +3631,14 @@ async function deletePortalUser(id, name){
 }
 function escapeHtml(s){
   return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+/* Safe way to pass a value into an inline handler:  onclick="fn(${jsArg(value)})"
+   JSON.stringify makes it a valid JS string literal; escapeHtml then protects it inside the HTML
+   attribute (the browser decodes the attribute back to the exact JSON text before running it).
+   Do NOT use escapeHtml(x) inside quotes in a handler ('${escapeHtml(x)}'): the browser decodes
+   &#39; back to ' before the JavaScript runs, which lets a value break out of the string. */
+function jsArg(v){
+  return escapeHtml(JSON.stringify(v == null ? '' : v));
 }
 
 /* ============ ADMIN: ADD IP ADDRESS ============ */
@@ -4356,8 +4364,8 @@ function renderWholesaleScheduleEmailChips(){
   wrap.innerHTML = wholesaleSavedEmails.map(email => {
     const on = wholesaleScheduleSelectedEmails.has(email);
     return `<span class="wschipEmail" data-email="${escapeHtml(email)}" style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:14px;font-size:12px;cursor:pointer;border:1px solid var(--line);${on ? 'background:var(--accent);color:#1a1a1a;border-color:var(--accent);' : ''}">
-      <span onclick="toggleWholesaleScheduleEmail('${escapeHtml(email).replace(/'/g,"\\'")}')">${escapeHtml(email)}</span>
-      <span onclick="deleteWholesaleScheduleEmail('${escapeHtml(email).replace(/'/g,"\\'")}')" title="Remove this saved email" style="opacity:0.7;">&times;</span>
+      <span onclick="toggleWholesaleScheduleEmail(${jsArg(email)})">${escapeHtml(email)}</span>
+      <span onclick="deleteWholesaleScheduleEmail(${jsArg(email)})" title="Remove this saved email" style="opacity:0.7;">&times;</span>
     </span>`;
   }).join('');
 }
@@ -4570,7 +4578,7 @@ function renderWsWaFlyerGrid(){
       renderWsWaFlyerGrid();
     };
     const thumbHtml = (img && img.data)
-      ? `<img class="wa-flyer-thumb" src="${img.data}" alt="${escapeHtml(f.label)}">`
+      ? `<img class="wa-flyer-thumb" src="${escapeHtml(img.data)}" alt="${escapeHtml(f.label)}">`
       : `<div class="wa-flyer-thumb-placeholder">No image saved yet — use Choose image below</div>`;
     const noteHtml = custom
       ? '<div class="wa-flyer-note">Custom image — this schedule only</div>'
@@ -5017,10 +5025,10 @@ function renderPdfLibrary(){
             <td style="padding:6px;">${escapeHtml(f.filename)}</td>
             <td style="padding:6px;">
               <a href="${escapeHtml(f.url)}" target="_blank" rel="noopener">${escapeHtml(f.url)}</a>
-              <button type="button" class="btn-ghost" style="padding:2px 8px;margin-left:6px;" onclick="copyPdfLibraryLink('${escapeHtml(f.url)}', this)">Copy</button>
+              <button type="button" class="btn-ghost" style="padding:2px 8px;margin-left:6px;" onclick="copyPdfLibraryLink(${jsArg(f.url)}, this)">Copy</button>
             </td>
             <td style="padding:6px;">${new Date(f.updated_at).toLocaleString()}</td>
-            <td style="padding:6px;"><button type="button" class="btn-danger-ghost" style="padding:2px 8px;" onclick="deletePdfLibraryFile('${escapeHtml(f.filename)}')">Delete</button></td>
+            <td style="padding:6px;"><button type="button" class="btn-danger-ghost" style="padding:2px 8px;" onclick="deletePdfLibraryFile(${jsArg(f.filename)})">Delete</button></td>
           </tr>
         `).join('')}
       </tbody>
@@ -5937,7 +5945,7 @@ function flyerWebFeaturedHtml(prepared){
   if(!prepared.length) return '';
   return '<div class="fw-featured">' + prepared.map((p,i) => `
       <div class="fw-featured-item${i===0 ? ' fw-featured-main':''}">
-        ${p.image ? `<img src="${p.image}" alt="${escapeHtml(p.name)}">` : ''}
+        ${p.image ? `<img src="${escapeHtml(p.image)}" alt="${escapeHtml(p.name)}">` : ''}
         <div class="fw-featured-name">${escapeHtml(p.name)}</div>
         ${p.price !== null ? `<div class="fw-featured-price${i===0 ? ' fw-featured-price-main':''}">£${p.price.toFixed(2)}${p.isVat ? ' <small>+VAT</small>' : ''}</div>` : ''}
       </div>`).join('') + '</div>';
@@ -6806,10 +6814,31 @@ window.fbAsyncInit = function() {
     version: WA_SIGNUP_GRAPH_VERSION,
     fedCM: false
   });
+  window.__fbInitDone = true;
+  if (window.__fbReady) window.__fbReady();
 };
 
+// Loads Facebook's SDK only when it is needed. Third-party scripts run with full access to this page
+// (including the saved sign-in token), so they should not be on every page load.
+let fbSdkPromise = null;
+function ensureFacebookSdk(){
+  if (window.FB && window.__fbInitDone) return Promise.resolve();
+  if (fbSdkPromise) return fbSdkPromise;
+  fbSdkPromise = new Promise((resolve, reject) => {
+    window.__fbReady = resolve;
+    const sc = document.createElement('script');
+    sc.src = 'https://connect.facebook.net/en_US/sdk.js';
+    sc.async = true; sc.defer = true; sc.crossOrigin = 'anonymous';
+    sc.onerror = () => { fbSdkPromise = null; reject(new Error('Could not load the Facebook SDK (blocked by a network filter or ad blocker?)')); };
+    document.head.appendChild(sc);
+    setTimeout(() => { if (!window.__fbInitDone) { fbSdkPromise = null; reject(new Error('The Facebook SDK took too long to start')); } }, 15000);
+  });
+  return fbSdkPromise;
+}
+
 window.addEventListener('message', (event) => {
-  if (!event.origin.endsWith('facebook.com')) return;
+  // was endsWith('facebook.com'), which also matches https://evilfacebook.com
+  if (!/^https:\/\/([a-z0-9-]+\.)*facebook\.com$/.test(event.origin)) return;
   let data;
   try { data = JSON.parse(event.data); } catch { return; }
   if (data.type !== 'WA_EMBEDDED_SIGNUP') return;
@@ -6851,7 +6880,14 @@ async function waSignupSendCodeToServer(code){
   }
 }
 
-function launchWhatsAppSignup(){
+async function launchWhatsAppSignup(){
+  try { await ensureFacebookSdk(); }
+  catch(e){
+    const statusEl = document.getElementById('waConnectStatus');
+    statusEl.style.display = 'block';
+    statusEl.textContent = e.message;
+    return;
+  }
   FB.login((response) => {
     if (response.authResponse) {
       waSignupSendCodeToServer(response.authResponse.code);
@@ -7129,7 +7165,7 @@ function renderWaFlyerGrid(){
       renderWaFlyerGrid();
     };
     const thumbHtml = (img && img.data)
-      ? `<img class="wa-flyer-thumb" src="${img.data}" alt="${escapeHtml(f.label)}">`
+      ? `<img class="wa-flyer-thumb" src="${escapeHtml(img.data)}" alt="${escapeHtml(f.label)}">`
       : `<div class="wa-flyer-thumb-placeholder">No image saved yet — use Replace below</div>`;
     card.innerHTML = `
       <h4>${waSelectedFlyer === f.key ? '✅' : '⬜'} ${escapeHtml(f.label)}</h4>
@@ -7643,27 +7679,27 @@ function buildRestaurantItemCard(it, source){
   card.id = 'restaurant-card-' + key;
   card.innerHTML = `
     ${it.image_url
-      ? `<img class="restaurant-card-img" src="${it.image_url}" alt="" loading="lazy" onerror="this.outerHTML='<div class=&quot;restaurant-card-img-placeholder&quot;>No photo</div>'">`
+      ? `<img class="restaurant-card-img" src="${escapeHtml(it.image_url)}" alt="" loading="lazy" onerror="this.outerHTML='<div class=&quot;restaurant-card-img-placeholder&quot;>No photo</div>'">`
       : `<div class="restaurant-card-img-placeholder">No photo</div>`}
     <div class="restaurant-card-name">${escapeHtml(it.item_name)}</div>
     <div class="restaurant-card-price">${it.trade_price === null ? '—' : '£' + it.trade_price.toFixed(2) + (it.is_vat ? ' +VAT' : '')}</div>
-    ${!it.in_stock ? `<div class="restaurant-card-oos">\u26a0 May be out of stock \u2014 <a href="#" onclick="event.preventDefault(); toggleRestaurantSubstitutes(this, '${key}')">suggest alternatives</a></div>` : ''}
+    ${!it.in_stock ? `<div class="restaurant-card-oos">\u26a0 May be out of stock \u2014 <a href="#" onclick="event.preventDefault(); toggleRestaurantSubstitutes(this, ${jsArg(key)})">suggest alternatives</a></div>` : ''}
     <div class="restaurant-sub-slot"></div>
     <div class="restaurant-qty-stepper">
-      <button type="button" onclick="stepRestaurantQty('${key}', -1, '${source}')">\u2212</button>
+      <button type="button" onclick="stepRestaurantQty(${jsArg(key)}, -1, ${jsArg(source)})">\u2212</button>
       <input type="number" min="0" step="1" class="restaurant-qty-input" value="${inCart ? inCart.qty : 0}"
-        onchange="updateRestaurantCartItem('${key}', this.value, '${source}')">
-      <button type="button" onclick="stepRestaurantQty('${key}', 1, '${source}')">+</button>
-      ${kgOrBox ? `<span class="restaurant-unit-label" id="restaurant-unit-${key}">${unit === 'box' ? 'box(es)' : 'kg'}</span>` : ''}
+        onchange="updateRestaurantCartItem(${jsArg(key)}, this.value, ${jsArg(source)})">
+      <button type="button" onclick="stepRestaurantQty(${jsArg(key)}, 1, ${jsArg(source)})">+</button>
+      ${kgOrBox ? `<span class="restaurant-unit-label" id="restaurant-unit-${escapeHtml(key)}">${unit === 'box' ? 'box(es)' : 'kg'}</span>` : ''}
     </div>
     ${kgOrBox ? `
     <label class="restaurant-unit-toggle">
-      <input type="checkbox" ${unit === 'box' ? 'checked' : ''} onchange="toggleRestaurantUnit('${key}', this.checked, '${source}')">
+      <input type="checkbox" ${unit === 'box' ? 'checked' : ''} onchange="toggleRestaurantUnit(${jsArg(key)}, this.checked, ${jsArg(source)})">
       Order by box instead of kg
     </label>
     ` : ''}
     <input type="text" class="restaurant-note-input" placeholder="Note (optional) — e.g. ripe, extra small"
-      value="${escapeHtml(note)}" onchange="updateRestaurantItemNote('${key}', this.value)">
+      value="${escapeHtml(note)}" onchange="updateRestaurantItemNote(${jsArg(key)}, this.value)">
   `;
   return card;
 }
@@ -7794,7 +7830,7 @@ function renderRestaurantCustomAddedList(){
   list.innerHTML = '<div style="font-weight:700;font-size:13px;margin-bottom:6px;">Added by name:</div>' +
     customItems.map(it => `<div style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:4px;">
         <span>${escapeHtml(it.item_name)} \u00d7 ${it.qty}${it.note ? ' — ' + escapeHtml(it.note) : ''}</span>
-        <button class="btn-ghost" style="padding:2px 8px;" onclick="reviewRemoveRestaurantItem('${it.key}'); renderRestaurantCustomAddedList();">Remove</button>
+        <button class="btn-ghost" style="padding:2px 8px;" onclick="reviewRemoveRestaurantItem(${jsArg(it.key)}); renderRestaurantCustomAddedList();">Remove</button>
       </div>`).join('');
 }
 
@@ -7821,7 +7857,7 @@ async function toggleRestaurantSubstitutes(linkEl, key){
         restaurantItemLookup.set(subKey, s);
         const inCart = restaurantCart.get(subKey);
         return `<label style="display:flex;align-items:center;gap:6px;font-size:13px;margin-bottom:4px;">
-          <input type="checkbox" ${inCart ? 'checked' : ''} onchange="toggleRestaurantSubstituteItem(this, '${subKey}')">
+          <input type="checkbox" ${inCart ? 'checked' : ''} onchange="toggleRestaurantSubstituteItem(this, ${jsArg(subKey)})">
           ${escapeHtml(s.item_name)} ${s.trade_price !== null ? '(' + s.trade_price.toFixed(2) + (s.is_vat ? ' +VAT' : '') + ')' : ''}
         </label>`;
       }).join('');
@@ -7889,21 +7925,21 @@ function renderRestaurantReview(){
       tr.innerHTML = `
         <td>
           <div style="display:flex;align-items:center;gap:8px;">
-            ${it.image_url ? `<img class="restaurant-review-thumb" src="${it.image_url}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
+            ${it.image_url ? `<img class="restaurant-review-thumb" src="${escapeHtml(it.image_url)}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
             <div style="flex:1;">
               ${escapeHtml(it.item_name)}
               <input type="text" class="restaurant-note-input" style="margin-top:4px;font-size:12px;" placeholder="Note (optional)"
-                value="${escapeHtml(it.note || '')}" onchange="reviewUpdateRestaurantNote('${key}', this.value)">
+                value="${escapeHtml(it.note || '')}" onchange="reviewUpdateRestaurantNote(${jsArg(key)}, this.value)">
             </div>
           </div>
         </td>
         <td class="qtycell">${it.trade_price === null ? '—' : it.trade_price.toFixed(2) + (it.is_vat ? ' +VAT' : '')}</td>
         <td class="qtycell">
           <input type="number" min="1" step="1" class="restaurant-qty-input" style="width:70px;" value="${it.qty}"
-            onchange="reviewUpdateRestaurantQty('${key}', this.value)">
+            onchange="reviewUpdateRestaurantQty(${jsArg(key)}, this.value)">
           ${it.unit ? `<div style="font-size:11px;color:var(--text-dim);">${it.unit === 'box' ? 'box(es)' : 'kg'}</div>` : ''}
         </td>
-        <td class="qtycell"><button class="btn-ghost" onclick="reviewRemoveRestaurantItem('${key}')">Remove</button></td>
+        <td class="qtycell"><button class="btn-ghost" onclick="reviewRemoveRestaurantItem(${jsArg(key)})">Remove</button></td>
       `;
       tbody.appendChild(tr);
     });
@@ -10296,7 +10332,7 @@ async function runNewInvoiceSupplierSearch(){
     if(items.length === 0){ results.innerHTML = '<div class="empty-hint" style="font-size:12px;">No suppliers found.</div>'; return; }
     results.innerHTML = items.map(s => `
       <div style="padding:8px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px;"
-        onclick="chooseNewInvoiceSupplier(${s.suppid}, ${JSON.stringify(s.name).replace(/"/g,'&quot;')})">${escapeHtml(s.name)}</div>
+        onclick="chooseNewInvoiceSupplier(${s.suppid}, ${jsArg(s.name)})">${escapeHtml(s.name)}</div>
     `).join('');
   }catch(e){ console.error(e); }
 }
@@ -10509,7 +10545,7 @@ async function runGoodsInSupplierSearch(){
     if(items.length === 0){ results.innerHTML = '<div class="empty-hint" style="font-size:12px;">No suppliers found.</div>'; return; }
     results.innerHTML = items.map(s => `
       <div style="padding:8px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px;"
-        onclick="chooseGoodsInSupplier(${s.suppid}, ${JSON.stringify(s.name).replace(/"/g,'&quot;')})">${escapeHtml(s.name)}</div>
+        onclick="chooseGoodsInSupplier(${s.suppid}, ${jsArg(s.name)})">${escapeHtml(s.name)}</div>
     `).join('');
   }catch(e){ console.error(e); }
 }
@@ -11037,7 +11073,7 @@ function renderReturnsPickSupplierList(suppliers){
     return;
   }
   box.innerHTML = suppliers.map(s => `
-    <div class="supplier-pick-row" onclick="chooseReturnsSupplier(${s.suppid}, ${JSON.stringify(s.supplier_name).replace(/"/g,'&quot;')}, ${s.cost_net === null || s.cost_net === undefined ? 'null' : s.cost_net})">
+    <div class="supplier-pick-row" onclick="chooseReturnsSupplier(${s.suppid}, ${jsArg(s.supplier_name)}, ${s.cost_net === null || s.cost_net === undefined ? 'null' : s.cost_net})">
       <div>
         <span class="spname">${escapeHtml(s.supplier_name)}</span>
         ${s.preferred ? '<span class="spbadge">Preferred</span>' : ''}
@@ -11059,7 +11095,7 @@ async function runReturnsPickSupplierSearch(){
     const items = data.items || [];
     if(items.length === 0){ results.innerHTML = '<div class="empty-hint" style="font-size:12px;">No suppliers found.</div>'; return; }
     results.innerHTML = items.map(s => `
-      <div class="supplier-pick-row" onclick="chooseReturnsSupplier(${s.suppid}, ${JSON.stringify(s.name).replace(/"/g,'&quot;')}, null)">
+      <div class="supplier-pick-row" onclick="chooseReturnsSupplier(${s.suppid}, ${jsArg(s.name)}, null)">
         <div><span class="spname">${escapeHtml(s.name)}</span></div>
       </div>
     `).join('');
@@ -11084,7 +11120,7 @@ async function chooseReturnsSupplier(suppid, supplierName, costNet){
 }
 function renderReturnsReasonGrid(){
   document.getElementById('returnsReasonGrid').innerHTML = RETURN_REASONS.map(r => `
-    <div class="reasonbtn${returnsSelectedReason === r ? ' selected' : ''}" onclick="pickReturnsReason(${JSON.stringify(r).replace(/"/g,'&quot;')})">${escapeHtml(r)}</div>
+    <div class="reasonbtn${returnsSelectedReason === r ? ' selected' : ''}" onclick="pickReturnsReason(${jsArg(r)})">${escapeHtml(r)}</div>
   `).join('');
 }
 function pickReturnsReason(reason){
@@ -11228,7 +11264,7 @@ async function loadReturnsSupplierBrowse(){
       return;
     }
     box.innerHTML = suppliers.map(s => `
-      <div class="pickrow" style="cursor:pointer;" onclick="openReturnsSupplierDetail(${s.suppid}, ${JSON.stringify(s.supplier_name).replace(/"/g,'&quot;')})">
+      <div class="pickrow" style="cursor:pointer;" onclick="openReturnsSupplierDetail(${s.suppid}, ${jsArg(s.supplier_name)})">
         <div class="pickinfo">
           <div class="pname">${escapeHtml(s.supplier_name)}</div>
           <div class="pbarcode">${s.pending_items > 0 ? s.pending_items + ' item' + (s.pending_items===1?'':'s') + ' pending' : 'None pending'} &middot; ${s.awaiting_lists} awaiting credit &middot; ${s.returned_lists} returned</div>
@@ -11255,7 +11291,7 @@ async function runReturnsSupplierSearch(){
     const items = data.items || [];
     if(items.length === 0){ results.innerHTML = '<div class="empty-hint">No suppliers found.</div>'; return; }
     results.innerHTML = items.map(s => `
-      <div class="pickrow" style="cursor:pointer;" onclick="openReturnsSupplierDetail(${s.suppid}, ${JSON.stringify(s.name).replace(/"/g,'&quot;')})">
+      <div class="pickrow" style="cursor:pointer;" onclick="openReturnsSupplierDetail(${s.suppid}, ${jsArg(s.name)})">
         <div class="pickinfo"><div class="pname">${escapeHtml(s.name)}</div></div>
       </div>
     `).join('');
@@ -11795,7 +11831,7 @@ async function runCreatedInvoiceSearch(idx, q){
     if(items.length === 0){ results.innerHTML = '<div class="empty-hint" style="font-size:12px;">No matches.</div>'; return; }
     results.innerHTML = items.map(it => `
       <div style="padding:6px 8px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px;"
-        onclick="pickCreatedInvoiceMatch(${idx}, ${it.stockid}, ${JSON.stringify(it.name).replace(/"/g,'&quot;')})">${escapeHtml(it.name)}</div>
+        onclick="pickCreatedInvoiceMatch(${idx}, ${it.stockid}, ${jsArg(it.name)})">${escapeHtml(it.name)}</div>
     `).join('');
   }catch(e){
     results.innerHTML = '<div class="empty-hint" style="font-size:12px;color:var(--danger)">Search failed.</div>';
@@ -14615,11 +14651,8 @@ async function shareOrEmailPDF(doc, filename, subject){
 }
 
 /* ============ UTIL ============ */
-function escapeHtml(str){
-  const d = document.createElement('div');
-  d.textContent = str ?? '';
-  return d.innerHTML;
-}
+// (a second escapeHtml() used to be defined here. It did not escape quotes, and because it was declared
+// later in the same script it overrode the correct one at the top of the file for the whole app.)
 function errDetailHtml(e){
   const msg = (e && e.message) ? e.message : String(e);
   return '<div class="errdetail">' + escapeHtml(msg) + '</div>';
