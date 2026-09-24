@@ -2188,6 +2188,11 @@
         <h4>📷 Scan</h4>
         <div class="count">Scan products in, one by one, and pick the supplier each is going back to</div>
       </div>
+      <div class="bincard" style="--tile-color:#0e7490;" onclick="openReturnsAdjustments()">
+        <h4>📉 Stock Adjusted (Vector)</h4>
+        <div class="count">Write-offs entered in Vector — add them to a supplier return, or clear them</div>
+        <div class="count" id="returnsAdjustCount" style="margin-top:4px;"></div>
+      </div>
       <div class="bincard" onclick="openReturnsListsHub()">
         <h4>📋 Lists</h4>
         <div class="count">Find a supplier's returns — pending, awaiting credit note, or returned</div>
@@ -2220,6 +2225,25 @@
       <button class="btn-amber" onclick="openReturnsScannerModal()">Scan Barcode</button>
     </div>
     <div id="returnsScanFeed"><div class="empty-hint">Nothing scanned yet this session. Tap "Scan Barcode" to start.</div></div>
+  </div>
+
+  <!-- RETURNS: STOCK ADJUSTED (VECTOR) — write-offs synced from Vector -->
+  <div id="view-returns-adjustments" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openReturnsHub()">Returns</button><span class="sep">/</span>
+      <span class="current">Stock Adjusted (Vector)</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Supplier Returns</div>
+      <h2>Stock Adjusted (Vector)</h2>
+      <p>Stock written off in Vector since 23 September. Tap an item to add it to a supplier's return list (quantity and reason can be changed), or tap ✕ to clear it.</p>
+    </div>
+    <div class="actionbar">
+      <span id="returnsAdjustCountBar" class="mono" style="color:var(--text-dim);font-size:12px;"></span>
+      <button class="btn-ghost" onclick="loadReturnsAdjustments()">Refresh</button>
+    </div>
+    <div id="returnsAdjustList"><div class="loading">Loading…</div></div>
   </div>
 
   <!-- RETURNS: LISTS — supplier search / browse -->
@@ -2703,6 +2727,7 @@
   <div class="modal" style="width:430px;">
     <h3 id="returnsDetailsProduct">Product</h3>
     <p class="modal-sub" id="returnsDetailsSupplier"></p>
+    <p class="modal-sub" id="returnsDetailsVectorNote" style="display:none;margin-top:-6px;"></p>
 
     <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;">Quantity</label>
     <div class="qtystepper" style="margin-bottom:16px;">
@@ -10882,10 +10907,14 @@ let returnsBarcodeDebounce = null;
 let returnsSupplierSearchDebounce = null;
 let returnsPickSupplierSearchDebounce = null;
 
-function openReturnsHub(){ showView('view-returns-hub'); }
+function openReturnsHub(){
+  showView('view-returns-hub');
+  refreshReturnsAdjustCount();
+}
 
 /* ---- Scan ---- */
 function openReturnsScan(){
+  returnsPendingAdjustment = null; // the scan flow shares the supplier/qty/reason modals with Stock Adjusted
   returnsScanFeedItems = [];
   returnsScanQueue = [];
   returnsScanBusy = false;
@@ -11109,9 +11138,24 @@ async function chooseReturnsSupplier(suppid, supplierName, costNet){
   closeModal('modalReturnsSupplierPick');
   document.getElementById('returnsDetailsProduct').textContent = returnsPendingProduct.name;
   document.getElementById('returnsDetailsSupplier').textContent = 'Going back to ' + supplierName;
-  document.getElementById('returnsQtyInput').value = '1';
+  // Coming from Stock Adjusted (Vector): quantity starts at what Vector wrote
+  // off (still editable), and if Vector's reason is one of the presets it is
+  // pre-selected. Otherwise it's shown as a note and the person picks/types.
+  const adj = returnsPendingAdjustment;
+  document.getElementById('returnsQtyInput').value = adj ? String(adj.qty) : '1';
   returnsQtySafeToType = false; // reset — only a genuine tap on the box allows typing into it
   document.getElementById('returnsReasonCustom').value = '';
+  if(adj){
+    const match = RETURN_REASONS.find(r => r.toLowerCase() === String(adj.reason || '').trim().toLowerCase());
+    if(match) returnsSelectedReason = match;
+  }
+  const note = document.getElementById('returnsDetailsVectorNote');
+  if(adj){
+    note.textContent = 'Written off in Vector: ' + adj.qty + (adj.reason ? ' · ' + adj.reason : '');
+    note.style.display = '';
+  }else{
+    note.style.display = 'none';
+  }
   renderReturnsReasonGrid();
   openModal('modalReturnsDetails');
   // No auto-focus/select here any more: auto-focusing this box used to be
@@ -11138,7 +11182,7 @@ function onReturnsCustomReason(){
 }
 function bumpReturnsQty(delta){
   const el = document.getElementById('returnsQtyInput');
-  el.value = Math.max(1, (parseInt(el.value, 10) || 1) + delta);
+  el.value = Math.max(1, (parseFloat(el.value) || 1) + delta);
 }
 function backToReturnsSupplierPick(){
   closeModal('modalReturnsDetails');
@@ -11147,7 +11191,10 @@ function backToReturnsSupplierPick(){
 async function confirmReturnsDetails(){
   const p = returnsPendingProduct, s = returnsPendingSupplier;
   if(!p || !s) return;
-  const qty = Math.max(1, parseInt(document.getElementById('returnsQtyInput').value, 10) || 1);
+  // parseFloat (not parseInt) so a fractional write-off from Vector (e.g. 0.5)
+  // isn't silently rounded down to 0 -> 1.
+  const rawQty = parseFloat(document.getElementById('returnsQtyInput').value);
+  const qty = rawQty > 0 ? rawQty : 1;
   const custom = document.getElementById('returnsReasonCustom').value.trim();
   const reason = custom || returnsSelectedReason;
   if(!reason){ toast('Pick a return reason, or type your own'); return; }
@@ -11156,8 +11203,23 @@ async function confirmReturnsDetails(){
       suppid: s.suppid, supplier_name: s.name,
       stockid: p.stockid, item_name: p.name, barcode: p.barcode,
       cost_price: s.cost_net, quantity: qty, return_reason: reason,
-      created_by: localStorage.getItem('hallan_staff_name') || null
+      created_by: localStorage.getItem('hallan_staff_name') || null,
+      stockadjustid: returnsPendingAdjustment ? returnsPendingAdjustment.stockadjustid : null
     });
+    if(returnsPendingAdjustment){
+      // Added from Stock Adjusted (Vector): the server has dismissed that
+      // write-off in the same transaction, so drop it from the list here and
+      // stay on the list rather than jumping into the scanner.
+      const doneId = returnsPendingAdjustment.stockadjustid;
+      returnsAdjustItems = returnsAdjustItems.filter(x => x.stockadjustid !== doneId);
+      returnsPendingAdjustment = null;
+      returnsPendingProduct = null;
+      returnsPendingSupplier = null;
+      closeModal('modalReturnsDetails');
+      renderReturnsAdjustments();
+      toast('Added to ' + s.name + '’s return list');
+      return;
+    }
     returnsScanFeedItems.unshift({ item_name: p.name, supplier_name: s.name, cost_net: s.cost_net, quantity: qty, reason });
     renderReturnsScanFeed();
     closeModal('modalReturnsDetails');
@@ -11173,7 +11235,109 @@ async function confirmReturnsDetails(){
 function cancelReturnsSupplierPick(){
   closeModal('modalReturnsSupplierPick');
   returnsPendingProduct = null;
+  if(returnsPendingAdjustment){
+    // Opened from Stock Adjusted (Vector): back to that list, nothing changed.
+    returnsPendingAdjustment = null;
+    return;
+  }
   returnsAdvanceScan();
+}
+
+/* ---- Stock Adjusted (Vector): write-offs synced from Vector by
+   test_oracle.py into STOCK_ADJUSTMENTS. Tap a row -> the same supplier pick
+   and quantity/reason modals the scanner uses (quantity pre-filled from the
+   write-off, still editable) -> it's added to that supplier's PENDING return
+   list and the write-off is dismissed server-side. The ✕ dismisses without
+   adding, after a confirm. Dismissed rows stay in Oracle flagged DISMISSED,
+   which is what stops the 5-minute sync bringing them back. ---- */
+let returnsAdjustItems = [];
+let returnsPendingAdjustment = null; // { stockadjustid, qty, reason } while a write-off is being turned into a return item
+let returnsAdjustBusy = false;
+
+function openReturnsAdjustments(){
+  returnsPendingAdjustment = null;
+  showView('view-returns-adjustments');
+  loadReturnsAdjustments();
+}
+async function loadReturnsAdjustments(){
+  const box = document.getElementById('returnsAdjustList');
+  box.innerHTML = '<div class="loading">Loading…</div>';
+  try{
+    const data = await apiGet('returns/stock-adjustments/');
+    returnsAdjustItems = data.items || [];
+    renderReturnsAdjustments();
+  }catch(e){
+    box.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not load write-offs</div>';
+    console.error(e);
+  }
+}
+function renderReturnsAdjustments(){
+  const box = document.getElementById('returnsAdjustList');
+  const bar = document.getElementById('returnsAdjustCountBar');
+  if(bar) bar.textContent = returnsAdjustItems.length + ' write-off' + (returnsAdjustItems.length===1?'':'s');
+  if(returnsAdjustItems.length === 0){
+    box.innerHTML = '<div class="empty-hint">Nothing waiting — every Vector write-off has been added to a return or cleared.</div>';
+    return;
+  }
+  box.innerHTML = returnsAdjustItems.map(it => {
+    const qty = Math.abs(Number(it.adjust_qty)) || 0;
+    return `
+    <div class="pickrow" style="cursor:pointer;" onclick="pickReturnsAdjustment(${Number(it.stockadjustid)})">
+      <div class="pickinfo">
+        <div class="pname">${escapeHtml(it.stock_name)} <span style="color:var(--text-dim);font-weight:400;">× ${qty}</span></div>
+        <div class="pbarcode">${escapeHtml(it.reason || 'No reason')} &middot; ${escapeHtml(it.adjust_datetime_txt || '')}</div>
+      </div>
+      <a href="#" class="minibtn minibtn-remove" title="Clear this write-off"
+        onclick="event.preventDefault(); event.stopPropagation(); dismissReturnsAdjustment(${Number(it.stockadjustid)})">✕</a>
+    </div>`;
+  }).join('');
+}
+async function pickReturnsAdjustment(adjId){
+  const a = returnsAdjustItems.find(x => x.stockadjustid === adjId);
+  if(!a || returnsAdjustBusy) return;
+  returnsAdjustBusy = true;
+  let suppliers = [];
+  try{
+    const data = await apiGet('returns/stock-suppliers/' + a.stockid + '/');
+    suppliers = data.suppliers || [];
+  }catch(e){
+    // Still let them carry on and search for a supplier manually.
+    console.error(e);
+    toast('Could not load this product’s suppliers — search for one instead');
+  }
+  returnsAdjustBusy = false;
+  returnsPendingAdjustment = {
+    stockadjustid: a.stockadjustid,
+    qty: Math.abs(Number(a.adjust_qty)) || 1,
+    reason: a.reason || ''
+  };
+  returnsPendingProduct = { stockid: a.stockid, name: a.stock_name, barcode: null, suppliers };
+  openReturnsSupplierPick();
+}
+async function dismissReturnsAdjustment(adjId){
+  const a = returnsAdjustItems.find(x => x.stockadjustid === adjId);
+  if(!a) return;
+  const qty = Math.abs(Number(a.adjust_qty)) || 0;
+  if(!confirm('Delete this write-off from the list?\n\n' + a.stock_name + ' × ' + qty + '\n\nIt will not come back on the next sync.')) return;
+  try{
+    await apiPost('returns/stock-adjustments/' + adjId + '/dismiss/', {});
+    returnsAdjustItems = returnsAdjustItems.filter(x => x.stockadjustid !== adjId);
+    renderReturnsAdjustments();
+    toast('Write-off cleared');
+  }catch(e){
+    toast('Could not clear write-off: ' + (e && e.message ? e.message : 'unknown error'));
+    console.error(e);
+  }
+}
+// Small count under the hub card — best-effort, never blocks or errors the hub.
+async function refreshReturnsAdjustCount(){
+  const el = document.getElementById('returnsAdjustCount');
+  if(!el) return;
+  try{
+    const data = await apiGet('returns/stock-adjustments/');
+    const n = (data.items || []).length;
+    el.textContent = n ? (n + ' waiting') : '';
+  }catch(e){ el.textContent = ''; }
 }
 function renderReturnsScanFeed(){
   const box = document.getElementById('returnsScanFeed');
