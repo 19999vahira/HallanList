@@ -117,6 +117,66 @@
   .badge.declined{background:rgba(220,38,38,.1);color:var(--danger);}
   .empty-hint{color:var(--slate);font-size:13px;padding:8px 0;}
   .otp-input{letter-spacing:6px;font-size:20px;text-align:center;font-family:'JetBrains Mono',monospace;}
+
+  /* ---- HR Holiday admin ---- */
+  .hr-statgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;}
+  @media(max-width:760px){.hr-statgrid{grid-template-columns:repeat(2,1fr);}}
+  .hr-stat{
+    background:var(--navy-deep);border-radius:12px;padding:18px 20px;cursor:pointer;
+    border:2px solid transparent;transition:.15s;
+  }
+  .hr-stat:hover{background:var(--navy-mid);}
+  .hr-stat.active{border-color:var(--gold);}
+  .hr-stat .hr-stat-lbl{color:#93a8c4;font-size:11px;text-transform:uppercase;letter-spacing:1.2px;font-family:'JetBrains Mono',monospace;}
+  .hr-stat .hr-stat-num{color:#fff;font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:700;margin-top:6px;}
+
+  .hr-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:18px;}
+  .hr-toolbar input[type=text]{width:220px;margin-bottom:0;}
+  .hr-refresh{
+    padding:10px 16px;border-radius:8px;border:1px solid var(--line);background:var(--panel);
+    color:var(--ink);font-size:13px;font-weight:500;cursor:pointer;font-family:'Inter',sans-serif;
+  }
+  .hr-refresh:hover{border-color:var(--gold);}
+
+  .hr-table-wrap{overflow-x:auto;}
+  table.hr-table{width:100%;border-collapse:collapse;font-size:13px;}
+  table.hr-table th{
+    text-align:left;padding:10px 12px;color:var(--slate);font-size:10.5px;text-transform:uppercase;
+    letter-spacing:.8px;border-bottom:2px solid var(--line);white-space:nowrap;font-family:'JetBrains Mono',monospace;
+  }
+  table.hr-table td{padding:12px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:middle;}
+  table.hr-table tr:hover td{background:var(--paper);}
+
+  .badge.partial{background:rgba(184,134,11,.12);color:var(--gold);}
+
+  .hr-actions{display:flex;gap:6px;}
+  .btn-xs{
+    padding:6px 12px;border-radius:6px;border:none;font-size:12px;font-weight:600;cursor:pointer;
+    font-family:'Inter',sans-serif;white-space:nowrap;
+  }
+  .btn-xs.approve{background:rgba(22,163,74,.12);color:#0e7a3b;}
+  .btn-xs.approve:hover{background:rgba(22,163,74,.22);}
+  .btn-xs.decline{background:rgba(220,38,38,.1);color:var(--danger);}
+  .btn-xs.decline:hover{background:rgba(220,38,38,.18);}
+  .btn-xs.partial{background:rgba(184,134,11,.12);color:var(--gold);}
+  .btn-xs.partial:hover{background:rgba(184,134,11,.22);}
+  .btn-xs:disabled{opacity:.5;cursor:not-allowed;}
+
+  .hr-modal-backdrop{
+    display:none;position:fixed;inset:0;background:rgba(14,30,51,.55);z-index:50;
+    align-items:center;justify-content:center;padding:20px;
+  }
+  .hr-modal-backdrop.active{display:flex;}
+  .hr-modal{background:var(--panel);border-radius:12px;padding:26px 24px;max-width:360px;width:100%;}
+  .hr-modal h3{margin:0 0 4px;font-size:17px;}
+  .hr-modal p.sub{color:var(--slate);font-size:13px;margin:0 0 18px;}
+  .hr-modal-actions{display:flex;gap:10px;margin-top:4px;}
+  .hr-modal-actions .btn-primary{flex:1;}
+  .btn-ghost-inline{
+    flex:1;padding:13px;border-radius:8px;border:1px solid var(--line);background:transparent;
+    color:var(--ink);font-size:14px;font-weight:500;cursor:pointer;font-family:'Inter',sans-serif;
+  }
+  .btn-ghost-inline:hover{border-color:var(--gold);}
 </style>
 </head>
 <body>
@@ -243,6 +303,73 @@
   </div>
 </div>
 
+<!-- HR HOLIDAY ADMIN -->
+<div id="view-hr-admin" class="view">
+  <div class="wrap wide">
+    <div class="card">
+      <div class="eyebrow">Holiday Requests</div>
+      <h2 class="welcome-name" id="hrWelcomeName">Welcome</h2>
+      <p class="welcome-dept" id="hrWelcomeDept"></p>
+
+      <div class="hr-statgrid">
+        <div class="hr-stat active" id="hrStat-all" onclick="setHrFilter('all')">
+          <div class="hr-stat-lbl">All</div>
+          <div class="hr-stat-num" id="hrCount-all">—</div>
+        </div>
+        <div class="hr-stat" id="hrStat-pending" onclick="setHrFilter('pending')">
+          <div class="hr-stat-lbl">Pending</div>
+          <div class="hr-stat-num" id="hrCount-pending">—</div>
+        </div>
+        <div class="hr-stat" id="hrStat-approved" onclick="setHrFilter('approved')">
+          <div class="hr-stat-lbl">Approved</div>
+          <div class="hr-stat-num" id="hrCount-approved">—</div>
+        </div>
+        <div class="hr-stat" id="hrStat-declined" onclick="setHrFilter('declined')">
+          <div class="hr-stat-lbl">Disapproved</div>
+          <div class="hr-stat-num" id="hrCount-declined">—</div>
+        </div>
+      </div>
+
+      <div class="hr-toolbar">
+        <input type="text" id="hrNameFilter" placeholder="Filter by name…" oninput="renderHrTable()">
+        <button class="hr-refresh" onclick="loadHrHolidayRequests()">↻ Refresh</button>
+        <button class="logout" onclick="logout()" style="margin-top:0;">Sign out</button>
+      </div>
+
+      <div class="hr-table-wrap">
+        <table class="hr-table">
+          <thead>
+            <tr>
+              <th>Timestamp</th><th>ID</th><th>Name</th><th>Start Date</th><th>End Date</th>
+              <th>Type</th><th>Days</th><th>Balance</th><th>Status</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="hrTableBody">
+            <tr><td colspan="10" class="empty-hint">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PARTIAL APPROVAL MODAL -->
+<div class="hr-modal-backdrop" id="hrPartialModal">
+  <div class="hr-modal">
+    <h3>Partial approval</h3>
+    <p class="sub">Record how many days are approved and, optionally, a short note for the employee.</p>
+    <div class="errbox" id="hrPartialErr"></div>
+    <label for="hrPartialDays">Days approved</label>
+    <input type="text" id="hrPartialDays" placeholder="e.g. 3">
+    <label for="hrPartialNote">Note (optional)</label>
+    <textarea id="hrPartialNote" placeholder="Anything you'd like the employee to see"></textarea>
+    <div class="hr-modal-actions">
+      <button class="btn-ghost-inline" onclick="closeHrPartialModal()">Cancel</button>
+      <button class="btn-primary" id="hrPartialSubmitBtn" onclick="submitHrPartial()">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const API_BASE = "https://hallan-picking-backend.onrender.com/api/";
 
@@ -254,6 +381,7 @@ const API_BASE = "https://hallan-picking-backend.onrender.com/api/";
 const TOKEN_KEY = 'hallanStaffToken';
 let authToken = localStorage.getItem(TOKEN_KEY) || null;
 let currentEmp = null;
+let currentRole = null;
 
 // Set while an OTP is in flight (login or forgot-password) so the verify
 // screen knows which employee it's confirming a code for.
@@ -361,10 +489,9 @@ async function submitOtp(){
     authToken = data.token;
     localStorage.setItem(TOKEN_KEY, authToken);
     currentEmp = data.emp;
+    currentRole = data.role;
     pendingEmployeeId = null;
-    renderHolidayPortal(currentEmp);
-    showView('view-holiday');
-    loadMyRequests();
+    routeToPortal(currentEmp, currentRole);
   }catch(e){
     errBox.textContent = 'Could not reach the server — check your connection and try again.';
     errBox.style.display = 'block';
@@ -372,6 +499,23 @@ async function submitOtp(){
   }finally{
     btn.disabled = false;
     btn.textContent = 'Verify & Sign In';
+  }
+}
+
+// Sends a just-signed-in employee to the right view. HR gets the Holiday
+// Requests admin screen instead of their own personal holiday portal; the
+// staff portal's own look is untouched — this only decides which existing
+// view shows first.
+function routeToPortal(emp, role){
+  if(role === 'hr'){
+    document.getElementById('hrWelcomeName').textContent = 'Welcome, ' + emp.name;
+    document.getElementById('hrWelcomeDept').textContent = emp.department || '';
+    showView('view-hr-admin');
+    loadHrHolidayRequests();
+  }else{
+    renderHolidayPortal(emp);
+    showView('view-holiday');
+    loadMyRequests();
   }
 }
 
@@ -542,6 +686,146 @@ function escapeHtml(s){
   return d.innerHTML;
 }
 
+// ============ HR Holiday Requests admin ============
+let hrRequests = [];
+let hrFilter = 'all';
+let hrPartialTargetId = null;
+
+async function loadHrHolidayRequests(){
+  const tbody = document.getElementById('hrTableBody');
+  tbody.innerHTML = '<tr><td colspan="10" class="empty-hint">Loading…</td></tr>';
+  try{
+    const res = await fetch(API_BASE + 'staff/leave-requests', { headers: authHeaders() });
+    const data = await res.json();
+    if(res.status === 401){ logout(); return; }
+    if(!res.ok || !data.ok){
+      tbody.innerHTML = '<tr><td colspan="10" class="empty-hint">Could not load requests.</td></tr>';
+      return;
+    }
+    hrRequests = data.requests || [];
+    updateHrCounts();
+    renderHrTable();
+  }catch(e){
+    tbody.innerHTML = '<tr><td colspan="10" class="empty-hint">Could not load requests.</td></tr>';
+    console.error(e);
+  }
+}
+
+function updateHrCounts(){
+  const counts = { all: hrRequests.length, pending: 0, approved: 0, declined: 0 };
+  hrRequests.forEach(r => { if(counts[r.status] !== undefined) counts[r.status]++; });
+  document.getElementById('hrCount-all').textContent = counts.all;
+  document.getElementById('hrCount-pending').textContent = counts.pending;
+  document.getElementById('hrCount-approved').textContent = counts.approved;
+  document.getElementById('hrCount-declined').textContent = counts.declined;
+}
+
+function setHrFilter(filter){
+  hrFilter = filter;
+  ['all','pending','approved','declined'].forEach(f => {
+    document.getElementById('hrStat-' + f).classList.toggle('active', f === filter);
+  });
+  renderHrTable();
+}
+
+function renderHrTable(){
+  const tbody = document.getElementById('hrTableBody');
+  const nameQuery = document.getElementById('hrNameFilter').value.trim().toLowerCase();
+  let rows = hrRequests;
+  if(hrFilter !== 'all') rows = rows.filter(r => r.status === hrFilter);
+  if(nameQuery) rows = rows.filter(r => (r.full_name || '').toLowerCase().includes(nameQuery));
+
+  if(rows.length === 0){
+    tbody.innerHTML = '<tr><td colspan="10" class="empty-hint">No requests match.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = rows.map(r => {
+    const created = r.created_at ? new Date(r.created_at).toLocaleDateString() : '—';
+    const start = r.start_date ? new Date(r.start_date).toLocaleDateString() : '—';
+    const end = r.end_date ? new Date(r.end_date).toLocaleDateString() : '—';
+    const balance = (r.holiday_balance ?? r.holiday_balance === 0) ? r.holiday_balance : '—';
+    const days = r.status === 'partial' && r.partial_days != null
+      ? r.partial_days + ' of ' + (r.days_requested ?? '—')
+      : (r.days_requested ?? '—');
+    const statusLabel = r.status === 'declined' ? 'disapproved' : r.status;
+    const disabled = (r.status === 'approved' || r.status === 'declined') ? 'disabled' : '';
+    return `
+      <tr>
+        <td>${created}</td>
+        <td>${escapeHtml(r.employee_id ?? '')}</td>
+        <td>${escapeHtml(r.full_name ?? '')}</td>
+        <td>${start}</td>
+        <td>${end}</td>
+        <td>Holiday</td>
+        <td>${days}</td>
+        <td>${balance}</td>
+        <td><span class="badge ${r.status}">${statusLabel}</span></td>
+        <td>
+          <div class="hr-actions">
+            <button class="btn-xs approve" ${disabled} onclick="hrDecide(${r.request_id},'approved')">Approve</button>
+            <button class="btn-xs decline" ${disabled} onclick="hrDecide(${r.request_id},'declined')">Decline</button>
+            <button class="btn-xs partial" ${disabled} onclick="openHrPartialModal(${r.request_id})">Partial</button>
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+}
+
+async function hrDecide(requestId, status, extra){
+  try{
+    const res = await fetch(API_BASE + 'staff/leave-requests/' + requestId + '/status', {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify(Object.assign({ status }, extra || {}))
+    });
+    const data = await res.json();
+    if(res.status === 401){ logout(); return; }
+    if(!res.ok || !data.ok){
+      alert(data.error || 'Could not update that request.');
+      return;
+    }
+    loadHrHolidayRequests();
+  }catch(e){
+    alert('Could not reach the server — check your connection and try again.');
+    console.error(e);
+  }
+}
+
+function openHrPartialModal(requestId){
+  hrPartialTargetId = requestId;
+  document.getElementById('hrPartialDays').value = '';
+  document.getElementById('hrPartialNote').value = '';
+  document.getElementById('hrPartialErr').style.display = 'none';
+  document.getElementById('hrPartialModal').classList.add('active');
+}
+function closeHrPartialModal(){
+  hrPartialTargetId = null;
+  document.getElementById('hrPartialModal').classList.remove('active');
+}
+async function submitHrPartial(){
+  const errBox = document.getElementById('hrPartialErr');
+  errBox.style.display = 'none';
+  const partialDays = document.getElementById('hrPartialDays').value.trim();
+  const note = document.getElementById('hrPartialNote').value.trim();
+  if(!partialDays || isNaN(Number(partialDays))){
+    errBox.textContent = 'Enter the number of days approved.';
+    errBox.style.display = 'block';
+    return;
+  }
+  const btn = document.getElementById('hrPartialSubmitBtn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  try{
+    await hrDecide(hrPartialTargetId, 'partial', { partialDays, note: note || undefined });
+    closeHrPartialModal();
+  }finally{
+    btn.disabled = false;
+    btn.textContent = 'Confirm';
+  }
+}
+// ============ end HR Holiday Requests admin ============
+
 function openHolidayForm(){
   document.getElementById('reqStart').value = '';
   document.getElementById('reqEnd').value = '';
@@ -603,6 +887,7 @@ async function submitHolidayRequest(){
 function logout(){
   authToken = null;
   currentEmp = null;
+  currentRole = null;
   pendingEmployeeId = null;
   localStorage.removeItem(TOKEN_KEY);
   document.getElementById('staffId').value = '';
@@ -627,9 +912,8 @@ function logout(){
         holidayTaken: data.emp.holiday_taken,
         holidayBalance: data.emp.holiday_balance
       };
-      renderHolidayPortal(currentEmp);
-      showView('view-holiday');
-      loadMyRequests();
+      currentRole = data.role;
+      routeToPortal(currentEmp, currentRole);
     }else{
       localStorage.removeItem(TOKEN_KEY);
       authToken = null;
