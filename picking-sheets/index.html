@@ -2739,6 +2739,11 @@
       <button class="btn-ghost" onclick="bumpReturnsQty(1)">+</button>
     </div>
 
+    <label class="retvat-check" style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:16px;cursor:pointer;">
+      <input type="checkbox" id="returnsIsVatCheckbox" style="width:16px;height:16px;margin:0;">
+      Cost price shown is ex-VAT — this item is standard-rated (+20% VAT)
+    </label>
+
     <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;">Return reason</label>
     <div id="returnsReasonGrid" class="reasongrid"></div>
     <input type="text" id="returnsReasonCustom" placeholder="Or type your own reason…" autocomplete="off"
@@ -11145,6 +11150,11 @@ async function chooseReturnsSupplier(suppid, supplierName, costNet){
   document.getElementById('returnsQtyInput').value = adj ? String(adj.qty) : '1';
   returnsQtySafeToType = false; // reset — only a genuine tap on the box allows typing into it
   document.getElementById('returnsReasonCustom').value = '';
+  // No VATID reliably available from SUPPLIER_STOCK (see server.js comment
+  // above RETURNS_ITEMS), so this is a manual tick, not auto-detected —
+  // reset to unchecked for every new item rather than carrying the last
+  // item's answer over by accident.
+  document.getElementById('returnsIsVatCheckbox').checked = false;
   if(adj){
     const match = RETURN_REASONS.find(r => r.toLowerCase() === String(adj.reason || '').trim().toLowerCase());
     if(match) returnsSelectedReason = match;
@@ -11198,11 +11208,12 @@ async function confirmReturnsDetails(){
   const custom = document.getElementById('returnsReasonCustom').value.trim();
   const reason = custom || returnsSelectedReason;
   if(!reason){ toast('Pick a return reason, or type your own'); return; }
+  const isVat = document.getElementById('returnsIsVatCheckbox').checked;
   try{
     await apiPost('returns/scan-add/', {
       suppid: s.suppid, supplier_name: s.name,
       stockid: p.stockid, item_name: p.name, barcode: p.barcode,
-      cost_price: s.cost_net, quantity: qty, return_reason: reason,
+      cost_price: s.cost_net, is_vat: isVat, quantity: qty, return_reason: reason,
       created_by: localStorage.getItem('hallan_staff_name') || null,
       stockadjustid: returnsPendingAdjustment ? returnsPendingAdjustment.stockadjustid : null
     });
@@ -11220,7 +11231,7 @@ async function confirmReturnsDetails(){
       toast('Added to ' + s.name + '’s return list');
       return;
     }
-    returnsScanFeedItems.unshift({ item_name: p.name, supplier_name: s.name, cost_net: s.cost_net, quantity: qty, reason });
+    returnsScanFeedItems.unshift({ item_name: p.name, supplier_name: s.name, cost_net: s.cost_net, is_vat: isVat, quantity: qty, reason });
     renderReturnsScanFeed();
     closeModal('modalReturnsDetails');
     returnsPendingProduct = null;
@@ -11349,7 +11360,7 @@ function renderReturnsScanFeed(){
     <div class="pickrow">
       <div class="pickinfo">
         <div class="pname">${escapeHtml(it.item_name)} <span style="color:var(--text-dim);font-weight:400;">× ${it.quantity}</span></div>
-        <div class="pbarcode">${escapeHtml(it.supplier_name)}${it.cost_net !== null && it.cost_net !== undefined ? (' — £' + Number(it.cost_net).toFixed(2)) : ''} &middot; ${escapeHtml(it.reason || '')}</div>
+        <div class="pbarcode">${escapeHtml(it.supplier_name)}${it.cost_net !== null && it.cost_net !== undefined ? (' — £' + Number(it.cost_net).toFixed(2) + (it.is_vat ? ' +VAT' : '')) : ''} &middot; ${escapeHtml(it.reason || '')}</div>
       </div>
     </div>
   `).join('');
@@ -11572,12 +11583,45 @@ async function openReturnsListDetail(returnId){
     console.error(e);
   }
 }
+/* ---- Returns VAT display helpers — matches RETURNS_VAT_RATE server-side.
+   COST_PRICE is always stored ex-VAT (net); IS_VAT just flags whether the
+   standard rate applies on top for display/totals. Every total is shown
+   as three figures — cost price (net), VAT, and the two added together —
+   never a single blended number, same as the analytics endpoint. ---- */
+const RETURNS_VAT_RATE = 0.20; // UK standard rate — matches server RETURNS_VAT_RATE
+function returnsUnitVat(costPrice, isVat){
+  if(!isVat || costPrice === null || costPrice === undefined || costPrice === '') return 0;
+  return Number(costPrice) * RETURNS_VAT_RATE;
+}
+function returnsLineVatAmount(costPrice, quantity, isVat){
+  return returnsUnitVat(costPrice, isVat) * (Number(quantity) || 0);
+}
+// One cost-price cell's text: net only for non-VAT items, or
+// "£cost + VAT £vat" for standard-rated ones, so the VAT amount is always
+// visible right next to the price it applies to, not just in a total.
+function returnsCostCellText(costPrice, isVat){
+  if(costPrice === null || costPrice === undefined || costPrice === '') return '—';
+  const net = Number(costPrice);
+  if(!isVat) return '£' + net.toFixed(2);
+  return '£' + net.toFixed(2) + ' <span class="vattag">+VAT £' + returnsUnitVat(net, true).toFixed(2) + '</span>';
+}
 function returnsItemsTotal(items){
-  return (items || []).reduce((sum, it) => {
-    const cost = it.cost_price === null || it.cost_price === undefined ? 0 : Number(it.cost_price);
+  return (items || []).reduce((acc, it) => {
+    const cost = it.cost_price === null || it.cost_price === undefined || it.cost_price === '' ? 0 : Number(it.cost_price);
     const qty = Number(it.quantity) || 0;
-    return sum + (cost * qty);
-  }, 0);
+    const net = cost * qty;
+    const vat = returnsLineVatAmount(it.cost_price, qty, it.is_vat);
+    acc.net += net;
+    acc.vat += vat;
+    acc.gross += net + vat;
+    return acc;
+  }, { net: 0, vat: 0, gross: 0 });
+}
+// Three-line "£net / +VAT £vat / = £gross" block used in table footers.
+function returnsTotalCellHtml(total){
+  return `<div>£${total.net.toFixed(2)}</div>` +
+    (total.vat > 0 ? `<div style="font-weight:400;font-size:11px;color:var(--text-dim);">+VAT £${total.vat.toFixed(2)}</div>
+      <div style="font-size:12px;">= £${total.gross.toFixed(2)}</div>` : '');
 }
 function renderReturnsDetailTable(){
   const table = document.getElementById('returnsDetailTable');
@@ -11589,7 +11633,10 @@ function renderReturnsDetailTable(){
   const rows = currentReturnsItems.map(it => `
     <tr>
       <td>${escapeHtml(it.item_name)}</td>
-      <td class="qtycell">${it.cost_price === null || it.cost_price === undefined ? '—' : ('£' + Number(it.cost_price).toFixed(2))}</td>
+      <td class="qtycell">
+        ${returnsCostCellText(it.cost_price, it.is_vat)}
+        ${editable ? `<label class="retvat-inline"><input type="checkbox" ${it.is_vat ? 'checked' : ''} onchange="toggleReturnsItemVat(${it.item_id}, this.checked)"> VAT</label>` : ''}
+      </td>
       <td class="qtycell">${it.quantity}</td>
       <td>${escapeHtml(it.return_reason || '—')}</td>
       <td class="retloc-cell loc-col${it.location ? '' : ' empty'}" ${editable ? `onclick="openReturnsLocationModal(${it.item_id})"` : ''}>${it.location ? escapeHtml(it.location) : (editable ? 'Tap to add' : '—')}</td>
@@ -11607,7 +11654,7 @@ function renderReturnsDetailTable(){
     <tbody>${rows}</tbody>
     <tfoot><tr>
       <td style="font-weight:700;">Total</td>
-      <td class="qtycell" style="font-weight:700;">£${total.toFixed(2)}</td>
+      <td class="qtycell" style="font-weight:700;">${returnsTotalCellHtml(total)}</td>
       <td></td><td></td><td class="loc-col"></td>
       ${editable ? '<td class="no-print"></td>' : ''}
       <td class="checkbox-col"></td>
