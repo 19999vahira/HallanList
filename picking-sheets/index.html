@@ -432,6 +432,18 @@
   .reasonbtn.selected{background:var(--accent);color:#fff;border-color:var(--accent);}
   .qtystepper{display:flex;align-items:center;gap:8px;}
   .qtystepper button{width:44px;font-size:18px;padding:8px 0;}
+  .retphotogrid{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;}
+  .retphoto{position:relative;width:72px;height:72px;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:var(--panel2);flex-shrink:0;}
+  .retphoto img{width:100%;height:100%;object-fit:cover;display:block;cursor:pointer;}
+  .retphoto .retphoto-remove{position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;cursor:pointer;line-height:1;}
+  .retphoto .retphoto-remove:hover{background:var(--danger);}
+  .retphoto-add{width:72px;height:72px;border-radius:8px;border:1px dashed var(--line);background:var(--panel);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:var(--text-dim);font-size:10px;flex-shrink:0;text-align:center;}
+  .retphoto-add:hover{border-color:var(--accent);color:var(--accent);}
+  .retphoto-add .icon{font-size:18px;}
+  .retphoto-uploading{opacity:.5;}
+  .retphotobadge{display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--text-dim);cursor:pointer;text-decoration:underline dotted;white-space:nowrap;}
+  .retphotobadge:hover{color:var(--accent);}
+  .retphoto-viewer-img{max-width:100%;max-height:70vh;display:block;margin:0 auto;border-radius:8px;}
   .minibtn{display:inline-block;padding:4px 11px;border-radius:14px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid transparent;margin-right:6px;text-decoration:none;letter-spacing:.2px;}
   .minibtn-charity{background:rgba(124,58,237,.12);color:#7c3aed;}
   .minibtn-charity:hover{background:rgba(124,58,237,.22);}
@@ -2778,9 +2790,40 @@
     <label style="display:block;font-size:12px;color:var(--text-dim);margin:16px 0 6px;">Send to</label>
     <div id="returnsDestinationGrid" class="reasongrid"></div>
 
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin:16px 0 6px;">Photos (optional)</label>
+    <div id="returnsPendingPhotoGrid" class="retphotogrid"></div>
+    <input type="file" id="returnsPendingPhotoInput" accept="image/*" capture="environment" multiple
+      style="display:none;" onchange="onReturnsPendingPhotoSelected(event)">
+
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="backToReturnsSupplierPick()">Back</button>
       <button class="btn-amber" onclick="confirmReturnsDetails()">Add to return list</button>
+    </div>
+  </div>
+</div>
+
+<!-- RETURNS: PHOTOS — view, add, or delete photos already on a return item.
+     Reached from the "Photos" column on a return list / Charity List / Bin
+     List, for anything that didn't get a photo at scan time. -->
+<div class="modal-backdrop" id="modalReturnsPhotos">
+  <div class="modal" style="width:420px;">
+    <h3>Photos</h3>
+    <p class="modal-sub" id="returnsPhotoGalleryItemName"></p>
+    <div id="returnsPhotoGalleryGrid" class="retphotogrid"><div class="loading">Loading…</div></div>
+    <input type="file" id="returnsGalleryPhotoInput" accept="image/*" capture="environment" multiple
+      style="display:none;" onchange="onReturnsGalleryPhotoSelected(event)">
+    <div class="modal-close-row">
+      <button class="btn-amber" onclick="closeModal('modalReturnsPhotos')">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- RETURNS: PHOTO VIEWER — one photo, full size -->
+<div class="modal-backdrop" id="modalReturnsPhotoViewer">
+  <div class="modal" style="width:auto;max-width:92vw;">
+    <img id="returnsPhotoViewerImg" class="retphoto-viewer-img" src="" alt="Return photo">
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalReturnsPhotoViewer')">Close</button>
     </div>
   </div>
 </div>
@@ -11200,6 +11243,7 @@ async function chooseReturnsSupplier(suppid, supplierName, costNet){
   // Supplier is settled — now collect quantity and reason before saving.
   returnsPendingSupplier = { suppid, name: supplierName, cost_net: costNet };
   returnsSelectedReason = null;
+  resetReturnsPendingPhotos();
   closeModal('modalReturnsSupplierPick');
   document.getElementById('returnsDetailsProduct').textContent = returnsPendingProduct.name;
   document.getElementById('returnsDetailsSupplier').textContent = 'Going back to ' + supplierName;
@@ -11312,8 +11356,9 @@ async function confirmReturnsDetails(){
   const isVat = document.getElementById('returnsVatInput').checked;
   const destination = returnsSelectedDestination;
   const destLabel = destination === 'CHARITY' ? 'Charity List' : destination === 'BIN' ? 'Bin List' : (s.name + '’s return list');
+  const photosToUpload = returnsPendingPhotos.slice();
   try{
-    await apiPost('returns/scan-add/', {
+    const result = await apiPost('returns/scan-add/', {
       suppid: s.suppid, supplier_name: s.name,
       stockid: p.stockid, item_name: p.name, barcode: p.barcode,
       cost_price: s.cost_net, is_vat: isVat, quantity: qty, return_reason: reason,
@@ -11321,6 +11366,10 @@ async function confirmReturnsDetails(){
       stockadjustid: returnsPendingAdjustment ? returnsPendingAdjustment.stockadjustid : null,
       destination: destination
     });
+    if(photosToUpload.length && result && result.item_id){
+      await uploadReturnsItemPhotos(result.item_id, photosToUpload);
+    }
+    resetReturnsPendingPhotos();
     if(returnsPendingAdjustment){
       // Added from Stock Adjusted (Vector): the server has dismissed that
       // write-off in the same transaction, so drop it from the list here and
@@ -11349,6 +11398,7 @@ async function confirmReturnsDetails(){
 }
 function cancelReturnsSupplierPick(){
   closeModal('modalReturnsSupplierPick');
+  resetReturnsPendingPhotos();
   returnsPendingProduct = null;
   if(returnsPendingAdjustment){
     // Opened from Stock Adjusted (Vector): back to that list, nothing changed.
@@ -11356,6 +11406,186 @@ function cancelReturnsSupplierPick(){
     return;
   }
   returnsAdvanceScan();
+}
+
+/* ---- Photos: evidence photos (damaged goods, out-of-date labels, etc.)
+   attached to a RETURNS_ITEMS row. Two entry points share the code below:
+   (a) the quantity+reason modal, for photos taken before the item even
+   exists yet — held in returnsPendingPhotos and uploaded the moment the
+   item is created (see confirmReturnsDetails above), and (b) the "Photos"
+   column on a return list / Charity List / Bin List, for adding to or
+   deleting from an existing item's photos any time afterwards. Both use
+   the same in-browser downscale/compress step (long edge capped at
+   1000px, JPEG ~75%) before anything is sent, so a phone photo doesn't
+   land in Oracle at full multi-MB size. ---- */
+const RETURNS_PHOTO_MAX = 8; // matches RETURNS_IMAGE_MAX_PER_UPLOAD on the server
+function returnsFileToDataUrl(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 1000;
+        let w = img.width, h = img.height;
+        if(w > maxDim || h > maxDim){
+          if(w > h){ h = Math.round(h * maxDim / w); w = maxDim; }
+          else { w = Math.round(w * maxDim / h); h = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.75));
+      };
+      img.onerror = () => reject(new Error(
+        'Could not read "' + file.name + '" — if it\'s an iPhone photo it may be HEIC format, which browsers can\'t open. Re-save/export it as JPG or PNG first, then try again.'
+      ));
+      img.src = reader.result;
+    };
+    reader.onerror = () => reject(new Error('Could not read ' + file.name));
+    reader.readAsDataURL(file);
+  });
+}
+async function filesToReturnsPhotos(fileList){
+  const files = Array.from(fileList || []);
+  const out = [];
+  for(const f of files){
+    try{
+      const data = await returnsFileToDataUrl(f);
+      out.push({ data, filename: f.name || null });
+    }catch(e){
+      toast(e.message || ('Could not read ' + (f.name || 'photo')));
+      console.error(e);
+    }
+  }
+  return out;
+}
+function openReturnsPhotoViewer(dataUrl){
+  document.getElementById('returnsPhotoViewerImg').src = dataUrl;
+  openModal('modalReturnsPhotoViewer');
+}
+function returnsPhotoGridHtml(photos, removeFn){
+  const thumbs = (photos || []).map((p, idx) => `
+    <div class="retphoto">
+      <img src="${p.data}" onclick="openReturnsPhotoViewer(${jsArg(p.data)})">
+      <div class="retphoto-remove" title="Remove" onclick="event.stopPropagation(); ${removeFn}(${typeof p.image_id === 'number' ? p.image_id : idx})">✕</div>
+    </div>
+  `).join('');
+  const addTile = (photos || []).length < RETURNS_PHOTO_MAX
+    ? `<div class="retphoto-add" onclick="document.getElementById('${removeFn === 'removeReturnsPendingPhoto' ? 'returnsPendingPhotoInput' : 'returnsGalleryPhotoInput'}').click()"><span class="icon">📷</span>Add</div>`
+    : '';
+  return thumbs + addTile;
+}
+
+/* -- (a) Pending photos, attached before the item exists -- */
+let returnsPendingPhotos = [];
+function resetReturnsPendingPhotos(){
+  returnsPendingPhotos = [];
+  renderReturnsPendingPhotos();
+}
+function renderReturnsPendingPhotos(){
+  const box = document.getElementById('returnsPendingPhotoGrid');
+  if(box) box.innerHTML = returnsPhotoGridHtml(returnsPendingPhotos, 'removeReturnsPendingPhoto');
+}
+async function onReturnsPendingPhotoSelected(event){
+  const input = event.target;
+  const room = RETURNS_PHOTO_MAX - returnsPendingPhotos.length;
+  const files = Array.from(input.files || []).slice(0, Math.max(0, room));
+  input.value = '';
+  if(room <= 0){ toast('Up to ' + RETURNS_PHOTO_MAX + ' photos'); return; }
+  if(!files.length) return;
+  const added = await filesToReturnsPhotos(files);
+  returnsPendingPhotos.push(...added);
+  renderReturnsPendingPhotos();
+}
+function removeReturnsPendingPhoto(idx){
+  returnsPendingPhotos.splice(idx, 1);
+  renderReturnsPendingPhotos();
+}
+async function uploadReturnsItemPhotos(itemId, photos){
+  if(!photos || !photos.length) return;
+  try{
+    await apiPost('returns/items/' + itemId + '/images/', { images: photos });
+  }catch(e){
+    toast('Item was added, but its photos failed to upload — add them again from the return list');
+    console.error(e);
+  }
+}
+
+/* -- (b) Gallery for an existing item, opened from the "Photos" column -- */
+let returnsPhotoGalleryItemId = null;
+let returnsPhotoGalleryImages = [];
+let returnsPhotoGalleryOwnerItems = null;  // currentReturnsItems or currentReturnsDisposalItems — kept in sync as photos are added/removed
+let returnsPhotoGalleryOwnerRender = null; // renderReturnsDetailTable or renderReturnsDisposalTable — re-run so the "📷 N" count on the row stays right
+function openReturnsPhotoGallery(itemId, itemName, ownerItems, ownerRender){
+  returnsPhotoGalleryItemId = itemId;
+  returnsPhotoGalleryOwnerItems = ownerItems;
+  returnsPhotoGalleryOwnerRender = ownerRender;
+  document.getElementById('returnsPhotoGalleryItemName').textContent = itemName || '';
+  document.getElementById('returnsPhotoGalleryGrid').innerHTML = '<div class="loading">Loading…</div>';
+  openModal('modalReturnsPhotos');
+  loadReturnsPhotoGallery();
+}
+async function loadReturnsPhotoGallery(){
+  const itemId = returnsPhotoGalleryItemId;
+  try{
+    const data = await apiGet('returns/items/' + itemId + '/images/');
+    if(returnsPhotoGalleryItemId !== itemId) return; // gallery was closed/reopened on another item while this was loading
+    returnsPhotoGalleryImages = data.images || [];
+    renderReturnsPhotoGallery();
+  }catch(e){
+    document.getElementById('returnsPhotoGalleryGrid').innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not load photos</div>';
+    console.error(e);
+  }
+}
+function renderReturnsPhotoGallery(){
+  const box = document.getElementById('returnsPhotoGalleryGrid');
+  box.innerHTML = returnsPhotoGridHtml(returnsPhotoGalleryImages, 'deleteReturnsGalleryPhoto');
+  updateReturnsPhotoBadgeCount();
+}
+async function onReturnsGalleryPhotoSelected(event){
+  const input = event.target;
+  const itemId = returnsPhotoGalleryItemId;
+  const room = RETURNS_PHOTO_MAX - returnsPhotoGalleryImages.length;
+  const files = Array.from(input.files || []).slice(0, Math.max(0, room));
+  input.value = '';
+  if(room <= 0){ toast('Up to ' + RETURNS_PHOTO_MAX + ' photos'); return; }
+  if(!files.length) return;
+  const photos = await filesToReturnsPhotos(files);
+  if(!photos.length) return;
+  try{
+    const data = await apiPost('returns/items/' + itemId + '/images/', { images: photos });
+    const created = data.images || [];
+    // Server only echoes back image_id/filename — pair each one with the
+    // data URL already in hand client-side (same order sent) rather than
+    // re-fetching the whole gallery.
+    created.forEach((c, i) => {
+      returnsPhotoGalleryImages.push({ image_id: c.image_id, filename: c.filename, data: photos[i] ? photos[i].data : null });
+    });
+    renderReturnsPhotoGallery();
+  }catch(e){
+    toast('Could not upload photo: ' + (e && e.message ? e.message : 'unknown error'));
+    console.error(e);
+  }
+}
+async function deleteReturnsGalleryPhoto(imageId){
+  if(!confirm('Delete this photo?')) return;
+  try{
+    await apiDelete('returns/item-images/' + imageId + '/');
+    returnsPhotoGalleryImages = returnsPhotoGalleryImages.filter(i => i.image_id !== imageId);
+    renderReturnsPhotoGallery();
+  }catch(e){
+    toast('Could not delete photo');
+    console.error(e);
+  }
+}
+function updateReturnsPhotoBadgeCount(){
+  const itemId = returnsPhotoGalleryItemId;
+  const n = returnsPhotoGalleryImages.length;
+  if(returnsPhotoGalleryOwnerItems){
+    const it = returnsPhotoGalleryOwnerItems.find(i => i.item_id === itemId);
+    if(it) it.image_count = n;
+  }
+  if(returnsPhotoGalleryOwnerRender) returnsPhotoGalleryOwnerRender();
 }
 
 /* ---- Stock Adjusted (Vector): write-offs synced from Vector by
@@ -11721,6 +11951,7 @@ function renderReturnsDetailTable(){
       <td class="qtycell" style="font-weight:600;">${returnsMoney(returnsLineGross(it.cost_price, it.quantity, it.is_vat))}</td>
       <td>${escapeHtml(it.return_reason || '—')}</td>
       <td class="retloc-cell loc-col${it.location ? '' : ' empty'}" ${editable ? `onclick="openReturnsLocationModal(${it.item_id})"` : ''}>${it.location ? escapeHtml(it.location) : (editable ? 'Tap to add' : '—')}</td>
+      <td class="no-print">${returnsPhotoBadge(it, 'currentReturnsItems', 'renderReturnsDetailTable')}</td>
       ${editable ? `<td class="no-print" style="white-space:nowrap;">
           <a href="#" class="minibtn minibtn-charity" onclick="event.preventDefault(); moveReturnsItem(${it.item_id}, 'CHARITY')">🎁 Charity</a>
           <a href="#" class="minibtn minibtn-bin" onclick="event.preventDefault(); moveReturnsItem(${it.item_id}, 'BIN')">🗑️ Bin</a>
@@ -11731,7 +11962,7 @@ function renderReturnsDetailTable(){
   `).join('');
   const totals = returnsItemsTotals(currentReturnsItems);
   table.innerHTML = `
-    <thead><tr><th>Item</th><th class="qtycell">Cost Price</th><th class="qtycell">Qty</th><th class="qtycell">VAT</th><th class="qtycell">Total</th><th>Reason</th><th class="loc-col">Location</th>${editable ? '<th class="no-print"></th>' : ''}<th class="checkbox-col"></th></tr></thead>
+    <thead><tr><th>Item</th><th class="qtycell">Cost Price</th><th class="qtycell">Qty</th><th class="qtycell">VAT</th><th class="qtycell">Total</th><th>Reason</th><th class="loc-col">Location</th><th class="no-print">Photos</th>${editable ? '<th class="no-print"></th>' : ''}<th class="checkbox-col"></th></tr></thead>
     <tbody>${rows}</tbody>
     <tfoot><tr>
       <td style="font-weight:700;">Total</td>
@@ -11740,10 +11971,21 @@ function renderReturnsDetailTable(){
       <td class="qtycell" style="font-weight:700;">${returnsMoney(totals.vat)}</td>
       <td class="qtycell" style="font-weight:700;">${returnsMoney(totals.gross)}</td>
       <td></td><td class="loc-col"></td>
+      <td class="no-print"></td>
       ${editable ? '<td class="no-print"></td>' : ''}
       <td class="checkbox-col"></td>
     </tr></tfoot>
   `;
+}
+// ---- Small "📷 N" / "Add photo" link used in both the return-list table and
+//      the Charity/Bin tables — opens the photo gallery for that item. The
+//      owner array/render-fn names are passed through as raw identifiers
+//      (not values) so the click handler updates whichever list this row
+//      actually belongs to once a photo is added or removed. ----
+function returnsPhotoBadge(it, ownerItemsVar, ownerRenderFn){
+  const n = Number(it.image_count) || 0;
+  const label = n ? ('📷 ' + n) : '📷 Add';
+  return `<span class="retphotobadge" onclick="openReturnsPhotoGallery(${it.item_id}, ${jsArg(it.item_name)}, ${ownerItemsVar}, ${ownerRenderFn})">${label}</span>`;
 }
 async function markReturnsItemsReturned(){
   if(!currentReturnsList) return;
@@ -11917,12 +12159,13 @@ function renderReturnsDisposalTable(){
       <td class="qtycell">${it.is_vat ? returnsMoney(returnsLineVat(it.cost_price, it.quantity, true)) : '—'}</td>
       <td class="qtycell" style="font-weight:600;">${returnsMoney(returnsLineGross(it.cost_price, it.quantity, it.is_vat))}</td>
       <td class="loc-col">${escapeHtml(it.location || '—')}</td>
+      <td class="no-print">${returnsPhotoBadge(it, 'currentReturnsDisposalItems', 'renderReturnsDisposalTable')}</td>
       <td class="no-print"><a href="#" class="minibtn minibtn-undo" onclick="event.preventDefault(); unmoveReturnsDisposalItem(${it.item_id})">Undo</a></td>
     </tr>
   `).join('');
   const totals = returnsItemsTotals(currentReturnsDisposalItems);
   table.innerHTML = `
-    <thead><tr><th>Item</th><th>Supplier</th><th class="qtycell">Cost Price</th><th class="qtycell">Qty</th><th class="qtycell">VAT</th><th class="qtycell">Total</th><th class="loc-col">Location</th><th class="no-print"></th></tr></thead>
+    <thead><tr><th>Item</th><th>Supplier</th><th class="qtycell">Cost Price</th><th class="qtycell">Qty</th><th class="qtycell">VAT</th><th class="qtycell">Total</th><th class="loc-col">Location</th><th class="no-print">Photos</th><th class="no-print"></th></tr></thead>
     <tbody>${rows}</tbody>
     <tfoot><tr>
       <td style="font-weight:700;">Total</td>
@@ -11931,7 +12174,7 @@ function renderReturnsDisposalTable(){
       <td></td>
       <td class="qtycell" style="font-weight:700;">${returnsMoney(totals.vat)}</td>
       <td class="qtycell" style="font-weight:700;">${returnsMoney(totals.gross)}</td>
-      <td class="loc-col"></td><td class="no-print"></td>
+      <td class="loc-col"></td><td class="no-print"></td><td class="no-print"></td>
     </tr></tfoot>
   `;
 }
