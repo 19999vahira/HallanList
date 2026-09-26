@@ -2775,11 +2775,8 @@
       <button class="btn-ghost" onclick="bumpReturnsQty(1)">+</button>
     </div>
 
-    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);margin-bottom:16px;cursor:pointer;">
-      <input type="checkbox" id="returnsVatInput" style="width:16px;height:16px;" onchange="updateReturnsDetailsVatPreview()">
-      This item is VAT-rated (adds 20% VAT on top of cost price)
-    </label>
-    <p class="modal-sub" id="returnsDetailsVatPreview" style="margin-top:-10px;margin-bottom:14px;"></p>
+    <p class="modal-sub" id="returnsDetailsVatStatus" style="margin-bottom:4px;"></p>
+    <p class="modal-sub" id="returnsDetailsVatPreview" style="margin-top:-4px;margin-bottom:14px;"></p>
 
     <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;">Return reason</label>
     <div id="returnsReasonGrid" class="reasongrid"></div>
@@ -10994,6 +10991,10 @@ let returnsScanFeedItems = [];
 let returnsPendingProduct = null; // { stockid, name, barcode, suppliers } — awaiting a supplier tap
 let returnsPendingSupplier = null; // { suppid, name, cost_net } — chosen, awaiting qty + reason
 let returnsSelectedReason = null;  // a tapped preset; a typed custom reason wins over this
+// VAT is no longer a staff decision — VESTOCK.VATID is treated as always
+// correct, so this is set straight from returnsPendingProduct.default_vat
+// (see chooseReturnsSupplier) and just displayed, never edited by hand.
+let returnsCurrentIsVat = false;
 
 const RETURN_REASONS = [
   'Out of date',
@@ -11253,12 +11254,12 @@ async function chooseReturnsSupplier(suppid, supplierName, costNet){
   const adj = returnsPendingAdjustment;
   document.getElementById('returnsQtyInput').value = adj ? String(adj.qty) : '1';
   returnsQtySafeToType = false; // reset — only a genuine tap on the box allows typing into it
-  // Pre-tick VAT when WHOLESALE_PRICING has this product as VAT-rated (see
-  // lookupReturnsDefaultVat on the server) — still just a default, staff can
-  // untick/tick it either way. Previously this always started unticked, which
-  // is why genuinely VAT-rated items kept showing £0.00 VAT: nobody remembered
-  // to tick the box every single time.
-  document.getElementById('returnsVatInput').checked = !!(returnsPendingProduct && returnsPendingProduct.default_vat);
+  // VAT comes straight from VESTOCK.VATID (see returnsDefaultVatFromVatid on
+  // the server) — trusted as always correct, no staff confirmation needed.
+  returnsCurrentIsVat = !!(returnsPendingProduct && returnsPendingProduct.default_vat);
+  document.getElementById('returnsDetailsVatStatus').textContent = returnsCurrentIsVat
+    ? 'This item is VAT-rated (20% VAT added on top of cost price)'
+    : 'This item is not VAT-rated';
   document.getElementById('returnsReasonCustom').value = '';
   returnsSelectedDestination = null;
   renderReturnsDestinationGrid();
@@ -11332,7 +11333,7 @@ function updateReturnsDetailsVatPreview(){
   const cost = s && s.cost_net !== null && s.cost_net !== undefined ? Number(s.cost_net) : null;
   if(cost === null){ preview.textContent = ''; return; }
   const qty = Math.max(1, parseFloat(document.getElementById('returnsQtyInput').value) || 1);
-  const isVat = document.getElementById('returnsVatInput').checked;
+  const isVat = returnsCurrentIsVat;
   const vat = returnsLineVat(cost, qty, isVat);
   const gross = returnsLineGross(cost, qty, isVat);
   preview.textContent = isVat
@@ -11353,7 +11354,7 @@ async function confirmReturnsDetails(){
   const custom = document.getElementById('returnsReasonCustom').value.trim();
   const reason = custom || returnsSelectedReason;
   if(!reason){ toast('Pick a return reason, or type your own'); return; }
-  const isVat = document.getElementById('returnsVatInput').checked;
+  const isVat = returnsCurrentIsVat;
   const destination = returnsSelectedDestination;
   const destLabel = destination === 'CHARITY' ? 'Charity List' : destination === 'BIN' ? 'Bin List' : (s.name + '’s return list');
   const photosToUpload = returnsPendingPhotos.slice();
