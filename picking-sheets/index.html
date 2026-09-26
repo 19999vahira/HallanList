@@ -1065,6 +1065,14 @@
         <p class="wa-hint">Sent automatically to anyone who messages this WhatsApp number.</p>
         <textarea id="waAutoreplyText" class="wa-input" rows="3" maxlength="900" style="width:100%;resize:vertical;" placeholder="Loading…"></textarea>
         <button class="btn-primary" style="margin-top:8px;" onclick="saveWaAutoreplyText()">Save auto-reply</button>
+
+        <div class="actionbar" style="margin-top:18px;margin-bottom:4px;">
+          <label class="wa-label" style="margin:0;">Forward messages to</label>
+          <span id="waForwardStatus" class="wa-hint" style="margin:0;"></span>
+        </div>
+        <p class="wa-hint">Every message this number receives is also sent as a notification to this WhatsApp number, so it shows up in a real, actively-carried WhatsApp app.</p>
+        <input type="text" id="waForwardPhone" class="wa-input" placeholder="Loading…" autocomplete="off">
+        <button class="btn-primary" style="margin-top:8px;" onclick="saveWaForwardPhone()">Save forwarding number</button>
       </div>
       <div class="wa-panel" style="margin-top:16px;">
         <div class="actionbar" style="margin-bottom:4px;">
@@ -7115,6 +7123,7 @@ function setWaTab(tab){
   if(tab === 'inbox'){
     renderWaInbox();
     if(!waAutoreplyLoaded) loadWaAutoreplyText();
+    if(!waForwardPhoneLoaded) loadWaForwardPhone();
   }
 }
 
@@ -7147,6 +7156,41 @@ async function saveWaAutoreplyText(){
     status.style.color = 'var(--accent)';
   }catch(e){
     status.textContent = 'Failed to save';
+    status.style.color = 'var(--danger)';
+    console.error(e);
+  }
+}
+
+/* ---- Forward-to number: load once, save on demand ---- */
+let waForwardPhoneLoaded = false;
+async function loadWaForwardPhone(){
+  const box = document.getElementById('waForwardPhone');
+  const status = document.getElementById('waForwardStatus');
+  try{
+    const data = await apiGet('whatsapp/forward-phone');
+    box.value = data.phone || '';
+    waForwardPhoneLoaded = true;
+    status.textContent = '';
+  }catch(e){
+    box.placeholder = 'Could not load — try Refresh';
+    status.textContent = '';
+    console.error(e);
+  }
+}
+async function saveWaForwardPhone(){
+  const box = document.getElementById('waForwardPhone');
+  const status = document.getElementById('waForwardStatus');
+  const phone = box.value.replace(/[^\d]/g, '');
+  if(!phone){ status.textContent = 'Number cannot be empty'; status.style.color = 'var(--danger)'; return; }
+  status.textContent = 'Saving…';
+  status.style.color = '';
+  try{
+    await apiPost('whatsapp/forward-phone', { phone });
+    box.value = phone;
+    status.textContent = 'Saved ✓';
+    status.style.color = 'var(--accent)';
+  }catch(e){
+    status.textContent = (e && e.message) || 'Failed to save';
     status.style.color = 'var(--danger)';
     console.error(e);
   }
