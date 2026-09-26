@@ -2775,6 +2775,9 @@
       style="width:100%;padding:10px;margin-top:8px;" oninput="onReturnsCustomReason()"
       onkeydown="if(event.key==='Enter')confirmReturnsDetails()">
 
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin:16px 0 6px;">Send to</label>
+    <div id="returnsDestinationGrid" class="reasongrid"></div>
+
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="backToReturnsSupplierPick()">Back</button>
       <button class="btn-amber" onclick="confirmReturnsDetails()">Add to return list</button>
@@ -11051,7 +11054,7 @@ async function pickReturnsNameSearchResult(it){
   returnsScanBusy = true;
   try{
     const data = await apiGet('returns/stock-suppliers/' + it.stockid + '/');
-    returnsScanFound({ stockid: it.stockid, name: it.name, barcode: null, suppliers: data.suppliers || [] });
+    returnsScanFound({ stockid: it.stockid, name: it.name, barcode: null, suppliers: data.suppliers || [], default_vat: data.default_vat });
   }catch(e){
     console.error(e);
     // Still let them carry on and pick a supplier manually even if this failed.
@@ -11206,8 +11209,15 @@ async function chooseReturnsSupplier(suppid, supplierName, costNet){
   const adj = returnsPendingAdjustment;
   document.getElementById('returnsQtyInput').value = adj ? String(adj.qty) : '1';
   returnsQtySafeToType = false; // reset — only a genuine tap on the box allows typing into it
-  document.getElementById('returnsVatInput').checked = false;
+  // Pre-tick VAT when WHOLESALE_PRICING has this product as VAT-rated (see
+  // lookupReturnsDefaultVat on the server) — still just a default, staff can
+  // untick/tick it either way. Previously this always started unticked, which
+  // is why genuinely VAT-rated items kept showing £0.00 VAT: nobody remembered
+  // to tick the box every single time.
+  document.getElementById('returnsVatInput').checked = !!(returnsPendingProduct && returnsPendingProduct.default_vat);
   document.getElementById('returnsReasonCustom').value = '';
+  returnsSelectedDestination = null;
+  renderReturnsDestinationGrid();
   if(adj){
     const match = RETURN_REASONS.find(r => r.toLowerCase() === String(adj.reason || '').trim().toLowerCase());
     if(match) returnsSelectedReason = match;
@@ -11236,6 +11246,29 @@ function pickReturnsReason(reason){
   returnsSelectedReason = (returnsSelectedReason === reason) ? null : reason;
   if(returnsSelectedReason) document.getElementById('returnsReasonCustom').value = '';
   renderReturnsReasonGrid();
+}
+// ---- "Send to", picked up front alongside qty/reason instead of only after
+//      the item lands on the supplier's list. null = back to the supplier
+//      (the old, only behaviour); 'CHARITY'/'BIN' sets DESTINATION on the
+//      item at the same time it's inserted, so it never sits in the
+//      supplier's pending list at all — same end state moveReturnsItem()
+//      reaches later, just in one step. ----
+let returnsSelectedDestination = null;
+const RETURNS_DESTINATION_OPTIONS = [
+  { value: null, label: '↩️ Back to supplier' },
+  { value: 'CHARITY', label: '🎁 Charity' },
+  { value: 'BIN', label: '🗑️ Bin' }
+];
+function renderReturnsDestinationGrid(){
+  const box = document.getElementById('returnsDestinationGrid');
+  if(!box) return;
+  box.innerHTML = RETURNS_DESTINATION_OPTIONS.map(o => `
+    <div class="reasonbtn${returnsSelectedDestination === o.value ? ' selected' : ''}" onclick="pickReturnsDestination(${o.value ? jsArg(o.value) : 'null'})">${o.label}</div>
+  `).join('');
+}
+function pickReturnsDestination(dest){
+  returnsSelectedDestination = dest;
+  renderReturnsDestinationGrid();
 }
 function onReturnsCustomReason(){
   // Typing a custom reason deselects the presets, for the same reason.
@@ -11277,13 +11310,16 @@ async function confirmReturnsDetails(){
   const reason = custom || returnsSelectedReason;
   if(!reason){ toast('Pick a return reason, or type your own'); return; }
   const isVat = document.getElementById('returnsVatInput').checked;
+  const destination = returnsSelectedDestination;
+  const destLabel = destination === 'CHARITY' ? 'Charity List' : destination === 'BIN' ? 'Bin List' : (s.name + '’s return list');
   try{
     await apiPost('returns/scan-add/', {
       suppid: s.suppid, supplier_name: s.name,
       stockid: p.stockid, item_name: p.name, barcode: p.barcode,
       cost_price: s.cost_net, is_vat: isVat, quantity: qty, return_reason: reason,
       created_by: localStorage.getItem('hallan_staff_name') || null,
-      stockadjustid: returnsPendingAdjustment ? returnsPendingAdjustment.stockadjustid : null
+      stockadjustid: returnsPendingAdjustment ? returnsPendingAdjustment.stockadjustid : null,
+      destination: destination
     });
     if(returnsPendingAdjustment){
       // Added from Stock Adjusted (Vector): the server has dismissed that
@@ -11296,15 +11332,15 @@ async function confirmReturnsDetails(){
       returnsPendingSupplier = null;
       closeModal('modalReturnsDetails');
       renderReturnsAdjustments();
-      toast('Added to ' + s.name + '’s return list');
+      toast('Added to ' + destLabel);
       return;
     }
-    returnsScanFeedItems.unshift({ item_name: p.name, supplier_name: s.name, cost_net: s.cost_net, is_vat: isVat, quantity: qty, reason });
+    returnsScanFeedItems.unshift({ item_name: p.name, supplier_name: s.name, cost_net: s.cost_net, is_vat: isVat, quantity: qty, reason, destination: destination });
     renderReturnsScanFeed();
     closeModal('modalReturnsDetails');
     returnsPendingProduct = null;
     returnsPendingSupplier = null;
-    toast('Added to ' + s.name + '’s return list');
+    toast('Added to ' + destLabel);
     returnsAdvanceScan();
   }catch(e){
     toast('Could not add item: ' + (e && e.message ? e.message : 'unknown error'));
@@ -11376,9 +11412,11 @@ async function pickReturnsAdjustment(adjId){
   if(!a || returnsAdjustBusy) return;
   returnsAdjustBusy = true;
   let suppliers = [];
+  let defaultVat = null;
   try{
     const data = await apiGet('returns/stock-suppliers/' + a.stockid + '/');
     suppliers = data.suppliers || [];
+    defaultVat = data.default_vat;
   }catch(e){
     // Still let them carry on and search for a supplier manually.
     console.error(e);
@@ -11390,7 +11428,7 @@ async function pickReturnsAdjustment(adjId){
     qty: Math.abs(Number(a.adjust_qty)) || 1,
     reason: a.reason || ''
   };
-  returnsPendingProduct = { stockid: a.stockid, name: a.stock_name, barcode: null, suppliers };
+  returnsPendingProduct = { stockid: a.stockid, name: a.stock_name, barcode: null, suppliers, default_vat: defaultVat };
   openReturnsSupplierPick();
 }
 async function dismissReturnsAdjustment(adjId){
@@ -11427,7 +11465,7 @@ function renderReturnsScanFeed(){
   box.innerHTML = returnsScanFeedItems.map(it => `
     <div class="pickrow">
       <div class="pickinfo">
-        <div class="pname">${escapeHtml(it.item_name)} <span style="color:var(--text-dim);font-weight:400;">× ${it.quantity}</span></div>
+        <div class="pname">${escapeHtml(it.item_name)} <span style="color:var(--text-dim);font-weight:400;">× ${it.quantity}</span>${it.destination ? ` <span style="color:var(--text-dim);font-weight:400;">→ ${it.destination === 'CHARITY' ? '🎁 Charity' : '🗑️ Bin'}</span>` : ''}</div>
         <div class="pbarcode">${escapeHtml(it.supplier_name)}${it.cost_net !== null && it.cost_net !== undefined ? (' — £' + Number(it.cost_net).toFixed(2)) : ''} &middot; ${escapeHtml(it.reason || '')}</div>
       </div>
     </div>
