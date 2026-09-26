@@ -5743,7 +5743,7 @@ async function generateColourFlyer(){
     doc.setFont(flyerMainFont, 'normal');
     doc.setFontSize(24);
     flyerDrawCenteredSegments(doc, [
-      { text: 'Offers valid from ', color: FLYER_COLOR_BLUE },
+      { text: 'Prices valid from ', color: FLYER_COLOR_BLUE },
       { text: flyerDdmmyyyy(fromVal), color: FLYER_COLOR_GOLD },
       { text: ' to ', color: FLYER_COLOR_BLUE },
       { text: flyerDdmmyyyy(toVal), color: FLYER_COLOR_GOLD }
@@ -6149,7 +6149,7 @@ function buildFlyerWebpageHTML(mode, fromVal, toVal){
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Hallan Cash &amp; Carry — ${escapeHtml(modeLabel)}</title>
 <meta property="og:title" content="Hallan Cash &amp; Carry — ${escapeHtml(modeLabel)}">
-<meta property="og:description" content="Offers valid from ${flyerDdmmyyyy(fromVal)} to ${flyerDdmmyyyy(toVal)}">
+<meta property="og:description" content="Prices valid from ${flyerDdmmyyyy(fromVal)} to ${flyerDdmmyyyy(toVal)}">
 <meta property="og:image" content="${flyerImages.first || ''}">
 <meta property="og:url" content="">
 <meta name="theme-color" content="${FLYER_WEB_BLUE}">
@@ -6249,7 +6249,7 @@ function buildFlyerWebpageHTML(mode, fromVal, toVal){
 </head>
 <body>
   <section class="fw-page fw-cover"${coverBg}>
-    <div class="fw-validity">Offers valid from <b>${flyerDdmmyyyy(fromVal)}</b> to <b>${flyerDdmmyyyy(toVal)}</b></div>
+    <div class="fw-validity">Prices valid from <b>${flyerDdmmyyyy(fromVal)}</b> to <b>${flyerDdmmyyyy(toVal)}</b></div>
   </section>
   ${deptSections}
   <section class="fw-page fw-notes-page">
