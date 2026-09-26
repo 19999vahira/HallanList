@@ -2205,6 +2205,10 @@
         <h4>🗑️ Bin List</h4>
         <div class="count">Items binned instead of sent back to a supplier</div>
       </div>
+      <div class="bincard" style="--tile-color:#059669;" onclick="openReturnsAnalytics()">
+        <h4>📊 Analytics</h4>
+        <div class="count">Wastage value — Bin and Charity vs what's actually coming back from suppliers</div>
+      </div>
     </div>
   </div>
 
@@ -2353,6 +2357,25 @@
       </div>
     </div>
     <table class="finaltable" id="returnsDisposalTable"></table>
+  </div>
+
+  <!-- RETURNS: ANALYTICS — wastage overview -->
+  <div id="view-returns-analytics" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openReturnsHub()">Returns</button><span class="sep">/</span>
+      <span class="current">Analytics</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Supplier Returns</div>
+      <h2>Analytics</h2>
+      <p>What wastage is actually costing — Bin and Charity stock value vs what's coming back from suppliers as credit.</p>
+    </div>
+    <div class="actionbar">
+      <span></span>
+      <button class="btn-ghost" onclick="loadReturnsAnalytics()">Refresh</button>
+    </div>
+    <div id="returnsAnalyticsBody"><div class="loading">Loading…</div></div>
   </div>
 
   <!-- INVOICES: NOTE DETAIL -->
@@ -2735,14 +2758,16 @@
       <input type="number" id="returnsQtyInput" value="1" min="1" step="1"
         style="width:80px;text-align:center;padding:10px;"
         onpointerdown="returnsQtySafeToType=true" onblur="returnsQtySafeToType=false"
+        oninput="updateReturnsDetailsVatPreview()"
         onkeydown="if(event.key==='Enter')confirmReturnsDetails()">
       <button class="btn-ghost" onclick="bumpReturnsQty(1)">+</button>
     </div>
 
-    <label class="retvat-check" style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:16px;cursor:pointer;">
-      <input type="checkbox" id="returnsIsVatCheckbox" style="width:16px;height:16px;margin:0;">
-      Cost price shown is ex-VAT — this item is standard-rated (+20% VAT)
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);margin-bottom:16px;cursor:pointer;">
+      <input type="checkbox" id="returnsVatInput" style="width:16px;height:16px;" onchange="updateReturnsDetailsVatPreview()">
+      This item is VAT-rated (adds 20% VAT on top of cost price)
     </label>
+    <p class="modal-sub" id="returnsDetailsVatPreview" style="margin-top:-10px;margin-bottom:14px;"></p>
 
     <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;">Return reason</label>
     <div id="returnsReasonGrid" class="reasongrid"></div>
@@ -2753,6 +2778,25 @@
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="backToReturnsSupplierPick()">Back</button>
       <button class="btn-amber" onclick="confirmReturnsDetails()">Add to return list</button>
+    </div>
+  </div>
+</div>
+
+<!-- RETURNS: EDIT COST PRICE + VAT -->
+<div class="modal-backdrop" id="modalReturnsEditItem">
+  <div class="modal" style="width:380px;">
+    <h3>Edit price</h3>
+    <p class="modal-sub" id="returnsEditItemName"></p>
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;">Cost price (ex VAT)</label>
+    <input type="number" step="0.01" min="0" id="returnsEditCostInput" style="width:100%;padding:10px;margin-bottom:12px;" oninput="updateReturnsEditItemPreview()">
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);margin-bottom:6px;cursor:pointer;">
+      <input type="checkbox" id="returnsEditVatInput" style="width:16px;height:16px;" onchange="updateReturnsEditItemPreview()">
+      This item is VAT-rated (adds 20% VAT on top of cost price)
+    </label>
+    <p class="modal-sub" id="returnsEditItemPreview" style="margin-top:-2px;"></p>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalReturnsEditItem')">Cancel</button>
+      <button class="btn-amber" onclick="saveReturnsEditItem()">Save</button>
     </div>
   </div>
 </div>
@@ -3390,6 +3434,19 @@ let returnsScanBufferTimer = null;
 let returnsQtySafeToType = false;    // only true once the person has actually tapped the qty box themselves
 const RETURNS_SCAN_MAX_KEY_GAP_MS = 60; // hardware scanners fire keys far faster than any human types
 const RETURNS_SCAN_MIN_LENGTH = 4;      // shortest plausible barcode/product code
+const RETURNS_VAT_RATE = 0.20; // UK standard rate — matches server's RETURNS_VAT_RATE
+// ---- Shared VAT math for Returns: cost_price is always ex-VAT (net); every
+//      total shown/printed for Returns is net, VAT, and gross so wastage
+//      value is never understated. ----
+function returnsLineVat(costPrice, quantity, isVat){
+  if(!isVat || costPrice === null || costPrice === undefined || costPrice === '') return 0;
+  return Number(costPrice) * (Number(quantity) || 0) * RETURNS_VAT_RATE;
+}
+function returnsLineGross(costPrice, quantity, isVat){
+  const net = (costPrice === null || costPrice === undefined || costPrice === '') ? 0 : Number(costPrice) * (Number(quantity) || 0);
+  return net + returnsLineVat(costPrice, quantity, isVat);
+}
+function returnsMoney(n){ return '£' + Number(n || 0).toFixed(2); }
 
 /* Shared active-time tracker for Making List / Picking List.
    Counts only time actually spent with the list open on screen — pauses when the
@@ -11149,12 +11206,8 @@ async function chooseReturnsSupplier(suppid, supplierName, costNet){
   const adj = returnsPendingAdjustment;
   document.getElementById('returnsQtyInput').value = adj ? String(adj.qty) : '1';
   returnsQtySafeToType = false; // reset — only a genuine tap on the box allows typing into it
+  document.getElementById('returnsVatInput').checked = false;
   document.getElementById('returnsReasonCustom').value = '';
-  // No VATID reliably available from SUPPLIER_STOCK (see server.js comment
-  // above RETURNS_ITEMS), so this is a manual tick, not auto-detected —
-  // reset to unchecked for every new item rather than carrying the last
-  // item's answer over by accident.
-  document.getElementById('returnsIsVatCheckbox').checked = false;
   if(adj){
     const match = RETURN_REASONS.find(r => r.toLowerCase() === String(adj.reason || '').trim().toLowerCase());
     if(match) returnsSelectedReason = match;
@@ -11167,6 +11220,7 @@ async function chooseReturnsSupplier(suppid, supplierName, costNet){
     note.style.display = 'none';
   }
   renderReturnsReasonGrid();
+  updateReturnsDetailsVatPreview();
   openModal('modalReturnsDetails');
   // No auto-focus/select here any more: auto-focusing this box used to be
   // exactly where the next scan's digits would land instead of the barcode
@@ -11193,6 +11247,20 @@ function onReturnsCustomReason(){
 function bumpReturnsQty(delta){
   const el = document.getElementById('returnsQtyInput');
   el.value = Math.max(1, (parseFloat(el.value) || 1) + delta);
+  updateReturnsDetailsVatPreview();
+}
+function updateReturnsDetailsVatPreview(){
+  const s = returnsPendingSupplier;
+  const preview = document.getElementById('returnsDetailsVatPreview');
+  const cost = s && s.cost_net !== null && s.cost_net !== undefined ? Number(s.cost_net) : null;
+  if(cost === null){ preview.textContent = ''; return; }
+  const qty = Math.max(1, parseFloat(document.getElementById('returnsQtyInput').value) || 1);
+  const isVat = document.getElementById('returnsVatInput').checked;
+  const vat = returnsLineVat(cost, qty, isVat);
+  const gross = returnsLineGross(cost, qty, isVat);
+  preview.textContent = isVat
+    ? (returnsMoney(cost * qty) + ' + ' + returnsMoney(vat) + ' VAT = ' + returnsMoney(gross))
+    : (returnsMoney(cost * qty) + ' (no VAT)');
 }
 function backToReturnsSupplierPick(){
   closeModal('modalReturnsDetails');
@@ -11208,7 +11276,7 @@ async function confirmReturnsDetails(){
   const custom = document.getElementById('returnsReasonCustom').value.trim();
   const reason = custom || returnsSelectedReason;
   if(!reason){ toast('Pick a return reason, or type your own'); return; }
-  const isVat = document.getElementById('returnsIsVatCheckbox').checked;
+  const isVat = document.getElementById('returnsVatInput').checked;
   try{
     await apiPost('returns/scan-add/', {
       suppid: s.suppid, supplier_name: s.name,
@@ -11360,7 +11428,7 @@ function renderReturnsScanFeed(){
     <div class="pickrow">
       <div class="pickinfo">
         <div class="pname">${escapeHtml(it.item_name)} <span style="color:var(--text-dim);font-weight:400;">× ${it.quantity}</span></div>
-        <div class="pbarcode">${escapeHtml(it.supplier_name)}${it.cost_net !== null && it.cost_net !== undefined ? (' — £' + Number(it.cost_net).toFixed(2) + (it.is_vat ? ' +VAT' : '')) : ''} &middot; ${escapeHtml(it.reason || '')}</div>
+        <div class="pbarcode">${escapeHtml(it.supplier_name)}${it.cost_net !== null && it.cost_net !== undefined ? (' — £' + Number(it.cost_net).toFixed(2)) : ''} &middot; ${escapeHtml(it.reason || '')}</div>
       </div>
     </div>
   `).join('');
@@ -11583,45 +11651,21 @@ async function openReturnsListDetail(returnId){
     console.error(e);
   }
 }
-/* ---- Returns VAT display helpers — matches RETURNS_VAT_RATE server-side.
-   COST_PRICE is always stored ex-VAT (net); IS_VAT just flags whether the
-   standard rate applies on top for display/totals. Every total is shown
-   as three figures — cost price (net), VAT, and the two added together —
-   never a single blended number, same as the analytics endpoint. ---- */
-const RETURNS_VAT_RATE = 0.20; // UK standard rate — matches server RETURNS_VAT_RATE
-function returnsUnitVat(costPrice, isVat){
-  if(!isVat || costPrice === null || costPrice === undefined || costPrice === '') return 0;
-  return Number(costPrice) * RETURNS_VAT_RATE;
-}
-function returnsLineVatAmount(costPrice, quantity, isVat){
-  return returnsUnitVat(costPrice, isVat) * (Number(quantity) || 0);
-}
-// One cost-price cell's text: net only for non-VAT items, or
-// "£cost + VAT £vat" for standard-rated ones, so the VAT amount is always
-// visible right next to the price it applies to, not just in a total.
-function returnsCostCellText(costPrice, isVat){
-  if(costPrice === null || costPrice === undefined || costPrice === '') return '—';
-  const net = Number(costPrice);
-  if(!isVat) return '£' + net.toFixed(2);
-  return '£' + net.toFixed(2) + ' <span class="vattag">+VAT £' + returnsUnitVat(net, true).toFixed(2) + '</span>';
-}
 function returnsItemsTotal(items){
+  // Kept for compatibility: ex-VAT (net) total only.
+  return returnsItemsTotals(items).net;
+}
+function returnsItemsTotals(items){
   return (items || []).reduce((acc, it) => {
-    const cost = it.cost_price === null || it.cost_price === undefined || it.cost_price === '' ? 0 : Number(it.cost_price);
+    const cost = it.cost_price === null || it.cost_price === undefined ? 0 : Number(it.cost_price);
     const qty = Number(it.quantity) || 0;
     const net = cost * qty;
-    const vat = returnsLineVatAmount(it.cost_price, qty, it.is_vat);
+    const vat = returnsLineVat(it.cost_price, qty, it.is_vat);
     acc.net += net;
     acc.vat += vat;
     acc.gross += net + vat;
     return acc;
   }, { net: 0, vat: 0, gross: 0 });
-}
-// Three-line "£net / +VAT £vat / = £gross" block used in table footers.
-function returnsTotalCellHtml(total){
-  return `<div>£${total.net.toFixed(2)}</div>` +
-    (total.vat > 0 ? `<div style="font-weight:400;font-size:11px;color:var(--text-dim);">+VAT £${total.vat.toFixed(2)}</div>
-      <div style="font-size:12px;">= £${total.gross.toFixed(2)}</div>` : '');
 }
 function renderReturnsDetailTable(){
   const table = document.getElementById('returnsDetailTable');
@@ -11633,11 +11677,10 @@ function renderReturnsDetailTable(){
   const rows = currentReturnsItems.map(it => `
     <tr>
       <td>${escapeHtml(it.item_name)}</td>
-      <td class="qtycell">
-        ${returnsCostCellText(it.cost_price, it.is_vat)}
-        ${editable ? `<label class="retvat-inline"><input type="checkbox" ${it.is_vat ? 'checked' : ''} onchange="toggleReturnsItemVat(${it.item_id}, this.checked)"> VAT</label>` : ''}
-      </td>
+      <td class="qtycell${editable ? ' retloc-cell' : ''}" ${editable ? `onclick="openReturnsEditItemModal(${it.item_id})"` : ''}>${it.cost_price === null || it.cost_price === undefined ? '—' : returnsMoney(it.cost_price)}</td>
       <td class="qtycell">${it.quantity}</td>
+      <td class="qtycell">${it.is_vat ? returnsMoney(returnsLineVat(it.cost_price, it.quantity, true)) : '—'}</td>
+      <td class="qtycell" style="font-weight:600;">${returnsMoney(returnsLineGross(it.cost_price, it.quantity, it.is_vat))}</td>
       <td>${escapeHtml(it.return_reason || '—')}</td>
       <td class="retloc-cell loc-col${it.location ? '' : ' empty'}" ${editable ? `onclick="openReturnsLocationModal(${it.item_id})"` : ''}>${it.location ? escapeHtml(it.location) : (editable ? 'Tap to add' : '—')}</td>
       ${editable ? `<td class="no-print" style="white-space:nowrap;">
@@ -11648,14 +11691,17 @@ function renderReturnsDetailTable(){
       <td class="checkbox-col"><span class="printbox"></span></td>
     </tr>
   `).join('');
-  const total = returnsItemsTotal(currentReturnsItems);
+  const totals = returnsItemsTotals(currentReturnsItems);
   table.innerHTML = `
-    <thead><tr><th>Item</th><th class="qtycell">Cost Price</th><th class="qtycell">Qty</th><th>Reason</th><th class="loc-col">Location</th>${editable ? '<th class="no-print"></th>' : ''}<th class="checkbox-col"></th></tr></thead>
+    <thead><tr><th>Item</th><th class="qtycell">Cost Price</th><th class="qtycell">Qty</th><th class="qtycell">VAT</th><th class="qtycell">Total</th><th>Reason</th><th class="loc-col">Location</th>${editable ? '<th class="no-print"></th>' : ''}<th class="checkbox-col"></th></tr></thead>
     <tbody>${rows}</tbody>
     <tfoot><tr>
       <td style="font-weight:700;">Total</td>
-      <td class="qtycell" style="font-weight:700;">${returnsTotalCellHtml(total)}</td>
-      <td></td><td></td><td class="loc-col"></td>
+      <td class="qtycell" style="font-weight:700;">${returnsMoney(totals.net)}</td>
+      <td></td>
+      <td class="qtycell" style="font-weight:700;">${returnsMoney(totals.vat)}</td>
+      <td class="qtycell" style="font-weight:700;">${returnsMoney(totals.gross)}</td>
+      <td></td><td class="loc-col"></td>
       ${editable ? '<td class="no-print"></td>' : ''}
       <td class="checkbox-col"></td>
     </tr></tfoot>
@@ -11753,6 +11799,48 @@ async function saveReturnsLocation(){
   }
 }
 
+/* ---- Edit cost price / VAT on a pending item, tapped from the Cost Price
+   cell in the detail table. Kept separate from the location modal since
+   they're edited from different cells and save independently. ---- */
+function openReturnsEditItemModal(itemId){
+  returnsEditingItemId = itemId;
+  const item = currentReturnsItems.find(i => i.item_id === itemId);
+  if(!item) return;
+  document.getElementById('returnsEditItemName').textContent = item.item_name;
+  document.getElementById('returnsEditCostInput').value = item.cost_price === null || item.cost_price === undefined ? '' : item.cost_price;
+  document.getElementById('returnsEditVatInput').checked = !!item.is_vat;
+  updateReturnsEditItemPreview();
+  openModal('modalReturnsEditItem');
+}
+function updateReturnsEditItemPreview(){
+  const item = currentReturnsItems.find(i => i.item_id === returnsEditingItemId);
+  const cost = parseFloat(document.getElementById('returnsEditCostInput').value);
+  const isVat = document.getElementById('returnsEditVatInput').checked;
+  const preview = document.getElementById('returnsEditItemPreview');
+  if(!item || isNaN(cost)){ preview.textContent = ''; return; }
+  const vat = returnsLineVat(cost, item.quantity, isVat);
+  const gross = returnsLineGross(cost, item.quantity, isVat);
+  preview.textContent = 'Qty ' + item.quantity + ': ' + returnsMoney(cost * item.quantity) +
+    (isVat ? (' + ' + returnsMoney(vat) + ' VAT = ' + returnsMoney(gross)) : ' (no VAT)');
+}
+async function saveReturnsEditItem(){
+  const item = currentReturnsItems.find(i => i.item_id === returnsEditingItemId);
+  if(!item) return;
+  const cost = parseFloat(document.getElementById('returnsEditCostInput').value);
+  const isVat = document.getElementById('returnsEditVatInput').checked;
+  if(isNaN(cost) || cost < 0){ toast('Enter a valid cost price'); return; }
+  try{
+    await apiPut('returns/items/' + returnsEditingItemId + '/', { quantity: item.quantity, cost_price: cost, is_vat: isVat, location: item.location || null });
+    item.cost_price = cost;
+    item.is_vat = isVat;
+    closeModal('modalReturnsEditItem');
+    renderReturnsDetailTable();
+  }catch(e){
+    toast('Could not save price');
+    console.error(e);
+  }
+}
+
 /* ---- Charity List / Bin List — flat, cross-supplier, items land here via
    moveReturnsItem() above and stay until someone deals with them. ---- */
 let currentReturnsDisposalType = null; // 'CHARITY' | 'BIN'
@@ -11786,21 +11874,26 @@ function renderReturnsDisposalTable(){
     <tr>
       <td>${escapeHtml(it.item_name)}</td>
       <td>${escapeHtml(it.supplier_name)}</td>
-      <td class="qtycell">${it.cost_price === null || it.cost_price === undefined ? '—' : ('£' + Number(it.cost_price).toFixed(2))}</td>
+      <td class="qtycell">${it.cost_price === null || it.cost_price === undefined ? '—' : returnsMoney(it.cost_price)}</td>
       <td class="qtycell">${it.quantity}</td>
+      <td class="qtycell">${it.is_vat ? returnsMoney(returnsLineVat(it.cost_price, it.quantity, true)) : '—'}</td>
+      <td class="qtycell" style="font-weight:600;">${returnsMoney(returnsLineGross(it.cost_price, it.quantity, it.is_vat))}</td>
       <td class="loc-col">${escapeHtml(it.location || '—')}</td>
       <td class="no-print"><a href="#" class="minibtn minibtn-undo" onclick="event.preventDefault(); unmoveReturnsDisposalItem(${it.item_id})">Undo</a></td>
     </tr>
   `).join('');
-  const total = returnsItemsTotal(currentReturnsDisposalItems);
+  const totals = returnsItemsTotals(currentReturnsDisposalItems);
   table.innerHTML = `
-    <thead><tr><th>Item</th><th>Supplier</th><th class="qtycell">Cost Price</th><th class="qtycell">Qty</th><th class="loc-col">Location</th><th class="no-print"></th></tr></thead>
+    <thead><tr><th>Item</th><th>Supplier</th><th class="qtycell">Cost Price</th><th class="qtycell">Qty</th><th class="qtycell">VAT</th><th class="qtycell">Total</th><th class="loc-col">Location</th><th class="no-print"></th></tr></thead>
     <tbody>${rows}</tbody>
     <tfoot><tr>
       <td style="font-weight:700;">Total</td>
       <td></td>
-      <td class="qtycell" style="font-weight:700;">£${total.toFixed(2)}</td>
-      <td></td><td class="loc-col"></td><td class="no-print"></td>
+      <td class="qtycell" style="font-weight:700;">${returnsMoney(totals.net)}</td>
+      <td></td>
+      <td class="qtycell" style="font-weight:700;">${returnsMoney(totals.vat)}</td>
+      <td class="qtycell" style="font-weight:700;">${returnsMoney(totals.gross)}</td>
+      <td class="loc-col"></td><td class="no-print"></td>
     </tr></tfoot>
   `;
 }
@@ -11815,6 +11908,112 @@ async function unmoveReturnsDisposalItem(itemId){
     toast('Could not undo this move');
     console.error(e);
   }
+}
+
+/* ---- Analytics: wastage overview — Bin/Charity value vs what suppliers
+   actually credit back, plus which items/suppliers show up most in
+   Bin/Charity and how that's trending. Pure read from
+   /api/returns/analytics — no client-side aggregation, so it reflects the
+   same net/VAT/gross split as the rest of Returns. ---- */
+async function openReturnsAnalytics(){
+  showView('view-returns-analytics');
+  loadReturnsAnalytics();
+}
+async function loadReturnsAnalytics(){
+  const box = document.getElementById('returnsAnalyticsBody');
+  box.innerHTML = '<div class="loading">Loading…</div>';
+  try{
+    const data = await apiGet('returns/analytics/');
+    renderReturnsAnalytics(data);
+  }catch(e){
+    box.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not load analytics</div>';
+    console.error(e);
+  }
+}
+function returnsAnalyticsCard(title, color, bucket, sub){
+  return `
+    <div class="bincard" style="--tile-color:${color};cursor:default;">
+      <h4>${escapeHtml(title)}</h4>
+      <div class="count" style="font-size:20px;font-weight:700;color:var(--text);">${returnsMoney(bucket.gross_value)}</div>
+      <div class="count" style="margin-top:4px;">${returnsMoney(bucket.net_value)} ex VAT + ${returnsMoney(bucket.vat_value)} VAT</div>
+      <div class="count" style="margin-top:4px;">${bucket.item_count} item${bucket.item_count===1?'':'s'}${sub ? ' · ' + sub : ''}</div>
+    </div>
+  `;
+}
+function renderReturnsAnalytics(data){
+  const box = document.getElementById('returnsAnalyticsBody');
+  const b = data.buckets;
+  const w = data.wastage;
+  const bts = data.back_to_supplier;
+  const totalMoved = w.gross_value + bts.gross_value;
+  const wastagePct = totalMoved > 0 ? (w.gross_value / totalMoved * 100) : 0;
+
+  const topItemsRows = (data.top_items || []).map(it => `
+    <tr>
+      <td>${escapeHtml(it.item_name)}</td>
+      <td class="qtycell">${it.times}</td>
+      <td class="qtycell">${it.total_qty}</td>
+      <td class="qtycell" style="font-weight:600;">${returnsMoney(it.gross_value)}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="4" class="empty-hint">No Bin/Charity items yet.</td></tr>';
+
+  const topSuppliersRows = (data.top_suppliers || []).map(s => `
+    <tr>
+      <td>${escapeHtml(s.supplier_name || '—')}</td>
+      <td class="qtycell">${s.item_count}</td>
+      <td class="qtycell" style="font-weight:600;">${returnsMoney(s.gross_value)}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="3" class="empty-hint">No Bin/Charity items yet.</td></tr>';
+
+  const trend = data.trend || [];
+  const maxTrend = Math.max(1, ...trend.map(m => m.bin_net + m.charity_net));
+  const trendRows = trend.length ? trend.map(m => `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+      <div style="width:64px;font-size:12px;color:var(--text-dim);">${escapeHtml(m.month)}</div>
+      <div style="flex:1;display:flex;height:16px;border-radius:4px;overflow:hidden;background:var(--bg-alt,#1a1d24);">
+        <div style="width:${(m.bin_net/maxTrend*100).toFixed(1)}%;background:#57534e;" title="Bin ${returnsMoney(m.bin_net)}"></div>
+        <div style="width:${(m.charity_net/maxTrend*100).toFixed(1)}%;background:#7c3aed;" title="Charity ${returnsMoney(m.charity_net)}"></div>
+      </div>
+      <div style="width:90px;font-size:12px;text-align:right;color:var(--text-dim);">${returnsMoney(m.bin_net + m.charity_net)}</div>
+    </div>
+  `).join('') : '<div class="empty-hint">Nothing moved to Bin/Charity in the last 6 months.</div>';
+
+  box.innerHTML = `
+    <div class="catgrid">
+      ${returnsAnalyticsCard('🗑️ Bin (ex VAT + VAT)', '#57534e', b.bin)}
+      ${returnsAnalyticsCard('🎁 Charity (ex VAT + VAT)', '#7c3aed', b.charity)}
+      ${returnsAnalyticsCard('💸 Total Wastage', '#dc2626', w, wastagePct.toFixed(0) + '% of all stock moved')}
+      ${returnsAnalyticsCard('✅ Back to Supplier', '#059669', bts, 'Pending/Awaiting/Returned')}
+    </div>
+
+    <h3 style="margin:24px 0 10px;font-size:15px;">Back to supplier, by stage</h3>
+    <div class="catgrid">
+      ${returnsAnalyticsCard('⏳ Pending for Return', '#d97706', b.pending)}
+      ${returnsAnalyticsCard('📨 Awaiting Credit Note', '#2563eb', b.awaiting_credit)}
+      ${returnsAnalyticsCard('✅ Returned Goods', '#059669', b.returned)}
+      ${returnsAnalyticsCard('🗄️ Closed', '#6b7280', b.closed)}
+    </div>
+
+    <h3 style="margin:24px 0 10px;font-size:15px;">Bin + Charity value, last 6 months</h3>
+    <div style="margin-bottom:8px;font-size:12px;color:var(--text-dim);">
+      <span style="display:inline-block;width:10px;height:10px;background:#57534e;border-radius:2px;margin-right:4px;"></span>Bin
+      <span style="display:inline-block;width:10px;height:10px;background:#7c3aed;border-radius:2px;margin:0 4px 0 14px;"></span>Charity
+      <span style="margin-left:14px;">(ex VAT)</span>
+    </div>
+    ${trendRows}
+
+    <h3 style="margin:24px 0 10px;font-size:15px;">Most wasted items (Bin + Charity)</h3>
+    <table class="finaltable">
+      <thead><tr><th>Item</th><th class="qtycell">Times</th><th class="qtycell">Total Qty</th><th class="qtycell">Value (inc VAT)</th></tr></thead>
+      <tbody>${topItemsRows}</tbody>
+    </table>
+
+    <h3 style="margin:24px 0 10px;font-size:15px;">Suppliers with the most Bin/Charity value</h3>
+    <table class="finaltable">
+      <thead><tr><th>Supplier</th><th class="qtycell">Items</th><th class="qtycell">Value (inc VAT)</th></tr></thead>
+      <tbody>${topSuppliersRows}</tbody>
+    </table>
+  `;
 }
 
 /* ---- Print / PDF — both ask "with or without location" first via the
@@ -11864,25 +12063,29 @@ function downloadReturnsListPDF(includeLocation){
     doc.setTextColor(120);
     doc.text('Date list printed: ' + new Date().toLocaleDateString('en-GB'), 14, 33);
     // Blank checkbox column last, so a printed copy can be ticked off by hand.
-    const head = ['Item', 'Cost Price', 'Qty', 'Reason'];
+    const head = ['Item', 'Cost Price', 'Qty', 'VAT', 'Total', 'Reason'];
     if(includeLocation) head.push('Location');
     const checkboxCol = head.length;
     head.push('\u2713');
     const rows = currentReturnsItems.map(it => {
       const row = [
         it.item_name,
-        it.cost_price === null || it.cost_price === undefined ? '—' : ('£' + Number(it.cost_price).toFixed(2)),
+        it.cost_price === null || it.cost_price === undefined ? '—' : returnsMoney(it.cost_price),
         String(it.quantity),
+        it.is_vat ? returnsMoney(returnsLineVat(it.cost_price, it.quantity, true)) : '—',
+        returnsMoney(returnsLineGross(it.cost_price, it.quantity, it.is_vat)),
         it.return_reason || ''
       ];
       if(includeLocation) row.push(it.location || '');
       row.push('');
       return row;
     });
-    const total = returnsItemsTotal(currentReturnsItems);
+    const totals = returnsItemsTotals(currentReturnsItems);
     const totalRow = new Array(head.length).fill('');
     totalRow[0] = 'Total';
-    totalRow[1] = '£' + total.toFixed(2);
+    totalRow[1] = returnsMoney(totals.net);
+    totalRow[3] = returnsMoney(totals.vat);
+    totalRow[4] = returnsMoney(totals.gross);
     rows.push(totalRow);
     doc.autoTable({
       startY: 39,
@@ -11927,22 +12130,26 @@ function downloadReturnsDisposalPDF(type, includeLocation){
     doc.setFontSize(10);
     doc.setTextColor(120);
     doc.text('Date list printed: ' + new Date().toLocaleDateString('en-GB'), 14, 27);
-    const head = ['Item', 'Supplier', 'Cost Price', 'Qty'];
+    const head = ['Item', 'Supplier', 'Cost Price', 'Qty', 'VAT', 'Total'];
     if(includeLocation) head.push('Location');
     const rows = currentReturnsDisposalItems.map(it => {
       const row = [
         it.item_name,
         it.supplier_name,
-        it.cost_price === null || it.cost_price === undefined ? '—' : ('£' + Number(it.cost_price).toFixed(2)),
-        String(it.quantity)
+        it.cost_price === null || it.cost_price === undefined ? '—' : returnsMoney(it.cost_price),
+        String(it.quantity),
+        it.is_vat ? returnsMoney(returnsLineVat(it.cost_price, it.quantity, true)) : '—',
+        returnsMoney(returnsLineGross(it.cost_price, it.quantity, it.is_vat))
       ];
       if(includeLocation) row.push(it.location || '');
       return row;
     });
-    const total = returnsItemsTotal(currentReturnsDisposalItems);
+    const totals = returnsItemsTotals(currentReturnsDisposalItems);
     const totalRow = new Array(head.length).fill('');
     totalRow[0] = 'Total';
-    totalRow[2] = '£' + total.toFixed(2);
+    totalRow[2] = returnsMoney(totals.net);
+    totalRow[4] = returnsMoney(totals.vat);
+    totalRow[5] = returnsMoney(totals.gross);
     rows.push(totalRow);
     doc.autoTable({
       startY: 33,
