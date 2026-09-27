@@ -1407,7 +1407,77 @@
         <h4>🆕 Create New List</h4>
         <div class="count">Resets every quantity to 0 — items stay, ready to count again</div>
       </div>
+      <div class="bincard" style="--tile-color:#dc2626;" onclick="openWarehouseDamageHub()">
+        <h4>🗂️ Damage Logs</h4>
+        <div class="count">Log damaged stock found in the warehouse — scan it in with quantity, reason and photos</div>
+        <div class="count" id="warehouseDamageHubCount" style="margin-top:4px;"></div>
+      </div>
     </div>
+  </div>
+
+  <!-- WAREHOUSE: DAMAGE LOGS HUB -->
+  <div id="view-warehouse-damage-hub" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openListType('WAREHOUSE')">Warehouse List</button><span class="sep">/</span>
+      <span class="current">Damage Logs</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Bulk Storage</div>
+      <h2>Damage Logs</h2>
+      <p>Scan damaged stock as it's found, then track it until it's moved into a supplier return, Charity List or Bin List.</p>
+    </div>
+    <div class="catgrid">
+      <div class="bincard" onclick="openWarehouseDamageScan()">
+        <h4>📷 Scan Damaged Product</h4>
+        <div class="count">Scan (or search by name), then record the quantity, reason and photos</div>
+      </div>
+      <div class="bincard" style="--tile-color:#0e7490;" onclick="openWarehouseDamageList()">
+        <h4>📋 Damaged List</h4>
+        <div class="count">Everything logged so far — edit details or add more photos</div>
+        <div class="count" id="warehouseDamageListCount" style="margin-top:4px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- WAREHOUSE: SCAN DAMAGED PRODUCT -->
+  <div id="view-warehouse-damage-scan" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openListType('WAREHOUSE')">Warehouse List</button><span class="sep">/</span>
+      <button onclick="openWarehouseDamageHub()">Damage Logs</button><span class="sep">/</span>
+      <span class="current">Scan</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Bulk Storage</div>
+      <h2>Scan Damaged Product</h2>
+      <p>Scan a product (or search by name), then record how many are damaged, why, and add photos.</p>
+    </div>
+    <div class="actionbar">
+      <span id="warehouseDamageQueueIndicator" class="mono" style="color:var(--text-dim);font-size:12px;"></span>
+      <button class="btn-amber" onclick="openWarehouseDamageScannerModal()">Scan Barcode</button>
+    </div>
+    <div id="warehouseDamageScanFeed"><div class="empty-hint">Nothing scanned yet this session. Tap "Scan Barcode" to start.</div></div>
+  </div>
+
+  <!-- WAREHOUSE: DAMAGED LIST -->
+  <div id="view-warehouse-damage-list" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openListType('WAREHOUSE')">Warehouse List</button><span class="sep">/</span>
+      <button onclick="openWarehouseDamageHub()">Damage Logs</button><span class="sep">/</span>
+      <span class="current">Damaged List</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Bulk Storage</div>
+      <h2>Damaged List</h2>
+      <p>Everything logged as damaged. Tap the quantity or reason to edit, or 📷 to manage photos.</p>
+    </div>
+    <div class="actionbar">
+      <span class="mono" id="warehouseDamageDetailCount" style="color:var(--text-dim);font-size:12px;"></span>
+      <button class="btn-ghost" onclick="loadWarehouseDamageList()">Refresh</button>
+    </div>
+    <table class="finaltable" id="warehouseDamageDetailTable"></table>
   </div>
 
   <!-- WAREHOUSE (category grid) -->
@@ -2213,6 +2283,11 @@
         <div class="count">Write-offs entered in Vector — add them to a supplier return, or clear them</div>
         <div class="count" id="returnsAdjustCount" style="margin-top:4px;"></div>
       </div>
+      <div class="bincard" style="--tile-color:#0e7490;" onclick="openReturnsWarehouseDamages()">
+        <h4>📉 Warehouse Damages</h4>
+        <div class="count">Damage logged in the warehouse — add it to a supplier return, or clear it</div>
+        <div class="count" id="returnsWarehouseDamageCount" style="margin-top:4px;"></div>
+      </div>
       <div class="bincard" onclick="openReturnsListsHub()">
         <h4>📋 Lists</h4>
         <div class="count">Find a supplier's returns — pending, awaiting credit note, or returned</div>
@@ -2268,6 +2343,25 @@
       <button class="btn-ghost" onclick="loadReturnsAdjustments()">Refresh</button>
     </div>
     <div id="returnsAdjustList"><div class="loading">Loading…</div></div>
+  </div>
+
+  <!-- RETURNS: WAREHOUSE DAMAGES — entries logged from Warehouse List > Damage Logs -->
+  <div id="view-returns-warehouse-damages" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openReturnsHub()">Returns</button><span class="sep">/</span>
+      <span class="current">Warehouse Damages</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Supplier Returns</div>
+      <h2>Warehouse Damages</h2>
+      <p>Damage logged from the warehouse floor. Tap an item to add it to a supplier's return list (quantity, reason and photos carry over and can be changed), or tap ✕ to clear it.</p>
+    </div>
+    <div class="actionbar">
+      <span id="returnsWarehouseDamageCountBar" class="mono" style="color:var(--text-dim);font-size:12px;"></span>
+      <button class="btn-ghost" onclick="loadReturnsWarehouseDamages()">Refresh</button>
+    </div>
+    <div id="returnsWarehouseDamageList"><div class="loading">Loading…</div></div>
   </div>
 
   <!-- RETURNS: LISTS — supplier search / browse -->
@@ -2878,6 +2972,103 @@
     </div>
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalReturnsLocationScanner')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- WAREHOUSE DAMAGE: BARCODE SCANNER -->
+<div class="modal-backdrop" id="modalWarehouseDamageScanner">
+  <div class="modal" style="width:400px;">
+    <h3>Scan barcode</h3>
+    <p class="modal-sub">Scan now — it looks up automatically</p>
+    <div class="scanmanual">
+      <input type="text" id="warehouseDamageBarcodeInput" placeholder="Waiting for scan…" autocomplete="off" autocapitalize="off"
+        inputmode="none" onkeydown="if(event.key==='Enter')submitWarehouseDamageBarcode()" oninput="onWarehouseDamageBarcodeInput()">
+      <button class="btn-ghost" onclick="submitWarehouseDamageBarcode()">Look up</button>
+    </div>
+    <div style="margin:-4px 0 10px;">
+      <a href="#" onclick="event.preventDefault(); toggleWarehouseDamageNameSearch()" style="font-size:13px;">Search by name instead</a>
+    </div>
+    <div id="warehouseDamageNameSearchBox" style="display:none;margin-bottom:10px;">
+      <input type="text" id="warehouseDamageNameSearchInput" placeholder="Search item name…" autocomplete="off" oninput="onWarehouseDamageNameSearch()">
+      <div id="warehouseDamageNameSearchResults" class="searchresults"></div>
+    </div>
+    <div id="warehouseDamageScanQueueNote" class="mono" style="display:none;color:var(--text-dim);font-size:12px;margin-bottom:6px;"></div>
+    <div id="warehouseDamageScanFeedback"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalWarehouseDamageScanner')">Done scanning</button>
+    </div>
+  </div>
+</div>
+
+<!-- WAREHOUSE DAMAGE: QUANTITY + REASON + PHOTOS -->
+<div class="modal-backdrop" id="modalWarehouseDamageDetails">
+  <div class="modal" style="width:430px;">
+    <h3 id="warehouseDamageDetailsProduct">Product</h3>
+
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;">Quantity</label>
+    <div class="qtystepper" style="margin-bottom:16px;">
+      <button class="btn-ghost" onclick="bumpWarehouseDamageQty(-1)">−</button>
+      <input type="number" id="warehouseDamageQtyInput" value="1" min="1" step="1"
+        style="width:80px;text-align:center;padding:10px;"
+        onpointerdown="warehouseDamageQtySafeToType=true" onblur="warehouseDamageQtySafeToType=false"
+        onkeydown="if(event.key==='Enter')confirmWarehouseDamageDetails()">
+      <button class="btn-ghost" onclick="bumpWarehouseDamageQty(1)">+</button>
+    </div>
+
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;">Reason</label>
+    <div id="warehouseDamageReasonGrid" class="reasongrid"></div>
+    <input type="text" id="warehouseDamageReasonCustom" placeholder="Or type your own reason…" autocomplete="off"
+      style="width:100%;padding:10px;margin-top:8px;" oninput="onWarehouseDamageCustomReason()"
+      onkeydown="if(event.key==='Enter')confirmWarehouseDamageDetails()">
+
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin:16px 0 6px;">Photos (multiple allowed)</label>
+    <div id="warehouseDamagePendingPhotoGrid" class="retphotogrid"></div>
+    <input type="file" id="warehouseDamagePendingPhotoInput" accept="image/*" capture="environment" multiple
+      style="display:none;" onchange="onWarehouseDamagePendingPhotoSelected(event)">
+
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="cancelWarehouseDamageDetails()">Cancel</button>
+      <button class="btn-amber" onclick="confirmWarehouseDamageDetails()">Add to damaged list</button>
+    </div>
+  </div>
+</div>
+
+<!-- WAREHOUSE DAMAGE: EDIT QUANTITY / REASON, from the Damaged List -->
+<div class="modal-backdrop" id="modalWarehouseDamageEditItem">
+  <div class="modal" style="width:420px;">
+    <h3>Edit damage entry</h3>
+    <p class="modal-sub" id="warehouseDamageEditItemName"></p>
+
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;">Quantity</label>
+    <div class="qtystepper" style="margin-bottom:16px;">
+      <button class="btn-ghost" onclick="bumpWarehouseDamageEditQty(-1)">−</button>
+      <input type="number" id="warehouseDamageEditQtyInput" value="1" min="1" step="1" style="width:80px;text-align:center;padding:10px;">
+      <button class="btn-ghost" onclick="bumpWarehouseDamageEditQty(1)">+</button>
+    </div>
+
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;">Reason</label>
+    <div id="warehouseDamageEditReasonGrid" class="reasongrid"></div>
+    <input type="text" id="warehouseDamageEditReasonCustom" placeholder="Or type your own reason…" autocomplete="off"
+      style="width:100%;padding:10px;margin-top:8px;" oninput="onWarehouseDamageEditCustomReason()">
+
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalWarehouseDamageEditItem')">Cancel</button>
+      <button class="btn-amber" onclick="saveWarehouseDamageEditItem()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- WAREHOUSE DAMAGE: PHOTOS — view, add, or delete photos on a damaged-list entry -->
+<div class="modal-backdrop" id="modalWarehouseDamagePhotos">
+  <div class="modal" style="width:420px;">
+    <h3>Photos</h3>
+    <p class="modal-sub" id="warehouseDamagePhotoGalleryItemName"></p>
+    <div id="warehouseDamagePhotoGalleryGrid" class="retphotogrid"><div class="loading">Loading…</div></div>
+    <input type="file" id="warehouseDamageGalleryPhotoInput" accept="image/*" capture="environment" multiple
+      style="display:none;" onchange="onWarehouseDamageGalleryPhotoSelected(event)">
+    <div class="modal-close-row">
+      <button class="btn-amber" onclick="closeModal('modalWarehouseDamagePhotos')">Done</button>
     </div>
   </div>
 </div>
@@ -3910,6 +4101,489 @@ async function createNewWarehouseList(){
     console.error(e);
   }
 }
+/* ============ WAREHOUSE LIST > DAMAGE LOGS ============
+   Log damaged stock found in the warehouse: scan a barcode (or search by
+   name), then record quantity, reason and photos. Entries land on the
+   Damaged List until someone deals with them from there, or from
+   Returns > Warehouse Damages, which turns one into a supplier return (or
+   Charity/Bin) and removes it from here in the same step. */
+let warehouseDamageScanFeedItems = [];
+let warehouseDamagePendingProduct = null; // { stockid, name, barcode } — awaiting qty/reason/photos
+let warehouseDamageSelectedReason = null;
+let warehouseDamageScanQueue = [];
+let warehouseDamageScanBusy = false;
+let warehouseDamageBarcodeDebounce = null;
+let warehouseDamageNameSearchDebounce = null;
+let warehouseDamageQtySafeToType = false;
+
+function openWarehouseDamageHub(){
+  showView('view-warehouse-damage-hub');
+  refreshWarehouseDamageHubCount();
+}
+async function refreshWarehouseDamageHubCount(){
+  const el = document.getElementById('warehouseDamageHubCount');
+  if(!el) return;
+  try{
+    const data = await apiGet('warehouse/damage-logs/');
+    const n = (data.items || []).length;
+    el.textContent = n ? (n + ' logged') : '';
+  }catch(e){ el.textContent = ''; }
+}
+function openWarehouseDamageScan(){
+  warehouseDamageScanFeedItems = [];
+  warehouseDamageScanQueue = [];
+  warehouseDamageScanBusy = false;
+  renderWarehouseDamageScanFeed();
+  updateWarehouseDamageQueueIndicator();
+  showView('view-warehouse-damage-scan');
+}
+function openWarehouseDamageScannerModal(){
+  document.getElementById('warehouseDamageBarcodeInput').value = '';
+  document.getElementById('warehouseDamageScanFeedback').innerHTML = '';
+  document.getElementById('warehouseDamageNameSearchBox').style.display = 'none';
+  document.getElementById('warehouseDamageNameSearchInput').value = '';
+  document.getElementById('warehouseDamageNameSearchResults').innerHTML = '';
+  updateWarehouseDamageQueueIndicator();
+  openModal('modalWarehouseDamageScanner');
+  document.getElementById('warehouseDamageBarcodeInput').focus();
+  processWarehouseDamageScanQueue();
+}
+function toggleWarehouseDamageNameSearch(){
+  const box = document.getElementById('warehouseDamageNameSearchBox');
+  const showing = box.style.display !== 'none';
+  box.style.display = showing ? 'none' : 'block';
+  if(!showing){
+    document.getElementById('warehouseDamageNameSearchInput').value = '';
+    document.getElementById('warehouseDamageNameSearchResults').innerHTML = '';
+    setTimeout(() => document.getElementById('warehouseDamageNameSearchInput').focus(), 80);
+  }
+}
+function onWarehouseDamageNameSearch(){
+  clearTimeout(warehouseDamageNameSearchDebounce);
+  const q = document.getElementById('warehouseDamageNameSearchInput').value.trim();
+  const results = document.getElementById('warehouseDamageNameSearchResults');
+  if(q.length < 2){ results.innerHTML = ''; return; }
+  results.innerHTML = '<div class="empty-hint">Searching…</div>';
+  warehouseDamageNameSearchDebounce = setTimeout(async () => {
+    try{
+      const data = await apiGet('stock/search/?q=' + encodeURIComponent(q));
+      const items = data.items || [];
+      if(items.length === 0){
+        results.innerHTML = '<div class="empty-hint">No matches</div>';
+        return;
+      }
+      results.innerHTML = '';
+      items.forEach(it => {
+        const div = document.createElement('div');
+        div.className = 'searchresult';
+        div.innerHTML = `<div class="sname">${escapeHtml(it.name)}</div><div class="sstock">${it.quantity} in stock</div>`;
+        div.onclick = () => warehouseDamageScanFound({ stockid: it.stockid, name: it.name, barcode: null });
+        results.appendChild(div);
+      });
+    }catch(e){
+      results.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Search failed</div>';
+      console.error(e);
+    }
+  }, 300);
+}
+function onWarehouseDamageBarcodeInput(){
+  clearTimeout(warehouseDamageBarcodeDebounce);
+  const val = document.getElementById('warehouseDamageBarcodeInput').value.trim();
+  if(!val) return;
+  warehouseDamageBarcodeDebounce = setTimeout(submitWarehouseDamageBarcode, 300);
+}
+function submitWarehouseDamageBarcode(){
+  clearTimeout(warehouseDamageBarcodeDebounce);
+  const code = document.getElementById('warehouseDamageBarcodeInput').value.trim();
+  if(!code) return;
+  startWarehouseDamageScan(code);
+}
+function startWarehouseDamageScan(code){
+  if(warehouseDamageScanBusy){
+    warehouseDamageScanQueue.push(code);
+    updateWarehouseDamageQueueIndicator();
+    toast(warehouseDamageScanQueue.length + ' more scan' + (warehouseDamageScanQueue.length===1?'':'s') + ' waiting');
+    return;
+  }
+  handleWarehouseDamageScannedCode(code);
+}
+function processWarehouseDamageScanQueue(){
+  updateWarehouseDamageQueueIndicator();
+  if(warehouseDamageScanBusy || !warehouseDamageScanQueue.length) return;
+  const code = warehouseDamageScanQueue.shift();
+  updateWarehouseDamageQueueIndicator();
+  handleWarehouseDamageScannedCode(code);
+}
+function updateWarehouseDamageQueueIndicator(){
+  const n = warehouseDamageScanQueue.length;
+  const note = document.getElementById('warehouseDamageScanQueueNote');
+  if(note){
+    note.style.display = n ? 'block' : 'none';
+    note.textContent = n ? (n + ' more scan' + (n===1?'':'s') + ' waiting to be looked up') : '';
+  }
+  const bar = document.getElementById('warehouseDamageQueueIndicator');
+  if(bar) bar.textContent = n ? (n + ' scan' + (n===1?'':'s') + ' queued') : '';
+}
+async function handleWarehouseDamageScannedCode(code){
+  warehouseDamageScanBusy = true;
+  const input = document.getElementById('warehouseDamageBarcodeInput');
+  if(input) input.value = '';
+  const box = document.getElementById('warehouseDamageScanFeedback');
+  const loadingEl = document.createElement('div');
+  loadingEl.className = 'loading';
+  loadingEl.textContent = 'Looking up ' + code + '…';
+  box.prepend(loadingEl);
+  try{
+    const data = await apiGet('warehouse/damage-scan-lookup/' + encodeURIComponent(code) + '/');
+    loadingEl.remove();
+    if(!data.item){
+      const fail = document.createElement('div');
+      fail.className = 'scanfail';
+      fail.textContent = 'No stock item found for barcode ' + code;
+      box.prepend(fail);
+      if(input) input.focus();
+      warehouseDamageScanBusy = false;
+      processWarehouseDamageScanQueue();
+      return;
+    }
+    warehouseDamageScanFound(data.item);
+  }catch(e){
+    loadingEl.remove();
+    const fail = document.createElement('div');
+    fail.className = 'scanfail';
+    fail.textContent = 'Lookup failed for ' + code;
+    box.prepend(fail);
+    console.error(e);
+    if(input) input.focus();
+    warehouseDamageScanBusy = false;
+    processWarehouseDamageScanQueue();
+  }
+}
+function warehouseDamageScanFound(item){
+  warehouseDamagePendingProduct = item;
+  closeModal('modalWarehouseDamageScanner');
+  warehouseDamageSelectedReason = null;
+  resetWarehouseDamagePendingPhotos();
+  document.getElementById('warehouseDamageDetailsProduct').textContent = item.name;
+  document.getElementById('warehouseDamageQtyInput').value = '1';
+  warehouseDamageQtySafeToType = false;
+  document.getElementById('warehouseDamageReasonCustom').value = '';
+  renderWarehouseDamageReasonGrid();
+  openModal('modalWarehouseDamageDetails');
+}
+function warehouseDamageAdvanceScan(){
+  warehouseDamageScanBusy = false;
+  if(warehouseDamageScanQueue.length){ processWarehouseDamageScanQueue(); }
+  else { openWarehouseDamageScannerModal(); }
+}
+function renderWarehouseDamageReasonGrid(){
+  document.getElementById('warehouseDamageReasonGrid').innerHTML = RETURN_REASONS.map(r => `
+    <div class="reasonbtn${warehouseDamageSelectedReason === r ? ' selected' : ''}" onclick="pickWarehouseDamageReason(${jsArg(r)})">${escapeHtml(r)}</div>
+  `).join('');
+}
+function pickWarehouseDamageReason(reason){
+  warehouseDamageSelectedReason = (warehouseDamageSelectedReason === reason) ? null : reason;
+  if(warehouseDamageSelectedReason) document.getElementById('warehouseDamageReasonCustom').value = '';
+  renderWarehouseDamageReasonGrid();
+}
+function onWarehouseDamageCustomReason(){
+  if(document.getElementById('warehouseDamageReasonCustom').value.trim() && warehouseDamageSelectedReason){
+    warehouseDamageSelectedReason = null;
+    renderWarehouseDamageReasonGrid();
+  }
+}
+function bumpWarehouseDamageQty(delta){
+  const el = document.getElementById('warehouseDamageQtyInput');
+  el.value = Math.max(1, (parseFloat(el.value) || 1) + delta);
+}
+function cancelWarehouseDamageDetails(){
+  closeModal('modalWarehouseDamageDetails');
+  resetWarehouseDamagePendingPhotos();
+  warehouseDamagePendingProduct = null;
+  warehouseDamageAdvanceScan();
+}
+async function confirmWarehouseDamageDetails(){
+  const p = warehouseDamagePendingProduct;
+  if(!p) return;
+  const rawQty = parseFloat(document.getElementById('warehouseDamageQtyInput').value);
+  const qty = rawQty > 0 ? rawQty : 1;
+  const custom = document.getElementById('warehouseDamageReasonCustom').value.trim();
+  const reason = custom || warehouseDamageSelectedReason;
+  if(!reason){ toast('Pick a reason, or type your own'); return; }
+  const photosToUpload = warehouseDamagePendingPhotos.slice();
+  try{
+    const result = await apiPost('warehouse/damage-logs/', {
+      stockid: p.stockid, item_name: p.name, barcode: p.barcode,
+      quantity: qty, reason,
+      created_by: localStorage.getItem('hallan_staff_name') || null
+    });
+    if(photosToUpload.length && result && result.damage_id){
+      await uploadWarehouseDamagePhotos(result.damage_id, photosToUpload);
+    }
+    resetWarehouseDamagePendingPhotos();
+    warehouseDamageScanFeedItems.unshift({ item_name: p.name, quantity: qty, reason });
+    renderWarehouseDamageScanFeed();
+    closeModal('modalWarehouseDamageDetails');
+    warehouseDamagePendingProduct = null;
+    toast('Added to Damaged List');
+    warehouseDamageAdvanceScan();
+  }catch(e){
+    toast('Could not add item: ' + (e && e.message ? e.message : 'unknown error'));
+    console.error(e);
+  }
+}
+function renderWarehouseDamageScanFeed(){
+  const box = document.getElementById('warehouseDamageScanFeed');
+  if(warehouseDamageScanFeedItems.length === 0){
+    box.innerHTML = '<div class="empty-hint">Nothing scanned yet this session. Tap "Scan Barcode" to start.</div>';
+    return;
+  }
+  box.innerHTML = warehouseDamageScanFeedItems.map(it => `
+    <div class="pickrow">
+      <div class="pickinfo">
+        <div class="pname">${escapeHtml(it.item_name)} <span style="color:var(--text-dim);font-weight:400;">× ${it.quantity}</span></div>
+        <div class="pbarcode">${escapeHtml(it.reason || '')}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+/* ---- Photos for a warehouse damage entry — same in-browser downscale/
+   compress step as Returns (see returnsFileToDataUrl/filesToReturnsPhotos
+   above, reused directly here since it's generic image handling), just
+   with their own grid markup so the "Add" tile points at the right file
+   input for pending vs. an existing entry's gallery. ---- */
+function warehouseDamagePhotoGridHtml(photos, removeFn, inputId){
+  const thumbs = (photos || []).map((p, idx) => `
+    <div class="retphoto">
+      <img src="${p.data}" onclick="openReturnsPhotoViewer(${jsArg(p.data)})">
+      <div class="retphoto-remove" title="Remove" onclick="event.stopPropagation(); ${removeFn}(${typeof p.image_id === 'number' ? p.image_id : idx})">✕</div>
+    </div>
+  `).join('');
+  const addTile = (photos || []).length < RETURNS_PHOTO_MAX
+    ? `<div class="retphoto-add" onclick="document.getElementById('${inputId}').click()"><span class="icon">📷</span>Add</div>`
+    : '';
+  return thumbs + addTile;
+}
+let warehouseDamagePendingPhotos = [];
+function resetWarehouseDamagePendingPhotos(){
+  warehouseDamagePendingPhotos = [];
+  renderWarehouseDamagePendingPhotos();
+}
+function renderWarehouseDamagePendingPhotos(){
+  const box = document.getElementById('warehouseDamagePendingPhotoGrid');
+  if(box) box.innerHTML = warehouseDamagePhotoGridHtml(warehouseDamagePendingPhotos, 'removeWarehouseDamagePendingPhoto', 'warehouseDamagePendingPhotoInput');
+}
+async function onWarehouseDamagePendingPhotoSelected(event){
+  const input = event.target;
+  const room = RETURNS_PHOTO_MAX - warehouseDamagePendingPhotos.length;
+  const files = Array.from(input.files || []).slice(0, Math.max(0, room));
+  input.value = '';
+  if(room <= 0){ toast('Up to ' + RETURNS_PHOTO_MAX + ' photos'); return; }
+  if(!files.length) return;
+  const added = await filesToReturnsPhotos(files);
+  warehouseDamagePendingPhotos.push(...added);
+  renderWarehouseDamagePendingPhotos();
+}
+function removeWarehouseDamagePendingPhoto(idx){
+  warehouseDamagePendingPhotos.splice(idx, 1);
+  renderWarehouseDamagePendingPhotos();
+}
+async function uploadWarehouseDamagePhotos(damageId, photos){
+  if(!photos || !photos.length) return;
+  try{
+    await apiPost('warehouse/damage-logs/' + damageId + '/images/', { images: photos });
+  }catch(e){
+    toast('Item was added, but its photos failed to upload — add them again from the Damaged List');
+    console.error(e);
+  }
+}
+
+/* ---- Gallery for an existing Damaged List entry, opened via the "Photos" column ---- */
+let warehouseDamagePhotoGalleryDamageId = null;
+let warehouseDamagePhotoGalleryImages = [];
+function openWarehouseDamagePhotoGallery(damageId, itemName){
+  warehouseDamagePhotoGalleryDamageId = damageId;
+  document.getElementById('warehouseDamagePhotoGalleryItemName').textContent = itemName || '';
+  document.getElementById('warehouseDamagePhotoGalleryGrid').innerHTML = '<div class="loading">Loading…</div>';
+  openModal('modalWarehouseDamagePhotos');
+  loadWarehouseDamagePhotoGallery();
+}
+async function loadWarehouseDamagePhotoGallery(){
+  const damageId = warehouseDamagePhotoGalleryDamageId;
+  try{
+    const data = await apiGet('warehouse/damage-logs/' + damageId + '/images/');
+    if(warehouseDamagePhotoGalleryDamageId !== damageId) return;
+    warehouseDamagePhotoGalleryImages = data.images || [];
+    renderWarehouseDamagePhotoGallery();
+  }catch(e){
+    document.getElementById('warehouseDamagePhotoGalleryGrid').innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not load photos</div>';
+    console.error(e);
+  }
+}
+function renderWarehouseDamagePhotoGallery(){
+  const box = document.getElementById('warehouseDamagePhotoGalleryGrid');
+  box.innerHTML = warehouseDamagePhotoGridHtml(warehouseDamagePhotoGalleryImages, 'deleteWarehouseDamageGalleryPhoto', 'warehouseDamageGalleryPhotoInput');
+  updateWarehouseDamagePhotoBadgeCount();
+}
+async function onWarehouseDamageGalleryPhotoSelected(event){
+  const input = event.target;
+  const damageId = warehouseDamagePhotoGalleryDamageId;
+  const room = RETURNS_PHOTO_MAX - warehouseDamagePhotoGalleryImages.length;
+  const files = Array.from(input.files || []).slice(0, Math.max(0, room));
+  input.value = '';
+  if(room <= 0){ toast('Up to ' + RETURNS_PHOTO_MAX + ' photos'); return; }
+  if(!files.length) return;
+  const photos = await filesToReturnsPhotos(files);
+  if(!photos.length) return;
+  try{
+    const data = await apiPost('warehouse/damage-logs/' + damageId + '/images/', { images: photos });
+    const created = data.images || [];
+    created.forEach((c, i) => {
+      warehouseDamagePhotoGalleryImages.push({ image_id: c.image_id, filename: c.filename, data: photos[i] ? photos[i].data : null });
+    });
+    renderWarehouseDamagePhotoGallery();
+  }catch(e){
+    toast('Could not upload photo: ' + (e && e.message ? e.message : 'unknown error'));
+    console.error(e);
+  }
+}
+async function deleteWarehouseDamageGalleryPhoto(imageId){
+  if(!confirm('Delete this photo?')) return;
+  try{
+    await apiDelete('warehouse/damage-images/' + imageId + '/');
+    warehouseDamagePhotoGalleryImages = warehouseDamagePhotoGalleryImages.filter(i => i.image_id !== imageId);
+    renderWarehouseDamagePhotoGallery();
+  }catch(e){
+    toast('Could not delete photo');
+    console.error(e);
+  }
+}
+function updateWarehouseDamagePhotoBadgeCount(){
+  const damageId = warehouseDamagePhotoGalleryDamageId;
+  const n = warehouseDamagePhotoGalleryImages.length;
+  const it = warehouseDamageDetailItems.find(i => i.damage_id === damageId);
+  if(it) it.image_count = n;
+  renderWarehouseDamageDetailTable();
+}
+
+/* ---- Damaged List — every entry logged so far, editable in place ---- */
+let warehouseDamageDetailItems = [];
+let warehouseDamageEditingId = null;
+async function openWarehouseDamageList(){
+  showView('view-warehouse-damage-list');
+  loadWarehouseDamageList();
+}
+async function loadWarehouseDamageList(){
+  const table = document.getElementById('warehouseDamageDetailTable');
+  document.getElementById('warehouseDamageDetailCount').textContent = 'Loading…';
+  table.innerHTML = '';
+  try{
+    const data = await apiGet('warehouse/damage-logs/');
+    warehouseDamageDetailItems = data.items || [];
+    document.getElementById('warehouseDamageDetailCount').textContent = warehouseDamageDetailItems.length + ' item' + (warehouseDamageDetailItems.length===1?'':'s');
+    const hubCountEl = document.getElementById('warehouseDamageListCount');
+    if(hubCountEl) hubCountEl.textContent = warehouseDamageDetailItems.length ? (warehouseDamageDetailItems.length + ' logged') : '';
+    renderWarehouseDamageDetailTable();
+  }catch(e){
+    document.getElementById('warehouseDamageDetailCount').textContent = '';
+    table.innerHTML = '<caption class="empty-hint" style="color:var(--danger)">Could not load the Damaged List</caption>';
+    console.error(e);
+  }
+}
+function renderWarehouseDamageDetailTable(){
+  const table = document.getElementById('warehouseDamageDetailTable');
+  if(warehouseDamageDetailItems.length === 0){
+    table.innerHTML = '<caption class="empty-hint">Nothing logged yet.</caption>';
+    return;
+  }
+  const rows = warehouseDamageDetailItems.map(it => `
+    <tr>
+      <td>${escapeHtml(it.item_name)}</td>
+      <td class="qtycell retloc-cell" onclick="openWarehouseDamageEditModal(${it.damage_id})">${it.quantity}</td>
+      <td class="retloc-cell" onclick="openWarehouseDamageEditModal(${it.damage_id})">${escapeHtml(it.reason || '—')}</td>
+      <td>${escapeHtml(it.created_at_txt || '')}</td>
+      <td>${warehouseDamagePhotoBadge(it)}</td>
+      <td style="white-space:nowrap;">
+        <a href="#" class="minibtn minibtn-remove" onclick="event.preventDefault(); deleteWarehouseDamageDetailItem(${it.damage_id})">✕</a>
+      </td>
+    </tr>
+  `).join('');
+  table.innerHTML = `
+    <thead><tr><th>Item</th><th class="qtycell">Qty</th><th>Reason</th><th>Logged</th><th>Photos</th><th></th></tr></thead>
+    <tbody>${rows}</tbody>
+  `;
+}
+function warehouseDamagePhotoBadge(it){
+  const n = Number(it.image_count) || 0;
+  const label = n ? ('📷 ' + n) : '📷 Add';
+  return `<span class="retphotobadge" onclick="openWarehouseDamagePhotoGallery(${it.damage_id}, ${jsArg(it.item_name)})">${label}</span>`;
+}
+async function deleteWarehouseDamageDetailItem(damageId){
+  if(!confirm('Remove this item from the Damaged List? This cannot be undone.')) return;
+  try{
+    await apiDelete('warehouse/damage-logs/' + damageId + '/');
+    warehouseDamageDetailItems = warehouseDamageDetailItems.filter(i => i.damage_id !== damageId);
+    document.getElementById('warehouseDamageDetailCount').textContent = warehouseDamageDetailItems.length + ' item' + (warehouseDamageDetailItems.length===1?'':'s');
+    renderWarehouseDamageDetailTable();
+  }catch(e){
+    toast('Could not remove item');
+    console.error(e);
+  }
+}
+function openWarehouseDamageEditModal(damageId){
+  warehouseDamageEditingId = damageId;
+  const item = warehouseDamageDetailItems.find(i => i.damage_id === damageId);
+  if(!item) return;
+  document.getElementById('warehouseDamageEditItemName').textContent = item.item_name;
+  document.getElementById('warehouseDamageEditQtyInput').value = item.quantity;
+  document.getElementById('warehouseDamageEditReasonCustom').value = '';
+  warehouseDamageEditSelectedReason = RETURN_REASONS.find(r => r.toLowerCase() === String(item.reason || '').trim().toLowerCase()) || null;
+  if(!warehouseDamageEditSelectedReason && item.reason) document.getElementById('warehouseDamageEditReasonCustom').value = item.reason;
+  renderWarehouseDamageEditReasonGrid();
+  openModal('modalWarehouseDamageEditItem');
+}
+function bumpWarehouseDamageEditQty(delta){
+  const el = document.getElementById('warehouseDamageEditQtyInput');
+  el.value = Math.max(1, (parseFloat(el.value) || 1) + delta);
+}
+let warehouseDamageEditSelectedReason = null;
+function renderWarehouseDamageEditReasonGrid(){
+  document.getElementById('warehouseDamageEditReasonGrid').innerHTML = RETURN_REASONS.map(r => `
+    <div class="reasonbtn${warehouseDamageEditSelectedReason === r ? ' selected' : ''}" onclick="pickWarehouseDamageEditReason(${jsArg(r)})">${escapeHtml(r)}</div>
+  `).join('');
+}
+function pickWarehouseDamageEditReason(reason){
+  warehouseDamageEditSelectedReason = (warehouseDamageEditSelectedReason === reason) ? null : reason;
+  if(warehouseDamageEditSelectedReason) document.getElementById('warehouseDamageEditReasonCustom').value = '';
+  renderWarehouseDamageEditReasonGrid();
+}
+function onWarehouseDamageEditCustomReason(){
+  if(document.getElementById('warehouseDamageEditReasonCustom').value.trim() && warehouseDamageEditSelectedReason){
+    warehouseDamageEditSelectedReason = null;
+    renderWarehouseDamageEditReasonGrid();
+  }
+}
+async function saveWarehouseDamageEditItem(){
+  const item = warehouseDamageDetailItems.find(i => i.damage_id === warehouseDamageEditingId);
+  if(!item) return;
+  const rawQty = parseFloat(document.getElementById('warehouseDamageEditQtyInput').value);
+  const qty = rawQty > 0 ? rawQty : 1;
+  const custom = document.getElementById('warehouseDamageEditReasonCustom').value.trim();
+  const reason = custom || warehouseDamageEditSelectedReason;
+  if(!reason){ toast('Pick a reason, or type your own'); return; }
+  try{
+    await apiPut('warehouse/damage-logs/' + warehouseDamageEditingId + '/', { quantity: qty, reason });
+    item.quantity = qty;
+    item.reason = reason;
+    closeModal('modalWarehouseDamageEditItem');
+    renderWarehouseDamageDetailTable();
+  }catch(e){
+    toast('Could not save changes');
+    console.error(e);
+  }
+}
+
 async function openWholesalePricing(){
   const pw = prompt('This list is confidential.\nEnter the Wholesale Pricing password:');
   if(pw === null) return; // cancelled — stay where we are
@@ -11063,11 +11737,13 @@ let returnsPickSupplierSearchDebounce = null;
 function openReturnsHub(){
   showView('view-returns-hub');
   refreshReturnsAdjustCount();
+  refreshReturnsWarehouseDamageCount();
 }
 
 /* ---- Scan ---- */
 function openReturnsScan(){
   returnsPendingAdjustment = null; // the scan flow shares the supplier/qty/reason modals with Stock Adjusted
+  returnsPendingDamage = null; // ...and with Warehouse Damages
   returnsScanFeedItems = [];
   returnsScanQueue = [];
   returnsScanBusy = false;
@@ -11296,7 +11972,8 @@ async function chooseReturnsSupplier(suppid, supplierName, costNet){
   // off (still editable), and if Vector's reason is one of the presets it is
   // pre-selected. Otherwise it's shown as a note and the person picks/types.
   const adj = returnsPendingAdjustment;
-  document.getElementById('returnsQtyInput').value = adj ? String(adj.qty) : '1';
+  const dmg = returnsPendingDamage;
+  document.getElementById('returnsQtyInput').value = adj ? String(adj.qty) : (dmg ? String(dmg.qty) : '1');
   returnsQtySafeToType = false; // reset — only a genuine tap on the box allows typing into it
   // VAT comes straight from VESTOCK.VATID (see returnsDefaultVatFromVatid on
   // the server) — trusted as always correct, no staff confirmation needed.
@@ -11311,9 +11988,22 @@ async function chooseReturnsSupplier(suppid, supplierName, costNet){
     const match = RETURN_REASONS.find(r => r.toLowerCase() === String(adj.reason || '').trim().toLowerCase());
     if(match) returnsSelectedReason = match;
   }
+  if(dmg){
+    const match = RETURN_REASONS.find(r => r.toLowerCase() === String(dmg.reason || '').trim().toLowerCase());
+    if(match) returnsSelectedReason = match;
+    // Photos taken at scan time in the warehouse Damage Log carry straight
+    // across onto the new return item — staff don't have to retake them.
+    if(dmg.photos && dmg.photos.length){
+      returnsPendingPhotos = dmg.photos.slice();
+      renderReturnsPendingPhotos();
+    }
+  }
   const note = document.getElementById('returnsDetailsVectorNote');
   if(adj){
     note.textContent = 'Written off in Vector: ' + adj.qty + (adj.reason ? ' · ' + adj.reason : '');
+    note.style.display = '';
+  }else if(dmg){
+    note.textContent = 'Logged as warehouse damage: ' + dmg.qty + (dmg.reason ? ' · ' + dmg.reason : '');
     note.style.display = '';
   }else{
     note.style.display = 'none';
@@ -11409,6 +12099,7 @@ async function confirmReturnsDetails(){
       cost_price: s.cost_net, is_vat: isVat, quantity: qty, return_reason: reason,
       created_by: localStorage.getItem('hallan_staff_name') || null,
       stockadjustid: returnsPendingAdjustment ? returnsPendingAdjustment.stockadjustid : null,
+      damage_id: returnsPendingDamage ? returnsPendingDamage.damage_id : null,
       destination: destination
     });
     if(photosToUpload.length && result && result.item_id){
@@ -11426,6 +12117,20 @@ async function confirmReturnsDetails(){
       returnsPendingSupplier = null;
       closeModal('modalReturnsDetails');
       renderReturnsAdjustments();
+      toast('Added to ' + destLabel);
+      return;
+    }
+    if(returnsPendingDamage){
+      // Added from Warehouse Damages: the server has deleted that damage log
+      // row (and its photos) in the same transaction, so drop it from the
+      // list here and stay on the list rather than jumping into the scanner.
+      const doneId = returnsPendingDamage.damage_id;
+      returnsWarehouseDamageItems = returnsWarehouseDamageItems.filter(x => x.damage_id !== doneId);
+      returnsPendingDamage = null;
+      returnsPendingProduct = null;
+      returnsPendingSupplier = null;
+      closeModal('modalReturnsDetails');
+      renderReturnsWarehouseDamages();
       toast('Added to ' + destLabel);
       return;
     }
@@ -11448,6 +12153,11 @@ function cancelReturnsSupplierPick(){
   if(returnsPendingAdjustment){
     // Opened from Stock Adjusted (Vector): back to that list, nothing changed.
     returnsPendingAdjustment = null;
+    return;
+  }
+  if(returnsPendingDamage){
+    // Opened from Warehouse Damages: back to that list, nothing changed.
+    returnsPendingDamage = null;
     return;
   }
   returnsAdvanceScan();
@@ -11727,6 +12437,113 @@ async function refreshReturnsAdjustCount(){
   if(!el) return;
   try{
     const data = await apiGet('returns/stock-adjustments/');
+    const n = (data.items || []).length;
+    el.textContent = n ? (n + ' waiting') : '';
+  }catch(e){ el.textContent = ''; }
+}
+
+/* ---- Warehouse Damages: entries logged from Warehouse List > Damage Logs.
+   Tap a row -> the same supplier pick and quantity/reason/photos modals the
+   scanner uses (quantity, reason and photos pre-filled from the damage log,
+   still editable) -> it's added to that supplier's PENDING return list and
+   the damage log entry (and its photos) is deleted server-side in the same
+   transaction. The ✕ deletes the entry without adding it anywhere, after a
+   confirm. ---- */
+let returnsWarehouseDamageItems = [];
+let returnsPendingDamage = null; // { damage_id, qty, reason, photos } while a damage log entry is being turned into a return item
+let returnsWarehouseDamageBusy = false;
+
+function openReturnsWarehouseDamages(){
+  returnsPendingDamage = null;
+  showView('view-returns-warehouse-damages');
+  loadReturnsWarehouseDamages();
+}
+async function loadReturnsWarehouseDamages(){
+  const box = document.getElementById('returnsWarehouseDamageList');
+  box.innerHTML = '<div class="loading">Loading…</div>';
+  try{
+    const data = await apiGet('returns/warehouse-damages/');
+    returnsWarehouseDamageItems = data.items || [];
+    renderReturnsWarehouseDamages();
+  }catch(e){
+    box.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not load warehouse damage</div>';
+    console.error(e);
+  }
+}
+function renderReturnsWarehouseDamages(){
+  const box = document.getElementById('returnsWarehouseDamageList');
+  const bar = document.getElementById('returnsWarehouseDamageCountBar');
+  if(bar) bar.textContent = returnsWarehouseDamageItems.length + ' item' + (returnsWarehouseDamageItems.length===1?'':'s');
+  if(returnsWarehouseDamageItems.length === 0){
+    box.innerHTML = '<div class="empty-hint">Nothing waiting — every logged damage has been added to a return or cleared.</div>';
+    return;
+  }
+  box.innerHTML = returnsWarehouseDamageItems.map(it => {
+    const qty = Math.abs(Number(it.quantity)) || 0;
+    const photoNote = it.image_count ? (' &middot; 📷 ' + it.image_count) : '';
+    return `
+    <div class="pickrow" style="cursor:pointer;" onclick="pickReturnsWarehouseDamage(${Number(it.damage_id)})">
+      <div class="pickinfo">
+        <div class="pname">${escapeHtml(it.item_name)} <span style="color:var(--text-dim);font-weight:400;">× ${qty}</span></div>
+        <div class="pbarcode">${escapeHtml(it.reason || 'No reason')} &middot; ${escapeHtml(it.created_at_txt || '')}${photoNote}</div>
+      </div>
+      <a href="#" class="minibtn minibtn-remove" title="Clear this entry"
+        onclick="event.preventDefault(); event.stopPropagation(); dismissReturnsWarehouseDamage(${Number(it.damage_id)})">✕</a>
+    </div>`;
+  }).join('');
+}
+async function pickReturnsWarehouseDamage(damageId){
+  const it = returnsWarehouseDamageItems.find(x => x.damage_id === damageId);
+  if(!it || returnsWarehouseDamageBusy) return;
+  returnsWarehouseDamageBusy = true;
+  let suppliers = [];
+  let defaultVat = null;
+  let photos = [];
+  try{
+    const data = await apiGet('returns/stock-suppliers/' + it.stockid + '/');
+    suppliers = data.suppliers || [];
+    defaultVat = data.default_vat;
+  }catch(e){
+    console.error(e);
+    toast('Could not load this product’s suppliers — search for one instead');
+  }
+  try{
+    const imgData = await apiGet('warehouse/damage-logs/' + damageId + '/images/');
+    photos = (imgData.images || []).map(i => ({ data: i.data, filename: i.filename }));
+  }catch(e){
+    console.error(e); // non-fatal — the item can still be added without its photos carrying over
+  }
+  returnsWarehouseDamageBusy = false;
+  returnsPendingDamage = {
+    damage_id: it.damage_id,
+    qty: Math.abs(Number(it.quantity)) || 1,
+    reason: it.reason || '',
+    photos
+  };
+  returnsPendingProduct = { stockid: it.stockid, name: it.item_name, barcode: it.barcode || null, suppliers, default_vat: defaultVat };
+  openReturnsSupplierPick();
+}
+async function dismissReturnsWarehouseDamage(damageId){
+  const it = returnsWarehouseDamageItems.find(x => x.damage_id === damageId);
+  if(!it) return;
+  const qty = Math.abs(Number(it.quantity)) || 0;
+  if(!confirm('Delete this damage entry from the list?\n\n' + it.item_name + ' × ' + qty + '\n\nThis cannot be undone.')) return;
+  try{
+    await apiDelete('warehouse/damage-logs/' + damageId + '/');
+    returnsWarehouseDamageItems = returnsWarehouseDamageItems.filter(x => x.damage_id !== damageId);
+    renderReturnsWarehouseDamages();
+    toast('Entry cleared');
+  }catch(e){
+    toast('Could not clear entry: ' + (e && e.message ? e.message : 'unknown error'));
+    console.error(e);
+  }
+}
+// Small count under the hub card — best-effort, never blocks or errors the hub.
+async function refreshReturnsWarehouseDamageCount(){
+  const el = document.getElementById('returnsWarehouseDamageCount');
+  if(!el) return;
+  try{
+    const data = await apiGet('returns/warehouse-damages/');
     const n = (data.items || []).length;
     el.textContent = n ? (n + ' waiting') : '';
   }catch(e){ el.textContent = ''; }
