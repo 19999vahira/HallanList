@@ -384,8 +384,21 @@
     padding-top:8vh;z-index:100;
   }
   .modal-backdrop.active{display:flex;}
-  .modal{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:26px;width:420px;max-width:92vw;}
-  @media(max-width:480px){ .modal{padding:18px;} }
+  .modal{--modal-pad:26px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:var(--modal-pad);width:420px;max-width:92vw;
+    /* Scrolls inside itself when taller than the screen (Zebra scanners etc.) so
+       quantity / reason / location / photos and the Add button are always reachable. */
+    max-height:calc(100vh - 8vh - 16px);max-height:calc(100dvh - 8vh - 16px);
+    overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+  @media(max-width:480px){ .modal{--modal-pad:18px;} }
+  @media(max-height:700px){
+    .modal-backdrop{padding-top:8px;}
+    .modal{max-height:calc(100vh - 16px);max-height:calc(100dvh - 16px);}
+  }
+  /* Action buttons stay pinned to the bottom of a scrolling modal */
+  .modal .modal-close-row{position:sticky;bottom:calc(-1 * var(--modal-pad));background:var(--panel);
+    padding:10px 0 var(--modal-pad);margin:6px 0 calc(-1 * var(--modal-pad));z-index:2;}
+  /* Full-size photo viewer must sit above whichever photo gallery opened it */
+  #modalReturnsPhotoViewer{z-index:110;}
   .modal h3{margin:0 0 4px;font-size:17px;}
   .modal .modal-sub{color:var(--text-dim);font-size:12px;margin:0 0 18px;}
   .modal input[type=text],.modal input[type=password],.modal input[type=datetime-local],.modal input[type=email],.modal input[type=date]{
@@ -2922,7 +2935,15 @@
     </div>
 
     <p class="modal-sub" id="returnsDetailsVatStatus" style="margin-bottom:4px;"></p>
-    <p class="modal-sub" id="returnsDetailsVatPreview" style="margin-top:-4px;margin-bottom:14px;"></p>
+    <p class="modal-sub" id="returnsDetailsVatPreview" style="margin-top:-4px;margin-bottom:8px;"></p>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:14px;cursor:pointer;">
+      <input type="checkbox" id="returnsDetailsZeroCost" style="width:18px;height:18px;" onchange="updateReturnsDetailsVatPreview()">
+      Set cost price to £0.00 for this item
+    </label>
+
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;">Location (optional)</label>
+    <input type="text" id="returnsDetailsLocationInput" placeholder="Scan or type location, e.g. Aisle 3 / Bay 2" autocomplete="off" autocapitalize="off"
+      style="width:100%;padding:10px;margin-bottom:16px;" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
 
     <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;">Return reason</label>
     <div id="returnsReasonGrid" class="reasongrid"></div>
@@ -2978,6 +2999,7 @@
     <p class="modal-sub" id="returnsEditItemName"></p>
     <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:6px;">Cost price (ex VAT)</label>
     <input type="number" step="0.01" min="0" id="returnsEditCostInput" style="width:100%;padding:10px;margin-bottom:12px;" oninput="updateReturnsEditItemPreview()">
+    <button class="btn-ghost" type="button" style="width:100%;margin-bottom:12px;" onclick="setReturnsEditCostZero()">Set cost price to £0.00</button>
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);margin-bottom:6px;cursor:pointer;">
       <input type="checkbox" id="returnsEditVatInput" style="width:16px;height:16px;" onchange="updateReturnsEditItemPreview()">
       This item is VAT-rated (adds 20% VAT on top of cost price)
@@ -3066,6 +3088,10 @@
       style="width:100%;padding:10px;margin-top:8px;" oninput="onWarehouseDamageCustomReason()"
       onkeydown="if(event.key==='Enter')confirmWarehouseDamageDetails()">
 
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin:16px 0 6px;">Location (optional)</label>
+    <input type="text" id="warehouseDamageLocationInput" placeholder="Scan or type location, e.g. Aisle 3 / Bay 2" autocomplete="off" autocapitalize="off"
+      style="width:100%;padding:10px;" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
+
     <label style="display:block;font-size:12px;color:var(--text-dim);margin:16px 0 6px;">Photos (multiple allowed)</label>
     <div id="warehouseDamagePendingPhotoGrid" class="retphotogrid"></div>
     <input type="file" id="warehouseDamagePendingPhotoInput" accept="image/*" capture="environment" multiple
@@ -3095,6 +3121,10 @@
     <div id="warehouseDamageEditReasonGrid" class="reasongrid"></div>
     <input type="text" id="warehouseDamageEditReasonCustom" placeholder="Or type your own reason…" autocomplete="off"
       style="width:100%;padding:10px;margin-top:8px;" oninput="onWarehouseDamageEditCustomReason()">
+
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin:16px 0 6px;">Location</label>
+    <input type="text" id="warehouseDamageEditLocationInput" placeholder="Scan or type location" autocomplete="off" autocapitalize="off"
+      style="width:100%;padding:10px;" onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">
 
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalWarehouseDamageEditItem')">Cancel</button>
@@ -4312,8 +4342,11 @@ function warehouseDamageScanFound(item){
   document.getElementById('warehouseDamageQtyInput').value = '1';
   warehouseDamageQtySafeToType = false;
   document.getElementById('warehouseDamageReasonCustom').value = '';
+  document.getElementById('warehouseDamageLocationInput').value = '';
   renderWarehouseDamageReasonGrid();
   openModal('modalWarehouseDamageDetails');
+  const dmgDetailsModal = document.querySelector('#modalWarehouseDamageDetails .modal');
+  if(dmgDetailsModal) dmgDetailsModal.scrollTop = 0;
 }
 function warehouseDamageAdvanceScan(){
   warehouseDamageScanBusy = false;
@@ -4355,17 +4388,18 @@ async function confirmWarehouseDamageDetails(){
   const reason = custom || warehouseDamageSelectedReason;
   if(!reason){ toast('Pick a reason, or type your own'); return; }
   const photosToUpload = warehouseDamagePendingPhotos.slice();
+  const location = document.getElementById('warehouseDamageLocationInput').value.trim();
   try{
     const result = await apiPost('warehouse/damage-logs/', {
       stockid: p.stockid, item_name: p.name, barcode: p.barcode,
-      quantity: qty, reason,
+      quantity: qty, reason, location: location || null,
       created_by: localStorage.getItem('hallan_staff_name') || null
     });
     if(photosToUpload.length && result && result.damage_id){
       await uploadWarehouseDamagePhotos(result.damage_id, photosToUpload);
     }
     resetWarehouseDamagePendingPhotos();
-    warehouseDamageScanFeedItems.unshift({ item_name: p.name, quantity: qty, reason });
+    warehouseDamageScanFeedItems.unshift({ item_name: p.name, quantity: qty, reason, location });
     renderWarehouseDamageScanFeed();
     closeModal('modalWarehouseDamageDetails');
     warehouseDamagePendingProduct = null;
@@ -4386,7 +4420,7 @@ function renderWarehouseDamageScanFeed(){
     <div class="pickrow">
       <div class="pickinfo">
         <div class="pname">${escapeHtml(it.item_name)} <span style="color:var(--text-dim);font-weight:400;">× ${it.quantity}</span></div>
-        <div class="pbarcode">${escapeHtml(it.reason || '')}</div>
+        <div class="pbarcode">${escapeHtml(it.reason || '')}${it.location ? ' &middot; 📍 ' + escapeHtml(it.location) : ''}</div>
       </div>
     </div>
   `).join('');
@@ -4508,7 +4542,10 @@ function updateWarehouseDamagePhotoBadgeCount(){
   const n = warehouseDamagePhotoGalleryImages.length;
   const it = warehouseDamageDetailItems.find(i => i.damage_id === damageId);
   if(it) it.image_count = n;
+  const rit = returnsWarehouseDamageItems.find(i => i.damage_id === damageId);
+  if(rit) rit.image_count = n;
   renderWarehouseDamageDetailTable();
+  renderReturnsWarehouseDamages();
 }
 
 /* ---- Damaged List — every entry logged so far, editable in place ---- */
@@ -4546,6 +4583,7 @@ function renderWarehouseDamageDetailTable(){
       <td>${escapeHtml(it.item_name)}</td>
       <td class="qtycell retloc-cell" onclick="openWarehouseDamageEditModal(${it.damage_id})">${it.quantity}</td>
       <td class="retloc-cell" onclick="openWarehouseDamageEditModal(${it.damage_id})">${escapeHtml(it.reason || '—')}</td>
+      <td class="retloc-cell${it.location ? '' : ' empty'}" onclick="openWarehouseDamageEditModal(${it.damage_id})">${it.location ? escapeHtml(it.location) : 'Tap to add'}</td>
       <td>${escapeHtml(it.created_at_txt || '')}</td>
       <td>${warehouseDamagePhotoBadge(it)}</td>
       <td style="white-space:nowrap;">
@@ -4554,7 +4592,7 @@ function renderWarehouseDamageDetailTable(){
     </tr>
   `).join('');
   table.innerHTML = `
-    <thead><tr><th>Item</th><th class="qtycell">Qty</th><th>Reason</th><th>Logged</th><th>Photos</th><th></th></tr></thead>
+    <thead><tr><th>Item</th><th class="qtycell">Qty</th><th>Reason</th><th>Location</th><th>Logged</th><th>Photos</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
   `;
 }
@@ -4584,6 +4622,7 @@ function openWarehouseDamageEditModal(damageId){
   document.getElementById('warehouseDamageEditReasonCustom').value = '';
   warehouseDamageEditSelectedReason = RETURN_REASONS.find(r => r.toLowerCase() === String(item.reason || '').trim().toLowerCase()) || null;
   if(!warehouseDamageEditSelectedReason && item.reason) document.getElementById('warehouseDamageEditReasonCustom').value = item.reason;
+  document.getElementById('warehouseDamageEditLocationInput').value = item.location || '';
   renderWarehouseDamageEditReasonGrid();
   openModal('modalWarehouseDamageEditItem');
 }
@@ -4617,9 +4656,11 @@ async function saveWarehouseDamageEditItem(){
   const reason = custom || warehouseDamageEditSelectedReason;
   if(!reason){ toast('Pick a reason, or type your own'); return; }
   try{
-    await apiPut('warehouse/damage-logs/' + warehouseDamageEditingId + '/', { quantity: qty, reason });
+    const location = document.getElementById('warehouseDamageEditLocationInput').value.trim();
+    await apiPut('warehouse/damage-logs/' + warehouseDamageEditingId + '/', { quantity: qty, reason, location: location || null });
     item.quantity = qty;
     item.reason = reason;
+    item.location = location || null;
     closeModal('modalWarehouseDamageEditItem');
     renderWarehouseDamageDetailTable();
   }catch(e){
@@ -12026,6 +12067,9 @@ async function chooseReturnsSupplier(suppid, supplierName, costNet){
     ? 'This item is VAT-rated (20% VAT added on top of cost price)'
     : 'This item is not VAT-rated';
   document.getElementById('returnsReasonCustom').value = '';
+  document.getElementById('returnsDetailsZeroCost').checked = false;
+  // Location logged on the warehouse damage entry carries across; otherwise starts empty.
+  document.getElementById('returnsDetailsLocationInput').value = (returnsPendingDamage && returnsPendingDamage.location) || '';
   returnsSelectedDestination = null;
   renderReturnsDestinationGrid();
   if(adj){
@@ -12055,6 +12099,8 @@ async function chooseReturnsSupplier(suppid, supplierName, costNet){
   renderReturnsReasonGrid();
   updateReturnsDetailsVatPreview();
   openModal('modalReturnsDetails');
+  const retDetailsModal = document.querySelector('#modalReturnsDetails .modal');
+  if(retDetailsModal) retDetailsModal.scrollTop = 0;
   // No auto-focus/select here any more: auto-focusing this box used to be
   // exactly where the next scan's digits would land instead of the barcode
   // field, silently turning a scanned item into a bogus quantity.
@@ -12108,7 +12154,9 @@ function bumpReturnsQty(delta){
 function updateReturnsDetailsVatPreview(){
   const s = returnsPendingSupplier;
   const preview = document.getElementById('returnsDetailsVatPreview');
-  const cost = s && s.cost_net !== null && s.cost_net !== undefined ? Number(s.cost_net) : null;
+  const zeroBox = document.getElementById('returnsDetailsZeroCost');
+  const cost = (zeroBox && zeroBox.checked) ? 0
+    : (s && s.cost_net !== null && s.cost_net !== undefined ? Number(s.cost_net) : null);
   if(cost === null){ preview.textContent = ''; return; }
   const qty = Math.max(1, parseFloat(document.getElementById('returnsQtyInput').value) || 1);
   const isVat = returnsCurrentIsVat;
@@ -12136,11 +12184,15 @@ async function confirmReturnsDetails(){
   const destination = returnsSelectedDestination;
   const destLabel = destination === 'CHARITY' ? 'Charity List' : destination === 'BIN' ? 'Bin List' : (s.name + '’s return list');
   const photosToUpload = returnsPendingPhotos.slice();
+  const zeroCost = document.getElementById('returnsDetailsZeroCost').checked;
+  const finalCost = zeroCost ? 0 : s.cost_net;
+  const location = document.getElementById('returnsDetailsLocationInput').value.trim();
   try{
     const result = await apiPost('returns/scan-add/', {
       suppid: s.suppid, supplier_name: s.name,
       stockid: p.stockid, item_name: p.name, barcode: p.barcode,
-      cost_price: s.cost_net, is_vat: isVat, quantity: qty, return_reason: reason,
+      cost_price: finalCost, is_vat: isVat, quantity: qty, return_reason: reason,
+      location: location || null,
       created_by: localStorage.getItem('hallan_staff_name') || null,
       stockadjustid: returnsPendingAdjustment ? returnsPendingAdjustment.stockadjustid : null,
       damage_id: returnsPendingDamage ? returnsPendingDamage.damage_id : null,
@@ -12178,7 +12230,7 @@ async function confirmReturnsDetails(){
       toast('Added to ' + destLabel);
       return;
     }
-    returnsScanFeedItems.unshift({ item_name: p.name, supplier_name: s.name, cost_net: s.cost_net, is_vat: isVat, quantity: qty, reason, destination: destination });
+    returnsScanFeedItems.unshift({ item_name: p.name, supplier_name: s.name, cost_net: finalCost, is_vat: isVat, quantity: qty, reason, destination: destination, location });
     renderReturnsScanFeed();
     closeModal('modalReturnsDetails');
     returnsPendingProduct = null;
@@ -12525,7 +12577,8 @@ function renderReturnsWarehouseDamages(){
   }
   box.innerHTML = returnsWarehouseDamageItems.map(it => {
     const qty = Math.abs(Number(it.quantity)) || 0;
-    const photoNote = it.image_count ? (' &middot; 📷 ' + it.image_count) : '';
+    const photoCount = Number(it.image_count) || 0;
+    const locNote = it.location ? (' &middot; 📍 ' + escapeHtml(it.location)) : '';
     const hasReduced = it.reduced_price !== null && it.reduced_price !== undefined;
     const priceNote = hasReduced
       ? (' &middot; 🏷️ Reduced to £' + Number(it.reduced_price).toFixed(2) +
@@ -12535,11 +12588,15 @@ function renderReturnsWarehouseDamages(){
     <div class="pickrow" style="cursor:pointer;" onclick="pickReturnsWarehouseDamage(${Number(it.damage_id)})">
       <div class="pickinfo">
         <div class="pname">${escapeHtml(it.item_name)} <span style="color:var(--text-dim);font-weight:400;">× ${qty}</span></div>
-        <div class="pbarcode">${escapeHtml(it.reason || 'No reason')} &middot; ${escapeHtml(it.created_at_txt || '')}${photoNote}</div>
+        <div class="pbarcode">${escapeHtml(it.reason || 'No reason')} &middot; ${escapeHtml(it.created_at_txt || '')}${locNote}</div>
         ${hasReduced ? `<div class="pbarcode" style="color:var(--accent);">${priceNote.replace(/^ &middot; /, '')}</div>` : ''}
       </div>
-      <a href="#" class="minibtn minibtn-remove" title="Clear this entry"
-        onclick="event.preventDefault(); event.stopPropagation(); dismissReturnsWarehouseDamage(${Number(it.damage_id)})">✕</a>
+      <div style="display:flex;align-items:center;gap:6px;flex:none;">
+        <a href="#" class="minibtn minibtn-undo" style="margin-right:0;font-size:13px;padding:6px 10px;" title="View / add photos"
+          onclick="event.preventDefault(); event.stopPropagation(); openWarehouseDamagePhotoGallery(${Number(it.damage_id)}, ${jsArg(it.item_name)})">📷${photoCount ? ' ' + photoCount : ' Add'}</a>
+        <a href="#" class="minibtn minibtn-remove" style="margin-right:0;" title="Clear this entry"
+          onclick="event.preventDefault(); event.stopPropagation(); dismissReturnsWarehouseDamage(${Number(it.damage_id)})">✕</a>
+      </div>
     </div>`;
   }).join('');
 }
@@ -12589,6 +12646,7 @@ async function chooseDamageReturnToSupplier(){
     damage_id: it.damage_id,
     qty: Math.abs(Number(it.quantity)) || 1,
     reason: it.reason || '',
+    location: it.location || '',
     photos
   };
   returnsPendingProduct = { stockid: it.stockid, name: it.item_name, barcode: it.barcode || null, suppliers, default_vat: defaultVat };
@@ -12710,7 +12768,7 @@ function renderReturnsScanFeed(){
 document.addEventListener('keydown', function(e){
   if(!returnsScanModeActive) return;
   const t = e.target;
-  const safeIds = ['returnsBarcodeInput','returnsPickSupplierSearch','returnsReasonCustom','returnsNameSearchInput'];
+  const safeIds = ['returnsBarcodeInput','returnsPickSupplierSearch','returnsReasonCustom','returnsNameSearchInput','returnsDetailsLocationInput'];
   if(t && safeIds.includes(t.id)) return;
   if(t && t.id === 'returnsQtyInput' && returnsQtySafeToType) return;
   if(e.key.length !== 1 && e.key !== 'Enter') return; // leave Tab/Escape/arrows/etc alone
@@ -12944,7 +13002,7 @@ function renderReturnsDetailTable(){
   const rows = currentReturnsItems.map(it => `
     <tr>
       <td>${escapeHtml(it.item_name)}</td>
-      <td class="qtycell${editable ? ' retloc-cell' : ''}" ${editable ? `onclick="openReturnsEditItemModal(${it.item_id})"` : ''}>${it.cost_price === null || it.cost_price === undefined ? '—' : returnsMoney(it.cost_price)}</td>
+      <td class="qtycell${editable ? ' retloc-cell' : ''}" ${editable ? `onclick="openReturnsEditItemModal(${it.item_id})"` : ''}>${it.cost_price === null || it.cost_price === undefined ? '—' : returnsMoney(it.cost_price)}${editable && Number(it.cost_price) !== 0 ? ` <a href="#" class="minibtn minibtn-undo no-print" style="margin:0 0 0 4px;" title="Set cost price to £0.00" onclick="event.preventDefault(); event.stopPropagation(); zeroReturnsItemCost(${it.item_id})">£0</a>` : ''}</td>
       <td class="qtycell">${it.quantity}</td>
       <td class="qtycell">${it.is_vat ? returnsMoney(returnsLineVat(it.cost_price, it.quantity, true)) : '—'}</td>
       <td class="qtycell" style="font-weight:600;">${returnsMoney(returnsLineGross(it.cost_price, it.quantity, it.is_vat))}</td>
@@ -13081,30 +13139,45 @@ async function saveReturnsLocation(){
 /* ---- Edit cost price / VAT on a pending item, tapped from the Cost Price
    cell in the detail table. Kept separate from the location modal since
    they're edited from different cells and save independently. ---- */
+// Finds a return item on whichever list is on screen (pending return list, or Charity/Bin).
+function returnsFindEditableItem(itemId){
+  let item = currentReturnsItems.find(i => i.item_id === itemId);
+  if(item) return { item, rerender: renderReturnsDetailTable };
+  item = currentReturnsDisposalItems.find(i => i.item_id === itemId);
+  if(item) return { item, rerender: renderReturnsDisposalTable };
+  return null;
+}
 function openReturnsEditItemModal(itemId){
   returnsEditingItemId = itemId;
-  const item = currentReturnsItems.find(i => i.item_id === itemId);
-  if(!item) return;
+  const found = returnsFindEditableItem(itemId);
+  if(!found) return;
+  const item = found.item;
   document.getElementById('returnsEditItemName').textContent = item.item_name;
   document.getElementById('returnsEditCostInput').value = item.cost_price === null || item.cost_price === undefined ? '' : item.cost_price;
   document.getElementById('returnsEditVatInput').checked = !!item.is_vat;
   updateReturnsEditItemPreview();
   openModal('modalReturnsEditItem');
 }
+function setReturnsEditCostZero(){
+  document.getElementById('returnsEditCostInput').value = '0';
+  updateReturnsEditItemPreview();
+}
 function updateReturnsEditItemPreview(){
-  const item = currentReturnsItems.find(i => i.item_id === returnsEditingItemId);
+  const found = returnsFindEditableItem(returnsEditingItemId);
   const cost = parseFloat(document.getElementById('returnsEditCostInput').value);
   const isVat = document.getElementById('returnsEditVatInput').checked;
   const preview = document.getElementById('returnsEditItemPreview');
-  if(!item || isNaN(cost)){ preview.textContent = ''; return; }
+  if(!found || isNaN(cost)){ preview.textContent = ''; return; }
+  const item = found.item;
   const vat = returnsLineVat(cost, item.quantity, isVat);
   const gross = returnsLineGross(cost, item.quantity, isVat);
   preview.textContent = 'Qty ' + item.quantity + ': ' + returnsMoney(cost * item.quantity) +
     (isVat ? (' + ' + returnsMoney(vat) + ' VAT = ' + returnsMoney(gross)) : ' (no VAT)');
 }
 async function saveReturnsEditItem(){
-  const item = currentReturnsItems.find(i => i.item_id === returnsEditingItemId);
-  if(!item) return;
+  const found = returnsFindEditableItem(returnsEditingItemId);
+  if(!found) return;
+  const item = found.item;
   const cost = parseFloat(document.getElementById('returnsEditCostInput').value);
   const isVat = document.getElementById('returnsEditVatInput').checked;
   if(isNaN(cost) || cost < 0){ toast('Enter a valid cost price'); return; }
@@ -13113,7 +13186,23 @@ async function saveReturnsEditItem(){
     item.cost_price = cost;
     item.is_vat = isVat;
     closeModal('modalReturnsEditItem');
-    renderReturnsDetailTable();
+    found.rerender();
+  }catch(e){
+    toast('Could not save price');
+    console.error(e);
+  }
+}
+// One-tap "make this item £0.00" from the list row.
+async function zeroReturnsItemCost(itemId){
+  const found = returnsFindEditableItem(itemId);
+  if(!found) return;
+  const item = found.item;
+  if(!confirm('Set the cost price of "' + item.item_name + '" to £0.00?')) return;
+  try{
+    await apiPut('returns/items/' + itemId + '/', { quantity: item.quantity, cost_price: 0, is_vat: !!item.is_vat, location: item.location || null });
+    item.cost_price = 0;
+    found.rerender();
+    toast('Cost price set to £0.00');
   }catch(e){
     toast('Could not save price');
     console.error(e);
@@ -13153,7 +13242,7 @@ function renderReturnsDisposalTable(){
     <tr>
       <td>${escapeHtml(it.item_name)}</td>
       <td>${escapeHtml(it.supplier_name)}</td>
-      <td class="qtycell">${it.cost_price === null || it.cost_price === undefined ? '—' : returnsMoney(it.cost_price)}</td>
+      <td class="qtycell retloc-cell" onclick="openReturnsEditItemModal(${it.item_id})">${it.cost_price === null || it.cost_price === undefined ? '—' : returnsMoney(it.cost_price)}${Number(it.cost_price) !== 0 ? ` <a href="#" class="minibtn minibtn-undo no-print" style="margin:0 0 0 4px;" title="Set cost price to £0.00" onclick="event.preventDefault(); event.stopPropagation(); zeroReturnsItemCost(${it.item_id})">£0</a>` : ''}</td>
       <td class="qtycell">${it.quantity}</td>
       <td class="qtycell">${it.is_vat ? returnsMoney(returnsLineVat(it.cost_price, it.quantity, true)) : '—'}</td>
       <td class="qtycell" style="font-weight:600;">${returnsMoney(returnsLineGross(it.cost_price, it.quantity, it.is_vat))}</td>
