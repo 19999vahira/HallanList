@@ -13906,7 +13906,7 @@ function renderCreatedInvoiceMatchTable(){
         <div class="restaurant-sub-slot" id="createdInvoiceSearchSlot-${idx}" style="margin-top:6px;"></div>
       </td>
       <td class="qtycell" data-label="Quantity as Box">
-        <input type="number" min="0" step="0.001" class="restaurant-qty-input" style="width:90px;"
+        <input type="number" min="0" step="0.001" class="restaurant-qty-input" data-enter-col="matchqtybox" style="width:90px;"
           value="${it.qty_box !== null && it.qty_box !== undefined ? it.qty_box : ''}"
           onchange="updateCreatedInvoiceQtyBox(${idx}, this.value)">
       </td>
@@ -14167,7 +14167,30 @@ function updateCreatedInvoiceQtyPerBox(idx, value){
   const it = currentCreatedInvoice.items[idx];
   const newVal = value === '' ? null : Number(value);
   it.qty_per_box = isNaN(newVal) ? null : newVal;
-  renderCreatedInvoiceQtyTable();
+  // FIX: don't re-render the whole table here. Pressing Enter moves focus to
+  // the next row and THEN this onchange fires; a full re-render destroyed the
+  // newly focused input, so quick Enter-down-the-column entry lost its place.
+  // Update just this row in place (Total Qty, warning highlight + note).
+  const totalCell = document.getElementById('createdInvoiceQtyTotalCell-' + idx);
+  const totalQty = createdInvoiceTotalQty(it);
+  if(totalCell) totalCell.textContent = totalQty === null ? '—' : totalQty;
+  const tr = totalCell ? totalCell.closest('tr') : null;
+  if(tr){
+    const flagged = checkCreatedInvoiceQtyDeviation(it);
+    tr.classList.toggle('civ-qty-warn', !!flagged);
+    const perBoxTd = tr.querySelector('input[data-enter-col="qtyperbox"]');
+    const cell = perBoxTd ? perBoxTd.closest('td') : null;
+    if(cell){
+      const oldNote = cell.querySelector('.civ-qty-warn-note');
+      if(oldNote) oldNote.remove();
+      if(flagged){
+        const span = document.createElement('span');
+        span.className = 'civ-qty-warn-note';
+        span.textContent = '⚠ was ' + it.pack_size_previous + ' last time';
+        cell.appendChild(span);
+      }
+    }
+  }
   scheduleCreatedInvoiceAutosave();
 }
 async function saveAndExitCreatedInvoiceQty(){
