@@ -457,6 +457,28 @@
   .retphotobadge{display:inline-flex;align-items:center;gap:3px;font-size:11px;color:var(--text-dim);cursor:pointer;text-decoration:underline dotted;white-space:nowrap;}
   .retphotobadge:hover{color:var(--accent);}
   .retphoto-viewer-img{max-width:100%;max-height:70vh;display:block;margin:0 auto;border-radius:8px;}
+  /* ---- returns: sign-off block (bottom of a return list) ---- */
+  .retsign{margin-top:28px;padding:18px 18px 16px;border:1px solid var(--line);border-radius:10px;background:var(--panel);}
+  .retsign h3{margin:0 0 12px;font-size:15px;}
+  .retsign-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px;}
+  .retsign label{display:block;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--text-dim);font-family:'JetBrains Mono',monospace;margin-bottom:4px;}
+  .retsign input[type=text],.retsign input[type=date]{width:100%;padding:10px;box-sizing:border-box;}
+  .retsign-canvas{display:block;width:100%;max-width:520px;height:150px;background:#fff;border:1.5px dashed var(--line);border-radius:8px;touch-action:none;cursor:crosshair;}
+  .retsign-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px;}
+  .retsign-value{font-size:15px;padding:6px 0;border-bottom:1px solid var(--line);min-height:22px;}
+  .retsign-img{display:block;max-width:320px;max-height:130px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:4px;}
+  .retsign-printonly{display:none;}
+  /* ---- returns: "Show damaged picture" panel (bottom of a return list) ---- */
+  .retdamage{margin-top:26px;}
+  .retdamage-card{margin-top:14px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;background:var(--panel);}
+  .retdamage-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
+  .retdamage-head .rdname{font-weight:600;font-size:14px;}
+  .retdamage-head .rdmeta{font-size:12px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;}
+  .retdamage-imgs{display:flex;flex-wrap:wrap;gap:12px;}
+  .retdamage-imgs img{max-width:360px;max-height:320px;width:auto;height:auto;object-fit:contain;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:zoom-in;}
+  @media(max-width:480px){ .retdamage-imgs img{max-width:100%;} }
+  .retpick-row.nophoto{opacity:.45;cursor:not-allowed;}
+  .retpick-row .rpcount{font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--text-dim);white-space:nowrap;}
   .minibtn{display:inline-block;padding:4px 11px;border-radius:14px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid transparent;margin-right:6px;text-decoration:none;letter-spacing:.2px;}
   .minibtn-charity{background:rgba(124,58,237,.12);color:#7c3aed;}
   .minibtn-charity:hover{background:rgba(124,58,237,.22);}
@@ -653,6 +675,12 @@
   .pickprinttable{display:none;}
 
   @media print{
+    .retsign{border:none;padding:0;margin-top:34px;background:none;}
+    .retsign input{border:none !important;border-bottom:1px solid #333 !important;background:none !important;color:#111 !important;padding-left:0;}
+    .retsign-canvas{border:none;border-bottom:1px solid #333;border-radius:0;}
+    .retsign-value{border-bottom-color:#333;color:#111;}
+    .retsign-img{border:none;}
+    .retsign-printonly{display:block;}
     header.topbar,.crumbrow,.actionbar,.no-print{display:none !important;}
     body{background:#fff;color:#111;}
     .catblock h3{color:#111;border-bottom-color:#999;}
@@ -2395,7 +2423,7 @@
     <div id="returnsSupplierBrowse"><div class="loading">Loading…</div></div>
   </div>
 
-  <!-- RETURNS: SUPPLIER DETAIL — 3 status blocks -->
+  <!-- RETURNS: SUPPLIER DETAIL — 4 status blocks (Pending / Closed / Awaiting Credit / Returned) -->
   <div id="view-returns-supplier-detail" class="view">
     <div class="crumbrow">
       <button onclick="goHome()">Home</button><span class="sep">/</span>
@@ -2411,6 +2439,10 @@
       <div class="bincard" style="--tile-color:#d97706;" onclick="openReturnsPendingBlock()">
         <h4>⏳ Pending for Return</h4>
         <div class="count" id="returnsPendingCount">—</div>
+      </div>
+      <div class="bincard" style="--tile-color:#7c3aed;" onclick="openReturnsSublist('CLOSED_LIST')">
+        <h4>🔒 Closed Lists</h4>
+        <div class="count" id="returnsClosedCount">—</div>
       </div>
       <div class="bincard" style="--tile-color:#2563eb;" onclick="openReturnsSublist('AWAITING_CREDIT')">
         <h4>📨 Awaiting Credit Note</h4>
@@ -2455,6 +2487,8 @@
     <div class="actionbar no-print">
       <span class="mono" id="returnsDetailCount" style="color:var(--text-dim);font-size:12px;"></span>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn-ghost" id="returnsCloseListBtn" style="display:none;" onclick="closeReturnsCurrentList()">🔒 Close List</button>
+        <button class="btn-ghost" id="returnsReopenListBtn" style="display:none;" onclick="reopenReturnsCurrentList()">Reopen List</button>
         <button class="btn-ghost" onclick="promptReturnsAction('list','print')">Print</button>
         <button class="btn-ghost" onclick="promptReturnsAction('list','pdf')">Download PDF</button>
         <button class="btn-amber" id="returnsItemsReturnedBtn" style="display:none;" onclick="markReturnsItemsReturned()">Items Returned</button>
@@ -2462,6 +2496,15 @@
       </div>
     </div>
     <table class="finaltable" id="returnsDetailTable"></table>
+
+    <!-- Returned by / Accepted by / Date / Signature -->
+    <div id="returnsSignoffBox"></div>
+
+    <!-- Show damaged picture: pick an item from this list, its photo(s) appear here -->
+    <div class="retdamage no-print" id="returnsDamageSection">
+      <button class="btn-ghost" onclick="openReturnsDamagePick()">🖼️ Show damaged picture</button>
+      <div id="returnsDamagePanel"></div>
+    </div>
   </div>
 
   <!-- RETURNS: DISPOSAL — Charity List / Bin List (shared view, one per destination) -->
@@ -2978,6 +3021,18 @@
       style="display:none;" onchange="onReturnsGalleryPhotoSelected(event)">
     <div class="modal-close-row">
       <button class="btn-amber" onclick="closeModal('modalReturnsPhotos')">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- RETURNS: SHOW DAMAGED PICTURE — choose which item on the list to view -->
+<div class="modal-backdrop" id="modalReturnsDamagePick">
+  <div class="modal" style="width:440px;">
+    <h3>Which item's picture?</h3>
+    <p class="modal-sub">Pick an item from this list — its photo appears at the bottom of the page.</p>
+    <div id="returnsDamagePickList"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalReturnsDamagePick')">Cancel</button>
     </div>
   </div>
 </div>
@@ -11787,8 +11842,11 @@ async function finishScanGoodsSession(){
    Scan flow: scan a barcode -> pick which linked supplier it's going back
    to -> item lands straight on that supplier's current PENDING batch (one
    call, no separate "create list" step). Lists flow: search/browse a
-   supplier -> Pending for Return / Awaiting Credit Note / Returned Goods.
-   "Items Returned" locks a batch and moves it to Awaiting Credit Note;
+   supplier -> Pending for Return / Closed Lists / Awaiting Credit Note /
+   Returned Goods. "Close List" ends the open list (the next scan starts a
+   new one) and moves it to Closed Lists. "Items Returned" (needs the
+   Returned by / Accepted by / date / signature sign-off) moves a closed list
+   to Awaiting Credit Note;
    "Credit Notes Received" moves it on to Returned Goods. */
 let returnsScanFeedItems = [];
 let returnsPendingProduct = null; // { stockid, name, barcode, suppliers } — awaiting a supplier tap
@@ -11811,7 +11869,7 @@ const RETURN_REASONS = [
 let currentReturnsSupplier = null; // { suppid, name }
 let currentReturnsSupplierLists = []; // every batch (any status) for currentReturnsSupplier
 let returnsCurrentPendingList = null; // the one PENDING batch for currentReturnsSupplier, if any
-let currentReturnsSublistStatus = null; // 'AWAITING_CREDIT' | 'RETURNED'
+let currentReturnsSublistStatus = null; // 'CLOSED_LIST' | 'AWAITING_CREDIT' | 'RETURNED'
 let currentReturnsList = null;
 let currentReturnsItems = [];
 let returnsEditingItemId = null;
@@ -12825,7 +12883,7 @@ async function loadReturnsSupplierBrowse(){
     // Only show suppliers that actually have something going on — hide the
     // ones sitting at "None pending · 0 awaiting credit · 0 returned".
     const suppliers = (data.suppliers || []).filter(s =>
-      (s.pending_items > 0) || (s.awaiting_lists > 0) || (s.returned_lists > 0)
+      (s.pending_items > 0) || (s.closed_lists > 0) || (s.awaiting_lists > 0) || (s.returned_lists > 0)
     );
     if(suppliers.length === 0){
       box.innerHTML = '<div class="empty-hint">No returns yet — start one from Scan.</div>';
@@ -12835,7 +12893,7 @@ async function loadReturnsSupplierBrowse(){
       <div class="pickrow" style="cursor:pointer;" onclick="openReturnsSupplierDetail(${s.suppid}, ${jsArg(s.supplier_name)})">
         <div class="pickinfo">
           <div class="pname">${escapeHtml(s.supplier_name)}</div>
-          <div class="pbarcode">${s.pending_items > 0 ? s.pending_items + ' item' + (s.pending_items===1?'':'s') + ' pending' : 'None pending'} &middot; ${s.awaiting_lists} awaiting credit &middot; ${s.returned_lists} returned</div>
+          <div class="pbarcode">${s.pending_items > 0 ? s.pending_items + ' item' + (s.pending_items===1?'':'s') + ' pending' : 'None pending'} &middot; ${s.closed_lists || 0} closed &middot; ${s.awaiting_lists} awaiting credit &middot; ${s.returned_lists} returned</div>
         </div>
       </div>
     `).join('');
@@ -12872,6 +12930,7 @@ async function openReturnsSupplierDetail(suppid, supplierName){
   document.getElementById('returnsSupplierCrumb').textContent = supplierName;
   document.getElementById('returnsSupplierTitle').textContent = supplierName;
   document.getElementById('returnsPendingCount').textContent = 'Loading…';
+  document.getElementById('returnsClosedCount').textContent = 'Loading…';
   document.getElementById('returnsAwaitingCount').textContent = 'Loading…';
   document.getElementById('returnsReturnedCount').textContent = 'Loading…';
   showView('view-returns-supplier-detail');
@@ -12880,10 +12939,12 @@ async function openReturnsSupplierDetail(suppid, supplierName){
     const lists = data.lists || [];
     currentReturnsSupplierLists = lists;
     const pending = lists.filter(l => l.status === 'PENDING');
+    const closedLists = lists.filter(l => l.status === 'CLOSED_LIST');
     const awaiting = lists.filter(l => l.status === 'AWAITING_CREDIT');
     const returned = lists.filter(l => l.status === 'RETURNED');
     const pendingItems = pending.reduce((n,l) => n + l.item_count, 0);
     document.getElementById('returnsPendingCount').textContent = pendingItems > 0 ? (pendingItems + ' item' + (pendingItems===1?'':'s') + ' waiting') : 'Nothing pending';
+    document.getElementById('returnsClosedCount').textContent = closedLists.length + ' list' + (closedLists.length===1?'':'s');
     document.getElementById('returnsAwaitingCount').textContent = awaiting.length + ' list' + (awaiting.length===1?'':'s');
     document.getElementById('returnsReturnedCount').textContent = returned.length + ' list' + (returned.length===1?'':'s');
     returnsCurrentPendingList = pending[0] || null;
@@ -12893,6 +12954,7 @@ async function openReturnsSupplierDetail(suppid, supplierName){
     // the last version of this bug hard to pin down.
     toast('Could not load returns: ' + (e && e.message ? e.message : 'unknown error'));
     document.getElementById('returnsPendingCount').textContent = '—';
+    document.getElementById('returnsClosedCount').textContent = '—';
     document.getElementById('returnsAwaitingCount').textContent = '—';
     document.getElementById('returnsReturnedCount').textContent = '—';
     console.error(e);
@@ -12910,7 +12972,7 @@ function backToReturnsSupplierDetail(){
 /* ---- Sublist: just the batch names, for Awaiting Credit Note / Returned Goods ---- */
 function openReturnsSublist(status){
   currentReturnsSublistStatus = status;
-  const label = status === 'AWAITING_CREDIT' ? 'Awaiting Credit Note' : 'Returned Goods';
+  const label = status === 'CLOSED_LIST' ? 'Closed Lists' : (status === 'AWAITING_CREDIT' ? 'Awaiting Credit Note' : 'Returned Goods');
   document.getElementById('returnsSublistSupplierCrumb').textContent = currentReturnsSupplier.name;
   document.getElementById('returnsSublistCrumb').textContent = label;
   document.getElementById('returnsSublistTitle').textContent = currentReturnsSupplier.name + ' — ' + label;
@@ -12956,6 +13018,11 @@ async function openReturnsListDetail(returnId){
   document.getElementById('returnsDetailTable').innerHTML = '';
   document.getElementById('returnsItemsReturnedBtn').style.display = 'none';
   document.getElementById('returnsCreditNoteBtn').style.display = 'none';
+  document.getElementById('returnsCloseListBtn').style.display = 'none';
+  document.getElementById('returnsReopenListBtn').style.display = 'none';
+  document.getElementById('returnsSignoffBox').innerHTML = '';
+  document.getElementById('returnsDamagePanel').innerHTML = '';
+  returnsDamageImages = [];
   try{
     const data = await apiGet('returns/lists/' + returnId + '/');
     currentReturnsList = data.list;
@@ -12966,11 +13033,15 @@ async function openReturnsListDetail(returnId){
     document.getElementById('returnsDetailSupplierCrumb').textContent = currentReturnsList.supplier_name;
     document.getElementById('returnsDetailSupplierName').textContent = currentReturnsList.supplier_name;
     document.getElementById('returnsDetailMeta').textContent =
-      'Date list printed: ' + new Date().toLocaleDateString('en-GB') + ' — Batch started ' + new Date(currentReturnsList.created_at).toLocaleString();
+      'Date list printed: ' + new Date().toLocaleDateString('en-GB') + ' — Batch started ' + new Date(currentReturnsList.created_at).toLocaleString()
+      + (currentReturnsList.closed_at ? ' — List closed ' + new Date(currentReturnsList.closed_at).toLocaleString() : '');
     document.getElementById('returnsDetailCount').textContent = currentReturnsItems.length + ' item' + (currentReturnsItems.length===1?'':'s');
-    document.getElementById('returnsItemsReturnedBtn').style.display = currentReturnsList.status === 'PENDING' ? 'inline-block' : 'none';
+    document.getElementById('returnsCloseListBtn').style.display = currentReturnsList.status === 'PENDING' ? 'inline-block' : 'none';
+    document.getElementById('returnsReopenListBtn').style.display = currentReturnsList.status === 'CLOSED_LIST' ? 'inline-block' : 'none';
+    document.getElementById('returnsItemsReturnedBtn').style.display = currentReturnsList.status === 'CLOSED_LIST' ? 'inline-block' : 'none';
     document.getElementById('returnsCreditNoteBtn').style.display = currentReturnsList.status === 'AWAITING_CREDIT' ? 'inline-block' : 'none';
     renderReturnsDetailTable();
+    renderReturnsSignoff();
   }catch(e){
     toast('Could not load return list: ' + (e && e.message ? e.message : 'unknown error'));
     console.error(e);
@@ -13044,18 +13115,249 @@ function returnsPhotoBadge(it, ownerItemsVar, ownerRenderFn){
   const label = n ? ('📷 ' + n) : '📷 Add';
   return `<span class="retphotobadge" onclick="openReturnsPhotoGallery(${it.item_id}, ${jsArg(it.item_name)}, ${ownerItemsVar}, ${ownerRenderFn})">${label}</span>`;
 }
+/* ---- Close List: stops this list taking scans. The next scan for the
+        supplier opens a fresh PENDING list; this one moves to Closed Lists. ---- */
+async function closeReturnsCurrentList(){
+  if(!currentReturnsList || currentReturnsList.status !== 'PENDING') return;
+  if(currentReturnsItems.length === 0){ toast('Add at least one item before closing the list'); return; }
+  if(!confirm('Close this list? No more items will be added to it — the next item scanned for this supplier starts a new list, and this one moves to Closed Lists.')) return;
+  try{
+    await apiPost('returns/lists/' + currentReturnsList.return_id + '/close-list/', {});
+    toast('List closed');
+    backToReturnsSupplierDetail();
+  }catch(e){
+    toast('Could not close list: ' + (e && e.message ? e.message : 'unknown error'));
+    console.error(e);
+  }
+}
+async function reopenReturnsCurrentList(){
+  if(!currentReturnsList || currentReturnsList.status !== 'CLOSED_LIST') return;
+  if(!confirm('Reopen this list so items can be added to it again?')) return;
+  try{
+    await apiPost('returns/lists/' + currentReturnsList.return_id + '/reopen/', {});
+    toast('List reopened');
+    openReturnsListDetail(currentReturnsList.return_id);
+  }catch(e){
+    toast(e && e.message ? e.message : 'Could not reopen list');
+    console.error(e);
+  }
+}
+
+/* ---- Sign-off block at the bottom of a list: Returned by / Accepted by /
+        Date / Signature.
+        PENDING       -> blank lines, print/PDF only (to sign by hand if wanted)
+        CLOSED_LIST   -> editable form + signature pad, saved by "Items Returned"
+        AWAITING+     -> read-only record of what was signed ---- */
+let returnsSigCanvas = null, returnsSigCtx = null, returnsSigDrawing = false, returnsSigHasInk = false;
+function returnsTodayIso(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function returnsFmtIsoDate(iso){
+  if(!iso) return '';
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? (m[3] + '/' + m[2] + '/' + m[1]) : iso;
+}
+function renderReturnsSignoff(){
+  const box = document.getElementById('returnsSignoffBox');
+  const l = currentReturnsList;
+  returnsSigCanvas = null; returnsSigCtx = null; returnsSigHasInk = false;
+  if(!box || !l){ if(box) box.innerHTML = ''; return; }
+  if(l.status === 'PENDING'){
+    box.innerHTML = `
+      <div class="retsign retsign-printonly">
+        <h3>Return sign-off</h3>
+        <div class="retsign-grid">
+          <div><label>Returned by</label><div class="retsign-value">&nbsp;</div></div>
+          <div><label>Accepted by</label><div class="retsign-value">&nbsp;</div></div>
+          <div><label>Date</label><div class="retsign-value">&nbsp;</div></div>
+        </div>
+        <label>Signature</label><div class="retsign-value" style="height:70px;max-width:520px;">&nbsp;</div>
+      </div>`;
+    return;
+  }
+  if(l.status === 'CLOSED_LIST'){
+    const who = (portalSession && portalSession.name) ? portalSession.name : '';
+    box.innerHTML = `
+      <div class="retsign">
+        <h3>Return sign-off</h3>
+        <div class="retsign-grid">
+          <div><label for="returnsSignReturnedBy">Returned by</label>
+            <input type="text" id="returnsSignReturnedBy" placeholder="Name" autocomplete="off" value="${escapeHtml(who)}"></div>
+          <div><label for="returnsSignAcceptedBy">Accepted by</label>
+            <input type="text" id="returnsSignAcceptedBy" placeholder="Name of person accepting" autocomplete="off"></div>
+          <div><label for="returnsSignDate">Date</label>
+            <input type="date" id="returnsSignDate" value="${returnsTodayIso()}"></div>
+        </div>
+        <label>Signature (accepted by)</label>
+        <canvas id="returnsSigCanvas" class="retsign-canvas"></canvas>
+        <div class="retsign-actions no-print">
+          <button class="btn-ghost" type="button" onclick="clearReturnsSignature()">Clear signature</button>
+          <button class="btn-amber" type="button" onclick="markReturnsItemsReturned()">Items Returned</button>
+        </div>
+      </div>`;
+    initReturnsSigCanvas();
+    return;
+  }
+  // Awaiting credit / returned / archived: show what was signed, if anything
+  if(!l.returned_by && !l.accepted_by && !l.signature){ box.innerHTML = ''; return; }
+  box.innerHTML = `
+    <div class="retsign">
+      <h3>Return sign-off</h3>
+      <div class="retsign-grid">
+        <div><label>Returned by</label><div class="retsign-value">${escapeHtml(l.returned_by || '')}</div></div>
+        <div><label>Accepted by</label><div class="retsign-value">${escapeHtml(l.accepted_by || '')}</div></div>
+        <div><label>Date</label><div class="retsign-value">${escapeHtml(returnsFmtIsoDate(l.signoff_date))}</div></div>
+      </div>
+      <label>Signature</label>
+      ${l.signature ? `<img class="retsign-img" src="${l.signature}" alt="Signature">` : '<div class="retsign-value">—</div>'}
+    </div>`;
+}
+function initReturnsSigCanvas(){
+  const c = document.getElementById('returnsSigCanvas');
+  if(!c) return;
+  const ratio = Math.max(1, window.devicePixelRatio || 1);
+  const w = c.clientWidth || 400, h = c.clientHeight || 150;
+  c.width = Math.round(w * ratio);
+  c.height = Math.round(h * ratio);
+  const ctx = c.getContext('2d');
+  ctx.scale(ratio, ratio);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, w, h);
+  ctx.lineWidth = 2.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#111';
+  returnsSigCanvas = c; returnsSigCtx = ctx; returnsSigHasInk = false;
+  const pos = ev => { const r = c.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; };
+  c.addEventListener('pointerdown', ev => {
+    ev.preventDefault();
+    returnsSigDrawing = true;
+    try{ c.setPointerCapture(ev.pointerId); }catch(_){}
+    const p = pos(ev);
+    ctx.beginPath(); ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x + 0.01, p.y + 0.01); ctx.stroke();   // a tap leaves a dot
+    returnsSigHasInk = true;
+  });
+  c.addEventListener('pointermove', ev => {
+    if(!returnsSigDrawing) return;
+    ev.preventDefault();
+    const p = pos(ev);
+    ctx.lineTo(p.x, p.y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(p.x, p.y);
+  });
+  const end = () => { returnsSigDrawing = false; };
+  c.addEventListener('pointerup', end);
+  c.addEventListener('pointercancel', end);
+  c.addEventListener('pointerleave', end);
+}
+function clearReturnsSignature(){
+  const c = returnsSigCanvas, ctx = returnsSigCtx;
+  if(!c || !ctx) return;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.restore();
+  returnsSigHasInk = false;
+}
+
+/* ---- Items Returned: only from a closed list, and only once the sign-off is complete ---- */
 async function markReturnsItemsReturned(){
   if(!currentReturnsList) return;
+  if(currentReturnsList.status !== 'CLOSED_LIST'){ toast('Close the list first, then mark it as returned'); return; }
   if(currentReturnsItems.length === 0){ toast('Add at least one item first'); return; }
-  if(!confirm('Mark this batch as returned? It moves to Awaiting Credit Note, and the next item scanned for this supplier starts a new list.')) return;
+  const rbEl = document.getElementById('returnsSignReturnedBy');
+  const abEl = document.getElementById('returnsSignAcceptedBy');
+  const dEl = document.getElementById('returnsSignDate');
+  if(!rbEl || !abEl || !dEl) return;
+  const returnedBy = rbEl.value.trim(), acceptedBy = abEl.value.trim(), signoffDate = dEl.value;
+  let missing = null, focusEl = null;
+  if(!returnedBy){ missing = 'Enter who returned the goods'; focusEl = rbEl; }
+  else if(!acceptedBy){ missing = 'Enter who accepted the goods'; focusEl = abEl; }
+  else if(!signoffDate){ missing = 'Choose the date'; focusEl = dEl; }
+  else if(!returnsSigHasInk){ missing = 'The accepting person needs to sign'; }
+  if(missing){
+    toast(missing);
+    document.getElementById('returnsSignoffBox').scrollIntoView({ behavior:'smooth', block:'center' });
+    if(focusEl) setTimeout(() => focusEl.focus(), 350);
+    return;
+  }
+  if(!confirm('Mark this list as returned? It moves to Awaiting Credit Note with this sign-off saved, and it can no longer be edited.')) return;
   try{
-    await apiPost('returns/lists/' + currentReturnsList.return_id + '/items-returned/', {});
+    await apiPost('returns/lists/' + currentReturnsList.return_id + '/items-returned/', {
+      returned_by: returnedBy,
+      accepted_by: acceptedBy,
+      signoff_date: signoffDate,
+      signature: returnsSigCanvas.toDataURL('image/png')
+    });
     toast('Moved to Awaiting Credit Note');
     backToReturnsSupplierDetail();
   }catch(e){
-    toast('Could not update this list');
+    toast('Could not update this list: ' + (e && e.message ? e.message : 'unknown error'));
     console.error(e);
   }
+}
+
+/* ---- Show damaged picture: choose an item from this list, its photo(s) are
+        shown at the bottom of the page — big enough to see clearly, small
+        enough not to take over. Tap a picture for the full-size viewer. ---- */
+let returnsDamageImages = [];
+function openReturnsDamagePick(){
+  const box = document.getElementById('returnsDamagePickList');
+  if(!currentReturnsItems.length){ toast('There are no items on this list'); return; }
+  const withPhotos = currentReturnsItems.filter(i => Number(i.image_count) > 0).length;
+  const rows = currentReturnsItems.map(it => {
+    const n = Number(it.image_count) || 0;
+    return `
+      <div class="pickrow retpick-row${n ? '' : ' nophoto'}" style="cursor:${n ? 'pointer' : 'not-allowed'};" ${n ? `onclick="showReturnsDamagePhotos(${it.item_id})"` : ''}>
+        <div class="pickinfo">
+          <div class="pname">${escapeHtml(it.item_name)}</div>
+          <div class="pbarcode">Qty ${it.quantity}${it.return_reason ? ' &middot; ' + escapeHtml(it.return_reason) : ''}</div>
+        </div>
+        <div class="rpcount">${n ? '📷 ' + n : 'No photo'}</div>
+      </div>`;
+  }).join('');
+  box.innerHTML = (withPhotos === 0
+    ? '<div class="empty-hint" style="margin-bottom:10px;">None of these items have a photo yet. Use the Photos column to add one.</div>'
+    : '') + rows;
+  openModal('modalReturnsDamagePick');
+}
+async function showReturnsDamagePhotos(itemId){
+  closeModal('modalReturnsDamagePick');
+  const it = currentReturnsItems.find(i => i.item_id === itemId);
+  const panel = document.getElementById('returnsDamagePanel');
+  panel.innerHTML = '<div class="retdamage-card"><div class="loading">Loading picture…</div></div>';
+  panel.scrollIntoView({ behavior:'smooth', block:'start' });
+  try{
+    const data = await apiGet('returns/items/' + itemId + '/images/');
+    returnsDamageImages = (data.images || []).map(i => i.data).filter(Boolean);
+    if(!returnsDamageImages.length){
+      panel.innerHTML = '<div class="retdamage-card"><div class="empty-hint">This item has no photos.</div></div>';
+      return;
+    }
+    panel.innerHTML = `
+      <div class="retdamage-card">
+        <div class="retdamage-head">
+          <div>
+            <div class="rdname">${escapeHtml(it ? it.item_name : 'Item')}</div>
+            <div class="rdmeta">${it ? 'Qty ' + it.quantity + (it.return_reason ? ' · ' + escapeHtml(it.return_reason) : '') : ''}</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-ghost" onclick="openReturnsDamagePick()">Choose another item</button>
+            <button class="btn-ghost" onclick="hideReturnsDamagePanel()">Hide</button>
+          </div>
+        </div>
+        <div class="retdamage-imgs">
+          ${returnsDamageImages.map((d, idx) => `<img src="${d}" alt="Damaged item photo" title="Tap to enlarge" onclick="openReturnsPhotoViewer(returnsDamageImages[${idx}])">`).join('')}
+        </div>
+      </div>`;
+    panel.scrollIntoView({ behavior:'smooth', block:'start' });
+  }catch(e){
+    panel.innerHTML = '<div class="retdamage-card"><div class="empty-hint" style="color:var(--danger)">Could not load the picture.</div></div>';
+    console.error(e);
+  }
+}
+function hideReturnsDamagePanel(){
+  document.getElementById('returnsDamagePanel').innerHTML = '';
+  returnsDamageImages = [];
 }
 async function markReturnsCreditNoteReceived(){
   if(!currentReturnsList) return;
@@ -13352,12 +13654,13 @@ function renderReturnsAnalytics(data){
       ${returnsAnalyticsCard('🗑️ Bin (ex VAT + VAT)', '#57534e', b.bin)}
       ${returnsAnalyticsCard('🎁 Charity (ex VAT + VAT)', '#7c3aed', b.charity)}
       ${returnsAnalyticsCard('💸 Total Wastage', '#dc2626', w, wastagePct.toFixed(0) + '% of all stock moved')}
-      ${returnsAnalyticsCard('✅ Back to Supplier', '#059669', bts, 'Pending/Awaiting/Returned')}
+      ${returnsAnalyticsCard('✅ Back to Supplier', '#059669', bts, 'Pending/Closed/Awaiting/Returned')}
     </div>
 
     <h3 style="margin:24px 0 10px;font-size:15px;">Back to supplier, by stage</h3>
     <div class="catgrid">
       ${returnsAnalyticsCard('⏳ Pending for Return', '#d97706', b.pending)}
+      ${returnsAnalyticsCard('🔒 Closed Lists', '#7c3aed', b.closed_list || {item_count:0,total_qty:0,net_value:0,vat_value:0,gross_value:0})}
       ${returnsAnalyticsCard('📨 Awaiting Credit Note', '#2563eb', b.awaiting_credit)}
       ${returnsAnalyticsCard('✅ Returned Goods', '#059669', b.returned)}
       ${returnsAnalyticsCard('🗄️ Closed', '#6b7280', b.closed)}
@@ -13482,6 +13785,41 @@ function downloadReturnsListPDF(includeLocation){
         }
       }
     });
+    // ---- Sign-off block: Returned by / Accepted by / Date / Signature ----
+    // Filled in from the saved sign-off once the list has been returned;
+    // blank lines otherwise so it can still be signed by hand.
+    const lst = currentReturnsList;
+    let y = (doc.lastAutoTable && doc.lastAutoTable.finalY ? doc.lastAutoTable.finalY : 45) + 14;
+    if(y > 200){ doc.addPage(); y = 22; }
+    doc.setFontSize(11); doc.setTextColor(20);
+    doc.text('Return sign-off', 14, y);
+    y += 11;
+    doc.setFontSize(10);
+    const field = (label, val, yy) => {
+      doc.setTextColor(90);
+      doc.text(label, 14, yy);
+      const lx = 14 + 32;
+      doc.setTextColor(20);
+      if(val) doc.text(String(val), lx + 1, yy - 1);
+      doc.setDrawColor(120);
+      doc.line(lx, yy + 1.5, 130, yy + 1.5);
+    };
+    field('Returned by:', lst.returned_by || '', y); y += 12;
+    field('Accepted by:', lst.accepted_by || '', y); y += 12;
+    field('Date:', returnsFmtIsoDate(lst.signoff_date), y); y += 16;
+    doc.setTextColor(90);
+    doc.text('Signature:', 14, y);
+    if(lst.signature){
+      let iw = 60, ih = 22;
+      try{
+        const props = doc.getImageProperties(lst.signature);
+        ih = Math.min(24, iw * props.height / props.width);
+        iw = ih * props.width / props.height;
+      }catch(_){}
+      doc.addImage(lst.signature, 'PNG', 46, y - ih + 3, iw, ih);
+    }
+    doc.setDrawColor(120);
+    doc.line(46, y + 3, 130, y + 3);
     doc.save('return-' + currentReturnsList.supplier_name.replace(/[^a-z0-9]+/gi,'-') + '-' + new Date().toISOString().slice(0,10) + '.pdf');
   }catch(e){
     toast('Could not generate PDF');
