@@ -2522,11 +2522,30 @@
     <div class="actionbar no-print">
       <span class="mono" id="returnsDisposalCount" style="color:var(--text-dim);font-size:12px;"></span>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn-ghost" id="returnsDisposalClosedBackBtn" style="display:none;" onclick="openReturnsDisposalClosedLists()">← Closed lists</button>
+        <button class="btn-ghost" id="returnsDisposalViewClosedBtn" onclick="openReturnsDisposalClosedLists()">View closed lists</button>
+        <button class="btn-amber" id="returnsDisposalCloseBtn" onclick="closeReturnsDisposalList()">Close list</button>
         <button class="btn-ghost" onclick="promptReturnsAction(currentReturnsDisposalType,'print')">Print</button>
         <button class="btn-ghost" onclick="promptReturnsAction(currentReturnsDisposalType,'pdf')">Download PDF</button>
       </div>
     </div>
     <table class="finaltable" id="returnsDisposalTable"></table>
+  </div>
+
+  <!-- RETURNS: DISPOSAL — closed Charity / Bin lists -->
+  <div id="view-returns-disposal-closed" class="view">
+    <div class="crumbrow no-print">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openReturnsHub()">Returns</button><span class="sep">/</span>
+      <button onclick="openReturnsDisposal(currentReturnsDisposalType)" id="returnsDisposalClosedParentCrumb"></button><span class="sep">/</span>
+      <span class="current">Closed lists</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Hallan Cash &amp; Carry</div>
+      <h2 id="returnsDisposalClosedTitle"></h2>
+      <p>Lists that have been closed off. Tap one to see what was on it.</p>
+    </div>
+    <div id="returnsDisposalClosedGrid" class="catgrid"></div>
   </div>
 
   <!-- RETURNS: ANALYTICS — wastage overview -->
@@ -12265,13 +12284,21 @@ async function confirmReturnsDetails(){
       // write-off in the same transaction, so drop it from the list here and
       // stay on the list rather than jumping into the scanner.
       const doneId = returnsPendingAdjustment.stockadjustid;
-      returnsAdjustItems = returnsAdjustItems.filter(x => x.stockadjustid !== doneId);
+      // Partial send: the server keeps the write-off with whatever quantity
+      // is left, so keep it on the list showing the remainder.
+      const leftAdj = result && result.remaining_qty > 0 ? Number(result.remaining_qty) : 0;
+      if(leftAdj > 0){
+        const rowAdj = returnsAdjustItems.find(x => x.stockadjustid === doneId);
+        if(rowAdj) rowAdj.adjust_qty = (Number(rowAdj.adjust_qty) < 0 ? -1 : 1) * leftAdj;
+      }else{
+        returnsAdjustItems = returnsAdjustItems.filter(x => x.stockadjustid !== doneId);
+      }
       returnsPendingAdjustment = null;
       returnsPendingProduct = null;
       returnsPendingSupplier = null;
       closeModal('modalReturnsDetails');
       renderReturnsAdjustments();
-      toast('Added to ' + destLabel);
+      toast('Added to ' + destLabel + (leftAdj > 0 ? ' — ' + leftAdj + ' still on the list' : ''));
       return;
     }
     if(returnsPendingDamage){
@@ -12279,13 +12306,21 @@ async function confirmReturnsDetails(){
       // row (and its photos) in the same transaction, so drop it from the
       // list here and stay on the list rather than jumping into the scanner.
       const doneId = returnsPendingDamage.damage_id;
-      returnsWarehouseDamageItems = returnsWarehouseDamageItems.filter(x => x.damage_id !== doneId);
+      // Partial send: the server keeps the damage entry with whatever
+      // quantity is left, so keep it on the list showing the remainder.
+      const leftDmg = result && result.remaining_qty > 0 ? Number(result.remaining_qty) : 0;
+      if(leftDmg > 0){
+        const rowDmg = returnsWarehouseDamageItems.find(x => x.damage_id === doneId);
+        if(rowDmg) rowDmg.quantity = leftDmg;
+      }else{
+        returnsWarehouseDamageItems = returnsWarehouseDamageItems.filter(x => x.damage_id !== doneId);
+      }
       returnsPendingDamage = null;
       returnsPendingProduct = null;
       returnsPendingSupplier = null;
       closeModal('modalReturnsDetails');
       renderReturnsWarehouseDamages();
-      toast('Added to ' + destLabel);
+      toast('Added to ' + destLabel + (leftDmg > 0 ? ' — ' + leftDmg + ' still on the list' : ''));
       return;
     }
     returnsScanFeedItems.unshift({ item_name: p.name, supplier_name: s.name, cost_net: finalCost, is_vat: isVat, quantity: qty, reason, destination: destination, location });
@@ -13259,7 +13294,7 @@ function clearReturnsSignature(){
   returnsSigHasInk = false;
 }
 
-/* ---- Items Returned: only from a closed list, and only once the sign-off is complete ---- */
+/* ---- Items Returned: only from a closed list. The sign-off (names / date / signature) is optional. ---- */
 async function markReturnsItemsReturned(){
   if(!currentReturnsList) return;
   if(currentReturnsList.status !== 'CLOSED_LIST'){ toast('Close the list first, then mark it as returned'); return; }
@@ -13268,25 +13303,16 @@ async function markReturnsItemsReturned(){
   const abEl = document.getElementById('returnsSignAcceptedBy');
   const dEl = document.getElementById('returnsSignDate');
   if(!rbEl || !abEl || !dEl) return;
+  // Sign-off details are optional — names, date and signature can all be
+  // left blank and "Items Returned" still goes through.
   const returnedBy = rbEl.value.trim(), acceptedBy = abEl.value.trim(), signoffDate = dEl.value;
-  let missing = null, focusEl = null;
-  if(!returnedBy){ missing = 'Enter who returned the goods'; focusEl = rbEl; }
-  else if(!acceptedBy){ missing = 'Enter who accepted the goods'; focusEl = abEl; }
-  else if(!signoffDate){ missing = 'Choose the date'; focusEl = dEl; }
-  else if(!returnsSigHasInk){ missing = 'The accepting person needs to sign'; }
-  if(missing){
-    toast(missing);
-    document.getElementById('returnsSignoffBox').scrollIntoView({ behavior:'smooth', block:'center' });
-    if(focusEl) setTimeout(() => focusEl.focus(), 350);
-    return;
-  }
   if(!confirm('Mark this list as returned? It moves to Awaiting Credit Note with this sign-off saved, and it can no longer be edited.')) return;
   try{
     await apiPost('returns/lists/' + currentReturnsList.return_id + '/items-returned/', {
       returned_by: returnedBy,
       accepted_by: acceptedBy,
-      signoff_date: signoffDate,
-      signature: returnsSigCanvas.toDataURL('image/png')
+      signoff_date: signoffDate || null,
+      signature: returnsSigHasInk ? returnsSigCanvas.toDataURL('image/png') : null
     });
     toast('Moved to Awaiting Credit Note');
     backToReturnsSupplierDetail();
@@ -13515,9 +13541,14 @@ async function zeroReturnsItemCost(itemId){
    moveReturnsItem() above and stay until someone deals with them. ---- */
 let currentReturnsDisposalType = null; // 'CHARITY' | 'BIN'
 let currentReturnsDisposalItems = [];
+let currentReturnsDisposalClosure = null; // set while looking at a closed list (read-only), null for the open list
 async function openReturnsDisposal(type){
   currentReturnsDisposalType = type;
+  currentReturnsDisposalClosure = null;
   const label = type === 'CHARITY' ? 'Charity List' : 'Bin List';
+  document.getElementById('returnsDisposalClosedBackBtn').style.display = 'none';
+  document.getElementById('returnsDisposalViewClosedBtn').style.display = '';
+  document.getElementById('returnsDisposalCloseBtn').style.display = '';
   document.getElementById('returnsDisposalCrumb').textContent = label;
   document.getElementById('returnsDisposalTitle').textContent = label;
   document.getElementById('returnsDisposalMeta').textContent = 'Date list printed: ' + new Date().toLocaleDateString('en-GB');
@@ -13536,21 +13567,22 @@ async function openReturnsDisposal(type){
 }
 function renderReturnsDisposalTable(){
   const table = document.getElementById('returnsDisposalTable');
+  const readOnly = !!currentReturnsDisposalClosure;
   if(currentReturnsDisposalItems.length === 0){
-    table.innerHTML = '<caption class="empty-hint">Nothing here yet.</caption>';
+    table.innerHTML = '<caption class="empty-hint">' + (readOnly ? 'This closed list has no items.' : 'Nothing here yet.') + '</caption>';
     return;
   }
   const rows = currentReturnsDisposalItems.map(it => `
     <tr>
       <td>${escapeHtml(it.item_name)}</td>
       <td>${escapeHtml(it.supplier_name)}</td>
-      <td class="qtycell retloc-cell" onclick="openReturnsEditItemModal(${it.item_id})">${it.cost_price === null || it.cost_price === undefined ? '—' : returnsMoney(it.cost_price)}${Number(it.cost_price) !== 0 ? ` <a href="#" class="minibtn minibtn-undo no-print" style="margin:0 0 0 4px;" title="Set cost price to £0.00" onclick="event.preventDefault(); event.stopPropagation(); zeroReturnsItemCost(${it.item_id})">£0</a>` : ''}</td>
+      <td class="qtycell${readOnly ? '' : ' retloc-cell'}" ${readOnly ? '' : `onclick="openReturnsEditItemModal(${it.item_id})"`}>${it.cost_price === null || it.cost_price === undefined ? '—' : returnsMoney(it.cost_price)}${(!readOnly && Number(it.cost_price) !== 0) ? ` <a href="#" class="minibtn minibtn-undo no-print" style="margin:0 0 0 4px;" title="Set cost price to £0.00" onclick="event.preventDefault(); event.stopPropagation(); zeroReturnsItemCost(${it.item_id})">£0</a>` : ''}</td>
       <td class="qtycell">${it.quantity}</td>
       <td class="qtycell">${it.is_vat ? returnsMoney(returnsLineVat(it.cost_price, it.quantity, true)) : '—'}</td>
       <td class="qtycell" style="font-weight:600;">${returnsMoney(returnsLineGross(it.cost_price, it.quantity, it.is_vat))}</td>
       <td class="loc-col">${escapeHtml(it.location || '—')}</td>
       <td class="no-print">${returnsPhotoBadge(it, 'currentReturnsDisposalItems', 'renderReturnsDisposalTable')}</td>
-      <td class="no-print"><a href="#" class="minibtn minibtn-undo" onclick="event.preventDefault(); unmoveReturnsDisposalItem(${it.item_id})">Undo</a></td>
+      <td class="no-print">${readOnly ? '' : `<a href="#" class="minibtn minibtn-undo" onclick="event.preventDefault(); unmoveReturnsDisposalItem(${it.item_id})">Undo</a>`}</td>
     </tr>
   `).join('');
   const totals = returnsItemsTotals(currentReturnsDisposalItems);
@@ -13577,6 +13609,80 @@ async function unmoveReturnsDisposalItem(itemId){
     renderReturnsDisposalTable();
   }catch(e){
     toast('Could not undo this move');
+    console.error(e);
+  }
+}
+
+/* ---- Close list / View closed lists for Charity + Bin. "Close list" files
+   everything currently on the open list away as a dated closed list (items
+   stay counted in Analytics); the open list then starts empty again. ---- */
+async function closeReturnsDisposalList(){
+  const type = currentReturnsDisposalType;
+  if(!type || currentReturnsDisposalClosure) return;
+  const label = type === 'CHARITY' ? 'Charity List' : 'Bin List';
+  if(currentReturnsDisposalItems.length === 0){ toast('There is nothing on this list to close'); return; }
+  if(!confirm('Close this ' + label + '? All ' + currentReturnsDisposalItems.length + ' item' + (currentReturnsDisposalItems.length===1?'':'s') + ' move to Closed Lists and this list starts empty again.')) return;
+  try{
+    await apiPost('returns/bin-charity/' + type + '/close/', { closed_by: localStorage.getItem('hallan_staff_name') || null });
+    currentReturnsDisposalItems = [];
+    document.getElementById('returnsDisposalCount').textContent = '0 items';
+    renderReturnsDisposalTable();
+    toast(label + ' closed');
+  }catch(e){
+    toast('Could not close list: ' + (e && e.message ? e.message : 'unknown error'));
+    console.error(e);
+  }
+}
+async function openReturnsDisposalClosedLists(){
+  const type = currentReturnsDisposalType;
+  if(!type) return;
+  const label = type === 'CHARITY' ? 'Charity List' : 'Bin List';
+  document.getElementById('returnsDisposalClosedParentCrumb').textContent = label;
+  document.getElementById('returnsDisposalClosedTitle').textContent = label + ' — Closed lists';
+  const grid = document.getElementById('returnsDisposalClosedGrid');
+  grid.innerHTML = '<div class="loading">Loading…</div>';
+  showView('view-returns-disposal-closed');
+  try{
+    const data = await apiGet('returns/bin-charity/' + type + '/closed/');
+    const lists = data.lists || [];
+    if(lists.length === 0){
+      grid.innerHTML = '<div class="empty-hint">No closed lists yet.</div>';
+      return;
+    }
+    grid.innerHTML = lists.map(l => {
+      const gross = Number(l.net_value || 0) + Number(l.vat_value || 0);
+      const when = l.closed_at ? new Date(l.closed_at).toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+      return `
+      <div class="bincard" style="--tile-color:${type === 'CHARITY' ? '#7c3aed' : '#57534e'};" onclick="openReturnsDisposalClosedDetail(${Number(l.close_id)})">
+        <h4>🔒 ${escapeHtml(label)}</h4>
+        <div class="count">Closed ${escapeHtml(when)}</div>
+        <div class="count" style="margin-top:4px;">${l.item_count} item${Number(l.item_count)===1?'':'s'} &middot; ${returnsMoney(gross)}</div>
+      </div>`;
+    }).join('');
+  }catch(e){
+    grid.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not load closed lists</div>';
+    console.error(e);
+  }
+}
+async function openReturnsDisposalClosedDetail(closeId){
+  const type = currentReturnsDisposalType;
+  const label = type === 'CHARITY' ? 'Charity List' : 'Bin List';
+  try{
+    const data = await apiGet('returns/bin-charity-closed/' + closeId + '/');
+    currentReturnsDisposalClosure = data.closure;
+    currentReturnsDisposalItems = data.items || [];
+    const when = data.closure.closed_at ? new Date(data.closure.closed_at).toLocaleString('en-GB') : '';
+    document.getElementById('returnsDisposalCrumb').textContent = label;
+    document.getElementById('returnsDisposalTitle').textContent = label + ' — closed';
+    document.getElementById('returnsDisposalMeta').textContent = 'List closed ' + when + (data.closure.closed_by ? ' by ' + data.closure.closed_by : '');
+    document.getElementById('returnsDisposalCount').textContent = currentReturnsDisposalItems.length + ' item' + (currentReturnsDisposalItems.length===1?'':'s');
+    document.getElementById('returnsDisposalClosedBackBtn').style.display = '';
+    document.getElementById('returnsDisposalViewClosedBtn').style.display = 'none';
+    document.getElementById('returnsDisposalCloseBtn').style.display = 'none';
+    showView('view-returns-disposal');
+    renderReturnsDisposalTable();
+  }catch(e){
+    toast('Could not load this closed list: ' + (e && e.message ? e.message : 'unknown error'));
     console.error(e);
   }
 }
