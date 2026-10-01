@@ -361,6 +361,21 @@
   .po-field-sep{width:1px;align-self:stretch;background:var(--line);margin:2px 4px;}
   .po-method-hint{margin:10px 0 16px;font-size:12px;line-height:1.5;color:var(--text-dim);
     background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;}
+  /* Place Order table: column headings stay pinned while the rows scroll.
+     Desktop: headings stick just under the (also sticky) top bar — the page
+     scrolls and the top-bar height is measured in JS into --po-sticky-top.
+     Mobile: the table sits in its own scroll box (a table with
+     overflow-x:auto can't have sticky headings), headings stick to its top. */
+  .po-tablewrap{width:100%;}
+  table.po-table{overflow:visible;}
+  table.po-table th{position:sticky;top:var(--po-sticky-top,0px);z-index:5;
+    background:var(--bg);box-shadow:0 1px 0 var(--line);vertical-align:bottom;}
+  @media(max-width:760px){
+    .po-tablewrap{overflow:auto;-webkit-overflow-scrolling:touch;
+      max-height:calc(100vh - var(--po-sticky-top,0px) - 16px);
+      max-height:calc(100dvh - var(--po-sticky-top,0px) - 16px);}
+    table.po-table th{top:0;}
+  }
   @media(max-width:760px){
     .po-actionbar{flex-direction:column;}
     .po-filterbar{gap:14px;}
@@ -9979,7 +9994,7 @@ const SUPPLIER_PO_METHOD_HINTS = {
   simple: 'Simple: total sold over the sales-history window, scaled up to the number of weeks you\'re predicting for, then divided by pack size.',
   trend: 'Trend Weighted: like Simple, but weights the more recent half of the sales-history window more heavily (60/40), so it reacts faster to items speeding up or slowing down.',
   velocity: 'Stock-Aware Velocity: like Simple, but subtracts what\'s already In Stock so it doesn\'t over-order. Also adds a safety-stock buffer (the Reorder Level if set, else half a pack) before netting off stock, so slow movers with only a couple of units left still get flagged instead of showing 0.',
-  smart: 'Smart Reorder: combines Min/Max\'s trigger (nothing suggested until stock is genuinely low — Reorder Level if set, else half a pack) with Velocity\'s proportional, sales-driven order quantity. Works even on items with no Reorder Level configured in Vector, unlike Min/Max on its own.'
+  smart: 'Smart Reorder: combines Min/Max\'s trigger (nothing suggested until stock is genuinely low — Reorder Level if set, else half a pack) with Velocity\'s proportional, sales-driven order quantity. Works even on items with no Reorder Level configured in Vector, unlike Min/Max on its own. Items with 0 in stock and 0 sold over the sales-history window are skipped (treated as not currently available).'
 };
 // Which methods actually use the "Sales history" / "Predicted for" week
 // dropdowns — Min/Max is purely a stock-level trigger and ignores both, so
@@ -10094,7 +10109,7 @@ function renderSupplierPlaceOrderTable(){
   ];
   const arrow = (c) => supplierPOSort.col === c ? (supplierPOSort.dir === 'asc' ? ' ▲' : ' ▼') : '';
   const table = document.createElement('table');
-  table.className = 'finaltable';
+  table.className = 'finaltable po-table';
   table.innerHTML = `<thead><tr>
       ${cols.map(c => `<th class="${c.key === 'name' ? '' : 'qtycell'}" data-col="${c.key}" style="cursor:pointer;">${c.label}${arrow(c.key)}</th>`).join('')}
       <th class="qtycell" title="Order point — from Vector, or edited here">Reorder Level</th>
@@ -10118,6 +10133,8 @@ function renderSupplierPlaceOrderTable(){
     if(supplierOrderCart.hasOwnProperty(it.stockid)) tr.style.background = 'rgba(22,163,74,.08)';
     const minmaxNote = method === 'minmax' && it.minmax_triggered === false
       ? '<div style="font-size:11px;color:var(--text-dim);">above reorder level</div>'
+      : method === 'smart' && it.smart_dormant
+      ? '<div style="font-size:11px;color:var(--text-dim);">no stock &amp; no sales</div>'
       : method === 'smart' && it.smart_triggered === false
       ? '<div style="font-size:11px;color:var(--text-dim);">above reorder point</div>' : '';
     tr.innerHTML = `
@@ -10161,8 +10178,22 @@ function renderSupplierPlaceOrderTable(){
   });
   table.appendChild(tbody);
   results.innerHTML = '';
-  results.appendChild(table);
+  const wrap = document.createElement('div');
+  wrap.className = 'po-tablewrap';
+  wrap.appendChild(table);
+  results.appendChild(wrap);
+  updateSupplierPOStickyOffset();
 }
+
+// Headings need to know how tall the sticky top bar is so they stop just
+// underneath it instead of sliding behind it (its height changes when it wraps
+// on small screens, so measure rather than hard-code).
+function updateSupplierPOStickyOffset(){
+  const bar = document.querySelector('header.topbar');
+  const h = bar ? Math.round(bar.getBoundingClientRect().height) : 0;
+  document.documentElement.style.setProperty('--po-sticky-top', h + 'px');
+}
+window.addEventListener('resize', updateSupplierPOStickyOffset);
 
 // ---- Reorder Level / Max Stock Level cells: editable, saved to the
 //      STOCK_LEVEL_OVERRIDES table (survives the 5-minute Vector sync). ----
@@ -12924,12 +12955,32 @@ async function loadReturnsSupplierBrowse(){
       box.innerHTML = '<div class="empty-hint">No returns yet — start one from Scan.</div>';
       return;
     }
-    box.innerHTML = suppliers.map(s => `
+    // Group alphabetically into A / B / C… blocks (anything not starting
+    // with a letter goes under "#"). Search results below are unaffected —
+    // they still show as a flat list when you type.
+    const letterOf = (name) => {
+      const c = (name || '').trim().charAt(0).toUpperCase();
+      return /[A-Z]/.test(c) ? c : '#';
+    };
+    const sorted = suppliers.slice().sort((a, b) =>
+      (a.supplier_name || '').trim().localeCompare((b.supplier_name || '').trim(), undefined, { sensitivity: 'base' }));
+    const groups = {};
+    sorted.forEach(s => { (groups[letterOf(s.supplier_name)] = groups[letterOf(s.supplier_name)] || []).push(s); });
+    const letters = Object.keys(groups).sort((a, b) => a === '#' ? 1 : b === '#' ? -1 : a.localeCompare(b));
+    box.innerHTML = letters.map(letter => `
+      <div class="returns-letter-block" style="margin-bottom:18px;">
+        <div class="returns-letter-head" style="display:flex;align-items:center;gap:10px;margin:0 0 8px;">
+          <span style="font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:16px;background:var(--accent);color:#0e1e33;min-width:28px;height:28px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;">${letter}</span>
+          <span style="flex:1;height:1px;background:var(--line);"></span>
+          <span style="font-size:11px;color:var(--text-dim);">${groups[letter].length} supplier${groups[letter].length === 1 ? '' : 's'}</span>
+        </div>
+        ${groups[letter].map(s => `
       <div class="pickrow" style="cursor:pointer;" onclick="openReturnsSupplierDetail(${s.suppid}, ${jsArg(s.supplier_name)})">
         <div class="pickinfo">
           <div class="pname">${escapeHtml(s.supplier_name)}</div>
           <div class="pbarcode">${s.pending_items > 0 ? s.pending_items + ' item' + (s.pending_items===1?'':'s') + ' pending' : 'None pending'} &middot; ${s.closed_lists || 0} closed &middot; ${s.awaiting_lists} awaiting credit &middot; ${s.returned_lists} returned</div>
         </div>
+      </div>`).join('')}
       </div>
     `).join('');
   }catch(e){
@@ -12951,7 +13002,7 @@ async function runReturnsSupplierSearch(){
     const data = await apiGet('suppliers/search/?q=' + encodeURIComponent(q));
     const items = data.items || [];
     if(items.length === 0){ results.innerHTML = '<div class="empty-hint">No suppliers found.</div>'; return; }
-    results.innerHTML = items.map(s => `
+    results.innerHTML = items.slice().sort((a, b) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })).map(s => `
       <div class="pickrow" style="cursor:pointer;" onclick="openReturnsSupplierDetail(${s.suppid}, ${jsArg(s.name)})">
         <div class="pickinfo"><div class="pname">${escapeHtml(s.name)}</div></div>
       </div>
