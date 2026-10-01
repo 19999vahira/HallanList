@@ -366,15 +366,26 @@
      scrolls and the top-bar height is measured in JS into --po-sticky-top.
      Mobile: the table sits in its own scroll box (a table with
      overflow-x:auto can't have sticky headings), headings stick to its top. */
+  /* Whole filter/controls block stays pinned under the top bar (desktop) so
+     only the item rows scroll; column headings pin directly beneath it. */
+  .po-sticky-block{position:sticky;top:var(--po-sticky-top,0px);z-index:8;background:var(--bg);
+    padding:6px 0 8px;box-shadow:0 6px 8px -6px rgba(0,0,0,.18);}
+  .po-sticky-block .po-actionbar{margin-bottom:8px;}
+  .po-sticky-block .po-method-hint{margin:0 0 8px;}
+  .po-sticky-block .po-method-hint.is-clamped{display:-webkit-box;-webkit-line-clamp:1;
+    -webkit-box-orient:vertical;overflow:hidden;cursor:pointer;}
+  .po-sticky-block .po-method-hint{cursor:pointer;}
+  .po-sticky-block > div[style*="margin:4px 0 14px"]{margin:0 !important;}
   .po-tablewrap{width:100%;}
   table.po-table{overflow:visible;}
-  table.po-table th{position:sticky;top:var(--po-sticky-top,0px);z-index:5;
+  table.po-table th{position:sticky;top:var(--po-head-top,var(--po-sticky-top,0px));z-index:5;
     background:var(--bg);box-shadow:0 1px 0 var(--line);vertical-align:bottom;}
   @media(max-width:760px){
     .po-tablewrap{overflow:auto;-webkit-overflow-scrolling:touch;
       max-height:calc(100vh - var(--po-sticky-top,0px) - 16px);
       max-height:calc(100dvh - var(--po-sticky-top,0px) - 16px);}
     table.po-table th{top:0;}
+    .po-sticky-block{position:static;box-shadow:none;}
   }
   @media(max-width:760px){
     .po-actionbar{flex-direction:column;}
@@ -1999,6 +2010,7 @@
       <h2>Place Order</h2>
       <p>Order quantity is worked out by the selected method below — edit any you like, then add them to the order list. Click a column header to sort by it.</p>
     </div>
+    <div class="po-sticky-block" id="poStickyBlock">
     <div class="actionbar po-actionbar">
       <div class="po-filterbar">
         <div class="po-field" id="poFieldWeeks">
@@ -2059,10 +2071,11 @@
       </div>
       <button class="btn-amber" onclick="openSupplierOrderListPage()">🛒 Order List (<span id="supplierPOCartCount">0</span>)</button>
     </div>
-    <div class="po-method-hint" id="supplierPOMethodHint"></div>
+    <div class="po-method-hint is-clamped" id="supplierPOMethodHint" title="Click to expand / collapse" onclick="this.classList.toggle('is-clamped')"></div>
     <div style="margin:4px 0 14px;display:flex;gap:10px;flex-wrap:wrap;">
       <button class="btn-amber" onclick="addSupplierItemsToOrderList()">➕ Add Items to Order List</button>
       <button class="btn-ghost" onclick="openSupplierLevelsModal()">✎ Edit Reorder &amp; Max Levels</button>
+    </div>
     </div>
     <div id="supplierPOResults"></div>
   </div>
@@ -10191,9 +10204,21 @@ function renderSupplierPlaceOrderTable(){
 function updateSupplierPOStickyOffset(){
   const bar = document.querySelector('header.topbar');
   const h = bar ? Math.round(bar.getBoundingClientRect().height) : 0;
-  document.documentElement.style.setProperty('--po-sticky-top', h + 'px');
+  const root = document.documentElement;
+  root.style.setProperty('--po-sticky-top', h + 'px');
+  // Column headings pin beneath the controls block (desktop only — on mobile
+  // the block scrolls normally and headings pin inside the table's own box).
+  const block = document.getElementById('poStickyBlock');
+  const pinned = block && getComputedStyle(block).position === 'sticky';
+  const bh = pinned ? Math.round(block.getBoundingClientRect().height) : 0;
+  root.style.setProperty('--po-head-top', (h + bh) + 'px');
 }
 window.addEventListener('resize', updateSupplierPOStickyOffset);
+(function(){
+  // Block height changes when the hint expands/collapses or the bar wraps.
+  const block = document.getElementById('poStickyBlock');
+  if(block && window.ResizeObserver) new ResizeObserver(updateSupplierPOStickyOffset).observe(block);
+})();
 
 // ---- Reorder Level / Max Stock Level cells: editable, saved to the
 //      STOCK_LEVEL_OVERRIDES table (survives the 5-minute Vector sync). ----
