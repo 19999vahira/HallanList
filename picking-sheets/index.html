@@ -547,6 +547,16 @@
   .modal-close-row{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}
   .empty-hint{color:var(--text-dim);font-size:12px;text-align:center;padding:18px 0;}
 
+  /* ---- Stock Info > Online Data ---- */
+  .odcheck{width:20px;height:20px;accent-color:var(--accent);cursor:pointer;vertical-align:middle;}
+  .odcheck:disabled{cursor:not-allowed;opacity:.6;}
+  table.odtable th.odc,table.odtable td.odc{text-align:center;white-space:nowrap;width:1%;}
+  table.odtable td .odname{font-weight:600;font-size:14px;}
+  table.odtable td .odbarcode{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);margin-top:2px;}
+  table.odtable tr.odsaving{opacity:.55;pointer-events:none;}
+  .odtick{color:var(--green);font-weight:700;font-size:16px;}
+  .odcount{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-dim);}
+
   /* ---- unpicked / shortfall report ---- */
   .unpicked-select{
     background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:10px 14px;
@@ -1701,6 +1711,10 @@
         <h4>📅 Date</h4>
         <div class="count">See what's expiring, and when</div>
       </div>
+      <div class="bincard" onclick="openOnlineData()">
+        <h4>🌐 Online Data</h4>
+        <div class="count">Track images, descriptions and details for online listings</div>
+      </div>
     </div>
   </div>
 
@@ -1750,6 +1764,97 @@
       <button class="btn-ghost" onclick="setStockInfoExpiryFilter(182)">Within 6 months</button>
     </div>
     <div id="stockInfoExpiryResults"><div class="loading">Loading…</div></div>
+  </div>
+
+
+  <!-- STOCK INFO: ONLINE DATA (hub) -->
+  <div id="view-online-data" class="view">
+    <div class="crumbrow" id="onlineCrumbs-hub"></div>
+    <div class="hero">
+      <div class="eyebrow">Online</div>
+      <h2>Online Data</h2>
+      <p>Work through products supplier by supplier and tick off what's ready for online.</p>
+    </div>
+    <div class="catgrid">
+      <div class="bincard" onclick="openOnlineSupplierSelect()">
+        <h4>🏷️ Supplier</h4>
+        <div class="count">Pick a supplier and work through its products</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STOCK INFO: ONLINE DATA > SUPPLIER (search) -->
+  <div id="view-online-supplier" class="view">
+    <div class="crumbrow" id="onlineCrumbs-supplier"></div>
+    <div class="hero">
+      <div class="eyebrow">Online</div>
+      <h2>Select Supplier</h2>
+      <p>Search for a supplier by name.</p>
+    </div>
+    <div class="actionbar">
+      <input type="text" id="onlineSupplierSearchInput" class="historysearch" style="max-width:420px;"
+             placeholder="Search supplier name…" oninput="onOnlineSupplierSearch()" autocomplete="off">
+      <span></span>
+    </div>
+    <div id="onlineSupplierResults">
+      <div class="empty-hint">Start typing a supplier name.</div>
+    </div>
+  </div>
+
+  <!-- STOCK INFO: ONLINE DATA > SUPPLIER > Preferred / Non-Preferred -->
+  <div id="view-online-pref" class="view">
+    <div class="crumbrow" id="onlineCrumbs-pref"></div>
+    <div class="hero">
+      <div class="eyebrow">Online</div>
+      <h2 id="onlinePrefTitle">Supplier</h2>
+      <p>Choose which products to work on.</p>
+    </div>
+    <div class="catgrid">
+      <div class="bincard" onclick="openOnlinePref('yes')">
+        <h4>⭐ Preferred List</h4>
+        <div class="count" id="onlineCountPreferred">Loading…</div>
+      </div>
+      <div class="bincard" onclick="openOnlinePref('no')">
+        <h4>📋 Non-Preferred List</h4>
+        <div class="count" id="onlineCountNonPreferred">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STOCK INFO: ONLINE DATA > ... > Incomplete / Complete -->
+  <div id="view-online-status" class="view">
+    <div class="crumbrow" id="onlineCrumbs-status"></div>
+    <div class="hero">
+      <div class="eyebrow">Online</div>
+      <h2 id="onlineStatusTitle">Preferred List</h2>
+      <p>Incomplete products still need images, a description or other details. Once all three are ticked they move to Complete.</p>
+    </div>
+    <div class="catgrid">
+      <div class="bincard" onclick="openOnlineList('incomplete')">
+        <h4>⏳ Incomplete List</h4>
+        <div class="count" id="onlineCountIncomplete">Loading…</div>
+      </div>
+      <div class="bincard" onclick="openOnlineList('complete')">
+        <h4>✅ Complete List</h4>
+        <div class="count" id="onlineCountComplete">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STOCK INFO: ONLINE DATA > ... > product list -->
+  <div id="view-online-list" class="view">
+    <div class="crumbrow" id="onlineCrumbs-list"></div>
+    <div class="hero">
+      <div class="eyebrow">Online</div>
+      <h2 id="onlineListTitle">Incomplete List</h2>
+      <p id="onlineListSub"></p>
+    </div>
+    <div class="actionbar">
+      <input type="text" id="onlineListFilter" class="historysearch" style="max-width:420px;"
+             placeholder="Filter by name or barcode…" oninput="renderOnlineList()" autocomplete="off">
+      <span class="odcount" id="onlineListCount"></span>
+    </div>
+    <div id="onlineListBox"><div class="loading">Loading…</div></div>
   </div>
 
   <!-- RESTAURANT ORDERS: PASSCODE -->
@@ -7749,6 +7854,258 @@ function renderStockInfoResults(items){
   table.appendChild(tbody);
   results.innerHTML = '';
   results.appendChild(table);
+}
+
+/* ============ STOCK INFO: ONLINE DATA ============
+   Online Data > Supplier > (pick supplier) > Preferred / Non-Preferred >
+   Incomplete / Complete > product list.
+   Each product has three ticks — Images, Description, Other Details — plus
+   a Check All. When all three are ticked it moves to the Complete List; from
+   there it can be sent back to the Incomplete List (which clears the ticks).
+   Saved per product on the server (ONLINE_DATA_CHECKS). */
+const onlineData = {
+  suppid: null, suppName: '',
+  pref: null,      // 'yes' | 'no'
+  status: null,    // 'incomplete' | 'complete'
+  items: [],
+  counts: null,    // { preferred:{incomplete,complete}, non_preferred:{...} }
+  supplierDebounce: null
+};
+function onlinePrefLabel(){ return onlineData.pref === 'yes' ? 'Preferred List' : 'Non-Preferred List'; }
+function onlineStatusLabel(){ return onlineData.status === 'complete' ? 'Complete List' : 'Incomplete List'; }
+
+/* Breadcrumbs: level 0 = Online Data hub ... 4 = product list */
+function renderOnlineCrumbs(boxId, level){
+  const parts = [
+    { label:'Home', fn:'goHome()' },
+    { label:'Stock Info', fn:"showView('view-stock-info')" },
+    { label:'Online Data', fn:'openOnlineData()' }
+  ];
+  if(level >= 1) parts.push({ label:'Supplier', fn:'openOnlineSupplierSelect()' });
+  if(level >= 2) parts.push({ label:onlineData.suppName, fn:'openOnlineSupplierHome()' });
+  if(level >= 3) parts.push({ label:onlinePrefLabel(), fn:"openOnlinePref(onlineData.pref)" });
+  if(level >= 4) parts.push({ label:onlineStatusLabel(), fn:null });
+  // Last crumb is the current page
+  const html = parts.map((p, i) => {
+    const last = i === parts.length - 1;
+    const sep = i > 0 ? '<span class="sep">/</span>' : '';
+    return sep + (last
+      ? '<span class="current">' + escapeHtml(p.label) + '</span>'
+      : '<button onclick="' + p.fn + '">' + escapeHtml(p.label) + '</button>');
+  }).join('');
+  document.getElementById(boxId).innerHTML = html;
+}
+
+function openOnlineData(){
+  renderOnlineCrumbs('onlineCrumbs-hub', 0);
+  showView('view-online-data');
+}
+
+/* ---- Supplier search ---- */
+function openOnlineSupplierSelect(){
+  renderOnlineCrumbs('onlineCrumbs-supplier', 1);
+  showView('view-online-supplier');
+  document.getElementById('onlineSupplierSearchInput').value = '';
+  document.getElementById('onlineSupplierResults').innerHTML = '<div class="empty-hint">Start typing a supplier name.</div>';
+  setTimeout(() => document.getElementById('onlineSupplierSearchInput').focus(), 80);
+}
+function onOnlineSupplierSearch(){
+  clearTimeout(onlineData.supplierDebounce);
+  const q = document.getElementById('onlineSupplierSearchInput').value.trim();
+  const box = document.getElementById('onlineSupplierResults');
+  if(q.length < 2){
+    box.innerHTML = '<div class="empty-hint">Start typing a supplier name.</div>';
+    return;
+  }
+  box.innerHTML = '<div class="loading">Searching…</div>';
+  onlineData.supplierDebounce = setTimeout(async () => {
+    try{
+      const data = await apiGet('stock/online-data/suppliers/?q=' + encodeURIComponent(q));
+      const items = data.items || [];
+      if(items.length === 0){ box.innerHTML = '<div class="empty-hint">No suppliers found.</div>'; return; }
+      box.innerHTML = items.map(s => `
+        <div class="supplier-pick-row" onclick="chooseOnlineSupplier(${Number(s.suppid)}, ${jsArg(s.name)})">
+          <div><span class="spname">${escapeHtml(s.name)}</span></div>
+        </div>
+      `).join('');
+    }catch(e){
+      box.innerHTML = '<div class="loading" style="color:var(--danger)">Search failed.</div>' + errDetailHtml(e);
+      console.error(e);
+    }
+  }, 300);
+}
+function chooseOnlineSupplier(suppid, name){
+  onlineData.suppid = suppid;
+  onlineData.suppName = name;
+  openOnlineSupplierHome();
+}
+
+/* ---- Preferred / Non-Preferred ---- */
+function openOnlineSupplierHome(){
+  renderOnlineCrumbs('onlineCrumbs-pref', 2);
+  document.getElementById('onlinePrefTitle').textContent = onlineData.suppName;
+  showView('view-online-pref');
+  loadOnlineCounts();
+}
+async function loadOnlineCounts(){
+  const set = (id, c) => {
+    document.getElementById(id).textContent = c
+      ? (c.incomplete + ' incomplete · ' + c.complete + ' complete')
+      : 'Could not load counts';
+  };
+  document.getElementById('onlineCountPreferred').textContent = 'Loading…';
+  document.getElementById('onlineCountNonPreferred').textContent = 'Loading…';
+  try{
+    onlineData.counts = await apiGet('stock/online-data/summary/?suppid=' + encodeURIComponent(onlineData.suppid));
+    set('onlineCountPreferred', onlineData.counts.preferred);
+    set('onlineCountNonPreferred', onlineData.counts.non_preferred);
+    renderOnlineStatusCounts();
+  }catch(e){
+    onlineData.counts = null;
+    set('onlineCountPreferred', null);
+    set('onlineCountNonPreferred', null);
+    console.error(e);
+  }
+}
+
+/* ---- Incomplete / Complete ---- */
+function renderOnlineStatusCounts(){
+  const group = onlineData.counts && (onlineData.pref === 'yes' ? onlineData.counts.preferred : onlineData.counts.non_preferred);
+  document.getElementById('onlineCountIncomplete').textContent = group ? (group.incomplete + ' products') : '—';
+  document.getElementById('onlineCountComplete').textContent = group ? (group.complete + ' products') : '—';
+}
+async function openOnlinePref(pref){
+  onlineData.pref = pref;
+  renderOnlineCrumbs('onlineCrumbs-status', 3);
+  document.getElementById('onlineStatusTitle').textContent = onlinePrefLabel();
+  document.getElementById('onlineCountIncomplete').textContent = 'Loading…';
+  document.getElementById('onlineCountComplete').textContent = 'Loading…';
+  showView('view-online-status');
+  if(onlineData.counts) renderOnlineStatusCounts();
+  await loadOnlineCounts();
+}
+
+/* ---- Product list ---- */
+async function openOnlineList(status){
+  onlineData.status = status;
+  onlineData.items = [];
+  renderOnlineCrumbs('onlineCrumbs-list', 4);
+  document.getElementById('onlineListTitle').textContent = onlineStatusLabel();
+  document.getElementById('onlineListSub').textContent = status === 'incomplete'
+    ? 'Tick Images, Description and Other Details for each product. Once all three are ticked it moves to the Complete List. Check All ticks all three at once.'
+    : 'Everything here has images, a description and other details done. Use Move to Incomplete if something needs redoing.';
+  document.getElementById('onlineListFilter').value = '';
+  document.getElementById('onlineListCount').textContent = '';
+  document.getElementById('onlineListBox').innerHTML = '<div class="loading">Loading…</div>';
+  showView('view-online-list');
+  try{
+    const data = await apiGet('stock/online-data/items/?suppid=' + encodeURIComponent(onlineData.suppid)
+      + '&preferred=' + onlineData.pref + '&status=' + status);
+    onlineData.items = data.items || [];
+    renderOnlineList();
+  }catch(e){
+    document.getElementById('onlineListBox').innerHTML = '<div class="loading" style="color:var(--danger)">Could not load products.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+function renderOnlineList(){
+  const box = document.getElementById('onlineListBox');
+  const complete = onlineData.status === 'complete';
+  const q = document.getElementById('onlineListFilter').value.trim().toLowerCase();
+  const all = onlineData.items;
+  const items = q ? all.filter(it => (it.name || '').toLowerCase().includes(q) || (it.barcodes || '').toLowerCase().includes(q)) : all;
+  document.getElementById('onlineListCount').textContent = q ? (items.length + ' of ' + all.length + ' products') : (all.length + ' products');
+  if(all.length === 0){
+    box.innerHTML = '<div class="empty-hint">' + (complete ? 'Nothing in the Complete List yet.' : 'Nothing left to do here. 🎉') + '</div>';
+    return;
+  }
+  if(items.length === 0){
+    box.innerHTML = '<div class="empty-hint">No products match that filter.</div>';
+    return;
+  }
+  const table = document.createElement('table');
+  table.className = 'finaltable odtable';
+  const cb = (it, field, checked, disabled) => disabled
+    ? (checked ? '<span class="odtick">&#10003;</span>' : '—')
+    : `<input type="checkbox" class="odcheck" ${checked ? 'checked' : ''} onchange="onOnlineCheck(${Number(it.stockid)}, '${field}', this)">`;
+  const head = complete
+    ? '<tr><th>Product</th><th class="odc">Images</th><th class="odc">Description</th><th class="odc">Other Details</th><th class="odc">Move Back</th></tr>'
+    : '<tr><th>Product</th><th class="odc">Images</th><th class="odc">Description</th><th class="odc">Other Details</th><th class="odc">Check All</th></tr>';
+  const rows = items.map(it => {
+    const nameCell = `<td><div class="odname">${escapeHtml(it.name)}</div>${it.barcodes ? `<div class="odbarcode">${escapeHtml(it.barcodes)}</div>` : ''}</td>`;
+    if(complete){
+      return `<tr data-stockid="${Number(it.stockid)}">${nameCell}
+        <td class="odc">${cb(it, 'images_done', it.images_done, true)}</td>
+        <td class="odc">${cb(it, 'description_done', it.description_done, true)}</td>
+        <td class="odc">${cb(it, 'other_done', it.other_done, true)}</td>
+        <td class="odc"><button class="btn-ghost" type="button" onclick="moveOnlineBack(${Number(it.stockid)}, this)">&#8617; Move to Incomplete</button></td>
+      </tr>`;
+    }
+    const allTicked = it.images_done && it.description_done && it.other_done;
+    return `<tr data-stockid="${Number(it.stockid)}">${nameCell}
+      <td class="odc">${cb(it, 'images_done', it.images_done, false)}</td>
+      <td class="odc">${cb(it, 'description_done', it.description_done, false)}</td>
+      <td class="odc">${cb(it, 'other_done', it.other_done, false)}</td>
+      <td class="odc"><input type="checkbox" class="odcheck" ${allTicked ? 'checked' : ''} onchange="onOnlineCheck(${Number(it.stockid)}, 'all', this)"></td>
+    </tr>`;
+  }).join('');
+  table.innerHTML = '<thead>' + head + '</thead><tbody>' + rows + '</tbody>';
+  box.innerHTML = '';
+  box.appendChild(table);
+}
+function adjustOnlineCounts(from, to){
+  // Keeps the Incomplete/Complete counts in step without a refetch
+  const group = onlineData.counts && (onlineData.pref === 'yes' ? onlineData.counts.preferred : onlineData.counts.non_preferred);
+  if(!group) return;
+  group[from] = Math.max(0, group[from] - 1);
+  group[to] += 1;
+}
+async function onOnlineCheck(stockid, field, inputEl){
+  const it = onlineData.items.find(x => x.stockid === stockid);
+  if(!it) return;
+  const checked = inputEl.checked;
+  const body = field === 'all'
+    ? { images_done: checked, description_done: checked, other_done: checked }
+    : { [field]: checked };
+  const row = inputEl.closest('tr');
+  if(row) row.classList.add('odsaving');
+  try{
+    const data = await apiPut('stock/online-data/items/' + stockid + '/', body);
+    const saved = data.item || {};
+    it.images_done = !!saved.images_done;
+    it.description_done = !!saved.description_done;
+    it.other_done = !!saved.other_done;
+    it.is_complete = !!saved.is_complete;
+    if(it.is_complete){
+      onlineData.items = onlineData.items.filter(x => x.stockid !== stockid);
+      adjustOnlineCounts('incomplete', 'complete');
+      toast(it.name + ' moved to Complete List');
+      renderOnlineList();
+    }else{
+      renderOnlineList();
+    }
+  }catch(e){
+    inputEl.checked = !checked; // revert
+    if(row) row.classList.remove('odsaving');
+    toast('Could not save — try again');
+    console.error(e);
+  }
+}
+async function moveOnlineBack(stockid, btn){
+  const it = onlineData.items.find(x => x.stockid === stockid);
+  if(!it) return;
+  if(btn) btn.disabled = true;
+  try{
+    await apiPost('stock/online-data/items/' + stockid + '/reopen/', {});
+    onlineData.items = onlineData.items.filter(x => x.stockid !== stockid);
+    adjustOnlineCounts('complete', 'incomplete');
+    toast(it.name + ' moved back to Incomplete List');
+    renderOnlineList();
+  }catch(e){
+    if(btn) btn.disabled = false;
+    toast('Could not move it back — try again');
+    console.error(e);
+  }
 }
 
 /* ============ RESTAURANT ORDERS ============ */
