@@ -7869,6 +7869,7 @@ const onlineData = {
   status: null,    // 'incomplete' | 'complete'
   items: [],
   counts: null,    // { preferred:{incomplete,complete}, non_preferred:{...} }
+  started: null,   // suppliers with progress, for the Select Supplier screen
   supplierDebounce: null
 };
 function onlinePrefLabel(){ return onlineData.pref === 'yes' ? 'Preferred List' : 'Non-Preferred List'; }
@@ -7906,15 +7907,52 @@ function openOnlineSupplierSelect(){
   renderOnlineCrumbs('onlineCrumbs-supplier', 1);
   showView('view-online-supplier');
   document.getElementById('onlineSupplierSearchInput').value = '';
-  document.getElementById('onlineSupplierResults').innerHTML = '<div class="empty-hint">Start typing a supplier name.</div>';
+  loadOnlineStartedSuppliers();
   setTimeout(() => document.getElementById('onlineSupplierSearchInput').focus(), 80);
+}
+/* Suppliers already worked on — shown whenever the search box is empty so
+   work can be picked straight back up. Fetched fresh each time the screen opens. */
+async function loadOnlineStartedSuppliers(){
+  const box = document.getElementById('onlineSupplierResults');
+  box.innerHTML = '<div class="loading">Loading…</div>';
+  try{
+    const data = await apiGet('stock/online-data/started/');
+    onlineData.started = data.items || [];
+  }catch(e){
+    onlineData.started = [];
+    box.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load suppliers you have started.</div>' + errDetailHtml(e);
+    console.error(e);
+    return;
+  }
+  // The person may have started typing while this loaded — don't overwrite their results
+  if(document.getElementById('onlineSupplierSearchInput').value.trim().length >= 2) return;
+  renderOnlineStartedSuppliers();
+}
+function renderOnlineStartedSuppliers(){
+  const box = document.getElementById('onlineSupplierResults');
+  const list = onlineData.started || [];
+  if(list.length === 0){
+    box.innerHTML = '<div class="empty-hint">Nothing started yet. Start typing a supplier name.</div>';
+    return;
+  }
+  box.innerHTML = '<div class="eyebrow" style="margin:4px 0 10px;">Started &mdash; continue where you left off</div>' + list.map(s => {
+    const left = Math.max(0, s.total - s.complete);
+    const bits = [s.complete + ' complete'];
+    if(s.partial) bits.push(s.partial + ' part-done');
+    bits.push(left + ' left');
+    return `
+      <div class="supplier-pick-row" onclick="chooseOnlineSupplier(${Number(s.suppid)}, ${jsArg(s.name)})">
+        <div><span class="spname">${escapeHtml(s.name)}</span></div>
+        <div class="spcost">${escapeHtml(bits.join(' · '))} of ${s.total}</div>
+      </div>`;
+  }).join('');
 }
 function onOnlineSupplierSearch(){
   clearTimeout(onlineData.supplierDebounce);
   const q = document.getElementById('onlineSupplierSearchInput').value.trim();
   const box = document.getElementById('onlineSupplierResults');
   if(q.length < 2){
-    box.innerHTML = '<div class="empty-hint">Start typing a supplier name.</div>';
+    if(onlineData.started) renderOnlineStartedSuppliers(); else loadOnlineStartedSuppliers();
     return;
   }
   box.innerHTML = '<div class="loading">Searching…</div>';
