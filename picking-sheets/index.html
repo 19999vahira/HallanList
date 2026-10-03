@@ -461,6 +461,16 @@
   .supplier-pick-row .spname{font-weight:600;font-size:14px;}
   .supplier-pick-row .spcost{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-dim);}
   .supplier-pick-row .spbadge{display:inline-block;font-size:10px;text-transform:uppercase;letter-spacing:.5px;background:var(--accent);color:#fff;padding:2px 7px;border-radius:20px;margin-left:8px;}
+  .recent-recv{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);}
+  .recent-recv .rr-title{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-dim);font-weight:600;margin-bottom:6px;}
+  .recent-recv .rr-list{max-height:170px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel);}
+  .recent-recv .rr-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);font-size:13px;}
+  .recent-recv .rr-row:last-child{border-bottom:none;}
+  .recent-recv .rr-main{min-width:0;}
+  .recent-recv .rr-supplier{font-weight:600;overflow:hidden;text-overflow:ellipsis;}
+  .recent-recv .rr-date{font-size:11px;color:var(--text-dim);}
+  .recent-recv .rr-qty{font-family:'JetBrains Mono',monospace;font-size:12px;white-space:nowrap;}
+  .recent-recv .rr-empty{padding:10px 12px;font-size:12px;color:var(--text-dim);}
   .retloc-cell{cursor:pointer;color:var(--accent-dim);text-decoration:underline dotted;}
   .retloc-cell.empty{color:var(--text-dim);}
   .retclose{position:absolute;top:8px;right:10px;font-size:15px;line-height:1;color:var(--text-dim);cursor:pointer;padding:4px 6px;border-radius:6px;}
@@ -3056,6 +3066,7 @@
     <h3 id="returnsPickProduct">Product</h3>
     <p class="modal-sub">Tap the supplier this is going back to.</p>
     <div id="returnsPickSupplierList"></div>
+    <div class="recent-recv" id="returnsPickRecentReceived" style="display:none;"></div>
     <div style="margin-top:10px;">
       <input type="text" id="returnsPickSupplierSearch" placeholder="Search a different supplier…" autocomplete="off"
         oninput="onReturnsPickSupplierSearch()" style="width:100%;padding:10px;margin-bottom:6px;">
@@ -12535,7 +12546,62 @@ function openReturnsSupplierPick(){
   document.getElementById('returnsPickSupplierSearch').value = '';
   document.getElementById('returnsPickSupplierSearchResults').innerHTML = '';
   renderReturnsPickSupplierList(p.suppliers || []);
+  loadReturnsRecentReceived(p.stockid);
   openModal('modalReturnsSupplierPick');
+}
+// ---- "Recently received from": last 12 months of goods-received lines for
+//      the product being returned (supplier, date posted, qty), newest first.
+//      Cached per stockid so tapping Back from the details screen doesn't
+//      refetch, and a token guards against a slow response for a previous
+//      product painting over the current one. ----
+const returnsRecentReceivedCache = {};
+let returnsRecentReceivedToken = 0;
+function formatReturnsReceivedDate(v){
+  if(!v) return '';
+  const d = new Date(v);
+  if(isNaN(d.getTime())) return String(v);
+  return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+}
+function renderReturnsRecentReceived(receipts){
+  const box = document.getElementById('returnsPickRecentReceived');
+  if(!box) return;
+  let body;
+  if(!receipts || !receipts.length){
+    body = '<div class="rr-list"><div class="rr-empty">Not received from any supplier in the last 12 months.</div></div>';
+  }else{
+    body = '<div class="rr-list">' + receipts.map(r => `
+      <div class="rr-row">
+        <div class="rr-main">
+          <div class="rr-supplier">${escapeHtml(r.supplier_name || 'Unknown supplier')}</div>
+          <div class="rr-date">${escapeHtml(formatReturnsReceivedDate(r.postdate))}${r.recnoteref ? ' · ' + escapeHtml(String(r.recnoteref)) : ''}</div>
+        </div>
+        <div class="rr-qty">Qty ${escapeHtml(String(Number(r.qty)))}</div>
+      </div>`).join('') + '</div>';
+  }
+  box.innerHTML = '<div class="rr-title">Recently received from (last 12 months)</div>' + body;
+  box.style.display = '';
+}
+async function loadReturnsRecentReceived(stockid){
+  const box = document.getElementById('returnsPickRecentReceived');
+  if(!box) return;
+  if(!stockid){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  const token = ++returnsRecentReceivedToken;
+  if(returnsRecentReceivedCache[stockid]){
+    renderReturnsRecentReceived(returnsRecentReceivedCache[stockid]);
+    return;
+  }
+  box.innerHTML = '<div class="rr-title">Recently received from (last 12 months)</div><div class="rr-list"><div class="rr-empty">Loading…</div></div>';
+  box.style.display = '';
+  try{
+    const data = await apiGet('returns/recent-receipts/' + encodeURIComponent(stockid) + '/');
+    if(token !== returnsRecentReceivedToken) return;
+    returnsRecentReceivedCache[stockid] = data.receipts || [];
+    renderReturnsRecentReceived(returnsRecentReceivedCache[stockid]);
+  }catch(e){
+    console.error(e);
+    if(token !== returnsRecentReceivedToken) return;
+    box.innerHTML = '<div class="rr-title">Recently received from (last 12 months)</div><div class="rr-list"><div class="rr-empty">Could not load receiving history.</div></div>';
+  }
 }
 function renderReturnsPickSupplierList(suppliers){
   const box = document.getElementById('returnsPickSupplierList');
