@@ -566,6 +566,15 @@
   table.odtable tr.odsaving{opacity:.55;pointer-events:none;}
   .odtick{color:var(--green);font-weight:700;font-size:16px;}
   .odcount{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-dim);}
+  .odweb{display:inline-block;margin-left:8px;padding:1px 8px;border-radius:999px;font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;vertical-align:middle;text-decoration:none;border:1px solid transparent;}
+  .odweb.publish{background:#e6f6ec;color:#17803d;border-color:#b7e3c6;}
+  .odweb.draft{background:#fff4dc;color:#a15c00;border-color:#f1d9a3;}
+  .odweb.pending,.odweb.future{background:#e8f0fe;color:#2b59c3;border-color:#bfd1f7;}
+  .odweb.private,.odweb.trash{background:#f0e9fb;color:#6a3fb5;border-color:#d8c8f1;}
+  .odweb.not_found{background:#fde8e8;color:#b42318;border-color:#f5bcbc;}
+  .odweb.unknown{background:#eef0f3;color:#667085;border-color:#d9dde3;}
+  .odfilterbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  .odfilterbar select.historysearch{width:auto;min-width:210px;cursor:pointer;}
 
   /* ---- unpicked / shortfall report ---- */
   .unpicked-select{
@@ -1860,10 +1869,17 @@
       <p id="onlineListSub"></p>
     </div>
     <div class="actionbar">
-      <input type="text" id="onlineListFilter" class="historysearch" style="max-width:420px;"
-             placeholder="Filter by name or barcode…" oninput="renderOnlineList()" autocomplete="off">
+      <div class="odfilterbar">
+        <input type="text" id="onlineListFilter" class="historysearch" style="max-width:340px;"
+               placeholder="Filter by name or barcode…" oninput="renderOnlineList()" autocomplete="off">
+        <select id="onlineWebFilter" class="historysearch" onchange="onOnlineWebFilterChange()" title="Filter by whether the product is live on the website">
+          <option value="all">Website: All</option>
+        </select>
+        <button class="btn-ghost" type="button" id="onlineWebRefreshBtn" onclick="refreshOnlineWeb()" title="Re-read product statuses from the WooCommerce website">&#8635; Refresh website status</button>
+      </div>
       <span class="odcount" id="onlineListCount"></span>
     </div>
+    <div id="onlineWebNote" class="odcount" style="margin:-8px 0 12px;"></div>
     <div id="onlineListBox"><div class="loading">Loading…</div></div>
   </div>
 
@@ -7882,8 +7898,15 @@ const onlineData = {
   items: [],
   counts: null,    // { preferred:{incomplete,complete}, non_preferred:{...} }
   started: null,   // suppliers with progress, for the Select Supplier screen
+  web: null,       // { configured, ok, error, total, fetched_at } from WooCommerce
+  webFilter: 'all',// 'all' | WooCommerce status | 'not_found'
   supplierDebounce: null
 };
+const ONLINE_WEB_LABELS = {
+  publish:'Published', draft:'Draft', pending:'Pending review', private:'Private',
+  future:'Scheduled', trash:'Trashed', not_found:'Not on website', unknown:'Unknown'
+};
+function onlineWebLabel(st){ return ONLINE_WEB_LABELS[st] || st; }
 function onlinePrefLabel(){ return onlineData.pref === 'yes' ? 'Preferred List' : 'Non-Preferred List'; }
 function onlineStatusLabel(){ return onlineData.status === 'complete' ? 'Complete List' : 'Incomplete List'; }
 
@@ -8046,12 +8069,18 @@ async function openOnlineList(status){
     : 'Everything here has images, a description and other details done. Use Move to Incomplete if something needs redoing.';
   document.getElementById('onlineListFilter').value = '';
   document.getElementById('onlineListCount').textContent = '';
+  document.getElementById('onlineWebNote').textContent = '';
+  onlineData.webFilter = 'all';
   document.getElementById('onlineListBox').innerHTML = '<div class="loading">Loading…</div>';
   showView('view-online-list');
+  await loadOnlineItems(false);
+}
+async function loadOnlineItems(forceWeb){
   try{
     const data = await apiGet('stock/online-data/items/?suppid=' + encodeURIComponent(onlineData.suppid)
-      + '&preferred=' + onlineData.pref + '&status=' + status);
+      + '&preferred=' + onlineData.pref + '&status=' + onlineData.status + (forceWeb ? '&refresh=1' : ''));
     onlineData.items = data.items || [];
+    onlineData.web = data.web || null;
     renderOnlineList();
   }catch(e){
     document.getElementById('onlineListBox').innerHTML = '<div class="loading" style="color:var(--danger)">Could not load products.</div>' + errDetailHtml(e);
@@ -8063,8 +8092,13 @@ function renderOnlineList(){
   const complete = onlineData.status === 'complete';
   const q = document.getElementById('onlineListFilter').value.trim().toLowerCase();
   const all = onlineData.items;
-  const items = q ? all.filter(it => (it.name || '').toLowerCase().includes(q) || (it.barcodes || '').toLowerCase().includes(q)) : all;
-  document.getElementById('onlineListCount').textContent = q ? (items.length + ' of ' + all.length + ' products') : (all.length + ' products');
+  updateOnlineWebControls(all);
+  const wf = onlineData.webFilter;
+  const items = all.filter(it =>
+    (!q || (it.name || '').toLowerCase().includes(q) || (it.barcodes || '').toLowerCase().includes(q)) &&
+    (wf === 'all' || it.web_status === wf));
+  const filtered = !!q || wf !== 'all';
+  document.getElementById('onlineListCount').textContent = filtered ? (items.length + ' of ' + all.length + ' products') : (all.length + ' products');
   if(all.length === 0){
     box.innerHTML = '<div class="empty-hint">' + (complete ? 'Nothing in the Complete List yet.' : 'Nothing left to do here. 🎉') + '</div>';
     return;
@@ -8082,7 +8116,12 @@ function renderOnlineList(){
     ? '<tr><th>Product</th><th class="odc">Images</th><th class="odc">Description</th><th class="odc">Other Details</th><th class="odc">Move Back</th></tr>'
     : '<tr><th>Product</th><th class="odc">Images</th><th class="odc">Description</th><th class="odc">Other Details</th><th class="odc">Check All</th></tr>';
   const rows = items.map(it => {
-    const nameCell = `<td><div class="odname">${escapeHtml(it.name)}</div>${it.barcodes ? `<div class="odbarcode">${escapeHtml(it.barcodes)}</div>` : ''}</td>`;
+    const webBadge = onlineData.web && onlineData.web.ok
+      ? (it.web_url && it.web_status !== 'not_found'
+          ? `<a class="odweb ${escapeHtml(it.web_status)}" href="${escapeHtml(it.web_url)}" target="_blank" rel="noopener" title="Open on website">${escapeHtml(onlineWebLabel(it.web_status))}</a>`
+          : `<span class="odweb ${escapeHtml(it.web_status)}">${escapeHtml(onlineWebLabel(it.web_status))}</span>`)
+      : '';
+    const nameCell = `<td><div class="odname">${escapeHtml(it.name)}${webBadge}</div>${it.barcodes ? `<div class="odbarcode">${escapeHtml(it.barcodes)}</div>` : ''}</td>`;
     if(complete){
       return `<tr data-stockid="${Number(it.stockid)}">${nameCell}
         <td class="odc">${cb(it, 'images_done', it.images_done, true)}</td>
@@ -8102,6 +8141,50 @@ function renderOnlineList(){
   table.innerHTML = '<thead>' + head + '</thead><tbody>' + rows + '</tbody>';
   box.innerHTML = '';
   box.appendChild(table);
+}
+/* ---- Website (WooCommerce) status: filter dropdown, note, refresh ---- */
+function updateOnlineWebControls(all){
+  const sel = document.getElementById('onlineWebFilter');
+  const note = document.getElementById('onlineWebNote');
+  const btn = document.getElementById('onlineWebRefreshBtn');
+  const web = onlineData.web;
+  const ok = !!(web && web.ok);
+  if(!ok){
+    sel.innerHTML = '<option value="all">Website: not connected</option>';
+    sel.disabled = true;
+    onlineData.webFilter = 'all';
+    btn.disabled = !(web && web.configured);
+    note.style.color = 'var(--danger)';
+    note.textContent = !web ? ''
+      : !web.configured ? 'Website status is off — add WC_SITE_URL, WC_CONSUMER_KEY and WC_CONSUMER_SECRET on Render.'
+      : ('Could not read the website: ' + (web.error || 'unknown error'));
+    return;
+  }
+  const counts = {};
+  all.forEach(it => { counts[it.web_status] = (counts[it.web_status] || 0) + 1; });
+  const order = ['publish','draft','pending','private','future','trash','not_found','unknown'];
+  const keys = order.filter(k => counts[k]).concat(Object.keys(counts).filter(k => !order.includes(k)));
+  let html = '<option value="all">Website: All (' + all.length + ')</option>';
+  keys.forEach(k => { html += '<option value="' + escapeHtml(k) + '">' + escapeHtml(onlineWebLabel(k)) + ' (' + counts[k] + ')</option>'; });
+  if(onlineData.webFilter !== 'all' && !counts[onlineData.webFilter]) onlineData.webFilter = 'all';
+  sel.innerHTML = html;
+  sel.value = onlineData.webFilter;
+  sel.disabled = false;
+  btn.disabled = false;
+  note.style.color = '';
+  const when = web.fetched_at ? new Date(web.fetched_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
+  note.textContent = 'Website status checked at ' + when + ' · ' + web.total + ' products on the website';
+}
+function onOnlineWebFilterChange(){
+  onlineData.webFilter = document.getElementById('onlineWebFilter').value;
+  renderOnlineList();
+}
+async function refreshOnlineWeb(){
+  const btn = document.getElementById('onlineWebRefreshBtn');
+  const old = btn.innerHTML;
+  btn.disabled = true; btn.textContent = 'Refreshing…';
+  try{ await loadOnlineItems(true); toast('Website status refreshed'); }
+  finally{ btn.innerHTML = old; btn.disabled = false; }
 }
 function adjustOnlineCounts(from, to){
   // Keeps the Incomplete/Complete counts in step without a refetch
