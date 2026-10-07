@@ -2632,6 +2632,7 @@
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <button class="btn-ghost" id="returnsCloseListBtn" style="display:none;" onclick="closeReturnsCurrentList()">🔒 Close List</button>
         <button class="btn-ghost" id="returnsReopenListBtn" style="display:none;" onclick="reopenReturnsCurrentList()">Reopen List</button>
+        <button class="btn-ghost" id="returnsEditLockBtn" style="display:none;" onclick="toggleReturnsEditLock()">🔒 Editing locked — tap to edit</button>
         <button class="btn-ghost" onclick="promptReturnsAction('list','print')">Print</button>
         <button class="btn-ghost" onclick="promptReturnsAction('list','pdf')">Download PDF</button>
         <button class="btn-amber" id="returnsItemsReturnedBtn" style="display:none;" onclick="markReturnsItemsReturned()">Items Returned</button>
@@ -12354,6 +12355,7 @@ let currentReturnsSublistStatus = null; // 'CLOSED_LIST' | 'AWAITING_CREDIT' | '
 let currentReturnsList = null;
 let currentReturnsItems = [];
 let returnsEditingItemId = null;
+let returnsEditUnlocked = false; // Closed / Awaiting Credit / Returned lists stay read-only until "Edit" is switched on at the top
 let returnsBarcodeDebounce = null;
 let returnsSupplierSearchDebounce = null;
 let returnsPickSupplierSearchDebounce = null;
@@ -13592,6 +13594,8 @@ async function openReturnsListDetail(returnId){
   document.getElementById('returnsCreditNoteBtn').style.display = 'none';
   document.getElementById('returnsCloseListBtn').style.display = 'none';
   document.getElementById('returnsReopenListBtn').style.display = 'none';
+  document.getElementById('returnsEditLockBtn').style.display = 'none';
+  returnsEditUnlocked = false;   // every list opens locked
   document.getElementById('returnsSignoffBox').innerHTML = '';
   document.getElementById('returnsDamagePanel').innerHTML = '';
   returnsDamageImages = [];
@@ -13612,6 +13616,7 @@ async function openReturnsListDetail(returnId){
     document.getElementById('returnsReopenListBtn').style.display = currentReturnsList.status === 'CLOSED_LIST' ? 'inline-block' : 'none';
     document.getElementById('returnsItemsReturnedBtn').style.display = currentReturnsList.status === 'CLOSED_LIST' ? 'inline-block' : 'none';
     document.getElementById('returnsCreditNoteBtn').style.display = currentReturnsList.status === 'AWAITING_CREDIT' ? 'inline-block' : 'none';
+    updateReturnsEditLockBtn();
     renderReturnsDetailTable();
     renderReturnsSignoff();
   }catch(e){
@@ -13637,7 +13642,10 @@ function returnsItemsTotals(items){
 }
 function renderReturnsDetailTable(){
   const table = document.getElementById('returnsDetailTable');
-  const editable = currentReturnsList.status === 'PENDING';
+  // PENDING lists are always editable. Closed / Awaiting Credit / Returned lists
+  // only become editable once the lock button at the top has been switched on.
+  const isPending = currentReturnsList.status === 'PENDING';
+  const editable = isPending || returnsEditUnlocked;
   if(currentReturnsItems.length === 0){
     table.innerHTML = '<caption class="empty-hint">No items yet.</caption>';
     return;
@@ -13652,17 +13660,18 @@ function renderReturnsDetailTable(){
       <td>${escapeHtml(it.return_reason || '—')}</td>
       <td class="retloc-cell loc-col${it.location ? '' : ' empty'}" ${editable ? `onclick="openReturnsLocationModal(${it.item_id})"` : ''}>${it.location ? escapeHtml(it.location) : (editable ? 'Tap to add' : '—')}</td>
       <td class="no-print">${returnsPhotoBadge(it, 'currentReturnsItems', 'renderReturnsDetailTable')}</td>
-      ${editable ? `<td class="no-print" style="white-space:nowrap;">
-          <a href="#" class="minibtn minibtn-charity" onclick="event.preventDefault(); moveReturnsItem(${it.item_id}, 'CHARITY')">🎁 Charity</a>
+      <td class="no-print" style="white-space:nowrap;">
+          ${!isPending ? `<a href="#" class="minibtn minibtn-undo" title="Send this item back to Pending for Return" onclick="event.preventDefault(); sendReturnsItemToPending(${it.item_id})">⏳ Pending</a>` : ''}
+          ${editable ? `<a href="#" class="minibtn minibtn-charity" onclick="event.preventDefault(); moveReturnsItem(${it.item_id}, 'CHARITY')">🎁 Charity</a>
           <a href="#" class="minibtn minibtn-bin" onclick="event.preventDefault(); moveReturnsItem(${it.item_id}, 'BIN')">🗑️ Bin</a>
-          <a href="#" class="minibtn minibtn-remove" onclick="event.preventDefault(); removeReturnsItem(${it.item_id})">✕</a>
-        </td>` : ''}
+          <a href="#" class="minibtn minibtn-remove" onclick="event.preventDefault(); removeReturnsItem(${it.item_id})">✕</a>` : ''}
+        </td>
       <td class="checkbox-col"><span class="printbox"></span></td>
     </tr>
   `).join('');
   const totals = returnsItemsTotals(currentReturnsItems);
   table.innerHTML = `
-    <thead><tr><th>Item</th><th class="qtycell">Cost Price</th><th class="qtycell">Qty</th><th class="qtycell">VAT</th><th class="qtycell">Total</th><th>Reason</th><th class="loc-col">Location</th><th class="no-print">Photos</th>${editable ? '<th class="no-print"></th>' : ''}<th class="checkbox-col"></th></tr></thead>
+    <thead><tr><th>Item</th><th class="qtycell">Cost Price</th><th class="qtycell">Qty</th><th class="qtycell">VAT</th><th class="qtycell">Total</th><th>Reason</th><th class="loc-col">Location</th><th class="no-print">Photos</th><th class="no-print"></th><th class="checkbox-col"></th></tr></thead>
     <tbody>${rows}</tbody>
     <tfoot><tr>
       <td style="font-weight:700;">Total</td>
@@ -13672,7 +13681,7 @@ function renderReturnsDetailTable(){
       <td class="qtycell" style="font-weight:700;">${returnsMoney(totals.gross)}</td>
       <td></td><td class="loc-col"></td>
       <td class="no-print"></td>
-      ${editable ? '<td class="no-print"></td>' : ''}
+      <td class="no-print"></td>
       <td class="checkbox-col"></td>
     </tr></tfoot>
   `;
@@ -13960,6 +13969,48 @@ async function moveReturnsItem(itemId, destination){
     toast('Moved to ' + (destination === 'CHARITY' ? 'Charity List' : 'Bin List'));
   }catch(e){
     toast('Could not move item: ' + (e && e.message ? e.message : 'unknown error'));
+    console.error(e);
+  }
+}
+
+/* ---- Edit lock for Closed Lists / Awaiting Credit Note / Returned Goods.
+        These open locked; the button at the top switches editing on or off. ---- */
+function updateReturnsEditLockBtn(){
+  const b = document.getElementById('returnsEditLockBtn');
+  if(!b) return;
+  const show = !!currentReturnsList && currentReturnsList.status !== 'PENDING';
+  b.style.display = show ? 'inline-block' : 'none';
+  b.className = returnsEditUnlocked ? 'btn-amber' : 'btn-ghost';
+  b.textContent = returnsEditUnlocked ? '🔓 Editing ON — tap to lock' : '🔒 Editing locked — tap to edit';
+}
+function toggleReturnsEditLock(){
+  if(!currentReturnsList || currentReturnsList.status === 'PENDING') return;
+  returnsEditUnlocked = !returnsEditUnlocked;
+  updateReturnsEditLockBtn();
+  renderReturnsDetailTable();
+}
+// ---- Sends one item from a Closed / Awaiting Credit / Returned list back to
+//      ⏳ Pending for Return (the supplier's open list; created if none is open). ----
+async function sendReturnsItemToPending(itemId){
+  if(!currentReturnsList || currentReturnsList.status === 'PENDING') return;
+  const item = currentReturnsItems.find(i => i.item_id === itemId);
+  if(!item) return;
+  if(!confirm('Send "' + item.item_name + '" back to Pending for Return? It will leave this list.')) return;
+  try{
+    const r = await apiPost('returns/items/' + itemId + '/send-to-pending/', {
+      created_by: localStorage.getItem('hallan_staff_name') || null
+    });
+    currentReturnsItems = currentReturnsItems.filter(i => i.item_id !== itemId);
+    toast('Sent back to Pending for Return');
+    if(r && r.list_archived){
+      // that was the last item — the now-empty list is gone, so go back to the supplier screen
+      backToReturnsSupplierDetail();
+      return;
+    }
+    document.getElementById('returnsDetailCount').textContent = currentReturnsItems.length + ' item' + (currentReturnsItems.length===1?'':'s');
+    renderReturnsDetailTable();
+  }catch(e){
+    toast('Could not send back to pending: ' + (e && e.message ? e.message : 'unknown error'));
     console.error(e);
   }
 }
