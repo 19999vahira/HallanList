@@ -461,6 +461,10 @@
   .supplier-pick-row .spname{font-weight:600;font-size:14px;}
   .supplier-pick-row .spcost{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-dim);}
   .supplier-pick-row .spbadge{display:inline-block;font-size:10px;text-transform:uppercase;letter-spacing:.5px;background:var(--accent);color:#fff;padding:2px 7px;border-radius:20px;margin-left:8px;}
+  .pick-stock{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 12px;padding:9px 14px;border-radius:8px;background:var(--panel);border:1px solid var(--line);font-size:13px;}
+  .pick-stock .ps-label{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-dim);font-weight:600;}
+  .pick-stock .ps-val{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;}
+  .pick-stock .ps-val.zero{color:var(--danger);}
   .recent-recv{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);}
   .recent-recv .rr-title{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-dim);font-weight:600;margin-bottom:6px;}
   .recent-recv .rr-list{max-height:170px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel);}
@@ -3082,6 +3086,7 @@
   <div class="modal" style="width:440px;">
     <h3 id="returnsPickProduct">Product</h3>
     <p class="modal-sub">Tap the supplier this is going back to.</p>
+    <div class="pick-stock" id="returnsPickStock" style="display:none;"></div>
     <div id="returnsPickSupplierList"></div>
     <div class="recent-recv" id="returnsPickRecentReceived" style="display:none;"></div>
     <div style="margin-top:10px;">
@@ -12527,7 +12532,7 @@ async function pickReturnsNameSearchResult(it){
   returnsScanBusy = true;
   try{
     const data = await apiGet('returns/stock-suppliers/' + it.stockid + '/');
-    returnsScanFound({ stockid: it.stockid, name: it.name, barcode: null, suppliers: data.suppliers || [], default_vat: data.default_vat });
+    returnsScanFound({ stockid: it.stockid, name: it.name, barcode: null, suppliers: data.suppliers || [], default_vat: data.default_vat, quantity: data.quantity });
   }catch(e){
     console.error(e);
     // Still let them carry on and pick a supplier manually even if this failed.
@@ -12625,9 +12630,20 @@ function returnsAdvanceScan(){
   if(returnsScanQueue.length){ processReturnsScanQueue(); }
   else { openReturnsScannerModal(); }
 }
+function renderReturnsPickStock(qty){
+  const box = document.getElementById('returnsPickStock');
+  if(!box) return;
+  if(qty === null || qty === undefined || qty === '' || isNaN(Number(qty))){
+    box.style.display = 'none'; box.innerHTML = ''; return;
+  }
+  const n = Number(qty);
+  box.innerHTML = '<span class="ps-label">Stock available</span><span class="ps-val' + (n <= 0 ? ' zero' : '') + '">' + escapeHtml(String(n)) + '</span>';
+  box.style.display = '';
+}
 function openReturnsSupplierPick(){
   const p = returnsPendingProduct;
   document.getElementById('returnsPickProduct').textContent = p.name;
+  renderReturnsPickStock(p.quantity);
   document.getElementById('returnsPickSupplierSearch').value = '';
   document.getElementById('returnsPickSupplierSearchResults').innerHTML = '';
   renderReturnsPickSupplierList(p.suppliers || []);
@@ -13189,10 +13205,12 @@ async function pickReturnsAdjustment(adjId){
   returnsAdjustBusy = true;
   let suppliers = [];
   let defaultVat = null;
+  let stockQty = null;
   try{
     const data = await apiGet('returns/stock-suppliers/' + a.stockid + '/');
     suppliers = data.suppliers || [];
     defaultVat = data.default_vat;
+    stockQty = data.quantity;
   }catch(e){
     // Still let them carry on and search for a supplier manually.
     console.error(e);
@@ -13204,7 +13222,7 @@ async function pickReturnsAdjustment(adjId){
     qty: Math.abs(Number(a.adjust_qty)) || 1,
     reason: a.reason || ''
   };
-  returnsPendingProduct = { stockid: a.stockid, name: a.stock_name, barcode: null, suppliers, default_vat: defaultVat };
+  returnsPendingProduct = { stockid: a.stockid, name: a.stock_name, barcode: null, suppliers, default_vat: defaultVat, quantity: stockQty };
   openReturnsSupplierPick();
 }
 async function dismissReturnsAdjustment(adjId){
@@ -13321,11 +13339,13 @@ async function chooseDamageReturnToSupplier(){
   returnsWarehouseDamageBusy = true;
   let suppliers = [];
   let defaultVat = null;
+  let stockQty = null;
   let photos = [];
   try{
     const data = await apiGet('returns/stock-suppliers/' + it.stockid + '/');
     suppliers = data.suppliers || [];
     defaultVat = data.default_vat;
+    stockQty = data.quantity;
   }catch(e){
     console.error(e);
     toast('Could not load this product’s suppliers — search for one instead');
@@ -13344,7 +13364,7 @@ async function chooseDamageReturnToSupplier(){
     location: it.location || '',
     photos
   };
-  returnsPendingProduct = { stockid: it.stockid, name: it.item_name, barcode: it.barcode || null, suppliers, default_vat: defaultVat };
+  returnsPendingProduct = { stockid: it.stockid, name: it.item_name, barcode: it.barcode || null, suppliers, default_vat: defaultVat, quantity: stockQty };
   returnsDamageChoiceItem = null;
   openReturnsSupplierPick();
 }
@@ -14481,36 +14501,67 @@ function promptReturnsAction(target, type){
 }
 function chooseReturnsLocationOption(includeLocation){
   closeModal('modalReturnsPdfChoice');
+  // Print and Download PDF now build the very same jsPDF document, so a
+  // printed copy is identical to the downloaded PDF (no on-screen names /
+  // sign-off inputs leaking into the print).
+  const doc = returnsActionTarget === 'list'
+    ? buildReturnsListPDFDoc(includeLocation)
+    : buildReturnsDisposalPDFDoc(returnsActionTarget, includeLocation);
+  if(!doc) return;
   if(returnsActionType === 'print'){
-    const tableId = returnsActionTarget === 'list' ? 'returnsDetailTable' : 'returnsDisposalTable';
-    const table = document.getElementById(tableId);
-    if(!table) return;
-    table.classList.toggle('hide-location', !includeLocation);
-    window.print();
-    // window.print() blocks until the print dialog is dismissed on desktop
-    // browsers, so by the time this line runs it's safe to put the column
-    // back for normal on-screen viewing.
-    table.classList.remove('hide-location');
+    printReturnsPDFDoc(doc);
   } else if(returnsActionTarget === 'list'){
-    downloadReturnsListPDF(includeLocation);
+    doc.save('return-' + currentReturnsList.supplier_name.replace(/[^a-z0-9]+/gi,'-') + '-' + new Date().toISOString().slice(0,10) + '.pdf');
   } else {
-    downloadReturnsDisposalPDF(returnsActionTarget, includeLocation);
+    doc.save((returnsActionTarget === 'CHARITY' ? 'charity-list-' : 'bin-list-') + new Date().toISOString().slice(0,10) + '.pdf');
   }
 }
+function printReturnsPDFDoc(doc){
+  try{
+    const blobUrl = doc.output('bloburl');
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+    iframe.src = blobUrl;
+    document.body.appendChild(iframe);
+    iframe.onload = function(){
+      setTimeout(()=>{
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      }, 250);
+    };
+    setTimeout(()=>{ if(iframe.parentNode) iframe.parentNode.removeChild(iframe); }, 120000);
+  }catch(e){
+    toast('Could not open print dialog');
+    console.error(e);
+  }
+}
+// Big "RETURNS" banner at the very top of every returns document.
+function returnsPdfBanner(doc){
+  doc.setFont(undefined, 'bold');
+  doc.setFontSize(30);
+  doc.setTextColor(20);
+  doc.text('RETURNS', 14, 20);
+  doc.setFont(undefined, 'normal');
+  doc.setDrawColor(30);
+  doc.setLineWidth(0.6);
+  doc.line(14, 24, 196, 24);
+  doc.setLineWidth(0.2);
+}
 /* ---- PDF: Hallan Cash & Carry header, supplier name, date printed, items with cost price + total ---- */
-function downloadReturnsListPDF(includeLocation){
-  if(!currentReturnsList) return;
+function buildReturnsListPDFDoc(includeLocation){
+  if(!currentReturnsList) return null;
   try{
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text('Hallan Cash & Carry — Supplier Return', 14, 18);
-    doc.setFontSize(11);
+    returnsPdfBanner(doc);
+    doc.setFontSize(14);
     doc.setTextColor(20);
-    doc.text('Supplier: ' + currentReturnsList.supplier_name, 14, 27);
+    doc.text('Hallan Cash & Carry — Supplier Return', 14, 33);
+    doc.setFontSize(11);
+    doc.text('Supplier: ' + currentReturnsList.supplier_name, 14, 41);
     doc.setFontSize(10);
     doc.setTextColor(120);
-    doc.text('Date list printed: ' + new Date().toLocaleDateString('en-GB'), 14, 33);
+    doc.text('Date list printed: ' + new Date().toLocaleDateString('en-GB'), 14, 47);
     // Blank checkbox column last, so a printed copy can be ticked off by hand.
     const head = ['Item', 'Cost Price', 'Qty', 'VAT', 'Total', 'Reason'];
     if(includeLocation) head.push('Location');
@@ -14537,7 +14588,7 @@ function downloadReturnsListPDF(includeLocation){
     totalRow[4] = returnsMoney(totals.gross);
     rows.push(totalRow);
     doc.autoTable({
-      startY: 39,
+      startY: 53,
       head: [head],
       body: rows,
       theme: 'grid',
@@ -14597,23 +14648,30 @@ function downloadReturnsListPDF(includeLocation){
     }
     doc.setDrawColor(120);
     doc.line(46, y + 3, 130, y + 3);
-    doc.save('return-' + currentReturnsList.supplier_name.replace(/[^a-z0-9]+/gi,'-') + '-' + new Date().toISOString().slice(0,10) + '.pdf');
+    return doc;
   }catch(e){
     toast('Could not generate PDF');
     console.error(e);
+    return null;
   }
 }
-function downloadReturnsDisposalPDF(type, includeLocation){
-  if(!currentReturnsDisposalItems) return;
+function downloadReturnsListPDF(includeLocation){
+  const doc = buildReturnsListPDFDoc(includeLocation);
+  if(doc) doc.save('return-' + currentReturnsList.supplier_name.replace(/[^a-z0-9]+/gi,'-') + '-' + new Date().toISOString().slice(0,10) + '.pdf');
+}
+function buildReturnsDisposalPDFDoc(type, includeLocation){
+  if(!currentReturnsDisposalItems) return null;
   try{
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
     const label = type === 'CHARITY' ? 'Charity List' : 'Bin List';
-    doc.setFontSize(16);
-    doc.text('Hallan Cash & Carry — ' + label, 14, 18);
+    returnsPdfBanner(doc);
+    doc.setFontSize(14);
+    doc.setTextColor(20);
+    doc.text('Hallan Cash & Carry — ' + label, 14, 33);
     doc.setFontSize(10);
     doc.setTextColor(120);
-    doc.text('Date list printed: ' + new Date().toLocaleDateString('en-GB'), 14, 27);
+    doc.text('Date list printed: ' + new Date().toLocaleDateString('en-GB'), 14, 41);
     const head = ['Item', 'Supplier', 'Cost Price', 'Qty', 'VAT', 'Total'];
     if(includeLocation) head.push('Location');
     const rows = currentReturnsDisposalItems.map(it => {
@@ -14636,7 +14694,7 @@ function downloadReturnsDisposalPDF(type, includeLocation){
     totalRow[5] = returnsMoney(totals.gross);
     rows.push(totalRow);
     doc.autoTable({
-      startY: 33,
+      startY: 47,
       head: [head],
       body: rows,
       theme: 'grid',
@@ -14644,11 +14702,16 @@ function downloadReturnsDisposalPDF(type, includeLocation){
       styles: { fontSize: 9 },
       margin: { left: 14, right: 14 }
     });
-    doc.save((type === 'CHARITY' ? 'charity-list-' : 'bin-list-') + new Date().toISOString().slice(0,10) + '.pdf');
+    return doc;
   }catch(e){
     toast('Could not generate PDF');
     console.error(e);
+    return null;
   }
+}
+function downloadReturnsDisposalPDF(type, includeLocation){
+  const doc = buildReturnsDisposalPDFDoc(type, includeLocation);
+  if(doc) doc.save((type === 'CHARITY' ? 'charity-list-' : 'bin-list-') + new Date().toISOString().slice(0,10) + '.pdf');
 }
 
 function openCreatedInvoiceMatchStep(){
