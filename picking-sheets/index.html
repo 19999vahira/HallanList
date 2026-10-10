@@ -2752,6 +2752,7 @@
       <span class="mono" id="invoiceDetailCount" style="color:var(--text-dim);font-size:12px;"></span>
       <div style="display:flex;gap:10px;">
         <button class="btn-ghost" onclick="openInvoiceAutomatedModal()">🤖 Automated Check</button>
+        <button class="btn-ghost" onclick="scOpenSaved()">📂 Saved Supplier Check</button>
         <button class="btn-ghost" onclick="openInvoiceExportModal('csv', 'detail')">Download CSV</button>
         <button class="btn-ghost" onclick="openInvoiceExportModal('excel', 'detail')">Download Excel</button>
         <button class="btn-amber" onclick="openInvoiceExportModal('pdf', 'detail')">Download PDF</button>
@@ -2772,6 +2773,11 @@
       <div class="eyebrow" id="scEyebrow">Supplier</div>
       <h2>Supplier Invoice Check</h2>
       <p id="scSub"></p>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+      <button class="btn-ghost" onclick="scSave(false)">💾 Save</button>
+      <button class="btn-ghost" onclick="scRefresh()">🔄 Refresh from system</button>
+      <span id="scSaveStatus" style="font-size:12.5px;color:var(--text-dim);"></span>
     </div>
     <div class="sctabs" id="scTabs"></div>
     <div id="scBody"></div>
@@ -12094,6 +12100,12 @@ async function runInvoiceSheetCheck(){
       results.innerHTML = '<div class="empty-hint">No product lines found after skipping the first ' + rule.skipRows + ' lines. Check these are the right files for ' + escapeHtml(rule.label) + '.</div>';
       return;
     }
+    try{
+      const existing = await apiGet(scCheckUrl());
+      if(existing && existing.saved && !confirm('A saved supplier check already exists for this note. Replace it with this new one?')){
+        progress.style.display = 'none'; return;
+      }
+    }catch(e){ console.error('Could not check for an existing saved check', e); }
     const invLines = scMergeInvoiceLines(all);
     const m = scBuildMatches(invoiceItemAdjust, invLines, rule);
     m.pairs.forEach(p => {
@@ -12115,6 +12127,7 @@ async function runInvoiceSheetCheck(){
     progress.style.display = 'none';
     closeModal('modalInvoiceAutomated');
     openSupplierCheckView();
+    scSave(true);
   }catch(e){
     progress.style.display = 'none';
     results.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not read those files: ' + escapeHtml(e.message || '') + '</div>';
@@ -12161,6 +12174,7 @@ function scRender(){
   if(scState.tab === 'matched') scRenderMatched(body);
   else if(scState.tab === 'other') scRenderOther(body);
   else scRenderFinal(body);
+  scQueueSave();
 }
 
 
@@ -12213,28 +12227,165 @@ function scPriceMismatch(p){
   const sc = scSysCost(invoiceItemAdjust[p.sysIdx]);
   return sc === null || Math.abs(p.newCost - sc) > 0.004;
 }
-async function scRecheckPrices(){
-  if(scState.priceFilter){ scState.priceFilter = false; scRender(); return; }
-  // after an Update Prices, pull the note's lines again so the system side is current
-  if(scState.updateSent){
-    try{
-      const data = await apiGet('invoices/notes/' + currentInvoiceNote.suppid + '/' + encodeURIComponent(currentInvoiceNote.recnoteid) + '/items/');
-      const items = data.items || [];
-      if(items.length === invoiceItemAdjust.length && items.every((it, i) => it.stock_name === invoiceItemAdjust[i].stock_name)){
-        const f2 = v => (v !== null && v !== undefined) ? Number(v).toFixed(2) : '';
-        items.forEach((it, i) => {
-          const r = invoiceItemAdjust[i];
-          r.cost_price = f2(it.cost_price); r.retail_price = f2(it.retail_price); r.online_price = f2(it.online_price);
-          r.net_value = f2(it.net_value); r.vat_value = f2(it.vat_value);
-          r.pack_size = it.pack_size !== null && it.pack_size !== undefined ? String(it.pack_size) : '';
-        });
-      }else toast('System lines changed — compared with the data already loaded');
-    }catch(e){ console.error(e); toast('Could not refresh from the system — comparing with what is loaded'); }
-  }
-  scState.priceFilter = true;
+function scTogglePriceFilter(){
+  scState.priceFilter = !scState.priceFilter;
   scRender();
-  const n = scState.pairs.filter(p => scActive(p) && scPriceMismatch(p)).length;
-  toast(n === 0 ? 'All ticked prices match the system' : n + ' price(s) do not match');
+}
+
+/* ---- persistence: Save / reopen / Refresh ---- */
+function scSysId(idx, counts){
+  const s = invoiceItemAdjust[idx];
+  const base = String(s.stockid ?? '') + '|' + (s.stock_name || '');
+  counts[base] = (counts[base] || 0) + 1;
+  return base + '#' + counts[base]; // #n = nth line with the same product (separate batches)
+}
+function scSysIdList(){
+  const counts = {};
+  return invoiceItemAdjust.map((_, i) => scSysId(i, counts));
+}
+function scSerialize(){
+  const ids = scSysIdList(), st = scState;
+  const manual = {};
+  Object.keys(st.manual).forEach(k => { manual[ids[k]] = st.manual[k]; });
+  return {
+    v: 1, ruleKey: st.rule.key, supplierName: st.supplierName, fileNames: st.fileNames, perFile: st.perFile,
+    invLines: st.invLines,
+    pairs: st.pairs.map(p => ({ sys: ids[p.sysIdx], invIdx: p.invIdx, tier: p.tier, confirmed: !!p.confirmed,
+      split: p.split || 0, catDist: p.catDist || 0, shared: p.shared || 0, newCost: p.newCost, retail: p.retail })),
+    manual, reviewDone: st.reviewDone, onlyChanged: st.onlyChanged, marginInput: st.marginInput,
+    priceFilter: st.priceFilter, tab: st.tab
+  };
+}
+// Rebuilds scState from a saved copy against the CURRENT system lines
+// (matched up by stock id + name, not by row position, so a refreshed or
+// re-ordered note still lines up).
+function scRestore(saved){
+  const baseRule = INVOICE_SUPPLIER_RULES[saved.ruleKey];
+  if(!baseRule){ toast('The saved check uses supplier rules that no longer exist'); throw new Error('unknown rule ' + saved.ruleKey); }
+  const ruleObj = Object.assign({ key: saved.ruleKey }, baseRule);
+  const idToIdx = {};
+  scSysIdList().forEach((id, i) => { idToIdx[id] = i; });
+  const pairs = [];
+  const usedSys = new Set(), usedInv = new Set();
+  (saved.pairs || []).forEach(p => {
+    const si = idToIdx[p.sys];
+    if(si === undefined || usedSys.has(si)) return; // that system line no longer exists
+    const inv = saved.invLines[p.invIdx];
+    if(!inv) return;
+    usedSys.add(si); usedInv.add(p.invIdx);
+    pairs.push({ sysIdx: si, invIdx: p.invIdx, inv, tier: p.tier, confirmed: p.confirmed, split: p.split, catDist: p.catDist,
+      shared: p.shared, newCost: p.newCost, retail: p.retail });
+  });
+  const unmatchedInv = saved.invLines.map((_, i) => i).filter(i => !usedInv.has(i));
+  const unmatchedSys = invoiceItemAdjust.map((_, i) => i).filter(i => !usedSys.has(i));
+  const manual = {};
+  unmatchedSys.forEach(si => {
+    const id = Object.keys(idToIdx).find(k => idToIdx[k] === si);
+    const m = (saved.manual || {})[id];
+    manual[si] = m ? { include: !!m.include, cost: m.cost, retail: m.retail } : { include: false, cost: '', retail: invoiceItemAdjust[si].retail_price };
+  });
+  scState = {
+    rule: ruleObj, supplierName: saved.supplierName, fileNames: saved.fileNames || [], perFile: saved.perFile || [],
+    invLines: saved.invLines, pairs, unmatchedInv, unmatchedSys, manual,
+    tab: saved.tab || 'matched', reviewDone: !!saved.reviewDone, onlyChanged: saved.onlyChanged !== false,
+    marginInput: saved.marginInput || '', marginRows: null, priceFilter: !!saved.priceFilter, updateSent: false, skipAutosave: true
+  };
+}
+function scCheckUrl(){
+  return 'invoices/supplier-check/' + currentInvoiceNote.suppid + '/' + encodeURIComponent(currentInvoiceNote.recnoteid) + '/';
+}
+let scSaveTimer = null;
+function scSetStatus(msg, isErr){
+  const el = document.getElementById('scSaveStatus');
+  if(!el) return;
+  el.textContent = msg;
+  el.style.color = isErr ? 'var(--danger)' : 'var(--text-dim)';
+}
+function scQueueSave(){
+  if(!scState) return;
+  if(scState.skipAutosave){ scState.skipAutosave = false; return; }
+  scSetStatus('Unsaved changes…');
+  clearTimeout(scSaveTimer);
+  scSaveTimer = setTimeout(() => scSave(true), 1500);
+}
+async function scSave(silent){
+  if(!scState) return;
+  clearTimeout(scSaveTimer);
+  scSetStatus('Saving…');
+  try{
+    await apiPut(scCheckUrl(), { state: scSerialize() });
+    scSetStatus('Saved ' + new Date().toLocaleTimeString());
+    if(!silent) toast('Supplier check saved');
+  }catch(e){
+    console.error(e);
+    scSetStatus('Could not save — click Save to retry', true);
+    if(!silent) toast('Could not save');
+  }
+}
+async function scOpenSaved(){
+  if(!currentInvoiceNote){ return; }
+  if(!invoiceItemAdjust || invoiceItemAdjust.length === 0){ toast('Wait for the note to finish loading'); return; }
+  try{
+    const data = await apiGet(scCheckUrl());
+    if(!data.saved){ toast('No saved supplier check for this note yet — run an Automated Check first'); return; }
+    scRestore(data.state);
+    openSupplierCheckView();
+    scSetStatus('Loaded saved check' + (data.updated_at ? ' (saved ' + new Date(data.updated_at).toLocaleString() + ')' : ''));
+    // compare against the system as it is right now
+    await scRefresh(true);
+  }catch(e){
+    console.error(e);
+    toast('Could not open the saved check');
+  }
+}
+async function scRefresh(quiet){
+  if(!scState) return;
+  try{
+    const oldIds = scSysIdList();
+    const keep = scState.pairs.map(p => ({ p, id: oldIds[p.sysIdx] }));
+    const manualKeep = {};
+    Object.keys(scState.manual).forEach(k => { manualKeep[oldIds[k]] = scState.manual[k]; });
+    const data = await apiGet('invoices/notes/' + currentInvoiceNote.suppid + '/' + encodeURIComponent(currentInvoiceNote.recnoteid) + '/items/');
+    const f2 = v => (v !== null && v !== undefined) ? Number(v).toFixed(2) : '';
+    invoiceItemAdjust = (data.items || []).map(it => ({
+      stockid: it.stockid, stock_name: it.stock_name, catno: it.catno || '', barcode: it.barcode || '',
+      cost_price: f2(it.cost_price), retail_price: f2(it.retail_price), online_price: f2(it.online_price),
+      pack_size: it.pack_size !== null && it.pack_size !== undefined ? String(it.pack_size) : '',
+      vatid: it.vatid !== null && it.vatid !== undefined ? String(it.vatid) : '',
+      qty: it.qty !== null && it.qty !== undefined ? String(it.qty) : '',
+      net_value: f2(it.net_value), vat_value: f2(it.vat_value),
+      department_name: it.department_name || 'Other',
+      min_margin_pct: it.min_margin_pct !== null && it.min_margin_pct !== undefined ? Number(it.min_margin_pct) : 38
+    }));
+    currentInvoiceItems = data.items || [];
+    const idToIdx = {};
+    scSysIdList().forEach((id, i) => { idToIdx[id] = i; });
+    const used = new Set();
+    const pairs = [];
+    keep.forEach(({ p, id }) => {
+      const si = idToIdx[id];
+      if(si === undefined || used.has(si)) return;
+      used.add(si); p.sysIdx = si; pairs.push(p);
+    });
+    const usedInv = new Set(pairs.map(p => p.invIdx));
+    scState.pairs = pairs;
+    scState.unmatchedInv = scState.invLines.map((_, i) => i).filter(i => !usedInv.has(i));
+    scState.unmatchedSys = invoiceItemAdjust.map((_, i) => i).filter(i => !used.has(i));
+    const manual = {};
+    scState.unmatchedSys.forEach(si => {
+      const m = manualKeep[Object.keys(idToIdx).find(k => idToIdx[k] === si)];
+      manual[si] = m || { include: false, cost: '', retail: invoiceItemAdjust[si].retail_price };
+    });
+    scState.manual = manual;
+    scState.priceFilter = true; // show what still doesn't match
+    scState.skipAutosave = false;
+    scRender();
+    const n = scState.pairs.filter(p => scActive(p) && scPriceMismatch(p)).length;
+    if(!quiet || n > 0) toast(n === 0 ? 'Refreshed — all ticked prices match the system ✓' : 'Refreshed — ' + n + ' price(s) still do not match');
+  }catch(e){
+    console.error(e);
+    toast('Could not refresh from the system');
+  }
 }
 
 function scRenderMatched(body){
@@ -12254,8 +12405,8 @@ function scRenderMatched(body){
       ${st.reviewDone
         ? '<button class="btn-ghost" onclick="scReopenReview()">Re-open review</button>'
         : '<button class="btn-ghost" onclick="scTickAll(true)">Tick all suggestions</button><button class="btn-ghost" onclick="scTickAll(false)">Untick all suggestions</button><button class="btn-amber" onclick="scFinishReview()">Finish review — move unticked to Other</button>'}
-      <label style="font-size:13px;margin-left:auto;"><input type="checkbox" ${st.onlyChanged ? 'checked' : ''} onchange="scState.onlyChanged=this.checked"> Only send lines where cost / retail / pack changed</label>
-      <button class="btn-ghost" onclick="scRecheckPrices()">${st.priceFilter ? 'Show all lines' : 'Recheck prices'}</button>
+      <label style="font-size:13px;margin-left:auto;"><input type="checkbox" ${st.onlyChanged ? 'checked' : ''} onchange="scState.onlyChanged=this.checked;scQueueSave()"> Only send lines where cost / retail / pack changed</label>
+      <button class="btn-ghost" onclick="scTogglePriceFilter()">${st.priceFilter ? 'Show all lines' : 'Show price differences'}</button>
       <button class="btn-amber" onclick="scUpdatePrices()">Update Prices</button>
     </div>
     ${st.priceFilter ? (() => { const bad = st.pairs.filter(p => scActive(p) && scPriceMismatch(p)).length; return '<div style="margin-bottom:10px;font-size:13px;font-weight:700;">Showing the ' + bad + ' ticked line(s) whose cost does not match the system' + (bad === 0 ? ' — all prices match ✓' : '') + '.</div>'; })() : ''}`;
@@ -12411,7 +12562,7 @@ function scUpdatePrices(){
   const fileName = 'invoice-retail-veg.csv'; // fixed name — the Vector watcher looks for this exact filename
   downloadFixedNameCSV(fileName, headers, csvRows);
   apiPost('vector-import/queue', { file_name: fileName, csv_content: buildCSVText(headers, csvRows), type: 'RETAIL' })
-    .then(res => { scState.updateSent = true; if(res && res.queue_id) trackVectorImportStatus(res.queue_id, 'RETAIL'); })
+    .then(res => { scState.updateSent = true; scSave(true); if(res && res.queue_id) trackVectorImportStatus(res.queue_id, 'RETAIL'); })
     .catch(e => { toast('Could not queue the update for Vector'); console.error(e); });
 }
 
@@ -12459,6 +12610,7 @@ function scShowBelowMargin(){
   const v = scNum(document.getElementById('scMarginInput').value);
   if(v === null){ toast('Enter a margin percent first'); return; }
   scState.marginInput = String(v);
+  scQueueSave();
   const all = scFinalRows();
   scState.marginThreshold = v;
   scState.marginRows = all.filter(r => r.margin !== null && r.margin < v).sort((a, b) => a.margin - b.margin);
