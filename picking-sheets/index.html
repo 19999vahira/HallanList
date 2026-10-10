@@ -886,6 +886,10 @@
   .wa-flyer-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
   .wa-flyer-actions button{flex:1;min-width:0;padding:6px 8px;font-size:11px;}
   .wa-flyer-note{font-size:10px;color:var(--accent-dim);margin-top:6px;font-weight:600;}
+  /* Supplier file check (Automated Check -> CSV / Excel) */
+  .sctabs{display:flex;gap:6px;margin:0 0 14px;border-bottom:1px solid var(--line);}
+  .sctabs button{background:none;border:none;padding:10px 16px;font-size:14px;cursor:pointer;color:var(--text-dim);border-bottom:3px solid transparent;}
+  .sctabs button.active{color:var(--text);font-weight:700;border-bottom-color:#b7791f;}
 </style>
 </head>
 <body>
@@ -2756,6 +2760,23 @@
     <div id="invoiceDetailResults"></div>
   </div>
 
+  <!-- INVOICES: SUPPLIER FILE CHECK (CSV / Excel) -->
+  <div id="view-invoice-supcheck" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openInvoices()">Invoices</button><span class="sep">/</span>
+      <button onclick="scBackToNote()" id="scCrumbBtn">Note</button><span class="sep">/</span>
+      <span class="current">Supplier Check</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow" id="scEyebrow">Supplier</div>
+      <h2>Supplier Invoice Check</h2>
+      <p id="scSub"></p>
+    </div>
+    <div class="sctabs" id="scTabs"></div>
+    <div id="scBody"></div>
+  </div>
+
   <!-- CREATE INVOICE: LIST -->
   <div id="view-created-invoices-list" class="view">
     <div class="crumbrow">
@@ -3510,6 +3531,17 @@
       prices directly, then compares the result against what's in the system — it's a best-effort
       match, not guaranteed accurate, so please review the results rather than trusting them blindly.
     </p>
+    <div style="display:flex;gap:18px;margin:4px 0 10px;font-size:14px;">
+      <label><input type="radio" name="invoiceOcrSource" value="image" checked onchange="onInvoiceOcrSourceChange()"> Photo / scan</label>
+      <label><input type="radio" name="invoiceOcrSource" value="sheet" onchange="onInvoiceOcrSourceChange()"> CSV / Excel file</label>
+    </div>
+    <div id="invoiceSheetOptions" style="display:none;margin-bottom:10px;">
+      <label style="font-size:13px;display:block;margin-bottom:4px;">Supplier name (each supplier has its own rules)</label>
+      <input type="text" id="invoiceSheetSupplier" list="invoiceSheetSupplierList" oninput="onInvoiceSheetSupplierInput()" placeholder="e.g. Top-Op Foods Ltd" style="width:100%;padding:9px;">
+      <datalist id="invoiceSheetSupplierList"><option value="Top-Op Foods Ltd"></option></datalist>
+      <div id="invoiceSheetRuleHint" style="font-size:12.5px;margin-top:4px;"></div>
+      <div style="font-size:12.5px;color:var(--text-dim);margin-top:4px;">You can choose more than one file.</div>
+    </div>
     <input type="file" id="invoiceOcrFile" accept="image/*" multiple>
     <div id="invoiceOcrProgress" class="empty-hint" style="display:none;margin-top:10px;"></div>
     <div id="invoiceOcrResults" style="margin-top:14px;overflow:auto;flex:1;"></div>
@@ -11275,7 +11307,10 @@ async function loadInvoiceDetailItems(){
     // Keyed by row index, not stockid — the same product can appear as more
     // than one line on a note (separate batches), so stockid isn't unique here.
     invoiceItemAdjust = (data.items || []).map(it => ({
+      stockid: it.stockid,
       stock_name: it.stock_name,
+      catno: it.catno || '',
+      barcode: it.barcode || '',
       cost_price: it.cost_price !== null && it.cost_price !== undefined ? Number(it.cost_price).toFixed(2) : '',
       retail_price: it.retail_price !== null && it.retail_price !== undefined ? Number(it.retail_price).toFixed(2) : '',
       online_price: it.online_price !== null && it.online_price !== undefined ? Number(it.online_price).toFixed(2) : '',
@@ -11325,7 +11360,7 @@ function renderInvoiceDetailItems(){
   const table = document.createElement('table');
   table.className = 'finaltable';
   table.innerHTML = `<thead><tr>
-    <th>Product Name</th><th class="qtycell">Cost Price</th><th class="qtycell">Retail Price</th><th class="qtycell">Online Price</th>
+    <th>Product Name</th><th>Cat No</th><th class="qtycell">Cost Price</th><th class="qtycell">Retail Price</th><th class="qtycell">Online Price</th>
     <th class="qtycell">Pack Size</th><th class="qtycell">VAT Code</th><th class="qtycell">Qty</th><th class="qtycell">Net Value</th><th class="qtycell">VAT Value</th>
     <th class="qtycell">Margin</th><th>Department</th>
   </tr></thead>`;
@@ -11335,6 +11370,7 @@ function renderInvoiceDetailItems(){
     tr.dataset.idx = idx;
     tr.innerHTML = `
       <td>${escapeHtml(row.stock_name || '—')}</td>
+      <td class="mono">${escapeHtml(row.catno || '—')}</td>
       <td class="qtycell"><input type="number" step="0.01" min="0" class="priceinput" data-idx="${idx}" data-field="cost_price" value="${row.cost_price}"></td>
       <td class="qtycell"><input type="number" step="0.01" min="0" class="priceinput" data-idx="${idx}" data-field="retail_price" value="${row.retail_price}"></td>
       <td class="qtycell"><input type="number" step="0.01" min="0" class="priceinput" data-idx="${idx}" data-field="online_price" value="${row.online_price}"></td>
@@ -11351,13 +11387,13 @@ function renderInvoiceDetailItems(){
   table.appendChild(tbody);
   const tfoot = document.createElement('tfoot');
   tfoot.innerHTML = `<tr id="invoiceTotalsRow" style="font-weight:700;border-top:2px solid var(--line);">
-    <td colspan="7" style="text-align:right;">Total</td>
+    <td colspan="8" style="text-align:right;">Total</td>
     <td class="qtycell" id="invoiceTotalNet">0.00</td>
     <td class="qtycell" id="invoiceTotalVat">0.00</td>
     <td colspan="2"></td>
   </tr>
   <tr style="font-weight:700;">
-    <td colspan="7" style="text-align:right;">Grand Total (Net + VAT)</td>
+    <td colspan="8" style="text-align:right;">Grand Total (Net + VAT)</td>
     <td class="qtycell" colspan="2" id="invoiceTotalGrand">0.00</td>
     <td colspan="2"></td>
   </tr>`;
@@ -11432,7 +11468,7 @@ const INVOICE_LIST_COLUMNS = [
   ['postdate', 'Post Date'], ['item_count', 'Items'], ['total_net', 'Net'], ['total_vat', 'VAT']
 ];
 const INVOICE_DETAIL_COLUMNS = [
-  ['cost_price', 'Cost Price'], ['retail_price', 'Retail Price'], ['online_price', 'Online Price'], ['pack_size', 'Pack Size'],
+  ['catno', 'Cat No'], ['cost_price', 'Cost Price'], ['retail_price', 'Retail Price'], ['online_price', 'Online Price'], ['pack_size', 'Pack Size'],
   ['vatid', 'VAT Code'], ['qty', 'Qty'], ['net_value', 'Net Value'], ['vat_value', 'VAT Value'],
   ['margin_pct', 'Margin'], ['department_name', 'Department']
 ];
@@ -11572,6 +11608,8 @@ function openInvoiceAutomatedModal(){
   document.getElementById('invoiceOcrFinaliseBtn').style.display = 'none';
   document.getElementById('invoiceOcrDownloadRow').style.display = 'none';
   invoiceOcrLastRows = [];
+  const imgRadio = document.querySelector('input[name="invoiceOcrSource"][value="image"]');
+  if(imgRadio){ imgRadio.checked = true; onInvoiceOcrSourceChange(); }
   openModal('modalInvoiceAutomated');
 }
 function invoiceOcrFileToPart(file){
@@ -11616,6 +11654,7 @@ function invoiceOcrWordOverlap(a, b){
   return hits / Math.max(wa.length, wb.length);
 }
 async function runInvoiceOcrCheck(){
+  if(invoiceOcrSource() === 'sheet') return runInvoiceSheetCheck();
   const fileInput = document.getElementById('invoiceOcrFile');
   const files = fileInput.files ? Array.from(fileInput.files) : [];
   if(files.length === 0){ toast('Choose at least one image first'); return; }
@@ -11779,6 +11818,611 @@ function downloadInvoiceOcrPdf(){
     toast('Could not generate PDF');
     console.error(e);
   }
+}
+
+/* ============ AUTOMATED CHECK — SUPPLIER CSV / EXCEL FILES ============
+   Alternative to the photo check: staff pick the supplier, upload one or more
+   CSV/Excel files, and the supplier's own rules (below) decide how to read
+   them. Every supplier gets an entry in INVOICE_SUPPLIER_RULES — Top-Op first.
+
+   Matching against the note's lines (each system line carries its CATNO from
+   SUPPLIER_STOCK via stock id):
+     1. exact CATNO
+     2. near CATNO (1-2 characters different)  -> tick/cross to confirm
+     3. name match: at least 3 words in any order AND price nearly the same
+                                              -> tick/cross to confirm
+   Matched lines can be pushed to Vector with "Update Prices" (same CSV fields,
+   queue and status popup as Create Invoice). Everything else sits on the
+   "Other" tab, and the "Final" tab gives price levels + a below-margin list. */
+const INVOICE_SUPPLIER_RULES = {
+  topop: {
+    label: 'Top-Op Foods Ltd',
+    aliases: ['top-op', 'top op', 'topop'],
+    skipRows: 13, // first 13 lines of every file are header/address text
+    // 0-based column positions in the Top-Op sheet (A=0)
+    cols: { catno: 1, name: 3, packSize: 8, size: 9, qty: 10, casePrice: 12, discountPct: 13, net: 15, vatCode: 16 },
+    // "H737B...BIGEN" -> "H737B"
+    cleanCatno: v => String(v || '').split('.')[0].trim()
+  }
+};
+const SC_PRICE_TOLERANCE_PCT = 20; // "price nearly the same" for name matches
+
+function invoiceSupplierRuleFor(name){
+  const n = String(name || '').toLowerCase().trim();
+  if(!n) return null;
+  for(const key of Object.keys(INVOICE_SUPPLIER_RULES)){
+    const r = INVOICE_SUPPLIER_RULES[key];
+    if(r.aliases.some(a => n.includes(a)) || n === r.label.toLowerCase()) return Object.assign({ key }, r);
+  }
+  return null;
+}
+function scNum(v){
+  if(v === null || v === undefined || v === '') return null;
+  const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/[£,\s]/g, ''));
+  return isNaN(n) ? null : n;
+}
+function scNormCat(s, rule){
+  let t = String(s ?? '').trim();
+  if(rule && rule.cleanCatno) t = rule.cleanCatno(t);
+  return t.toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+const SC_STOP = new Set(['the', 'and', 'with', 'for', 'of', 'pm', 'pack', 'pk']);
+function scTokens(name){
+  return [...new Set(
+    String(name || '').toLowerCase().replace(/['’`]/g, '').replace(/[^a-z0-9]+/g, ' ').split(' ')
+      .filter(w => w.length >= 2 && !SC_STOP.has(w))
+      .map(w => w.length > 3 ? w.replace(/s$/, '') : w)
+  )];
+}
+// words "start match": identical, or one begins with the other (4+ letters)
+function scTokEq(a, b){
+  if(a === b) return true;
+  return Math.min(a.length, b.length) >= 4 && (a.startsWith(b) || b.startsWith(a));
+}
+function scSharedTokens(ta, tb){
+  const used = new Set(); let n = 0;
+  ta.forEach(a => {
+    const j = tb.findIndex((b, k) => !used.has(k) && scTokEq(a, b));
+    if(j >= 0){ used.add(j); n++; }
+  });
+  return n;
+}
+function scPriceDiffPct(inv, sys){
+  if(sys === null || !isFinite(sys) || sys <= 0 || inv === null) return null;
+  return (inv - sys) / sys * 100;
+}
+function scSysCost(row){
+  if(row.cost_price === '' || row.cost_price === undefined) return null;
+  const v = Number(row.cost_price);
+  return isNaN(v) ? null : v;
+}
+function scRound2(x){ return Math.round(x * 100) / 100; }
+
+async function scReadSheetRows(file){
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array' });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  if(!ws || !ws['!ref']) return [];
+  // absolute range from A1 so "first 13 lines" is counted from the true top
+  // even when the sheet's used range starts lower/righter
+  const rng = XLSX.utils.decode_range(ws['!ref']);
+  return XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null, blankrows: true, range: { s: { r: 0, c: 0 }, e: rng.e } });
+}
+function scParseInvoiceRows(rows, rule, fileName){
+  const c = rule.cols, out = [];
+  rows.slice(rule.skipRows).forEach(r => {
+    if(!r) return;
+    const name = String(r[c.name] ?? '').trim();
+    const catRaw = String(r[c.catno] ?? '').trim();
+    const qty = scNum(r[c.qty]), net = scNum(r[c.net]);
+    // footer/bank-detail rows have no numeric qty/net, so they drop out here
+    if(!name || !catRaw || qty === null || net === null) return;
+    const pack = scNum(r[c.packSize]) || 1;
+    const units = qty * pack;
+    if(!units) return;
+    out.push({
+      catno: rule.cleanCatno ? rule.cleanCatno(catRaw) : catRaw,
+      catKey: scNormCat(catRaw, rule),
+      name, packSize: pack, size: r[c.size] ?? '', caseQty: qty, units, net,
+      unitCost: scRound2(net / units),
+      casePrice: scNum(r[c.casePrice]), files: [fileName]
+    });
+  });
+  return out;
+}
+// Same catalogue number across several files/lines = one product: add up.
+function scMergeInvoiceLines(lines){
+  const byKey = new Map(), out = [];
+  lines.forEach(l => {
+    if(!l.catKey){ out.push(l); return; }
+    const ex = byKey.get(l.catKey);
+    if(!ex){ const copy = Object.assign({}, l, { files: [...l.files], _net: l.net }); byKey.set(l.catKey, copy); out.push(copy); return; }
+    ex.units += l.units; ex.caseQty += l.caseQty; ex._net += l.net; ex.net = ex._net;
+    ex.unitCost = ex.units ? scRound2(ex._net / ex.units) : ex.unitCost;
+    l.files.forEach(f => { if(!ex.files.includes(f)) ex.files.push(f); });
+  });
+  return out;
+}
+
+function scBuildMatches(sysRows, invLines, rule){
+  const usedSys = new Set(), usedInv = new Set(), pairs = [];
+  const sysKey = sysRows.map(r => scNormCat(r.catno, rule));
+  const sysTok = sysRows.map(r => scTokens(r.stock_name));
+  const invTok = invLines.map(l => scTokens(l.name));
+  const addPair = (si, ii, tier, extra) => {
+    usedSys.add(si); usedInv.add(ii);
+    pairs.push(Object.assign({ sysIdx: si, invIdx: ii, inv: invLines[ii], tier, shared: scSharedTokens(invTok[ii], sysTok[si]) }, extra));
+  };
+
+  // 1) exact catalogue number (a product received in two batches = two system lines, same invoice line)
+  const byKey = new Map();
+  sysKey.forEach((k, i) => { if(!k) return; if(!byKey.has(k)) byKey.set(k, []); byKey.get(k).push(i); });
+  invLines.forEach((l, ii) => {
+    if(!l.catKey) return;
+    const free = (byKey.get(l.catKey) || []).filter(s => !usedSys.has(s));
+    free.forEach(si => addPair(si, ii, 'catno', { confirmed: true, split: free.length > 1 ? free.length : 0 }));
+  });
+
+  // 2) near catalogue number
+  const near = [];
+  sysRows.forEach((r, si) => {
+    if(usedSys.has(si) || !sysKey[si]) return;
+    invLines.forEach((l, ii) => {
+      if(usedInv.has(ii) || !l.catKey) return;
+      const a = sysKey[si], b = l.catKey, minLen = Math.min(a.length, b.length);
+      if(minLen < 4 || Math.abs(a.length - b.length) > 2) return;
+      const d = invoiceOcrLevenshtein(a, b);
+      if(d > 0 && d <= (minLen <= 5 ? 1 : 2)){
+        const pd = scPriceDiffPct(l.unitCost, scSysCost(r));
+        near.push({ si, ii, d, shared: scSharedTokens(invTok[ii], sysTok[si]), pdAbs: pd === null ? 999 : Math.abs(pd) });
+      }
+    });
+  });
+  near.sort((x, y) => x.d - y.d || y.shared - x.shared || x.pdAbs - y.pdAbs);
+  near.forEach(c => {
+    if(usedSys.has(c.si) || usedInv.has(c.ii)) return;
+    // pre-ticked only when the names also share 2+ words (E105PM vs E105APM style clashes stay unticked)
+    addPair(c.si, c.ii, 'near', { confirmed: c.shared >= 2, catDist: c.d });
+  });
+
+  // 3) name match: 3+ shared words in any order and price nearly the same
+  const byName = [];
+  sysRows.forEach((r, si) => {
+    if(usedSys.has(si)) return;
+    const sc = scSysCost(r);
+    invLines.forEach((l, ii) => {
+      if(usedInv.has(ii)) return;
+      const shared = scSharedTokens(invTok[ii], sysTok[si]);
+      if(shared < 3) return;
+      const pd = scPriceDiffPct(l.unitCost, sc);
+      if(pd === null || Math.abs(pd) > SC_PRICE_TOLERANCE_PCT) return;
+      byName.push({ si, ii, shared, pdAbs: Math.abs(pd) });
+    });
+  });
+  byName.sort((x, y) => y.shared - x.shared || x.pdAbs - y.pdAbs);
+  byName.forEach(c => {
+    if(usedSys.has(c.si) || usedInv.has(c.ii)) return;
+    addPair(c.si, c.ii, 'name', { confirmed: false });
+  });
+
+  return {
+    pairs,
+    unmatchedInv: invLines.map((_, i) => i).filter(i => !usedInv.has(i)),
+    unmatchedSys: sysRows.map((_, i) => i).filter(i => !usedSys.has(i))
+  };
+}
+
+/* ---- state + entry point ---- */
+let scState = null;
+function invoiceOcrSource(){
+  const el = document.querySelector('input[name="invoiceOcrSource"]:checked');
+  return el ? el.value : 'image';
+}
+function onInvoiceOcrSourceChange(){
+  const sheet = invoiceOcrSource() === 'sheet';
+  document.getElementById('invoiceSheetOptions').style.display = sheet ? 'block' : 'none';
+  const f = document.getElementById('invoiceOcrFile');
+  f.accept = sheet ? '.csv,.xls,.xlsx,.xlsm,text/csv' : 'image/*';
+  f.value = '';
+  document.getElementById('invoiceOcrResults').innerHTML = '';
+  if(sheet){
+    const inp = document.getElementById('invoiceSheetSupplier');
+    if(!inp.value && currentInvoiceNote && currentInvoiceNote.supplier_name) inp.value = currentInvoiceNote.supplier_name;
+    onInvoiceSheetSupplierInput();
+  }
+}
+function onInvoiceSheetSupplierInput(){
+  const hint = document.getElementById('invoiceSheetRuleHint');
+  const rule = invoiceSupplierRuleFor(document.getElementById('invoiceSheetSupplier').value);
+  hint.style.color = rule ? 'var(--green)' : 'var(--danger)';
+  hint.textContent = rule
+    ? 'Rules found: ' + rule.label + ' — first ' + rule.skipRows + ' lines of each file are skipped.'
+    : 'No rules set up for this supplier yet (supported: ' + Object.values(INVOICE_SUPPLIER_RULES).map(r => r.label).join(', ') + ').';
+}
+async function runInvoiceSheetCheck(){
+  const files = Array.from(document.getElementById('invoiceOcrFile').files || []);
+  const progress = document.getElementById('invoiceOcrProgress');
+  const results = document.getElementById('invoiceOcrResults');
+  if(files.length === 0){ toast('Choose at least one CSV or Excel file first'); return; }
+  const supplierName = document.getElementById('invoiceSheetSupplier').value.trim();
+  if(!supplierName){ toast('Enter the supplier name first'); return; }
+  const rule = invoiceSupplierRuleFor(supplierName);
+  if(!rule){ toast('No rules set up for "' + supplierName + '" yet'); return; }
+  if(!invoiceItemAdjust || invoiceItemAdjust.length === 0){ toast('This note has no items to compare against'); return; }
+  const noteRule = invoiceSupplierRuleFor(currentInvoiceNote && currentInvoiceNote.supplier_name);
+  if(!noteRule || noteRule.key !== rule.key){
+    if(!confirm('This note is for "' + ((currentInvoiceNote && currentInvoiceNote.supplier_name) || 'unknown') + '" but you chose "' + rule.label + '". Continue anyway?')) return;
+  }
+  const btn = document.getElementById('invoiceOcrRunBtn');
+  btn.disabled = true;
+  progress.style.display = 'block';
+  progress.textContent = 'Reading ' + files.length + ' file' + (files.length > 1 ? 's' : '') + '…';
+  results.innerHTML = '';
+  try{
+    let all = [];
+    const perFile = [];
+    for(const f of files){
+      const rows = await scReadSheetRows(f);
+      const parsed = scParseInvoiceRows(rows, rule, f.name);
+      perFile.push(f.name + ': ' + parsed.length + ' lines');
+      all = all.concat(parsed);
+    }
+    if(all.length === 0){
+      progress.style.display = 'none';
+      results.innerHTML = '<div class="empty-hint">No product lines found after skipping the first ' + rule.skipRows + ' lines. Check these are the right files for ' + escapeHtml(rule.label) + '.</div>';
+      return;
+    }
+    const invLines = scMergeInvoiceLines(all);
+    const m = scBuildMatches(invoiceItemAdjust, invLines, rule);
+    m.pairs.forEach(p => {
+      const s = invoiceItemAdjust[p.sysIdx];
+      p.newCost = p.inv.unitCost;
+      p.retail = s.retail_price;
+    });
+    const manual = {};
+    m.unmatchedSys.forEach(si => {
+      const s = invoiceItemAdjust[si];
+      manual[si] = { include: false, cost: '', retail: s.retail_price };
+    });
+    scState = {
+      rule, supplierName, fileNames: files.map(f => f.name), perFile,
+      invLines, pairs: m.pairs, unmatchedInv: m.unmatchedInv, unmatchedSys: m.unmatchedSys,
+      manual, tab: 'matched', reviewDone: false, onlyChanged: true,
+      marginInput: '', marginRows: null
+    };
+    progress.style.display = 'none';
+    closeModal('modalInvoiceAutomated');
+    openSupplierCheckView();
+  }catch(e){
+    progress.style.display = 'none';
+    results.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not read those files: ' + escapeHtml(e.message || '') + '</div>';
+    console.error(e);
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+/* ---- view ---- */
+function openSupplierCheckView(){
+  const n = currentInvoiceNote || {};
+  document.getElementById('scCrumbBtn').textContent = n.recnoteref || 'Note';
+  document.getElementById('scEyebrow').textContent = scState.rule.label;
+  document.getElementById('scSub').textContent = scState.fileNames.join(', ') + ' — ' + scState.invLines.length + ' invoice lines vs ' + invoiceItemAdjust.length + ' system lines';
+  showView('view-invoice-supcheck');
+  scRender();
+}
+function scBackToNote(){ if(currentInvoiceNote) openInvoiceDetail(currentInvoiceNote); else openInvoices(); }
+function scSetTab(t){ scState.tab = t; scRender(); }
+function scActive(p){ return p.tier === 'catno' || p.confirmed; }
+function scVisibleOnMatched(p){ return scActive(p) || !scState.reviewDone; }
+function scTierLabel(p){
+  if(p.tier === 'catno') return 'Cat No' + (p.split ? ' (split ×' + p.split + ')' : '');
+  if(p.tier === 'near') return 'Near Cat No (' + p.catDist + ' off)';
+  return 'Name + price';
+}
+function scMargin(cost, retail){
+  const r = scNum(retail), c = scNum(cost);
+  if(r === null || c === null || r <= 0) return null;
+  return (r - c) / r * 100;
+}
+function scFmt(v){ return v === null || v === undefined || v === '' ? '—' : Number(v).toFixed(2); }
+
+function scRender(){
+  const body = document.getElementById('scBody');
+  const matchedCount = scState.pairs.filter(p => scActive(p)).length;
+  const rejected = scState.reviewDone ? scState.pairs.filter(p => !scActive(p)).length : 0;
+  const otherCount = rejected + scState.unmatchedInv.length + scState.unmatchedSys.length;
+  const tabs = [['matched', 'Matched (' + matchedCount + ')'], ['other', 'Other (' + otherCount + ')'], ['final', 'Final']];
+  document.getElementById('scTabs').innerHTML = tabs.map(([k, label]) =>
+    `<button class="${scState.tab === k ? 'active' : ''}" onclick="scSetTab('${k}')">${label}</button>`).join('');
+  body.innerHTML = '';
+  if(scState.tab === 'matched') scRenderMatched(body);
+  else if(scState.tab === 'other') scRenderOther(body);
+  else scRenderFinal(body);
+}
+
+function scRenderMatched(body){
+  const st = scState;
+  const exact = st.pairs.filter(p => p.tier === 'catno').length;
+  const near = st.pairs.filter(p => p.tier === 'near');
+  const byName = st.pairs.filter(p => p.tier === 'name');
+  const tick = a => a.filter(p => p.confirmed).length;
+  const head = document.createElement('div');
+  head.innerHTML = `
+    <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:13px;margin-bottom:10px;">
+      <span><b>${exact}</b> exact Cat No</span>
+      <span><b>${near.length}</b> near Cat No (${tick(near)} ✓)</span>
+      <span><b>${byName.length}</b> name + price (${tick(byName)} ✓)</span>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+      ${st.reviewDone
+        ? '<button class="btn-ghost" onclick="scReopenReview()">Re-open review</button>'
+        : '<button class="btn-ghost" onclick="scTickAll(true)">Tick all suggestions</button><button class="btn-ghost" onclick="scTickAll(false)">Untick all suggestions</button><button class="btn-amber" onclick="scFinishReview()">Finish review — move unticked to Other</button>'}
+      <label style="font-size:13px;margin-left:auto;"><input type="checkbox" ${st.onlyChanged ? 'checked' : ''} onchange="scState.onlyChanged=this.checked"> Only send lines where cost / retail / pack changed</label>
+      <button class="btn-amber" onclick="scUpdatePrices()">Update Prices</button>
+    </div>`;
+  body.appendChild(head);
+  const tierOrder = { near: 0, name: 1, catno: 2 };
+  const rows = st.pairs.filter(scVisibleOnMatched).sort((a, b) =>
+    tierOrder[a.tier] - tierOrder[b.tier] ||
+    String(invoiceItemAdjust[a.sysIdx].stock_name).localeCompare(String(invoiceItemAdjust[b.sysIdx].stock_name)));
+  if(rows.length === 0){ body.insertAdjacentHTML('beforeend', '<div class="empty-hint">Nothing matched.</div>'); return; }
+  const table = document.createElement('table');
+  table.className = 'finaltable';
+  table.innerHTML = `<thead><tr>
+    <th>Match</th><th>System product</th><th>Cat No (sys)</th><th>Invoice line</th><th>Cat No (inv)</th>
+    <th class="qtycell">Qty sys / inv</th><th class="qtycell">Cost (sys)</th><th class="qtycell">Cost (new)</th><th class="qtycell">Diff</th>
+    <th class="qtycell">Retail</th><th class="qtycell">Margin</th><th>OK?</th></tr></thead>`;
+  const tbody = document.createElement('tbody');
+  rows.forEach(p => {
+    const i = st.pairs.indexOf(p);
+    const s = invoiceItemAdjust[p.sysIdx];
+    const sc = scSysCost(s);
+    const pd = scPriceDiffPct(p.newCost, sc);
+    const margin = scMargin(p.newCost, p.retail);
+    const low = margin !== null && margin < Number(s.min_margin_pct);
+    const qtyOk = scNum(s.qty) === p.inv.units;
+    const tr = document.createElement('tr');
+    if(!scActive(p)) tr.style.opacity = '0.55';
+    if(p.tier !== 'catno') tr.style.background = 'rgba(245,158,11,0.10)';
+    if(low) tr.classList.add('invmarginlow');
+    tr.innerHTML = `
+      <td style="font-size:12px;">${escapeHtml(scTierLabel(p))}</td>
+      <td>${escapeHtml(s.stock_name || '—')}</td>
+      <td class="mono">${escapeHtml(s.catno || '—')}</td>
+      <td>${escapeHtml(p.inv.name)}</td>
+      <td class="mono">${escapeHtml(p.inv.catno)}</td>
+      <td class="qtycell" style="${qtyOk ? '' : 'color:var(--danger);font-weight:700;'}">${escapeHtml(String(s.qty || '—'))} / ${p.inv.units}</td>
+      <td class="qtycell">${scFmt(sc)}</td>
+      <td class="qtycell"><input type="number" step="0.01" min="0" class="priceinput" value="${p.newCost}" onchange="scSetPair(${i},'newCost',this.value)"></td>
+      <td class="qtycell" style="${pd !== null && Math.abs(pd) > 0.5 ? 'font-weight:700;' : ''}">${pd === null ? '—' : (pd > 0 ? '+' : '') + pd.toFixed(1) + '%'}</td>
+      <td class="qtycell"><input type="number" step="0.01" min="0" class="priceinput" value="${escapeHtml(String(p.retail ?? ''))}" onchange="scSetPair(${i},'retail',this.value)"></td>
+      <td class="qtycell" id="scMargin-${i}">${margin === null ? '—' : margin.toFixed(1) + '%'}</td>
+      <td>${p.tier === 'catno' ? '✓' : `<button class="btn-ghost" style="padding:2px 10px;font-size:15px;" onclick="scTogglePair(${i})">${p.confirmed ? '✓' : '✗'}</button>`}</td>`;
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  const wrap = document.createElement('div');
+  wrap.className = 'restaurant-table-scroll';
+  wrap.appendChild(table);
+  body.appendChild(wrap);
+}
+function scSetPair(i, field, val){
+  const p = scState.pairs[i];
+  if(field === 'newCost'){ const n = scNum(val); p.newCost = n === null ? 0 : n; }
+  else p.retail = String(val).trim();
+  scRender();
+}
+function scTogglePair(i){ const p = scState.pairs[i]; p.confirmed = !p.confirmed; scRender(); }
+function scTickAll(v){ scState.pairs.forEach(p => { if(p.tier !== 'catno') p.confirmed = v; }); scRender(); }
+function scFinishReview(){ scState.reviewDone = true; scRender(); toast('Unticked suggestions moved to the Other tab'); }
+function scReopenReview(){ scState.reviewDone = false; scRender(); }
+
+function scRenderOther(body){
+  const st = scState;
+  const rejected = st.reviewDone ? st.pairs.filter(p => !scActive(p)) : [];
+  let html = '';
+  if(!st.reviewDone && st.pairs.some(p => p.tier !== 'catno' && !p.confirmed)){
+    html += '<div class="empty-hint" style="margin-bottom:12px;">Unticked suggestions stay on the Matched tab until you click “Finish review”.</div>';
+  }
+  html += '<h4 style="margin:14px 0 6px;">Suggested matches you rejected (' + rejected.length + ')</h4>';
+  if(rejected.length === 0) html += '<div class="empty-hint">None.</div>';
+  else html += '<table class="finaltable"><thead><tr><th>System product</th><th>Invoice line</th><th>Match type</th><th></th></tr></thead><tbody>' +
+    rejected.map(p => { const i = st.pairs.indexOf(p); return `<tr><td>${escapeHtml(invoiceItemAdjust[p.sysIdx].stock_name)}</td><td>${escapeHtml(p.inv.name)}</td><td>${escapeHtml(scTierLabel(p))}</td><td><button class="btn-ghost" onclick="scTogglePair(${i})">Accept</button></td></tr>`; }).join('') + '</tbody></table>';
+
+  html += '<h4 style="margin:22px 0 6px;">On the invoice, not found in the system (' + st.unmatchedInv.length + ')</h4>';
+  if(st.unmatchedInv.length === 0) html += '<div class="empty-hint">None.</div>';
+  else html += '<table class="finaltable"><thead><tr><th>Cat No</th><th>Invoice line</th><th class="qtycell">Units</th><th class="qtycell">Cost / unit</th></tr></thead><tbody>' +
+    st.unmatchedInv.map(ii => { const l = st.invLines[ii]; return `<tr><td class="mono">${escapeHtml(l.catno)}</td><td>${escapeHtml(l.name)}</td><td class="qtycell">${l.units}</td><td class="qtycell">${scFmt(l.unitCost)}</td></tr>`; }).join('') + '</tbody></table>';
+
+  html += '<h4 style="margin:22px 0 6px;">In the system, not on the invoice (' + st.unmatchedSys.length + ')</h4>';
+  html += '<p class="sub-text" style="font-size:12.5px;color:var(--text-dim);margin:0 0 8px;">Type a cost (and retail if it changes) and tick “Include” to send these with Update Prices and the Final lists.</p>';
+  if(st.unmatchedSys.length === 0) html += '<div class="empty-hint">None.</div>';
+  else html += '<table class="finaltable"><thead><tr><th>System product</th><th>Cat No</th><th class="qtycell">Cost (sys)</th><th class="qtycell">New cost</th><th class="qtycell">Retail</th><th class="qtycell">Margin</th><th>Include</th></tr></thead><tbody>' +
+    st.unmatchedSys.map(si => {
+      const s = invoiceItemAdjust[si], m = st.manual[si];
+      const mg = scMargin(m.cost, m.retail);
+      return `<tr><td>${escapeHtml(s.stock_name || '—')}</td><td class="mono">${escapeHtml(s.catno || '—')}</td><td class="qtycell">${scFmt(scSysCost(s))}</td>
+        <td class="qtycell"><input type="number" step="0.01" min="0" class="priceinput" value="${escapeHtml(String(m.cost))}" onchange="scSetManual(${si},'cost',this.value)"></td>
+        <td class="qtycell"><input type="number" step="0.01" min="0" class="priceinput" value="${escapeHtml(String(m.retail ?? ''))}" onchange="scSetManual(${si},'retail',this.value)"></td>
+        <td class="qtycell">${mg === null ? '—' : mg.toFixed(1) + '%'}</td>
+        <td><input type="checkbox" ${m.include ? 'checked' : ''} onchange="scSetManual(${si},'include',this.checked)"></td></tr>`;
+    }).join('') + '</tbody></table>';
+  body.innerHTML = html;
+  body.querySelectorAll('table').forEach(t => {
+    const w = document.createElement('div'); w.className = 'restaurant-table-scroll';
+    t.parentNode.insertBefore(w, t); w.appendChild(t);
+  });
+}
+function scSetManual(si, field, val){
+  const m = scState.manual[si];
+  if(field === 'include') m.include = !!val; else m[field] = String(val).trim();
+  if(field === 'cost' && m.cost !== '' && !m.include) m.include = true; // typing a cost means "use it"
+  scRender();
+}
+
+/* ---- rows for Update Prices / Final ---- */
+function scRowFrom(s, cost, retail, pack, cat, source){
+  const retailN = scNum(retail);
+  return {
+    stockid: s.stockid, name: s.stock_name, catno: cat || s.catno || '', barcode: firstBarcode(s.barcode),
+    department: s.department_name || 'Other', packSize: pack, prevCost: scNum(s.cost_price), prevRetail: scNum(s.retail_price),
+    prevPack: scNum(s.pack_size), cost, retail: retailN, online: scNum(s.online_price),
+    margin: scMargin(cost, retailN), minMargin: Number(s.min_margin_pct), source
+  };
+}
+function scFinalRows(){
+  const rows = [];
+  scState.pairs.forEach(p => {
+    if(!scActive(p)) return;
+    rows.push(scRowFrom(invoiceItemAdjust[p.sysIdx], p.newCost, p.retail, p.inv.packSize, p.inv.catno, 'Invoice'));
+  });
+  Object.keys(scState.manual).forEach(k => {
+    const m = scState.manual[k];
+    const cost = scNum(m.cost);
+    if(!m.include || cost === null) return;
+    const s = invoiceItemAdjust[k];
+    rows.push(scRowFrom(s, cost, m.retail, scNum(s.pack_size) || 1, s.catno, 'Manual'));
+  });
+  return rows;
+}
+
+/* ---- Update Prices: same CSV fields, queue and status popup as Create Invoice's Retail CSV ---- */
+function scUpdatePrices(){
+  if(!scState.reviewDone && scState.pairs.some(p => p.tier !== 'catno' && !p.confirmed)){
+    if(!confirm('Some suggested matches are still unticked — they will NOT be updated. Continue?')) return;
+  }
+  let rows = scFinalRows();
+  if(scState.onlyChanged){
+    rows = rows.filter(r => r.prevCost === null || Math.abs(r.cost - r.prevCost) > 0.004 ||
+      r.retail !== r.prevRetail || r.prevPack !== Number(r.packSize));
+  }
+  if(rows.length === 0){ toast('Nothing to update — no lines changed'); return; }
+  const noRetail = rows.find(r => r.retail === null || r.retail === 0);
+  if(noRetail){ toast('"' + noRetail.name + '" has no Retail Price — fill it in before updating'); return; }
+  if(!confirm('Send ' + rows.length + ' line(s) to Vector?')) return;
+  const supplierName = (currentInvoiceNote && currentInvoiceNote.supplier_name) || scState.rule.label;
+  const headers = ['Description as per Vector', 'Qty per Box', 'Cost / Unit', 'Selling Price', 'Barcode', 'Department', 'Supplier'];
+  const csvRows = rows.map(r => ({
+    'Description as per Vector': r.name,
+    'Qty per Box': r.packSize === null || r.packSize === undefined ? '' : r.packSize,
+    'Cost / Unit': Number(r.cost).toFixed(2),
+    'Selling Price': Number(r.retail).toFixed(2),
+    'Barcode': r.barcode,
+    'Department': r.department,
+    'Supplier': supplierName
+  }));
+  const fileName = 'invoice-retail-veg.csv'; // fixed name — the Vector watcher looks for this exact filename
+  downloadFixedNameCSV(fileName, headers, csvRows);
+  apiPost('vector-import/queue', { file_name: fileName, csv_content: buildCSVText(headers, csvRows), type: 'RETAIL' })
+    .then(res => { if(res && res.queue_id) trackVectorImportStatus(res.queue_id, 'RETAIL'); })
+    .catch(e => { toast('Could not queue the update for Vector'); console.error(e); });
+}
+
+/* ---- Final tab ---- */
+function scRenderFinal(body){
+  const rows = scFinalRows();
+  body.innerHTML = `
+    <h4 style="margin:0 0 6px;">1. Price levels</h4>
+    <p class="sub-text" style="font-size:13px;color:var(--text-dim);margin:0 0 10px;">${rows.length} product(s): matched lines plus any manual entries — new cost, retail, online price and margin.</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:26px;">
+      <button class="btn-ghost" onclick="scDownloadLevels('csv')">Download CSV</button>
+      <button class="btn-ghost" onclick="scDownloadLevels('excel')">Download Excel</button>
+    </div>
+    <h4 style="margin:0 0 6px;">2. Products below a margin</h4>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
+      <label style="font-size:13px;">Minimum margin %</label>
+      <input type="number" step="0.1" min="0" max="100" id="scMarginInput" class="priceinput" style="width:90px;" value="${escapeHtml(scState.marginInput)}" placeholder="e.g. 30">
+      <button class="btn-amber" onclick="scShowBelowMargin()">Show products below this</button>
+    </div>
+    <div id="scMarginResults"></div>`;
+  if(scState.marginRows) scDrawMarginRows();
+}
+const SC_LEVEL_HEADERS = ['Stock No', 'Description', 'Cat No', 'Barcode', 'Department', 'Pack Size', 'Previous Cost', 'New Cost / Unit', 'Retail Price', 'Online Price', 'Margin %', 'Source'];
+function scLevelBody(rows){
+  return rows.map(r => [r.stockid ?? '', r.name, r.catno, r.barcode, r.department, r.packSize ?? '',
+    r.prevCost === null ? '' : r.prevCost.toFixed(2), Number(r.cost).toFixed(2),
+    r.retail === null ? '' : r.retail.toFixed(2), r.online === null ? '' : r.online.toFixed(2),
+    r.margin === null ? '' : r.margin.toFixed(1), r.source]);
+}
+function scFileBase(prefix){ return prefix + '-' + ((currentInvoiceNote && currentInvoiceNote.recnoteref) || 'note'); }
+function scDownloadLevels(fmt){
+  const rows = scFinalRows();
+  if(rows.length === 0){ toast('No matched products yet'); return; }
+  const body = scLevelBody(rows);
+  if(fmt === 'csv') downloadCSV(scFileBase('price-levels') + '.csv', SC_LEVEL_HEADERS, body);
+  else scDownloadExcel(scFileBase('price-levels') + '.xlsx', SC_LEVEL_HEADERS, body, 'Price levels');
+}
+function scDownloadExcel(file, headers, body, sheetName){
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...body]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.writeFile(wb, file);
+}
+function scShowBelowMargin(){
+  const v = scNum(document.getElementById('scMarginInput').value);
+  if(v === null){ toast('Enter a margin percent first'); return; }
+  scState.marginInput = String(v);
+  const all = scFinalRows();
+  scState.marginThreshold = v;
+  scState.marginRows = all.filter(r => r.margin !== null && r.margin < v).sort((a, b) => a.margin - b.margin);
+  scState.marginSkipped = all.filter(r => r.margin === null).length;
+  scDrawMarginRows();
+}
+const SC_MARGIN_HEADERS = ['Description', 'Cat No', 'Barcode', 'Department', 'New Cost / Unit', 'Retail Price', 'Online Price', 'Margin %'];
+function scMarginBody(){
+  return scState.marginRows.map(r => [r.name, r.catno, r.barcode, r.department, Number(r.cost).toFixed(2),
+    r.retail === null ? '' : r.retail.toFixed(2), r.online === null ? '' : r.online.toFixed(2), r.margin.toFixed(1)]);
+}
+function scDrawMarginRows(){
+  const box = document.getElementById('scMarginResults');
+  const rows = scState.marginRows;
+  if(!rows) return;
+  if(rows.length === 0){ box.innerHTML = '<div class="empty-hint">No products are below ' + scState.marginThreshold + '% margin.</div>'; return; }
+  box.innerHTML = `
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;align-items:center;">
+      <b>${rows.length}</b> product(s) below ${scState.marginThreshold}%${scState.marginSkipped ? ' <span style="color:var(--text-dim);font-size:12px;">(' + scState.marginSkipped + ' skipped — no retail price)</span>' : ''}
+      <span style="margin-left:auto;display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn-ghost" onclick="scDownloadMargin('csv')">Download CSV</button>
+        <button class="btn-ghost" onclick="scDownloadMargin('excel')">Download Excel</button>
+        <button class="btn-ghost" onclick="scDownloadMargin('pdf')">Download PDF</button>
+        <button class="btn-amber" onclick="scPrintMargin()">Print</button>
+      </span>
+    </div>
+    <div class="restaurant-table-scroll"><table class="finaltable"><thead><tr>${SC_MARGIN_HEADERS.map((h, i) => `<th class="${i >= 4 ? 'qtycell' : ''}">${h}</th>`).join('')}</tr></thead><tbody>` +
+    scMarginBody().map(r => '<tr class="invmarginlow">' + r.map((c, i) => `<td class="${i >= 4 ? 'qtycell' : ''}">${escapeHtml(String(c))}</td>`).join('') + '</tr>').join('') +
+    '</tbody></table></div>';
+}
+function scDownloadMargin(fmt){
+  if(!scState.marginRows || scState.marginRows.length === 0){ toast('Nothing to download'); return; }
+  const body = scMarginBody();
+  const base = scFileBase('below-margin-' + scState.marginThreshold);
+  if(fmt === 'csv') downloadCSV(base + '.csv', SC_MARGIN_HEADERS, body);
+  else if(fmt === 'excel') scDownloadExcel(base + '.xlsx', SC_MARGIN_HEADERS, body, 'Below margin');
+  else{
+    try{
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      doc.setFontSize(16);
+      doc.text('Below ' + scState.marginThreshold + '% margin — ' + ((currentInvoiceNote && currentInvoiceNote.recnoteref) || ''), 14, 18);
+      doc.setFontSize(9); doc.setTextColor(120);
+      doc.text(scState.rule.label + ' — Generated ' + new Date().toLocaleString(), 14, 24);
+      doc.autoTable({ startY: 30, head: [SC_MARGIN_HEADERS], body, theme: 'grid', headStyles: { fillColor: [30, 34, 42] }, styles: { fontSize: 8.5 }, margin: { left: 10, right: 10 } });
+      doc.save(base + '.pdf');
+    }catch(e){ toast('Could not generate PDF'); console.error(e); }
+  }
+}
+function scPrintMargin(){
+  if(!scState.marginRows || scState.marginRows.length === 0){ toast('Nothing to print'); return; }
+  const w = window.open('', '_blank');
+  if(!w){ toast('Allow pop-ups to print'); return; }
+  const body = scMarginBody();
+  w.document.write('<html><head><title>Below margin</title><style>body{font-family:Arial,sans-serif;padding:20px}table{border-collapse:collapse;width:100%;font-size:12px}th,td{border:1px solid #999;padding:4px 6px;text-align:left}th{background:#eee}</style></head><body>' +
+    '<h2>Products below ' + scState.marginThreshold + '% margin</h2><p>' + escapeHtml(scState.rule.label) + ' — ' + escapeHtml((currentInvoiceNote && currentInvoiceNote.recnoteref) || '') + ' — ' + new Date().toLocaleString() + '</p>' +
+    '<table><thead><tr>' + SC_MARGIN_HEADERS.map(h => '<th>' + h + '</th>').join('') + '</tr></thead><tbody>' +
+    body.map(r => '<tr>' + r.map(c => '<td>' + escapeHtml(String(c)) + '</td>').join('') + '</tr>').join('') +
+    '</tbody></table></body></html>');
+  w.document.close(); w.focus(); w.print();
 }
 
 /* ============ CREATE INVOICE (3rd Invoices category) ============ */
