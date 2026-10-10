@@ -11839,6 +11839,7 @@ const INVOICE_SUPPLIER_RULES = {
     label: 'Top-Op Foods Ltd',
     aliases: ['top-op', 'top op', 'topop'],
     skipRows: 13, // first 13 lines of every file are header/address text
+    vatRates: { '1': 0.20, '2': 0 }, // VAT code on the invoice -> rate (code 2 = zero rated)
     // 0-based column positions in the Top-Op sheet (A=0)
     cols: { catno: 1, name: 3, packSize: 8, size: 9, qty: 10, casePrice: 12, discountPct: 13, net: 15, vatCode: 16 },
     // "H737B...BIGEN" -> "H737B"
@@ -11943,6 +11944,7 @@ function scParseInvoiceRows(rows, rule, fileName){
       catKey: scNormCat(catRaw, rule),
       name, packSize: pack, size: r[c.size] ?? '', caseQty: qty, units, net,
       unitCost: scRound2(net / units),
+      vat: net * ((rule.vatRates && rule.vatRates[String(r[c.vatCode]).trim()]) || 0), // unrounded: the invoice rounds VAT on the total, not per line
       casePrice: scNum(r[c.casePrice]), files: [fileName]
     });
   });
@@ -11955,7 +11957,7 @@ function scMergeInvoiceLines(lines){
     if(!l.catKey){ out.push(l); return; }
     const ex = byKey.get(l.catKey);
     if(!ex){ const copy = Object.assign({}, l, { files: [...l.files], _net: l.net }); byKey.set(l.catKey, copy); out.push(copy); return; }
-    ex.units += l.units; ex.caseQty += l.caseQty; ex._net += l.net; ex.net = ex._net;
+    ex.units += l.units; ex.caseQty += l.caseQty; ex._net += l.net; ex.net = ex._net; ex.vat = ex.vat + l.vat;
     ex.unitCost = ex.units ? scRound2(ex._net / ex.units) : ex.unitCost;
     l.files.forEach(f => { if(!ex.files.includes(f)) ex.files.push(f); });
   });
@@ -12108,7 +12110,7 @@ async function runInvoiceSheetCheck(){
       rule, supplierName, fileNames: files.map(f => f.name), perFile,
       invLines, pairs: m.pairs, unmatchedInv: m.unmatchedInv, unmatchedSys: m.unmatchedSys,
       manual, tab: 'matched', reviewDone: false, onlyChanged: true,
-      marginInput: '', marginRows: null
+      marginInput: '', marginRows: null, priceFilter: false, updateSent: false
     };
     progress.style.display = 'none';
     closeModal('modalInvoiceAutomated');
@@ -12161,6 +12163,80 @@ function scRender(){
   else scRenderFinal(body);
 }
 
+
+/* ---- totals (invoice file vs system note) + price recheck ---- */
+function scSumObj(items, netOf, vatOf){
+  const o = { net: 0, vat: 0 };
+  items.forEach(x => { o.net += netOf(x) || 0; o.vat += vatOf(x) || 0; });
+  o.net = scRound2(o.net); o.vat = scRound2(o.vat); o.gross = scRound2(o.net + o.vat);
+  return o;
+}
+function scTotalsHtml(){
+  const st = scState;
+  const active = st.pairs.filter(scActive);
+  const invAll = scSumObj(st.invLines, l => l.net, l => l.vat);
+  const sysAll = scSumObj(invoiceItemAdjust, r => scNum(r.net_value), r => scNum(r.vat_value));
+  const uniqInv = [...new Set(active.map(p => p.invIdx))].map(i => st.invLines[i]);
+  const invTick = scSumObj(uniqInv, l => l.net, l => l.vat);
+  const sysTick = scSumObj(active, p => scNum(invoiceItemAdjust[p.sysIdx].net_value), p => scNum(invoiceItemAdjust[p.sysIdx].vat_value));
+  const diff = (a, b) => ({ net: scRound2(a.net - b.net), vat: scRound2(a.vat - b.vat), gross: scRound2(a.gross - b.gross) });
+  const dAll = diff(invAll, sysAll), dTick = diff(invTick, sysTick);
+  const TOL = 0.05;
+  const ok = d => Math.abs(d.net) <= TOL && Math.abs(d.vat) <= TOL && Math.abs(d.gross) <= TOL;
+  const m = v => '£' + Number(v).toFixed(2);
+  const sg = v => (v > 0 ? '+' : '') + Number(v).toFixed(2);
+  const row = (label, o, bold) => `<tr style="${bold ? 'font-weight:700;' : ''}"><td>${label}</td><td class="qtycell">${m(o.net)}</td><td class="qtycell">${m(o.vat)}</td><td class="qtycell">${m(o.gross)}</td></tr>`;
+  const drow = (label, d) => `<tr style="font-weight:700;"><td>${label}</td><td class="qtycell">${sg(d.net)}</td><td class="qtycell">${sg(d.vat)}</td><td class="qtycell">${sg(d.gross)}</td></tr>`;
+  const leftover = scRound2(invAll.gross - invTick.gross);
+  const leftoverLines = st.invLines.length - uniqInv.length;
+  const tickMsg = ok(dTick)
+    ? '✓ Ticked matches agree with the system note totals.'
+    : '✗ Ticked matches differ from the system note by ' + m(Math.abs(dTick.gross)) + ' (inc VAT) — still a difference.';
+  const allMsg = ok(dAll)
+    ? '✓ Invoice file total matches the system note total.'
+    : '✗ Invoice file total differs from the system note total by ' + m(Math.abs(dAll.gross)) + ' (inc VAT).';
+  return `<div style="margin-bottom:14px;max-width:760px;">
+    <table class="finaltable"><thead><tr><th>Totals</th><th class="qtycell">Cost (ex VAT)</th><th class="qtycell">VAT</th><th class="qtycell">Total inc VAT</th></tr></thead><tbody>
+      ${row('Invoice file — all ' + st.invLines.length + ' lines', invAll)}
+      ${row('System note — all ' + invoiceItemAdjust.length + ' lines', sysAll)}
+      ${drow('Difference', dAll)}
+      ${row('Ticked matches — invoice side (' + uniqInv.length + ' lines)', invTick)}
+      ${row('Ticked matches — system side (' + active.length + ' lines)', sysTick)}
+      ${drow('Difference', dTick)}
+    </tbody></table>
+    <div style="font-size:13px;margin-top:6px;color:${ok(dAll) ? 'var(--green)' : 'var(--danger)'};">${allMsg}</div>
+    <div style="font-size:13px;color:${ok(dTick) ? 'var(--green)' : 'var(--danger)'};">${tickMsg}</div>
+    <div style="font-size:12.5px;color:var(--text-dim);">Not yet matched: ${leftoverLines} invoice line(s), ${m(leftover)} inc VAT.</div>
+  </div>`;
+}
+function scPriceMismatch(p){
+  const sc = scSysCost(invoiceItemAdjust[p.sysIdx]);
+  return sc === null || Math.abs(p.newCost - sc) > 0.004;
+}
+async function scRecheckPrices(){
+  if(scState.priceFilter){ scState.priceFilter = false; scRender(); return; }
+  // after an Update Prices, pull the note's lines again so the system side is current
+  if(scState.updateSent){
+    try{
+      const data = await apiGet('invoices/notes/' + currentInvoiceNote.suppid + '/' + encodeURIComponent(currentInvoiceNote.recnoteid) + '/items/');
+      const items = data.items || [];
+      if(items.length === invoiceItemAdjust.length && items.every((it, i) => it.stock_name === invoiceItemAdjust[i].stock_name)){
+        const f2 = v => (v !== null && v !== undefined) ? Number(v).toFixed(2) : '';
+        items.forEach((it, i) => {
+          const r = invoiceItemAdjust[i];
+          r.cost_price = f2(it.cost_price); r.retail_price = f2(it.retail_price); r.online_price = f2(it.online_price);
+          r.net_value = f2(it.net_value); r.vat_value = f2(it.vat_value);
+          r.pack_size = it.pack_size !== null && it.pack_size !== undefined ? String(it.pack_size) : '';
+        });
+      }else toast('System lines changed — compared with the data already loaded');
+    }catch(e){ console.error(e); toast('Could not refresh from the system — comparing with what is loaded'); }
+  }
+  scState.priceFilter = true;
+  scRender();
+  const n = scState.pairs.filter(p => scActive(p) && scPriceMismatch(p)).length;
+  toast(n === 0 ? 'All ticked prices match the system' : n + ' price(s) do not match');
+}
+
 function scRenderMatched(body){
   const st = scState;
   const exact = st.pairs.filter(p => p.tier === 'catno').length;
@@ -12168,7 +12244,7 @@ function scRenderMatched(body){
   const byName = st.pairs.filter(p => p.tier === 'name');
   const tick = a => a.filter(p => p.confirmed).length;
   const head = document.createElement('div');
-  head.innerHTML = `
+  head.innerHTML = scTotalsHtml() + `
     <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:13px;margin-bottom:10px;">
       <span><b>${exact}</b> exact Cat No</span>
       <span><b>${near.length}</b> near Cat No (${tick(near)} ✓)</span>
@@ -12179,14 +12255,16 @@ function scRenderMatched(body){
         ? '<button class="btn-ghost" onclick="scReopenReview()">Re-open review</button>'
         : '<button class="btn-ghost" onclick="scTickAll(true)">Tick all suggestions</button><button class="btn-ghost" onclick="scTickAll(false)">Untick all suggestions</button><button class="btn-amber" onclick="scFinishReview()">Finish review — move unticked to Other</button>'}
       <label style="font-size:13px;margin-left:auto;"><input type="checkbox" ${st.onlyChanged ? 'checked' : ''} onchange="scState.onlyChanged=this.checked"> Only send lines where cost / retail / pack changed</label>
+      <button class="btn-ghost" onclick="scRecheckPrices()">${st.priceFilter ? 'Show all lines' : 'Recheck prices'}</button>
       <button class="btn-amber" onclick="scUpdatePrices()">Update Prices</button>
-    </div>`;
+    </div>
+    ${st.priceFilter ? (() => { const bad = st.pairs.filter(p => scActive(p) && scPriceMismatch(p)).length; return '<div style="margin-bottom:10px;font-size:13px;font-weight:700;">Showing the ' + bad + ' ticked line(s) whose cost does not match the system' + (bad === 0 ? ' — all prices match ✓' : '') + '.</div>'; })() : ''}`;
   body.appendChild(head);
   const tierOrder = { near: 0, name: 1, catno: 2 };
-  const rows = st.pairs.filter(scVisibleOnMatched).sort((a, b) =>
+  const rows = st.pairs.filter(scVisibleOnMatched).filter(p => !st.priceFilter || (scActive(p) && scPriceMismatch(p))).sort((a, b) =>
     tierOrder[a.tier] - tierOrder[b.tier] ||
     String(invoiceItemAdjust[a.sysIdx].stock_name).localeCompare(String(invoiceItemAdjust[b.sysIdx].stock_name)));
-  if(rows.length === 0){ body.insertAdjacentHTML('beforeend', '<div class="empty-hint">Nothing matched.</div>'); return; }
+  if(rows.length === 0){ body.insertAdjacentHTML('beforeend', '<div class="empty-hint">' + (st.priceFilter ? 'No price differences.' : 'Nothing matched.') + '</div>'); return; }
   const table = document.createElement('table');
   table.className = 'finaltable';
   table.innerHTML = `<thead><tr>
@@ -12333,7 +12411,7 @@ function scUpdatePrices(){
   const fileName = 'invoice-retail-veg.csv'; // fixed name — the Vector watcher looks for this exact filename
   downloadFixedNameCSV(fileName, headers, csvRows);
   apiPost('vector-import/queue', { file_name: fileName, csv_content: buildCSVText(headers, csvRows), type: 'RETAIL' })
-    .then(res => { if(res && res.queue_id) trackVectorImportStatus(res.queue_id, 'RETAIL'); })
+    .then(res => { scState.updateSent = true; if(res && res.queue_id) trackVectorImportStatus(res.queue_id, 'RETAIL'); })
     .catch(e => { toast('Could not queue the update for Vector'); console.error(e); });
 }
 
