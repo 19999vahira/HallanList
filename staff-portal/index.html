@@ -371,7 +371,7 @@
 </div>
 
 <script>
-const API_BASE = "https://hallan-picking-backend.onrender.com/api/";
+const API_BASE = (location.hostname === "localhost" || location.hostname === "127.0.0.1") ? "http://localhost:3000/api/" : "https://hallan-picking-backend.onrender.com/api/";
 
 // Persistent login: localStorage (not sessionStorage) so the session
 // survives closing the browser entirely, not just this tab. The only thing

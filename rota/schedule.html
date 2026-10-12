@@ -738,7 +738,7 @@
   /* =================================================================
      AUTH GUARD — reuses the Staff Portal login (see rota/index.html).
      ================================================================= */
-  const API_BASE = 'https://hallan-picking-backend.onrender.com';
+  const API_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? 'http://localhost:3000' : 'https://hallan-picking-backend.onrender.com';
   const token = localStorage.getItem('rota_token');
   if (!token) window.location.href = 'index.html';
   document.getElementById('user-name').textContent = localStorage.getItem('rota_name') || 'Hallan Cash & Carry';

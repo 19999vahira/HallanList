@@ -3969,7 +3969,7 @@
 
 <script>
 /* ============ CONFIG ============ */
-const API_BASE = "https://hallan-picking-backend.onrender.com/api/";
+const API_BASE = (location.hostname === "localhost" || location.hostname === "127.0.0.1") ? "http://localhost:3000/api/" : "https://hallan-picking-backend.onrender.com/api/";
 // Wholesale Pricing password now lives server-side (APP_SETTINGS table) so it can be
 // changed from the portal and stays in sync across every device — see openWholesalePricing().
 
