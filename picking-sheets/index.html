@@ -603,6 +603,20 @@
   .odfilterbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
   .odfilterbar select.historysearch{width:auto;min-width:210px;cursor:pointer;}
 
+  /* ---- Stock Info > Shopify ---- */
+  .odweb.active{background:#e6f6ec;color:#17803d;border-color:#b7e3c6;}
+  .odweb.archived,.odweb.unlisted{background:#f0e9fb;color:#6a3fb5;border-color:#d8c8f1;}
+  .shbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  .shbar select.historysearch{width:auto;min-width:190px;cursor:pointer;}
+  table.shtable th.shc,table.shtable td.shc{text-align:center;white-space:nowrap;width:1%;}
+  table.shtable td.shnum{text-align:right;font-family:'JetBrains Mono',monospace;font-size:13px;white-space:nowrap;}
+  table.shtable th.shnum{text-align:right;}
+  table.shtable tr.shsending{opacity:.55;pointer-events:none;}
+  .shmsg{font-size:12px;margin-top:3px;word-break:break-word;}
+  .shmsg.err{color:var(--danger);}
+  .shmsg.ok{color:var(--green);}
+  .shmsg.warn{color:var(--accent-dim);}
+
   /* ---- unpicked / shortfall report ---- */
   .unpicked-select{
     background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:10px 14px;
@@ -1750,7 +1764,7 @@
     <div class="hero">
       <div class="eyebrow">Lookup</div>
       <h2>Stock Info</h2>
-      <p>Look up where a product is stocked, or check what's coming up to expiry.</p>
+      <p>Look up where a product is stocked, check what's coming up to expiry, or send products online.</p>
     </div>
     <div class="catgrid">
       <div class="bincard" onclick="openStockDataSearch()">
@@ -1764,6 +1778,10 @@
       <div class="bincard" onclick="openOnlineData()">
         <h4>🌐 Online Data</h4>
         <div class="count">Track images, descriptions and details for online listings</div>
+      </div>
+      <div class="bincard" onclick="openShopify()">
+        <h4>🛍️ Shopify</h4>
+        <div class="count">Send products to the Shopify store and see what's live</div>
       </div>
     </div>
   </div>
@@ -1912,6 +1930,76 @@
     </div>
     <div id="onlineWebNote" class="odcount" style="margin:-8px 0 12px;"></div>
     <div id="onlineListBox"><div class="loading">Loading…</div></div>
+  </div>
+
+  <!-- STOCK INFO: SHOPIFY (supplier search) -->
+  <div id="view-shopify-supplier" class="view">
+    <div class="crumbrow" id="shopifyCrumbs-supplier"></div>
+    <div class="hero">
+      <div class="eyebrow">Shopify</div>
+      <h2>Shopify</h2>
+      <p>Pick a supplier, then send its products to the Shopify store and see which ones are already there.</p>
+    </div>
+    <div id="shopifyConnNote" class="odcount" style="margin:0 0 12px;"></div>
+    <div class="actionbar">
+      <input type="text" id="shopifySupplierSearchInput" class="historysearch" style="max-width:420px;"
+             placeholder="Search supplier name…" oninput="onShopifySupplierSearch()" autocomplete="off">
+      <span></span>
+    </div>
+    <div id="shopifySupplierResults">
+      <div class="empty-hint">Start typing a supplier name.</div>
+    </div>
+  </div>
+
+  <!-- STOCK INFO: SHOPIFY > SUPPLIER > Preferred / Non-Preferred -->
+  <div id="view-shopify-pref" class="view">
+    <div class="crumbrow" id="shopifyCrumbs-pref"></div>
+    <div class="hero">
+      <div class="eyebrow">Shopify</div>
+      <h2 id="shopifyPrefTitle">Supplier</h2>
+      <p>Choose which products to work on.</p>
+    </div>
+    <div class="catgrid">
+      <div class="bincard" onclick="openShopifyList('yes')">
+        <h4>⭐ Preferred List</h4>
+        <div class="count" id="shopifyCountPreferred">Loading…</div>
+      </div>
+      <div class="bincard" onclick="openShopifyList('no')">
+        <h4>📋 Non-Preferred List</h4>
+        <div class="count" id="shopifyCountNonPreferred">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STOCK INFO: SHOPIFY > ... > product list -->
+  <div id="view-shopify-list" class="view">
+    <div class="crumbrow" id="shopifyCrumbs-list"></div>
+    <div class="hero">
+      <div class="eyebrow">Shopify</div>
+      <h2 id="shopifyListTitle">Preferred List</h2>
+      <p id="shopifyListSub"></p>
+    </div>
+    <div class="actionbar">
+      <div class="shbar">
+        <input type="text" id="shopifyListFilter" class="historysearch" style="max-width:300px;"
+               placeholder="Filter by name or barcode…" oninput="renderShopifyList()" autocomplete="off">
+        <select id="shopifyStatusFilter" class="historysearch" onchange="onShopifyFilterChange()" title="Filter by whether the product is on Shopify">
+          <option value="all">Shopify: All</option>
+        </select>
+        <select id="shopifyOnlineFilter" class="historysearch" onchange="onShopifyFilterChange()" title="Filter by Online Data progress (images, description, other details)">
+          <option value="all">Online Data: All</option>
+          <option value="complete">Online Data: Complete</option>
+          <option value="incomplete">Online Data: Incomplete</option>
+        </select>
+        <button class="btn-ghost" type="button" id="shopifyRefreshBtn" onclick="refreshShopifyStatus()" title="Re-read product statuses from Shopify">&#8635; Refresh Shopify status</button>
+      </div>
+      <div class="shbar">
+        <span class="odcount" id="shopifyListCount"></span>
+        <button class="btn-amber" type="button" id="shopifySendSelBtn" onclick="sendShopifySelected()" disabled>Send selected to Shopify</button>
+      </div>
+    </div>
+    <div id="shopifyListNote" class="odcount" style="margin:-8px 0 12px;"></div>
+    <div id="shopifyListBox"><div class="loading">Loading…</div></div>
   </div>
 
   <!-- RESTAURANT ORDERS: PASSCODE -->
@@ -8339,6 +8427,341 @@ async function moveOnlineBack(stockid, btn){
     toast('Could not move it back — try again');
     console.error(e);
   }
+}
+
+/* ============ STOCK INFO > SHOPIFY ============
+   Supplier -> Preferred / Non-Preferred -> product list. Each product shows
+   whether it is on Shopify (Active / Draft / Archived / Not on Shopify) and
+   can be sent (created) or updated there through the Shopify Admin API —
+   the server does the talking to Shopify (see the SHOPIFY section of
+   server.js); nothing secret ever reaches this page. Updates only change
+   price / barcode / SKU, so titles, descriptions and images edited in
+   Shopify are never overwritten. */
+const shopifyData = {
+  suppid: null, suppName: '', pref: null,
+  items: [],
+  selected: new Set(),
+  shopify: null,        // { configured, ok, error, total, fetched_at, new_product_status }
+  statusFilter: 'all',
+  onlineFilter: 'all',
+  busy: false,
+  supplierDebounce: null
+};
+const SHOPIFY_LABELS = {
+  active:'Active', draft:'Draft', archived:'Archived', unlisted:'Unlisted',
+  not_found:'Not on Shopify', unknown:'Unknown'
+};
+function shopifyLabel(st){ return SHOPIFY_LABELS[st] || st; }
+function shopifyPrefLabel(){ return shopifyData.pref === 'yes' ? 'Preferred List' : 'Non-Preferred List'; }
+
+/* Breadcrumbs: level 0 = supplier search ... 2 = product list */
+function renderShopifyCrumbs(boxId, level){
+  const parts = [
+    { label:'Home', fn:'goHome()' },
+    { label:'Stock Info', fn:"showView('view-stock-info')" },
+    { label:'Shopify', fn: level === 0 ? null : 'openShopify()' }
+  ];
+  if(level >= 1) parts.push({ label:shopifyData.suppName, fn: level === 1 ? null : 'openShopifySupplierHome()' });
+  if(level >= 2) parts.push({ label:shopifyPrefLabel(), fn:null });
+  const html = parts.map((p, i) => {
+    const last = i === parts.length - 1;
+    const sep = i > 0 ? '<span class="sep">/</span>' : '';
+    return sep + (last
+      ? '<span class="current">' + escapeHtml(p.label) + '</span>'
+      : '<button onclick="' + p.fn + '">' + escapeHtml(p.label) + '</button>');
+  }).join('');
+  document.getElementById(boxId).innerHTML = html;
+}
+
+/* ---- Supplier search ---- */
+function openShopify(){
+  renderShopifyCrumbs('shopifyCrumbs-supplier', 0);
+  showView('view-shopify-supplier');
+  const input = document.getElementById('shopifySupplierSearchInput');
+  input.value = '';
+  document.getElementById('shopifySupplierResults').innerHTML = '<div class="empty-hint">Start typing a supplier name.</div>';
+  loadShopifyConnection();
+  setTimeout(() => input.focus(), 80);
+}
+async function loadShopifyConnection(){
+  const note = document.getElementById('shopifyConnNote');
+  note.style.color = '';
+  note.textContent = 'Checking the Shopify connection…';
+  try{
+    const s = await apiGet('stock/shopify/status/');
+    if(!s.configured){
+      note.style.color = 'var(--danger)';
+      note.textContent = 'Shopify is not connected yet — add SHOPIFY_STORE and the Shopify app credentials on Render.';
+    }else if(!s.ok){
+      note.style.color = 'var(--danger)';
+      note.textContent = 'Could not connect to Shopify: ' + (s.error || 'unknown error');
+    }else if(!s.can_write_products){
+      note.style.color = 'var(--danger)';
+      note.textContent = 'Connected to ' + s.shop_name + ', but the app is missing the write_products permission — products cannot be sent until it is added.';
+    }else{
+      note.textContent = 'Connected to ' + s.shop_name + ' (' + s.shop_domain + '). New products are created as ' + String(s.new_product_status).toLowerCase() + '.';
+    }
+  }catch(e){
+    note.style.color = 'var(--danger)';
+    note.textContent = 'Could not check the Shopify connection.';
+    console.error(e);
+  }
+}
+function onShopifySupplierSearch(){
+  clearTimeout(shopifyData.supplierDebounce);
+  const q = document.getElementById('shopifySupplierSearchInput').value.trim();
+  const box = document.getElementById('shopifySupplierResults');
+  if(q.length < 2){ box.innerHTML = '<div class="empty-hint">Start typing a supplier name.</div>'; return; }
+  box.innerHTML = '<div class="loading">Searching…</div>';
+  shopifyData.supplierDebounce = setTimeout(async () => {
+    try{
+      const data = await apiGet('stock/online-data/suppliers/?q=' + encodeURIComponent(q));
+      const items = data.items || [];
+      if(items.length === 0){ box.innerHTML = '<div class="empty-hint">No suppliers found.</div>'; return; }
+      box.innerHTML = items.map(s => `
+        <div class="supplier-pick-row" onclick="chooseShopifySupplier(${Number(s.suppid)}, ${jsArg(s.name)})">
+          <div><span class="spname">${escapeHtml(s.name)}</span></div>
+        </div>
+      `).join('');
+    }catch(e){
+      box.innerHTML = '<div class="loading" style="color:var(--danger)">Search failed.</div>' + errDetailHtml(e);
+      console.error(e);
+    }
+  }, 300);
+}
+function chooseShopifySupplier(suppid, name){
+  shopifyData.suppid = suppid;
+  shopifyData.suppName = name;
+  openShopifySupplierHome();
+}
+
+/* ---- Preferred / Non-Preferred ---- */
+async function openShopifySupplierHome(){
+  renderShopifyCrumbs('shopifyCrumbs-pref', 1);
+  document.getElementById('shopifyPrefTitle').textContent = shopifyData.suppName;
+  document.getElementById('shopifyCountPreferred').textContent = 'Loading…';
+  document.getElementById('shopifyCountNonPreferred').textContent = 'Loading…';
+  showView('view-shopify-pref');
+  const set = (id, c) => {
+    document.getElementById(id).textContent = c ? ((c.incomplete + c.complete) + ' products') : 'Could not load counts';
+  };
+  try{
+    const counts = await apiGet('stock/online-data/summary/?suppid=' + encodeURIComponent(shopifyData.suppid));
+    set('shopifyCountPreferred', counts.preferred);
+    set('shopifyCountNonPreferred', counts.non_preferred);
+  }catch(e){
+    set('shopifyCountPreferred', null);
+    set('shopifyCountNonPreferred', null);
+    console.error(e);
+  }
+}
+
+/* ---- Product list ---- */
+async function openShopifyList(pref){
+  shopifyData.pref = pref;
+  shopifyData.items = [];
+  shopifyData.selected = new Set();
+  shopifyData.statusFilter = 'all';
+  shopifyData.onlineFilter = 'all';
+  renderShopifyCrumbs('shopifyCrumbs-list', 2);
+  document.getElementById('shopifyListTitle').textContent = shopifyData.suppName + ' — ' + shopifyPrefLabel();
+  document.getElementById('shopifyListSub').textContent =
+    'Tick products and press Send selected to Shopify, or use the button on a row. Products not on Shopify are created; products already there get their price and barcode updated.';
+  document.getElementById('shopifyListFilter').value = '';
+  document.getElementById('shopifyOnlineFilter').value = 'all';
+  document.getElementById('shopifyListCount').textContent = '';
+  document.getElementById('shopifyListNote').textContent = '';
+  document.getElementById('shopifyListBox').innerHTML = '<div class="loading">Loading…</div>';
+  showView('view-shopify-list');
+  await loadShopifyItems(false);
+}
+async function loadShopifyItems(forceShopify){
+  try{
+    const data = await apiGet('stock/shopify/items/?suppid=' + encodeURIComponent(shopifyData.suppid)
+      + '&preferred=' + shopifyData.pref + (forceShopify ? '&refresh=1' : ''));
+    // Keep any "sent / failed" messages already on screen across a refresh
+    const old = new Map(shopifyData.items.map(x => [x.stockid, x.msg]));
+    shopifyData.items = (data.items || []).map(x => ({ ...x, msg: old.get(x.stockid) || null }));
+    shopifyData.shopify = data.shopify || null;
+    renderShopifyList();
+  }catch(e){
+    document.getElementById('shopifyListBox').innerHTML = '<div class="loading" style="color:var(--danger)">Could not load products.</div>' + errDetailHtml(e);
+    console.error(e);
+  }
+}
+function shopifyVisibleItems(){
+  const q = document.getElementById('shopifyListFilter').value.trim().toLowerCase();
+  const sf = shopifyData.statusFilter, of = shopifyData.onlineFilter;
+  return shopifyData.items.filter(it =>
+    (!q || (it.name || '').toLowerCase().includes(q) || (it.barcodes || '').toLowerCase().includes(q) || (it.sku || '').toLowerCase().includes(q)) &&
+    (sf === 'all' || it.shopify_status === sf) &&
+    (of === 'all' || (of === 'complete' ? it.online_complete : !it.online_complete)));
+}
+function renderShopifyList(){
+  const box = document.getElementById('shopifyListBox');
+  const all = shopifyData.items;
+  updateShopifyControls(all);
+  const items = shopifyVisibleItems();
+  const filtered = items.length !== all.length;
+  document.getElementById('shopifyListCount').textContent = filtered ? (items.length + ' of ' + all.length + ' products') : (all.length + ' products');
+  updateShopifySendButton();
+  if(all.length === 0){ box.innerHTML = '<div class="empty-hint">No products for this supplier.</div>'; return; }
+  if(items.length === 0){ box.innerHTML = '<div class="empty-hint">No products match that filter.</div>'; return; }
+  const web = shopifyData.shopify;
+  const shopOk = !!(web && web.ok);
+  const allShownSelected = items.every(it => shopifyData.selected.has(it.stockid));
+  const rows = items.map(it => {
+    const badge = shopOk
+      ? (it.shopify_url && it.shopify_status !== 'not_found'
+          ? `<a class="odweb ${escapeHtml(it.shopify_status)}" href="${escapeHtml(it.shopify_url)}" target="_blank" rel="noopener" title="Open in Shopify">${escapeHtml(shopifyLabel(it.shopify_status))}</a>`
+          : `<span class="odweb ${escapeHtml(it.shopify_status)}">${escapeHtml(shopifyLabel(it.shopify_status))}</span>`)
+      : '';
+    const sub = [it.sku ? ('SKU ' + it.sku) : ''].filter(Boolean).join(' · ');
+    const msg = it.msg ? `<div class="shmsg ${escapeHtml(it.msg.type)}">${escapeHtml(it.msg.text)}</div>` : '';
+    const price = it.price ? ('£' + escapeHtml(it.price)) : '<span class="shmsg err">No price</span>';
+    const onShopify = it.shopify_status !== 'not_found' && it.shopify_status !== 'unknown';
+    return `<tr data-stockid="${Number(it.stockid)}">
+      <td class="shc"><input type="checkbox" class="odcheck" ${shopifyData.selected.has(it.stockid) ? 'checked' : ''} onchange="onShopifySelect(${Number(it.stockid)}, this.checked)"></td>
+      <td><div class="odname">${escapeHtml(it.name)}${badge}</div>${sub ? `<div class="odbarcode">${escapeHtml(sub)}</div>` : ''}${msg}</td>
+      <td class="shnum">${price}</td>
+      <td class="shnum">${Number(it.qty) || 0}</td>
+      <td class="shc">${it.online_complete ? '<span class="odtick">&#10003;</span>' : '—'}</td>
+      <td class="shc"><button class="btn-ghost" type="button" onclick="sendShopifyOne(${Number(it.stockid)})">${onShopify ? 'Update' : 'Send to Shopify'}</button></td>
+    </tr>`;
+  }).join('');
+  box.innerHTML = '<table class="finaltable odtable shtable"><thead><tr>'
+    + `<th class="shc"><input type="checkbox" class="odcheck" ${allShownSelected ? 'checked' : ''} onchange="onShopifySelectAll(this.checked)" title="Select everything shown"></th>`
+    + '<th>Product</th><th class="shnum">Price (inc. VAT)</th><th class="shnum">Stock</th><th class="shc">Online Data</th><th class="shc">Shopify</th>'
+    + '</tr></thead><tbody>' + rows + '</tbody></table>';
+}
+function updateShopifyControls(all){
+  const sel = document.getElementById('shopifyStatusFilter');
+  const note = document.getElementById('shopifyListNote');
+  const btn = document.getElementById('shopifyRefreshBtn');
+  const web = shopifyData.shopify;
+  const ok = !!(web && web.ok);
+  if(!ok){
+    sel.innerHTML = '<option value="all">Shopify: not connected</option>';
+    sel.disabled = true;
+    shopifyData.statusFilter = 'all';
+    btn.disabled = !(web && web.configured);
+    note.style.color = 'var(--danger)';
+    note.textContent = !web ? ''
+      : !web.configured ? 'Shopify is not connected — add the SHOPIFY_ settings on Render.'
+      : ('Could not read Shopify: ' + (web.error || 'unknown error'));
+    return;
+  }
+  const counts = {};
+  all.forEach(it => { counts[it.shopify_status] = (counts[it.shopify_status] || 0) + 1; });
+  const order = ['active','draft','archived','unlisted','not_found','unknown'];
+  const keys = order.filter(k => counts[k]).concat(Object.keys(counts).filter(k => !order.includes(k)));
+  let html = '<option value="all">Shopify: All (' + all.length + ')</option>';
+  keys.forEach(k => { html += '<option value="' + escapeHtml(k) + '">' + escapeHtml(shopifyLabel(k)) + ' (' + counts[k] + ')</option>'; });
+  if(shopifyData.statusFilter !== 'all' && !counts[shopifyData.statusFilter]) shopifyData.statusFilter = 'all';
+  sel.innerHTML = html;
+  sel.value = shopifyData.statusFilter;
+  sel.disabled = false;
+  btn.disabled = false;
+  note.style.color = '';
+  const when = web.fetched_at ? new Date(web.fetched_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
+  note.textContent = 'Shopify checked at ' + when + ' · ' + web.total + ' products in the Shopify store · new products are created as '
+    + String(web.new_product_status || 'DRAFT').toLowerCase();
+}
+function onShopifyFilterChange(){
+  shopifyData.statusFilter = document.getElementById('shopifyStatusFilter').value;
+  shopifyData.onlineFilter = document.getElementById('shopifyOnlineFilter').value;
+  renderShopifyList();
+}
+async function refreshShopifyStatus(){
+  const btn = document.getElementById('shopifyRefreshBtn');
+  const old = btn.innerHTML;
+  btn.disabled = true; btn.textContent = 'Refreshing…';
+  try{ await loadShopifyItems(true); toast('Shopify status refreshed'); }
+  finally{ btn.innerHTML = old; btn.disabled = false; }
+}
+
+/* ---- Selecting ---- */
+function onShopifySelect(stockid, checked){
+  if(checked) shopifyData.selected.add(stockid); else shopifyData.selected.delete(stockid);
+  updateShopifySendButton();
+  // keep the header "select all" tick honest
+  const items = shopifyVisibleItems();
+  const head = document.querySelector('#shopifyListBox thead input[type=checkbox]');
+  if(head) head.checked = items.length > 0 && items.every(it => shopifyData.selected.has(it.stockid));
+}
+function onShopifySelectAll(checked){
+  shopifyVisibleItems().forEach(it => { if(checked) shopifyData.selected.add(it.stockid); else shopifyData.selected.delete(it.stockid); });
+  renderShopifyList();
+}
+function updateShopifySendButton(){
+  const btn = document.getElementById('shopifySendSelBtn');
+  const n = shopifyData.selected.size;
+  btn.textContent = n ? ('Send ' + n + ' selected to Shopify') : 'Send selected to Shopify';
+  btn.disabled = shopifyData.busy || n === 0;
+}
+
+/* ---- Sending ---- */
+function sendShopifyOne(stockid){ return shopifySend([stockid]); }
+function sendShopifySelected(){
+  const ids = shopifyData.items.filter(it => shopifyData.selected.has(it.stockid)).map(it => it.stockid);
+  if(ids.length === 0) return;
+  const newStatus = String((shopifyData.shopify && shopifyData.shopify.new_product_status) || 'DRAFT').toLowerCase();
+  if(!confirm('Send ' + ids.length + ' product' + (ids.length === 1 ? '' : 's') + ' to Shopify?\n\nProducts not on Shopify yet are created as ' + newStatus
+    + '. Products already there get their price and barcode updated.')) return;
+  return shopifySend(ids);
+}
+async function shopifySend(ids){
+  if(shopifyData.busy || ids.length === 0) return;
+  shopifyData.busy = true;
+  updateShopifySendButton();
+  const note = document.getElementById('shopifyListNote');
+  const CHUNK = 5;     // a few at a time: keeps each request short and the screen updating
+  let created = 0, updated = 0, failed = 0;
+  const find = id => shopifyData.items.find(x => x.stockid === id);
+  try{
+    for(let i = 0; i < ids.length; i += CHUNK){
+      const chunk = ids.slice(i, i + CHUNK);
+      note.style.color = '';
+      note.textContent = 'Sending ' + Math.min(i + CHUNK, ids.length) + ' of ' + ids.length + ' to Shopify…';
+      chunk.forEach(id => { const row = document.querySelector('#shopifyListBox tr[data-stockid="' + id + '"]'); if(row) row.classList.add('shsending'); });
+      let data;
+      try{
+        data = await apiPost('stock/shopify/push/', { stockids: chunk });
+      }catch(e){
+        chunk.forEach(id => { const it = find(id); if(it) it.msg = { type:'err', text:e.message }; });
+        failed += chunk.length;
+        console.error(e);
+        renderShopifyList();
+        continue;
+      }
+      (data.results || []).forEach(r => {
+        const it = find(r.stockid);
+        if(!it) return;
+        if(r.ok){
+          it.shopify_status = r.shopify_status || it.shopify_status;
+          it.shopify_url = r.shopify_url || it.shopify_url;
+          it.linked = true;
+          if(r.action === 'created') created++; else updated++;
+          const what = (r.action === 'created' ? 'Created on Shopify' : 'Updated on Shopify') + (r.price ? ' at £' + r.price : '');
+          it.msg = r.warning ? { type:'warn', text: what + ' — ' + r.warning } : { type:'ok', text: what };
+          shopifyData.selected.delete(r.stockid);
+        }else{
+          failed++;
+          it.msg = { type:'err', text: r.error || 'Failed' };
+        }
+      });
+      renderShopifyList();
+    }
+  }finally{
+    shopifyData.busy = false;
+    updateShopifySendButton();
+  }
+  const bits = [];
+  if(created) bits.push(created + ' created');
+  if(updated) bits.push(updated + ' updated');
+  if(failed) bits.push(failed + ' failed');
+  toast('Shopify: ' + (bits.join(', ') || 'nothing sent'));
+  renderShopifyList();   // re-draws the status note too
 }
 
 /* ============ RESTAURANT ORDERS ============ */
