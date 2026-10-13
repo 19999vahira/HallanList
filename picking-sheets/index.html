@@ -393,6 +393,29 @@
     .po-field-sep{display:none;}
   }
 
+  /* ---- New Items: Vector-style stock record forms ---- */
+  .ni-listbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:0 0 12px;}
+  .ni-listname{flex:1;min-width:220px;max-width:420px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;font-size:15px;font-family:'Space Grotesk',sans-serif;background:#fff;color:var(--text);}
+  .ni-pill{font-size:12px;padding:4px 10px;border-radius:999px;background:var(--panel2);color:var(--text-dim);border:1px solid var(--line);}
+  .ni-pill.unsaved{background:#fff7e0;color:var(--accent-dim);border-color:#ecd9a0;}
+  .ni-pill.saved{background:#e8f7ee;color:var(--green);border-color:#bfe5cc;}
+  .ni-pill.sent{background:#e8eefb;color:#2b4a8f;border-color:#c3d0ee;}
+  .ni-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px 18px;margin:0 0 18px;}
+  .ni-card.ni-bad{border-color:var(--danger);box-shadow:0 0 0 2px rgba(220,38,38,.12);}
+  .ni-cardhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px;flex-wrap:wrap;}
+  .ni-cardhead b{font-family:'Space Grotesk',sans-serif;font-size:15px;}
+  .ni-cardhead .ni-actions{display:flex;gap:8px;}
+  .ni-cardhead .ni-actions button{padding:6px 12px;font-size:12px;}
+  .ni-fs{border:1px solid var(--line);border-radius:8px;margin:0 0 12px;padding:10px 14px 12px;background:#fff;}
+  .ni-fs legend{font-size:12px;font-weight:600;color:var(--text-dim);padding:0 6px;text-transform:uppercase;letter-spacing:.5px;}
+  .ni-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px 16px;}
+  .ni-grid .ni-wide{grid-column:1/-1;}
+  .ni-f label{display:block;font-size:12px;color:var(--text-dim);margin-bottom:3px;}
+  .ni-f input,.ni-f select{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;font-size:14px;background:#fff;color:var(--text);font-family:inherit;}
+  .ni-f input:focus,.ni-f select:focus{outline:2px solid var(--accent);outline-offset:-1px;}
+  .ni-f input[readonly]{background:var(--panel2);}
+  .ni-hint{font-size:11px;color:var(--text-dim);margin-top:3px;}
+  .ni-warn{font-size:12px;color:var(--danger);margin-top:6px;min-height:16px;}
   .btn-ghost{
     background:var(--panel);border:1px solid var(--line);color:var(--text);padding:10px 16px;
     border-radius:6px;cursor:pointer;font-size:13px;font-family:'Inter',sans-serif;
@@ -2911,7 +2934,7 @@
     </div>
   </div>
 
-  <!-- NEW ITEMS: SPREADSHEET ENTRY -->
+  <!-- NEW ITEMS: STOCK RECORD FORMS -->
   <div id="view-new-items" class="view">
     <div class="crumbrow">
       <button onclick="goHome()">Home</button><span class="sep">/</span>
@@ -2921,13 +2944,23 @@
     <div class="hero">
       <div class="eyebrow">Not Yet In Vector</div>
       <h2>New Items</h2>
-      <p>Fill in a row per new product. Margin calculates itself from Price and Selling Price. Nothing here is saved automatically — download when you're ready.</p>
+      <p>One form per new product, laid out like Vector's Create New Stock Record. Save the list to come back to it later, or press Update to send every item to Vector.</p>
+    </div>
+    <div class="ni-listbar">
+      <input type="text" id="niListName" class="ni-listname" placeholder="List name" oninput="niOnListName(this.value)">
+      <span id="niStatusPill" class="ni-pill">Not saved</span>
     </div>
     <div class="actionbar">
-      <button class="btn-amber" onclick="addNewItemRow()">+ Add Row</button>
-      <div style="display:flex;gap:10px;">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn-amber" onclick="niAddItem()">+ Add Item</button>
+        <button class="btn-ghost" onclick="niNewList()">New List</button>
+        <button class="btn-ghost" onclick="niOpenListPicker()">Open List</button>
+        <button class="btn-ghost" onclick="niSave()">Save</button>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <button class="btn-ghost" onclick="openNewItemsExportModal('csv')">Download CSV</button>
         <button class="btn-ghost" onclick="openNewItemsExportModal('pdf')">Download PDF</button>
+        <button class="btn-amber" onclick="niUpdateVector()">Update Vector</button>
       </div>
     </div>
     <div id="newItemsSheet"></div>
@@ -3483,6 +3516,30 @@
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalCreatedInvoiceExport')">Cancel</button>
       <button class="btn-amber" onclick="confirmCreatedInvoiceExport()">Export</button>
+    </div>
+  </div>
+</div>
+
+<!-- NEW ITEMS: OPEN LIST -->
+<div class="modal-backdrop" id="modalNewItemsOpen">
+  <div class="modal" style="width:520px;">
+    <h3>Open a list</h3>
+    <p class="modal-sub">Pick a saved New Items list.</p>
+    <div id="niListPicker" style="max-height:50vh;overflow:auto;"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalNewItemsOpen')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- NEW ITEMS: PROBLEMS FOUND ON UPDATE -->
+<div class="modal-backdrop" id="modalNewItemsProblems">
+  <div class="modal" style="width:560px;">
+    <h3>Fix these before updating Vector</h3>
+    <p class="modal-sub" id="niProblemsSub"></p>
+    <div id="niProblemsList" style="max-height:50vh;overflow:auto;"></div>
+    <div class="modal-close-row">
+      <button class="btn-amber" onclick="closeModal('modalNewItemsProblems')">OK</button>
     </div>
   </div>
 </div>
@@ -16653,6 +16710,15 @@ const VIMPORT_STATUS_TEXT = {
     sending_title: 'Sending to the till...',
     sending_msg: 'This raises a goods receipt in Vector — usually takes a few minutes.'
   },
+  NEWITEM: {
+    QUEUED: 'Waiting for the till to pick this up...',
+    PULLED: 'Received by the till...',
+    IMPORTING: 'Creating the new stock items in Vector...',
+    done_title: 'New items created',
+    done_msg: 'The new stock items have been created in Vector.',
+    sending_title: 'Sending to the till...',
+    sending_msg: 'This creates new stock records in Vector — usually takes a few minutes.'
+  },
   WHOLESALE: {
     QUEUED: 'Waiting for the till to pick this up...',
     PULLED: 'Received by the till...',
@@ -16779,173 +16845,470 @@ async function downloadCreatedInvoiceQuantityCSV(){
     .catch(e => console.error('Could not queue quantity CSV for remote receipt import', e));
 }
 
-/* ============ NEW ITEMS (spreadsheet entry for brand new products) ============
-   Purely in-browser — nothing here is saved to the database. Fill in rows,
-   export CSV/PDF when ready. Department and Supplier are typeahead fields
-   backed by real data (VEDEPTS / SUPPLIERS) via <datalist> so typing a
-   partial name surfaces the real ones instead of relying on free-typed
-   text staying consistent with what's actually in Vector. */
-let newItemsRows = []; // { name, barcode, catalogue_number, size, price, selling_price, department, supplier, pack_size, total_qty }
-let newItemsDeptLoaded = false;
+/* ============ NEW ITEMS (Vector-style stock record forms) ============
+   One card per brand-new product, laid out like Vector's "Create New Stock
+   Record" (General Info / Cost / Retail Price / Opening Stock). Lists are
+   saved server-side (NEW_ITEM_LISTS) so they can be reopened later, and the
+   "Update Vector" button validates + queues every item as a NEWITEM import —
+   the same queue, status popup and till poller Create Invoice uses.
+   VAT Rate is exactly Vector's two types: Zero Rate (0%) or Standard Rate (20%).
+   Money rules: Item Cost NET is the stored cost; Retail Price inc VAT is the
+   stored shelf price (what Vector imports). Margin % = (retail NET - cost NET)
+   / retail NET, Markup % = (retail NET - cost NET) / cost NET — the same margin
+   definition used everywhere else in this app. Whichever of Retail Price /
+   Margin % / Markup % you typed last is the "driver"; the others follow it. */
+const NI_VAT_TYPES = ['Zero Rate', 'Standard Rate'];
+const NI_STANDARD_VAT = 0.20;
+const NI_DEFAULT_MIN_MARGIN = 38; // same fallback the departments/margins API uses
+let niList = { id: null, name: '', status: 'OPEN', sent_at: null, items: [] };
+let niDirty = false;
+let niUidCounter = 0;
+let niDeptLoaded = false;
+let niDeptMin = {};      // upper-case department name -> minimum margin %
+let niDeptNames = {};    // upper-case department name -> real spelling
+let niProblemUids = {};  // uid -> true while the server has flagged that card
 
-function openNewItemsSheet(){
-  showView('view-new-items');
-  if(newItemsRows.length === 0) addNewItemRow();
-  loadNewItemsDepartments();
-  renderNewItemsSheet();
+function niUkDate(d){ return new Date(d || Date.now()).toLocaleDateString('en-GB', { timeZone: 'Europe/London' }); }
+function niNum(v){ if(v === null || v === undefined || v === '') return null; const n = Number(v); return Number.isFinite(n) ? n : null; }
+function niR2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
+function niFmt2(n){ return (n === null || n === undefined || !Number.isFinite(n)) ? '' : Number(n).toFixed(2); }
+function niFmtCost(n){ if(n === null || n === undefined || !Number.isFinite(n)) return ''; const r = niR2(n); return Math.abs(r - n) < 1e-9 ? r.toFixed(2) : String(Number(n.toFixed(4))); }
+function niVatRate(it){ return it.vat === 'Standard Rate' ? NI_STANDARD_VAT : 0; }
+function niBlankItem(){
+  return {
+    uid: 'n' + (++niUidCounter) + '_' + Date.now().toString(36),
+    description: '', barcode: '', size: '', department: '', vat: 'Zero Rate',
+    supplier: '', catalogue_no: '', pack_size: 1,
+    cost_net: null, retail_inc: null, margin: null, markup: null, driver: 'retail', quantity: 0
+  };
 }
-async function loadNewItemsDepartments(){
-  if(newItemsDeptLoaded) return; // small, stable list — fetch once per visit
+function niFind(uid){ return niList.items.find(i => i.uid === uid); }
+
+/* ---- price maths: keep Retail / Margin / Markup consistent with the cost ---- */
+function niRecalc(it){
+  const v = niVatRate(it), cost = it.cost_net;
+  if(it.driver === 'margin'){
+    if(it.margin !== null && cost !== null && it.margin < 100){
+      const net = cost / (1 - it.margin / 100);
+      it.retail_inc = niR2(net * (1 + v));
+      it.markup = cost > 0 ? (net - cost) / cost * 100 : null;
+    }else{ it.retail_inc = null; it.markup = null; }
+  }else if(it.driver === 'markup'){
+    if(it.markup !== null && cost !== null){
+      const net = cost * (1 + it.markup / 100);
+      it.retail_inc = niR2(net * (1 + v));
+      it.margin = net > 0 ? (net - cost) / net * 100 : null;
+    }else{ it.retail_inc = null; it.margin = null; }
+  }else{
+    if(it.retail_inc !== null && cost !== null){
+      const net = it.retail_inc / (1 + v);
+      it.margin = net > 0 ? (net - cost) / net * 100 : null;
+      it.markup = cost > 0 ? (net - cost) / cost * 100 : null;
+    }else{ it.margin = null; it.markup = null; }
+  }
+}
+function niRetailNet(it){ return it.retail_inc === null ? null : it.retail_inc / (1 + niVatRate(it)); }
+function niCostInc(it){ return it.cost_net === null ? null : it.cost_net * (1 + niVatRate(it)); }
+
+/* ---- paint only the derived inputs (keeps the cursor where the person is typing) ---- */
+function niPaint(uid, skipField){
+  const it = niFind(uid); if(!it) return;
+  const set = (f, val) => {
+    if(f === skipField) return;
+    const el = document.getElementById('ni-' + uid + '-' + f);
+    if(el) el.value = val;
+  };
+  set('cost_net', niFmtCost(it.cost_net));
+  set('cost_inc', niFmt2(niCostInc(it)));
+  set('retail_net', niFmt2(niRetailNet(it)));
+  set('retail_inc', niFmt2(it.retail_inc));
+  set('margin', niFmt2(it.margin));
+  set('markup', niFmt2(it.markup));
+  const w = document.getElementById('ni-' + uid + '-warn');
+  if(w){
+    const min = niDeptMin[(it.department || '').trim().toUpperCase()];
+    const net = niRetailNet(it);
+    if(net !== null && it.cost_net !== null && net < it.cost_net) w.textContent = 'Retail price is BELOW cost.';
+    else if(it.margin !== null && min !== undefined && it.margin < min) w.textContent = 'Margin is below this department\'s minimum (' + min + '%).';
+    else w.textContent = '';
+  }
+}
+function niMarkDirty(){ niDirty = true; niPaintStatus(); }
+function niPaintStatus(){
+  const pill = document.getElementById('niStatusPill');
+  if(!pill) return;
+  let text, cls;
+  if(niDirty){ text = 'Unsaved changes'; cls = 'unsaved'; }
+  else if(!niList.id){ text = 'Not saved'; cls = ''; }
+  else if(niList.status === 'SENT'){ text = 'Sent to Vector' + (niList.sent_at ? ' ' + niUkDate(niList.sent_at) : ''); cls = 'sent'; }
+  else { text = 'Saved'; cls = 'saved'; }
+  pill.textContent = text;
+  pill.className = 'ni-pill ' + cls;
+}
+window.addEventListener('beforeunload', e => { if(niDirty){ e.preventDefault(); e.returnValue = ''; } });
+
+/* ---- field edits ---- */
+function niOnListName(v){ niList.name = v; niMarkDirty(); }
+function niSet(uid, field, value){
+  const it = niFind(uid); if(!it) return;
+  const textFields = ['description', 'barcode', 'size', 'department', 'supplier', 'catalogue_no'];
+  if(textFields.includes(field)){
+    it[field] = field === 'barcode' ? value.replace(/\s+/g, '') : value;
+    if(field === 'department') niPaint(uid);
+    if(field === 'supplier') niSupplierSearch(value);
+    niClearProblem(uid); niMarkDirty(); return;
+  }
+  const n = niNum(value);
+  if(field === 'vat'){ it.vat = value; niRecalc(it); niPaint(uid); niClearProblem(uid); niMarkDirty(); return; }
+  if(field === 'pack_size'){ it.pack_size = n; niClearProblem(uid); niMarkDirty(); return; }
+  if(field === 'quantity'){ it.quantity = n; niMarkDirty(); return; }
+  const v = niVatRate(it);
+  if(field === 'cost_net'){ it.cost_net = n; }
+  else if(field === 'cost_inc'){ it.cost_net = n === null ? null : n / (1 + v); }
+  else if(field === 'retail_inc'){ it.retail_inc = n; it.driver = 'retail'; }
+  else if(field === 'retail_net'){ it.retail_inc = n === null ? null : niR2(n * (1 + v)); it.driver = 'retail'; }
+  else if(field === 'margin'){ it.margin = n; it.driver = 'margin'; }
+  else if(field === 'markup'){ it.markup = n; it.driver = 'markup'; }
+  niRecalc(it);
+  niPaint(uid, field);
+  niClearProblem(uid); niMarkDirty();
+}
+function niCanonDept(uid, el){
+  const it = niFind(uid); if(!it) return;
+  const real = niDeptNames[(el.value || '').trim().toUpperCase()];
+  if(real){ el.value = real; it.department = real; niPaint(uid); niMarkDirty(); }
+}
+function niClearProblem(uid){
+  if(!niProblemUids[uid]) return;
+  delete niProblemUids[uid];
+  const c = document.getElementById('ni-card-' + uid); if(c) c.classList.remove('ni-bad');
+}
+
+/* ---- typeahead data ---- */
+async function niLoadDepartments(){
+  if(niDeptLoaded) return;
   try{
     const data = await apiGet('departments/margins/');
     const departments = data.departments || [];
+    niDeptMin = {}; niDeptNames = {};
+    departments.forEach(d => {
+      const k = String(d.name).trim().toUpperCase();
+      niDeptNames[k] = String(d.name).trim();
+      niDeptMin[k] = Number(d.min_margin_pct === null || d.min_margin_pct === undefined ? NI_DEFAULT_MIN_MARGIN : d.min_margin_pct);
+    });
     document.getElementById('newItemsDeptDatalist').innerHTML =
       departments.map(d => `<option value="${escapeHtml(d.name)}">`).join('');
-    newItemsDeptLoaded = true;
+    niDeptLoaded = true;
+    niList.items.forEach(it => niPaint(it.uid));
   }catch(e){ console.error(e); }
 }
-let newItemsSuppSearchDebounce = null;
-function onNewItemsSupplierInput(value){
-  clearTimeout(newItemsSuppSearchDebounce);
+let niSuppDebounce = null;
+function niSupplierSearch(value){
+  clearTimeout(niSuppDebounce);
   if(value.trim().length < 2) return;
-  newItemsSuppSearchDebounce = setTimeout(async () => {
+  niSuppDebounce = setTimeout(async () => {
     try{
       const data = await apiGet('suppliers/search/?q=' + encodeURIComponent(value.trim()));
-      const items = data.items || [];
-      // One shared datalist for every Supplier cell — updates to reflect
-      // whichever cell was most recently typed into, which is the only one
-      // that matters at any given moment.
       document.getElementById('newItemsSuppDatalist').innerHTML =
-        items.map(s => `<option value="${escapeHtml(s.name)}">`).join('');
+        (data.items || []).map(s => `<option value="${escapeHtml(s.name)}">`).join('');
     }catch(e){ console.error(e); }
   }, 250);
 }
-function addNewItemRow(){
-  newItemsRows.push({
-    name: '', barcode: '', catalogue_number: '', size: '',
-    price: null, selling_price: null, department: '', supplier: '',
-    pack_size: '', total_qty: null
-  });
-  renderNewItemsSheet();
+
+/* ---- rendering ---- */
+function niCardHtml(it, idx){
+  const u = it.uid;
+  const id = f => 'ni-' + u + '-' + f;
+  const val = x => escapeHtml(x === null || x === undefined ? '' : String(x));
+  return `
+  <div class="ni-card ${niProblemUids[u] ? 'ni-bad' : ''}" id="ni-card-${u}">
+    <div class="ni-cardhead">
+      <b>Item ${idx + 1}${it.description ? ' — ' + escapeHtml(it.description) : ''}</b>
+      <span class="ni-actions">
+        <button class="btn-ghost" onclick="niDuplicateItem('${u}')">Duplicate</button>
+        <button class="btn-ghost" onclick="niRemoveItem('${u}')">Remove</button>
+      </span>
+    </div>
+    <fieldset class="ni-fs"><legend>General Info</legend>
+      <div class="ni-grid">
+        <div class="ni-f ni-wide"><label>Description</label>
+          <input type="text" id="${id('description')}" value="${val(it.description)}" oninput="niSet('${u}','description',this.value)" onchange="niRefreshHead('${u}')"></div>
+        <div class="ni-f"><label>Barcode</label>
+          <input type="text" inputmode="numeric" id="${id('barcode')}" value="${val(it.barcode)}" oninput="niSet('${u}','barcode',this.value)"></div>
+        <div class="ni-f"><label>Size</label>
+          <input type="text" id="${id('size')}" value="${val(it.size)}" oninput="niSet('${u}','size',this.value)"></div>
+        <div class="ni-f"><label>Department</label>
+          <input type="text" list="newItemsDeptDatalist" id="${id('department')}" value="${val(it.department)}" oninput="niSet('${u}','department',this.value)" onchange="niCanonDept('${u}',this)"></div>
+        <div class="ni-f"><label>VAT Rate</label>
+          <select id="${id('vat')}" onchange="niSet('${u}','vat',this.value)">
+            ${NI_VAT_TYPES.map(t => `<option value="${t}" ${it.vat === t ? 'selected' : ''}>${t}</option>`).join('')}
+          </select></div>
+      </div>
+    </fieldset>
+    <fieldset class="ni-fs"><legend>Cost</legend>
+      <div class="ni-grid">
+        <div class="ni-f ni-wide"><label>Supplier</label>
+          <input type="text" list="newItemsSuppDatalist" id="${id('supplier')}" value="${val(it.supplier)}" oninput="niSet('${u}','supplier',this.value)"></div>
+        <div class="ni-f"><label>Catalogue No</label>
+          <input type="text" id="${id('catalogue_no')}" value="${val(it.catalogue_no)}" oninput="niSet('${u}','catalogue_no',this.value)"></div>
+        <div class="ni-f"><label>Pack Size</label>
+          <input type="number" min="0" step="any" id="${id('pack_size')}" value="${val(it.pack_size)}" oninput="niSet('${u}','pack_size',this.value)"></div>
+        <div class="ni-f"><label>Item Cost NET</label>
+          <input type="number" min="0" step="0.01" id="${id('cost_net')}" value="${niFmtCost(it.cost_net)}" oninput="niSet('${u}','cost_net',this.value)"></div>
+        <div class="ni-f"><label>Item Cost inc VAT</label>
+          <input type="number" min="0" step="0.01" id="${id('cost_inc')}" value="${niFmt2(niCostInc(it))}" oninput="niSet('${u}','cost_inc',this.value)"></div>
+      </div>
+    </fieldset>
+    <fieldset class="ni-fs"><legend>Retail Price</legend>
+      <div class="ni-grid">
+        <div class="ni-f"><label>Profit Margin %</label>
+          <input type="number" step="0.01" id="${id('margin')}" value="${niFmt2(it.margin)}" oninput="niSet('${u}','margin',this.value)"></div>
+        <div class="ni-f"><label>Markup %</label>
+          <input type="number" step="0.01" id="${id('markup')}" value="${niFmt2(it.markup)}" oninput="niSet('${u}','markup',this.value)"></div>
+        <div class="ni-f"><label>Retail Price NET</label>
+          <input type="number" min="0" step="0.01" id="${id('retail_net')}" value="${niFmt2(niRetailNet(it))}" oninput="niSet('${u}','retail_net',this.value)"></div>
+        <div class="ni-f"><label>Retail Price inc VAT <span style="color:var(--accent-dim)">(sent to Vector)</span></label>
+          <input type="number" min="0" step="0.01" id="${id('retail_inc')}" value="${niFmt2(it.retail_inc)}" oninput="niSet('${u}','retail_inc',this.value)"></div>
+      </div>
+      <div class="ni-warn" id="${id('warn')}"></div>
+    </fieldset>
+    <fieldset class="ni-fs"><legend>Opening Stock</legend>
+      <div class="ni-grid">
+        <div class="ni-f"><label>Quantity</label>
+          <input type="number" min="0" step="any" id="${id('quantity')}" value="${val(it.quantity)}" oninput="niSet('${u}','quantity',this.value)">
+          <div class="ni-hint">Kept in the list and downloads only — Vector's file import cannot set opening stock.</div></div>
+      </div>
+    </fieldset>
+  </div>`;
 }
-function removeNewItemRow(idx){
-  newItemsRows.splice(idx, 1);
-  if(newItemsRows.length === 0) addNewItemRow(); // never leave the sheet fully empty
-  else renderNewItemsSheet();
+function niRefreshHead(uid){
+  const idx = niList.items.findIndex(i => i.uid === uid);
+  const card = document.getElementById('ni-card-' + uid);
+  if(!card || idx < 0) return;
+  const b = card.querySelector('.ni-cardhead b');
+  const it = niList.items[idx];
+  if(b) b.innerHTML = 'Item ' + (idx + 1) + (it.description ? ' — ' + escapeHtml(it.description) : '');
 }
-function updateNewItemField(idx, field, value, isNumber){
-  newItemsRows[idx][field] = (isNumber && value !== '') ? Number(value) : (isNumber ? null : value);
-  if(field === 'price' || field === 'selling_price'){
-    const margin = newItemMarginPct(newItemsRows[idx]);
-    const cell = document.getElementById('newItemMarginCell-' + idx);
-    if(cell) cell.textContent = margin === null ? '—' : margin.toFixed(1) + '%';
+function niRender(){
+  const box = document.getElementById('newItemsSheet');
+  box.innerHTML = niList.items.map((it, i) => niCardHtml(it, i)).join('');
+  document.getElementById('niListName').value = niList.name;
+  niList.items.forEach(it => niPaint(it.uid));
+  niPaintStatus();
+}
+function niAddItem(){
+  const it = niBlankItem();
+  niList.items.push(it);
+  niRender();
+  niMarkDirty();
+  const el = document.getElementById('ni-' + it.uid + '-description');
+  if(el){ el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); }
+}
+function niRemoveItem(uid){
+  const it = niFind(uid); if(!it) return;
+  if((it.description || it.barcode || it.cost_net !== null) && !confirm('Remove this item from the list?')) return;
+  niList.items = niList.items.filter(i => i.uid !== uid);
+  if(niList.items.length === 0) niList.items.push(niBlankItem());
+  niRender(); niMarkDirty();
+}
+function niDuplicateItem(uid){
+  const it = niFind(uid); if(!it) return;
+  const copy = Object.assign({}, it, { uid: niBlankItem().uid, barcode: '' }); // barcodes must be unique
+  niList.items.splice(niList.items.indexOf(it) + 1, 0, copy);
+  niRender(); niMarkDirty();
+  toast('Duplicated — enter a new barcode for the copy');
+}
+
+/* ---- entry point (called from the Invoices hub card) ---- */
+function openNewItemsSheet(){
+  showView('view-new-items');
+  if(niList.items.length === 0){ niList.name = niList.name || ('New items ' + niUkDate()); niList.items.push(niBlankItem()); }
+  niLoadDepartments();
+  niRender();
+}
+
+/* ---- saving / opening / new list ---- */
+function niCleanForSave(){
+  return niList.items.map(it => ({
+    uid: it.uid, description: it.description, barcode: it.barcode, size: it.size, department: it.department,
+    vat: it.vat, supplier: it.supplier, catalogue_no: it.catalogue_no, pack_size: it.pack_size,
+    cost_net: it.cost_net, retail_inc: it.retail_inc, margin: it.margin, markup: it.markup,
+    driver: it.driver, quantity: it.quantity
+  }));
+}
+async function niSave(silent){
+  const name = (niList.name || '').trim();
+  if(!name){ toast('Give the list a name first'); document.getElementById('niListName').focus(); return false; }
+  try{
+    const body = { name, items: niCleanForSave() };
+    if(niList.id){ await apiPut('invoices/new-item-lists/' + niList.id, body); }
+    else{
+      const res = await apiPost('invoices/new-item-lists', body);
+      niList.id = res.list_id;
+    }
+    niDirty = false; niPaintStatus();
+    if(!silent) toast('List saved');
+    return true;
+  }catch(e){
+    console.error(e); toast('Could not save the list'); return false;
   }
 }
-function newItemMarginPct(row){
-  if(row.price === null || row.price === undefined) return null;
-  if(row.selling_price === null || row.selling_price === undefined) return null;
-  if(Number(row.selling_price) === 0) return null;
-  return (Number(row.selling_price) - Number(row.price)) / Number(row.selling_price) * 100;
+async function niGuardUnsaved(){
+  if(!niDirty) return true;
+  if(confirm('This list has unsaved changes. Save it first?\n\nOK = save, Cancel = choose to discard')){
+    return await niSave(true);
+  }
+  return confirm('Discard the unsaved changes?');
 }
-function renderNewItemsSheet(){
-  const box = document.getElementById('newItemsSheet');
-  const table = document.createElement('table');
-  table.className = 'finaltable';
-  table.innerHTML = `<thead><tr>
-    <th>Name</th><th>Barcode</th><th>Catalogue No.</th><th>Size</th>
-    <th class="qtycell">Price</th><th class="qtycell">Selling Price</th><th class="qtycell">Margin</th>
-    <th>Department</th><th>Supplier</th><th class="qtycell">Pack Size</th><th class="qtycell">Total Qty</th><th></th>
-  </tr></thead>`;
-  const tbody = document.createElement('tbody');
-  newItemsRows.forEach((row, idx) => {
-    const margin = newItemMarginPct(row);
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><input type="text" style="width:150px;" value="${escapeHtml(row.name)}" onchange="updateNewItemField(${idx},'name',this.value)"></td>
-      <td><input type="text" style="width:110px;" value="${escapeHtml(row.barcode)}" onchange="updateNewItemField(${idx},'barcode',this.value)"></td>
-      <td><input type="text" style="width:100px;" value="${escapeHtml(row.catalogue_number)}" onchange="updateNewItemField(${idx},'catalogue_number',this.value)"></td>
-      <td><input type="text" style="width:80px;" value="${escapeHtml(row.size)}" onchange="updateNewItemField(${idx},'size',this.value)"></td>
-      <td class="qtycell"><input type="number" min="0" step="0.01" style="width:80px;" value="${row.price === null ? '' : row.price}" onchange="updateNewItemField(${idx},'price',this.value,true)"></td>
-      <td class="qtycell"><input type="number" min="0" step="0.01" style="width:80px;" value="${row.selling_price === null ? '' : row.selling_price}" onchange="updateNewItemField(${idx},'selling_price',this.value,true)"></td>
-      <td class="qtycell" id="newItemMarginCell-${idx}">${margin === null ? '—' : margin.toFixed(1) + '%'}</td>
-      <td><input type="text" list="newItemsDeptDatalist" style="width:140px;" value="${escapeHtml(row.department)}" onchange="updateNewItemField(${idx},'department',this.value)"></td>
-      <td><input type="text" list="newItemsSuppDatalist" style="width:140px;" value="${escapeHtml(row.supplier)}"
-            oninput="onNewItemsSupplierInput(this.value)" onchange="updateNewItemField(${idx},'supplier',this.value)"></td>
-      <td class="qtycell"><input type="text" style="width:80px;" value="${escapeHtml(row.pack_size)}" onchange="updateNewItemField(${idx},'pack_size',this.value)"></td>
-      <td class="qtycell"><input type="number" min="0" step="0.01" style="width:80px;" value="${row.total_qty === null ? '' : row.total_qty}" onchange="updateNewItemField(${idx},'total_qty',this.value,true)"></td>
-      <td><button class="btn-ghost" onclick="removeNewItemRow(${idx})">Remove</button></td>
-    `;
-    tbody.appendChild(tr);
+async function niNewList(){
+  if(!(await niGuardUnsaved())) return;
+  niList = { id: null, name: 'New items ' + niUkDate(), status: 'OPEN', sent_at: null, items: [niBlankItem()] };
+  niDirty = false; niProblemUids = {};
+  niRender();
+}
+async function niOpenListPicker(){
+  const box = document.getElementById('niListPicker');
+  box.innerHTML = '<div class="empty-hint">Loading…</div>';
+  openModal('modalNewItemsOpen');
+  try{
+    const data = await apiGet('invoices/new-item-lists');
+    const lists = data.lists || [];
+    if(lists.length === 0){ box.innerHTML = '<div class="empty-hint">No saved lists yet.</div>'; return; }
+    box.innerHTML = lists.map(l => `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);">
+        <div><b>${escapeHtml(l.list_name)}</b>
+          <div style="font-size:12px;color:var(--text-dim);">${l.item_count} item(s) · ${l.status === 'SENT' ? 'Sent ' + niUkDate(l.sent_at) : 'Not sent'} · saved ${niUkDate(l.updated_at)}${l.updated_by ? ' by ' + escapeHtml(l.updated_by) : ''}</div></div>
+        <button class="btn-amber" style="padding:7px 14px;font-size:13px;" onclick="niOpenList(${Number(l.list_id)})">Open</button>
+      </div>`).join('');
+  }catch(e){ console.error(e); box.innerHTML = '<div class="empty-hint">Could not load the lists.</div>'; }
+}
+async function niOpenList(id){
+  if(!(await niGuardUnsaved())) return;
+  try{
+    const data = await apiGet('invoices/new-item-lists/' + id);
+    const items = (data.items || []).map(r => Object.assign(niBlankItem(), r, { uid: niBlankItem().uid }));
+    items.forEach(niRecalc);
+    niList = { id: data.list_id, name: data.list_name, status: data.status, sent_at: data.sent_at, items: items.length ? items : [niBlankItem()] };
+    niDirty = false; niProblemUids = {};
+    closeModal('modalNewItemsOpen');
+    niRender();
+  }catch(e){ console.error(e); toast('Could not open that list'); }
+}
+
+/* ---- Update Vector: save, let the server validate + queue, then show the same status popup ---- */
+function niLocalProblems(){
+  const out = [];
+  niList.items.forEach((it, i) => {
+    const m = [];
+    if(!it.description.trim()) m.push('Description is required');
+    if(!/^\d{4,14}$/.test(it.barcode)) m.push('Barcode must be digits only (4-14 digits)');
+    if(!it.department.trim()) m.push('Department is required');
+    if(!it.supplier.trim()) m.push('Supplier is required');
+    if(it.cost_net === null) m.push('Item Cost NET is required');
+    if(it.retail_inc === null || !(it.retail_inc > 0)) m.push('Retail Price is required');
+    if(!(it.pack_size > 0)) m.push('Pack Size must be more than 0');
+    if(m.length) out.push({ row: i + 1, uid: it.uid, name: it.description, messages: m });
   });
-  table.appendChild(tbody);
-  box.innerHTML = '';
-  const scrollWrap = document.createElement('div');
-  scrollWrap.className = 'restaurant-table-scroll';
-  scrollWrap.appendChild(table);
-  box.appendChild(scrollWrap);
+  return out;
+}
+function niShowProblems(problems, intro){
+  niProblemUids = {};
+  problems.forEach(p => { if(p.uid) niProblemUids[p.uid] = true; });
+  document.getElementById('niProblemsSub').textContent = intro;
+  document.getElementById('niProblemsList').innerHTML = problems.map(p => `
+    <div style="padding:8px 0;border-bottom:1px solid var(--line);">
+      <b>Item ${p.row}${p.name ? ' — ' + escapeHtml(p.name) : ''}</b>
+      <ul style="margin:4px 0 0 18px;padding:0;font-size:13px;">${p.messages.map(m => '<li>' + escapeHtml(m) + '</li>').join('')}</ul>
+    </div>`).join('');
+  niRender();
+  openModal('modalNewItemsProblems');
+}
+async function niUpdateVector(){
+  const local = niLocalProblems();
+  if(local.length){ niShowProblems(local, 'Complete these fields first.'); return; }
+  if(!confirm('Send ' + niList.items.length + ' new item(s) to Vector?\n\nThis creates new stock records on the till.')) return;
+  if(!(await niSave(true))) return;
+  let force = false;
+  for(;;){
+    try{
+      const res = await apiPost('invoices/new-item-lists/' + niList.id + '/send', { force });
+      niList.status = 'SENT'; niList.sent_at = new Date().toISOString(); niPaintStatus();
+      if(res && res.queue_id) trackVectorImportStatus(res.queue_id, 'NEWITEM');
+      return;
+    }catch(e){
+      const info = await niParseSendError(e);
+      if(info && info.already_sent && !force){
+        if(!confirm('This list was already sent to Vector' + (info.sent_at ? ' on ' + niUkDate(info.sent_at) : '') + '. Send it again?\n\n(Items that already exist in Vector will be flagged.)')) return;
+        force = true; continue;
+      }
+      if(info && info.problems){ niShowProblems(info.problems, info.error); return; }
+      console.error(e); toast((info && info.error) || 'Could not send to Vector'); return;
+    }
+  }
+}
+// apiThrow's error shape isn't visible here, so re-read what the server said
+// from the message when it carries JSON, and otherwise fall back to a re-post.
+async function niParseSendError(e){
+  if(e && e.body && typeof e.body === 'object') return e.body;
+  try{ const m = String(e && e.message || ''); const j = m.slice(m.indexOf('{')); return JSON.parse(j); }catch(_){}
+  return { error: String(e && e.message || 'Could not send to Vector') };
 }
 
 /* ---- Export: same column-picker pattern as everywhere else ---- */
 const NEW_ITEMS_EXPORT_COLUMNS = [
-  { key: 'name', label: 'Name', always: true },
+  { key: 'description', label: 'Description', always: true },
   { key: 'barcode', label: 'Barcode' },
-  { key: 'catalogue_number', label: 'Catalogue No.' },
   { key: 'size', label: 'Size' },
-  { key: 'price', label: 'Price' },
-  { key: 'selling_price', label: 'Selling Price' },
-  { key: 'margin', label: 'Margin' },
+  { key: 'catalogue_no', label: 'Catalogue No.' },
   { key: 'department', label: 'Department' },
+  { key: 'vat', label: 'VAT Rate' },
   { key: 'supplier', label: 'Supplier' },
   { key: 'pack_size', label: 'Pack Size' },
-  { key: 'total_qty', label: 'Total Qty' }
+  { key: 'cost_net', label: 'Item Cost NET' },
+  { key: 'cost_inc', label: 'Item Cost inc VAT' },
+  { key: 'retail_net', label: 'Retail NET' },
+  { key: 'retail_inc', label: 'Retail inc VAT' },
+  { key: 'margin', label: 'Margin %' },
+  { key: 'markup', label: 'Markup %' },
+  { key: 'quantity', label: 'Quantity' }
 ];
 let newItemsExportFormat = null;
+function niNamedItems(){ return niList.items.filter(r => r.description.trim()); }
 function openNewItemsExportModal(format){
-  const rows = newItemsRows.filter(r => r.name.trim());
-  if(rows.length === 0){ toast('Add at least one named item first'); return; }
+  if(niNamedItems().length === 0){ toast('Add at least one named item first'); return; }
   newItemsExportFormat = format;
-  const box = document.getElementById('newItemsExportColumns');
-  box.innerHTML = NEW_ITEMS_EXPORT_COLUMNS.map(c => `
+  document.getElementById('newItemsExportColumns').innerHTML = NEW_ITEMS_EXPORT_COLUMNS.map(c => `
     <label style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;">
       <input type="checkbox" id="nieCol-${c.key}" ${c.always ? 'checked disabled' : 'checked'}> ${c.label}
-    </label>
-  `).join('');
+    </label>`).join('');
   openModal('modalNewItemsExport');
 }
 function confirmNewItemsExport(){
   const columns = {};
-  NEW_ITEMS_EXPORT_COLUMNS.forEach(c => {
-    columns[c.key] = c.always || document.getElementById('nieCol-' + c.key).checked;
-  });
+  NEW_ITEMS_EXPORT_COLUMNS.forEach(c => { columns[c.key] = c.always || document.getElementById('nieCol-' + c.key).checked; });
   closeModal('modalNewItemsExport');
   exportNewItems(newItemsExportFormat, columns);
 }
-function newItemExportRow(row, columns){
-  const margin = newItemMarginPct(row);
+function newItemExportRow(it, columns){
   const out = {};
-  if(columns.name) out['Name'] = row.name;
-  if(columns.barcode) out['Barcode'] = row.barcode;
-  if(columns.catalogue_number) out['Catalogue No.'] = row.catalogue_number;
-  if(columns.size) out['Size'] = row.size;
-  if(columns.price) out['Price'] = row.price === null ? '' : Number(row.price).toFixed(2);
-  if(columns.selling_price) out['Selling Price'] = row.selling_price === null ? '' : Number(row.selling_price).toFixed(2);
-  if(columns.margin) out['Margin'] = margin === null ? '' : margin.toFixed(1) + '%';
-  if(columns.department) out['Department'] = row.department;
-  if(columns.supplier) out['Supplier'] = row.supplier;
-  if(columns.pack_size) out['Pack Size'] = row.pack_size;
-  if(columns.total_qty) out['Total Qty'] = row.total_qty === null ? '' : row.total_qty;
+  const map = {
+    description: it.description, barcode: it.barcode, size: it.size, catalogue_no: it.catalogue_no,
+    department: it.department, vat: it.vat, supplier: it.supplier, pack_size: it.pack_size === null ? '' : it.pack_size,
+    cost_net: niFmtCost(it.cost_net), cost_inc: niFmt2(niCostInc(it)), retail_net: niFmt2(niRetailNet(it)),
+    retail_inc: niFmt2(it.retail_inc), margin: niFmt2(it.margin), markup: niFmt2(it.markup),
+    quantity: it.quantity === null ? '' : it.quantity
+  };
+  NEW_ITEMS_EXPORT_COLUMNS.forEach(c => { if(columns[c.key]) out[c.label] = map[c.key]; });
   return out;
 }
 function exportNewItems(format, columns){
-  const rows = newItemsRows.filter(r => r.name.trim());
-  const filenameBase = 'new-items-' + new Date().toISOString().slice(0,10);
+  const rows = niNamedItems();
+  const slug = (niList.name || 'new-items').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'new-items';
+  const filenameBase = slug + '-' + new Date().toISOString().slice(0,10);
   if(format === 'csv'){
     const outRows = rows.map(r => newItemExportRow(r, columns));
     const headers = Object.keys(outRows[0] || {});
-    const csvLines = [headers.join(',')].concat(
-      outRows.map(r => headers.map(h => '"' + String(r[h] ?? '').replace(/"/g, '""') + '"').join(','))
-    );
-    const blob = new Blob([csvLines.join('\n')], { type: 'text/csv' });
+    const blob = new Blob([buildCSVText(headers, outRows)], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = filenameBase + '.csv';
@@ -16955,15 +17318,12 @@ function exportNewItems(format, columns){
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: 'landscape' });
     doc.setFontSize(16);
-    doc.text('New Items', 14, 18);
+    doc.text(niList.name || 'New Items', 14, 18);
     doc.setFontSize(9);
     doc.setTextColor(120);
     doc.text('Generated ' + ukDateTimeString(new Date()) + ' (UK time)', 14, 24);
     const head = NEW_ITEMS_EXPORT_COLUMNS.filter(c => columns[c.key]).map(c => c.label);
-    const body = rows.map(r => {
-      const out = newItemExportRow(r, columns);
-      return head.map(h => out[h] ?? '');
-    });
+    const body = rows.map(r => { const out = newItemExportRow(r, columns); return head.map(h => out[h] ?? ''); });
     doc.autoTable({
       startY: 30, head: [head], body,
       theme: 'grid', headStyles: { fillColor: [30,34,42] }, styles: { fontSize: 8 },
