@@ -3691,9 +3691,10 @@
       <input type="text" id="invoiceSheetSupplier" list="invoiceSheetSupplierList" oninput="onInvoiceSheetSupplierInput()" placeholder="e.g. Top-Op Foods Ltd" style="width:100%;padding:9px;">
       <datalist id="invoiceSheetSupplierList"><option value="Top-Op Foods Ltd"></option></datalist>
       <div id="invoiceSheetRuleHint" style="font-size:12.5px;margin-top:4px;"></div>
-      <div style="font-size:12.5px;color:var(--text-dim);margin-top:4px;">You can choose more than one file.</div>
+      <div style="font-size:12.5px;color:var(--text-dim);margin-top:4px;">You can choose more than one file, and you can keep adding files — each pick is added to the list below (nothing is replaced).</div>
     </div>
-    <input type="file" id="invoiceOcrFile" accept="image/*" multiple>
+    <input type="file" id="invoiceOcrFile" accept="image/*" multiple onchange="onInvoiceOcrFileChange()">
+    <div id="invoiceSheetFileList" style="display:none;margin-top:10px;font-size:13px;"></div>
     <div id="invoiceOcrProgress" class="empty-hint" style="display:none;margin-top:10px;"></div>
     <div id="invoiceOcrResults" style="margin-top:14px;overflow:auto;flex:1;"></div>
     <div class="modal-close-row" id="invoiceOcrDownloadRow" style="display:none;">
@@ -12088,6 +12089,7 @@ function exportInvoiceDetail(format, selected){
    not gospel — always worth a human glance at the results. ---- */
 let invoiceOcrLastRows = []; // populated after each run; used by the CSV/PDF export
 function openInvoiceAutomatedModal(){
+  invoiceSheetFiles = [];
   document.getElementById('invoiceOcrFile').value = '';
   document.getElementById('invoiceOcrProgress').style.display = 'none';
   document.getElementById('invoiceOcrResults').innerHTML = '';
@@ -12403,6 +12405,62 @@ function scSysCost(row){
 }
 function scRound2(x){ return Math.round(x * 100) / 100; }
 
+/* ---- Supplier-check file list: every pick is ADDED to this list (the browser's
+   file input would otherwise replace the previous pick, so a second invoice
+   chosen separately silently dropped the first). ---- */
+let invoiceSheetFiles = [];
+function invoiceSheetFileKey(f){ return [f.name, f.size, f.lastModified].join('|'); }
+function onInvoiceOcrFileChange(){
+  if(invoiceOcrSource() !== 'sheet') return; // photo mode keeps the normal behaviour
+  const input = document.getElementById('invoiceOcrFile');
+  const picked = Array.from(input.files || []);
+  const have = new Set(invoiceSheetFiles.map(invoiceSheetFileKey));
+  let dup = 0;
+  picked.forEach(f => {
+    if(have.has(invoiceSheetFileKey(f))){ dup++; return; }
+    have.add(invoiceSheetFileKey(f));
+    invoiceSheetFiles.push(f);
+  });
+  input.value = ''; // so the same file can be re-picked after removing it
+  if(dup) toast(dup + ' file' + (dup > 1 ? 's were' : ' was') + ' already in the list');
+  renderInvoiceSheetFileList();
+}
+function removeInvoiceSheetFile(i){
+  invoiceSheetFiles.splice(i, 1);
+  renderInvoiceSheetFileList();
+}
+function clearInvoiceSheetFiles(){
+  invoiceSheetFiles = [];
+  renderInvoiceSheetFileList();
+}
+function renderInvoiceSheetFileList(){
+  const el = document.getElementById('invoiceSheetFileList');
+  if(!el) return;
+  if(invoiceOcrSource() !== 'sheet' || invoiceSheetFiles.length === 0){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = 'block';
+  el.innerHTML =
+    '<div style="font-weight:600;margin-bottom:4px;">' + invoiceSheetFiles.length + ' file' + (invoiceSheetFiles.length > 1 ? 's' : '') + ' selected</div>' +
+    invoiceSheetFiles.map((f, i) =>
+      '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border,#333);">' +
+        '<span style="flex:1;word-break:break-all;">' + escapeHtml(f.name) + '</span>' +
+        '<button class="btn-ghost" style="padding:2px 8px;" onclick="removeInvoiceSheetFile(' + i + ')">✕</button>' +
+      '</div>').join('') +
+    '<div style="margin-top:6px;"><button class="btn-ghost" style="padding:3px 10px;" onclick="clearInvoiceSheetFiles()">Clear all</button></div>';
+}
+
+// Reads EVERY sheet of a workbook (not just the first) so no invoice lines are missed.
+async function scReadSheetRowSets(file){
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array' });
+  const sets = [];
+  wb.SheetNames.forEach(name => {
+    const ws = wb.Sheets[name];
+    if(!ws || !ws['!ref']) return;
+    const rng = XLSX.utils.decode_range(ws['!ref']);
+    sets.push({ sheet: name, rows: XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null, blankrows: true, range: { s: { r: 0, c: 0 }, e: rng.e } }) });
+  });
+  return sets;
+}
 async function scReadSheetRows(file){
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: 'array' });
@@ -12532,6 +12590,8 @@ function onInvoiceOcrSourceChange(){
   const f = document.getElementById('invoiceOcrFile');
   f.accept = sheet ? '.csv,.xls,.xlsx,.xlsm,text/csv' : 'image/*';
   f.value = '';
+  invoiceSheetFiles = [];
+  renderInvoiceSheetFileList();
   document.getElementById('invoiceOcrResults').innerHTML = '';
   if(sheet){
     const inp = document.getElementById('invoiceSheetSupplier');
@@ -12548,7 +12608,9 @@ function onInvoiceSheetSupplierInput(){
     : 'No rules set up for this supplier yet (supported: ' + Object.values(INVOICE_SUPPLIER_RULES).map(r => r.label).join(', ') + ').';
 }
 async function runInvoiceSheetCheck(){
-  const files = Array.from(document.getElementById('invoiceOcrFile').files || []);
+  // anything picked but not yet added to the list (safety net) is added first
+  onInvoiceOcrFileChange();
+  const files = invoiceSheetFiles.slice();
   const progress = document.getElementById('invoiceOcrProgress');
   const results = document.getElementById('invoiceOcrResults');
   if(files.length === 0){ toast('Choose at least one CSV or Excel file first'); return; }
@@ -12569,11 +12631,25 @@ async function runInvoiceSheetCheck(){
   try{
     let all = [];
     const perFile = [];
+    const emptyFiles = [];
     for(const f of files){
-      const rows = await scReadSheetRows(f);
-      const parsed = scParseInvoiceRows(rows, rule, f.name);
+      progress.textContent = 'Reading ' + f.name + '…';
+      let parsed = [];
+      try{
+        const sets = await scReadSheetRowSets(f);
+        sets.forEach(st => { parsed = parsed.concat(scParseInvoiceRows(st.rows, rule, f.name)); });
+      }catch(err){
+        console.error('Could not read ' + f.name, err);
+        throw new Error(f.name + ' could not be read (' + (err.message || err) + ')');
+      }
       perFile.push(f.name + ': ' + parsed.length + ' lines');
+      if(parsed.length === 0) emptyFiles.push(f.name);
       all = all.concat(parsed);
+    }
+    if(emptyFiles.length && emptyFiles.length < files.length){
+      if(!confirm('No product lines were found in: ' + emptyFiles.join(', ') + '\n\nThose file(s) will be ignored. Continue with the other file(s)?')){
+        progress.style.display = 'none'; return;
+      }
     }
     if(all.length === 0){
       progress.style.display = 'none';
@@ -12622,7 +12698,7 @@ function openSupplierCheckView(){
   const n = currentInvoiceNote || {};
   document.getElementById('scCrumbBtn').textContent = n.recnoteref || 'Note';
   document.getElementById('scEyebrow').textContent = scState.rule.label;
-  document.getElementById('scSub').textContent = scState.fileNames.join(', ') + ' — ' + scState.invLines.length + ' invoice lines vs ' + invoiceItemAdjust.length + ' system lines';
+  document.getElementById('scSub').textContent = ((scState.perFile && scState.perFile.length) ? scState.perFile.join(' · ') : scState.fileNames.join(', ')) + ' — ' + scState.invLines.length + ' invoice lines vs ' + invoiceItemAdjust.length + ' system lines';
   showView('view-invoice-supcheck');
   scRender();
 }
