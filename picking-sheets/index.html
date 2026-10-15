@@ -616,6 +616,23 @@
   .shmsg.err{color:var(--danger);}
   .shmsg.ok{color:var(--green);}
   .shmsg.warn{color:var(--accent-dim);}
+  .shtabs{display:flex;gap:8px;margin:0 0 12px;}
+  .shtab{background:var(--panel2);border:1px solid var(--line);color:var(--text-dim);padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;}
+  .shtab.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .shrange{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--text-dim);flex-wrap:wrap;}
+  .shrange input{width:70px;padding:7px 9px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:13px;}
+  table.shtable td.shn{color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:12px;}
+  .shsmall{padding:4px 10px;font-size:12px;}
+  .shreview{color:var(--accent-dim);font-weight:700;}
+  .shready{color:var(--green);font-weight:700;}
+  .shlabel{display:block;font-size:12px;color:var(--text-dim);margin:12px 0 4px;}
+  .shta{width:100%;padding:9px 11px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-family:'Inter',sans-serif;font-size:13px;line-height:1.45;resize:vertical;box-sizing:border-box;}
+  .shnutri{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;}
+  .shnutri label{display:block;font-size:11px;color:var(--text-dim);margin-bottom:3px;}
+  .shnutri input,.shinp{width:100%;padding:7px 9px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:13px;box-sizing:border-box;}
+  .shwarnbox{background:rgba(184,134,11,.12);border:1px solid rgba(184,134,11,.4);border-radius:6px;padding:10px 12px;font-size:13px;margin:0 0 10px;}
+  .shpreview{border:1px solid var(--line);border-radius:6px;padding:10px 14px;font-size:13px;background:var(--panel2);}
+  .shpreview h3{font-size:14px;margin:12px 0 4px;}
 
   /* ---- unpicked / shortfall report ---- */
   .unpicked-select{
@@ -1246,6 +1263,18 @@
   </div>
 
   <!-- ADMIN: ADD/MANAGE USER MODAL -->
+  <div class="modal-backdrop" id="modalShopifyContent">
+    <div class="modal" style="width:860px;max-width:96vw;">
+      <h3 id="shContentTitle">Product content</h3>
+      <div id="shContentBody"><div class="loading">Loading…</div></div>
+      <div class="errdetail" id="shContentErr" style="display:none;"></div>
+      <div class="modal-close-row">
+        <button class="btn-ghost" type="button" onclick="closeModal('modalShopifyContent')">Close</button>
+        <button class="btn-amber" type="button" id="shContentSaveBtn" onclick="saveShopifyContent()">Save changes (mark as checked)</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-backdrop" id="modalPortalUser">
     <div class="modal" style="width:420px;">
       <h3 id="portalUserModalTitle">Add User</h3>
@@ -1979,6 +2008,7 @@
       <h2 id="shopifyListTitle">Preferred List</h2>
       <p id="shopifyListSub"></p>
     </div>
+    <div class="shtabs" id="shopifyTabs"></div>
     <div class="actionbar">
       <div class="shbar">
         <input type="text" id="shopifyListFilter" class="historysearch" style="max-width:300px;"
@@ -1995,7 +2025,13 @@
       </div>
       <div class="shbar">
         <span class="odcount" id="shopifyListCount"></span>
-        <button class="btn-amber" type="button" id="shopifySendSelBtn" onclick="sendShopifySelected()" disabled>Send selected to Shopify</button>
+        <span class="shrange" title="Rows are numbered in the first column of the list you are looking at">
+          Rows <input type="number" id="shopifyRangeFrom" min="1" placeholder="from"> to <input type="number" id="shopifyRangeTo" min="1" placeholder="to">
+          <button class="btn-ghost" type="button" onclick="selectShopifyRange()">Select range</button>
+        </span>
+        <button class="btn-ghost" type="button" id="shopifyGenSelBtn" onclick="generateShopifySelected()" disabled>Generate selected</button>
+        <button class="btn-amber" type="button" id="shopifySendSelBtn" onclick="sendShopifySelected()" disabled>Generate &amp; send selected</button>
+        <button class="btn-ghost" type="button" id="shopifyStopBtn" onclick="stopShopifyRun()" style="display:none;">Stop after this product</button>
       </div>
     </div>
     <div id="shopifyListNote" class="odcount" style="margin:-8px 0 12px;"></div>
@@ -8564,11 +8600,15 @@ async function openShopifyList(pref){
   shopifyData.selected = new Set();
   shopifyData.statusFilter = 'all';
   shopifyData.onlineFilter = 'all';
+  shopifyData.tab = 'todo';
+  shopifyData.stop = false;
   renderShopifyCrumbs('shopifyCrumbs-list', 2);
   document.getElementById('shopifyListTitle').textContent = shopifyData.suppName + ' — ' + shopifyPrefLabel();
   document.getElementById('shopifyListSub').textContent =
-    'Tick products and press Send selected to Shopify, or use the button on a row. Products not on Shopify are created; products already there get their price and barcode updated.';
+    'Generate writes the description, short description, ingredients, nutrition info and a picture with Gemini (saved, so each product is only generated once). Generate & Send does that if needed and then sends the product: products not on Shopify are created; products already there get their price and barcode updated, and a description / picture is only added if Shopify has none.';
   document.getElementById('shopifyListFilter').value = '';
+  document.getElementById('shopifyRangeFrom').value = '';
+  document.getElementById('shopifyRangeTo').value = '';
   document.getElementById('shopifyOnlineFilter').value = 'all';
   document.getElementById('shopifyListCount').textContent = '';
   document.getElementById('shopifyListNote').textContent = '';
@@ -8593,25 +8633,49 @@ async function loadShopifyItems(forceShopify){
 function shopifyVisibleItems(){
   const q = document.getElementById('shopifyListFilter').value.trim().toLowerCase();
   const sf = shopifyData.statusFilter, of = shopifyData.onlineFilter;
+  const wantDone = shopifyData.tab === 'done';
   return shopifyData.items.filter(it =>
+    (!!it.sh_completed === wantDone) &&
     (!q || (it.name || '').toLowerCase().includes(q) || (it.barcodes || '').toLowerCase().includes(q) || (it.sku || '').toLowerCase().includes(q)) &&
     (sf === 'all' || it.shopify_status === sf) &&
     (of === 'all' || (of === 'complete' ? it.online_complete : !it.online_complete)));
+}
+function renderShopifyTabs(){
+  const box = document.getElementById('shopifyTabs');
+  if(!box) return;
+  const done = shopifyData.items.filter(it => it.sh_completed).length;
+  const todo = shopifyData.items.length - done;
+  const t = shopifyData.tab;
+  box.innerHTML = '<button type="button" class="shtab' + (t === 'todo' ? ' on' : '') + '" onclick="setShopifyTab(\'todo\')">To do (' + todo + ')</button>'
+    + '<button type="button" class="shtab' + (t === 'done' ? ' on' : '') + '" onclick="setShopifyTab(\'done\')">Completed (' + done + ')</button>';
+}
+function setShopifyTab(t){
+  if(shopifyData.tab === t) return;
+  shopifyData.tab = t;
+  shopifyData.selected = new Set();   // never carry a hidden selection into the other list
+  renderShopifyList();
 }
 function renderShopifyList(){
   const box = document.getElementById('shopifyListBox');
   const all = shopifyData.items;
   updateShopifyControls(all);
+  renderShopifyTabs();
   const items = shopifyVisibleItems();
-  const filtered = items.length !== all.length;
-  document.getElementById('shopifyListCount').textContent = filtered ? (items.length + ' of ' + all.length + ' products') : (all.length + ' products');
+  const inTab = all.filter(it => !!it.sh_completed === (shopifyData.tab === 'done')).length;
+  const filtered = items.length !== inTab;
+  document.getElementById('shopifyListCount').textContent = filtered ? (items.length + ' of ' + inTab + ' products') : (inTab + ' products');
   updateShopifySendButton();
   if(all.length === 0){ box.innerHTML = '<div class="empty-hint">No products for this supplier.</div>'; return; }
-  if(items.length === 0){ box.innerHTML = '<div class="empty-hint">No products match that filter.</div>'; return; }
+  if(items.length === 0){
+    box.innerHTML = '<div class="empty-hint">' + (inTab === 0
+      ? (shopifyData.tab === 'done' ? 'Nothing has been marked Completed yet.' : 'Everything here is marked Completed.')
+      : 'No products match that filter.') + '</div>';
+    return;
+  }
   const web = shopifyData.shopify;
   const shopOk = !!(web && web.ok);
   const allShownSelected = items.every(it => shopifyData.selected.has(it.stockid));
-  const rows = items.map(it => {
+  const rows = items.map((it, idx) => {
     const badge = shopOk
       ? (it.shopify_url && it.shopify_status !== 'not_found'
           ? `<a class="odweb ${escapeHtml(it.shopify_status)}" href="${escapeHtml(it.shopify_url)}" target="_blank" rel="noopener" title="Open in Shopify">${escapeHtml(shopifyLabel(it.shopify_status))}</a>`
@@ -8621,18 +8685,26 @@ function renderShopifyList(){
     const msg = it.msg ? `<div class="shmsg ${escapeHtml(it.msg.type)}">${escapeHtml(it.msg.text)}</div>` : '';
     const price = it.price ? ('£' + escapeHtml(it.price)) : '<span class="shmsg err">No price</span>';
     const onShopify = it.shopify_status !== 'not_found' && it.shopify_status !== 'unknown';
-    return `<tr data-stockid="${Number(it.stockid)}">
-      <td class="shc"><input type="checkbox" class="odcheck" ${shopifyData.selected.has(it.stockid) ? 'checked' : ''} onchange="onShopifySelect(${Number(it.stockid)}, this.checked)"></td>
+    const id = Number(it.stockid);
+    const contentCell = it.content_ready
+      ? `<button class="btn-ghost shsmall" type="button" onclick="openShopifyContent(${id})" title="View, edit or regenerate the generated content">${it.content_review ? '<span class="shreview">&#9888; Check</span>' : '<span class="shready">&#10003; View</span>'}</button>`
+      : '—';
+    const genBtn = it.content_ready ? '' : `<button class="btn-ghost" type="button" onclick="generateShopifyOne(${id})">Generate</button> `;
+    return `<tr data-stockid="${id}">
+      <td class="shc"><input type="checkbox" class="odcheck" ${shopifyData.selected.has(it.stockid) ? 'checked' : ''} onchange="onShopifySelect(${id}, this.checked)"></td>
+      <td class="shc shn">${idx + 1}</td>
       <td><div class="odname">${escapeHtml(it.name)}${badge}</div>${sub ? `<div class="odbarcode">${escapeHtml(sub)}</div>` : ''}${msg}</td>
       <td class="shnum">${price}</td>
       <td class="shnum">${Number(it.qty) || 0}</td>
       <td class="shc">${it.online_complete ? '<span class="odtick">&#10003;</span>' : '—'}</td>
-      <td class="shc"><button class="btn-ghost" type="button" onclick="sendShopifyOne(${Number(it.stockid)})">${onShopify ? 'Update' : 'Send to Shopify'}</button></td>
+      <td class="shc">${contentCell}</td>
+      <td class="shc">${genBtn}<button class="btn-ghost" type="button" onclick="sendShopifyOne(${id})" title="${it.content_ready ? 'Content is already generated, so it is sent straight away' : 'Generates the content first, then sends it'}">${onShopify ? 'Generate &amp; Update' : 'Generate &amp; Send to Shopify'}</button></td>
+      <td class="shc"><input type="checkbox" class="odcheck" ${it.sh_completed ? 'checked' : ''} onchange="toggleShopifyCompleted(${id}, this.checked)" title="Tick when this product is finished — it moves to the Completed list"></td>
     </tr>`;
   }).join('');
   box.innerHTML = '<table class="finaltable odtable shtable"><thead><tr>'
     + `<th class="shc"><input type="checkbox" class="odcheck" ${allShownSelected ? 'checked' : ''} onchange="onShopifySelectAll(this.checked)" title="Select everything shown"></th>`
-    + '<th>Product</th><th class="shnum">Price (inc. VAT)</th><th class="shnum">Stock</th><th class="shc">Online Data</th><th class="shc">Shopify</th>'
+    + '<th class="shc">#</th><th>Product</th><th class="shnum">Price (inc. VAT)</th><th class="shnum">Stock</th><th class="shc">Online Data</th><th class="shc">Content</th><th class="shc">Shopify</th><th class="shc">Completed</th>'
     + '</tr></thead><tbody>' + rows + '</tbody></table>';
 }
 function updateShopifyControls(all){
@@ -8696,73 +8768,272 @@ function onShopifySelectAll(checked){
 }
 function updateShopifySendButton(){
   const btn = document.getElementById('shopifySendSelBtn');
+  const gbtn = document.getElementById('shopifyGenSelBtn');
   const n = shopifyData.selected.size;
-  btn.textContent = n ? ('Send ' + n + ' selected to Shopify') : 'Send selected to Shopify';
-  btn.disabled = shopifyData.busy || n === 0;
+  btn.textContent = n ? ('Generate & send ' + n + ' selected') : 'Generate & send selected';
+  gbtn.textContent = n ? ('Generate ' + n + ' selected') : 'Generate selected';
+  btn.disabled = gbtn.disabled = shopifyData.busy || n === 0;
+  const stop = document.getElementById('shopifyStopBtn');
+  if(stop) stop.style.display = shopifyData.busy ? '' : 'none';
+}
+// Tick rows "from … to …" (numbers in the # column of the list on screen)
+function selectShopifyRange(){
+  const items = shopifyVisibleItems();
+  if(items.length === 0){ toast('Nothing to select'); return; }
+  let from = parseInt(document.getElementById('shopifyRangeFrom').value, 10);
+  let to = parseInt(document.getElementById('shopifyRangeTo').value, 10);
+  if(!from && !to){ toast('Type a From and To row number first'); return; }
+  if(!from) from = 1;
+  if(!to) to = items.length;
+  if(from > to){ const t = from; from = to; to = t; }
+  from = Math.max(1, from); to = Math.min(items.length, to);
+  if(from > items.length){ toast('There are only ' + items.length + ' rows in this list'); return; }
+  shopifyData.selected = new Set(items.slice(from - 1, to).map(it => it.stockid));
+  renderShopifyList();
+  toast('Selected rows ' + from + ' to ' + to + ' (' + shopifyData.selected.size + ' products)');
+}
+async function toggleShopifyCompleted(stockid, checked){
+  const it = shopifyData.items.find(x => x.stockid === stockid);
+  if(!it) return;
+  try{
+    await apiPost('stock/shopify/completed/', { stockid, completed: !!checked });
+    it.sh_completed = !!checked;
+    shopifyData.selected.delete(stockid);
+    toast(checked ? 'Moved to Completed' : 'Moved back to To do');
+  }catch(e){
+    console.error(e);
+    toast('Could not save: ' + e.message);
+  }
+  renderShopifyList();
+}
+function stopShopifyRun(){
+  shopifyData.stop = true;
+  const b = document.getElementById('shopifyStopBtn');
+  if(b){ b.textContent = 'Stopping…'; b.disabled = true; }
 }
 
-/* ---- Sending ---- */
-function sendShopifyOne(stockid){ return shopifySend([stockid]); }
-function sendShopifySelected(){
-  const ids = shopifyData.items.filter(it => shopifyData.selected.has(it.stockid)).map(it => it.stockid);
-  if(ids.length === 0) return;
-  const newStatus = String((shopifyData.shopify && shopifyData.shopify.new_product_status) || 'DRAFT').toLowerCase();
-  if(!confirm('Send ' + ids.length + ' product' + (ids.length === 1 ? '' : 's') + ' to Shopify?\n\nProducts not on Shopify yet are created as ' + newStatus
-    + '. Products already there get their price and barcode updated.')) return;
-  return shopifySend(ids);
+/* ---- Generating + sending ---- */
+function sendShopifyOne(stockid){ return shopifyRun([stockid], true); }
+function generateShopifyOne(stockid){ return shopifyRun([stockid], false); }
+function shopifySelectedIds(){
+  return shopifyData.items.filter(it => shopifyData.selected.has(it.stockid)).map(it => it.stockid);
 }
-async function shopifySend(ids){
+function generateShopifySelected(){
+  const ids = shopifySelectedIds();
+  if(ids.length === 0) return;
+  const need = shopifyData.items.filter(it => shopifyData.selected.has(it.stockid) && !it.content_ready).length;
+  if(!confirm('Generate content for ' + ids.length + ' product' + (ids.length === 1 ? '' : 's') + ' with Gemini?\n\n'
+    + need + ' still need generating (about 20–40 seconds each, uses Gemini credit). The rest are already generated and are skipped.\n\nNothing is sent to Shopify.')) return;
+  return shopifyRun(ids, false);
+}
+function sendShopifySelected(){
+  const ids = shopifySelectedIds();
+  if(ids.length === 0) return;
+  const need = shopifyData.items.filter(it => shopifyData.selected.has(it.stockid) && !it.content_ready).length;
+  const newStatus = String((shopifyData.shopify && shopifyData.shopify.new_product_status) || 'DRAFT').toLowerCase();
+  if(!confirm('Generate & send ' + ids.length + ' product' + (ids.length === 1 ? '' : 's') + ' to Shopify?\n\n'
+    + need + ' still need generating with Gemini (about 20–40 seconds each); the rest are sent straight away.\n'
+    + 'Products not on Shopify yet are created as ' + newStatus + '. Products already there get their price and barcode updated, and a description / picture is only added if Shopify has none.')) return;
+  return shopifyRun(ids, true);
+}
+// One product at a time: (1) generate if needed, (2) send if asked. One product failing never stops the rest.
+async function shopifyRun(ids, send){
   if(shopifyData.busy || ids.length === 0) return;
   shopifyData.busy = true;
+  shopifyData.stop = false;
+  const stopBtn = document.getElementById('shopifyStopBtn');
+  if(stopBtn){ stopBtn.textContent = 'Stop after this product'; stopBtn.disabled = false; }
   updateShopifySendButton();
   const note = document.getElementById('shopifyListNote');
-  const CHUNK = 5;     // a few at a time: keeps each request short and the screen updating
-  let created = 0, updated = 0, failed = 0;
+  let generated = 0, ready = 0, created = 0, updated = 0, failed = 0, review = 0, stopped = false, done = 0;
   const find = id => shopifyData.items.find(x => x.stockid === id);
+  const mark = id => { const row = document.querySelector('#shopifyListBox tr[data-stockid="' + id + '"]'); if(row) row.classList.add('shsending'); };
   try{
-    for(let i = 0; i < ids.length; i += CHUNK){
-      const chunk = ids.slice(i, i + CHUNK);
+    for(let i = 0; i < ids.length; i++){
+      if(shopifyData.stop){ stopped = true; break; }
+      const id = ids[i];
+      const it = find(id);
+      if(!it) continue;
       note.style.color = '';
-      note.textContent = 'Sending ' + Math.min(i + CHUNK, ids.length) + ' of ' + ids.length + ' to Shopify…';
-      chunk.forEach(id => { const row = document.querySelector('#shopifyListBox tr[data-stockid="' + id + '"]'); if(row) row.classList.add('shsending'); });
-      let data;
-      try{
-        data = await apiPost('stock/shopify/push/', { stockids: chunk });
-      }catch(e){
-        chunk.forEach(id => { const it = find(id); if(it) it.msg = { type:'err', text:e.message }; });
-        failed += chunk.length;
-        console.error(e);
+      note.textContent = (send ? 'Generating & sending ' : 'Generating ') + (i + 1) + ' of ' + ids.length + ': ' + it.name + '…';
+      mark(id);
+      // 1) generate (skipped when already done — no cost)
+      if(!it.content_ready){
+        try{
+          const g = await apiPost('stock/shopify/generate/', { stockids: [id] });
+          const r = (g.results || [])[0] || {};
+          if(!r.ok) throw new Error(r.error || 'Generate failed');
+          it.content_ready = true;
+          it.content_review = !!r.needs_review;
+          generated++;
+          if(r.needs_review) review++;
+        }catch(e){
+          console.error(e);
+          it.msg = { type:'err', text:'Not generated: ' + e.message };
+          failed++;
+          renderShopifyList();
+          continue;
+        }
+      }else{
+        ready++;
+      }
+      if(!send){
+        it.msg = it.content_review
+          ? { type:'warn', text:'Generated — please check the ingredients / nutrition (press Check) before it goes live' }
+          : { type:'ok', text:'Content generated' };
+        shopifyData.selected.delete(id);
+        done++;
         renderShopifyList();
         continue;
       }
-      (data.results || []).forEach(r => {
-        const it = find(r.stockid);
-        if(!it) return;
+      // 2) send
+      try{
+        mark(id);
+        const data = await apiPost('stock/shopify/push/', { stockids: [id], require_content: true });
+        const r = (data.results || [])[0] || {};
         if(r.ok){
           it.shopify_status = r.shopify_status || it.shopify_status;
           it.shopify_url = r.shopify_url || it.shopify_url;
           it.linked = true;
           if(r.action === 'created') created++; else updated++;
-          const what = (r.action === 'created' ? 'Created on Shopify' : 'Updated on Shopify') + (r.price ? ' at £' + r.price : '');
-          it.msg = r.warning ? { type:'warn', text: what + ' — ' + r.warning } : { type:'ok', text: what };
-          shopifyData.selected.delete(r.stockid);
+          const c = r.content || {};
+          const bits = [c.description ? 'description' : '', c.image ? 'picture' : ''].filter(Boolean).join(' & ');
+          let what = (r.action === 'created' ? 'Created on Shopify' : 'Updated on Shopify') + (r.price ? ' at £' + r.price : '');
+          what += bits ? (r.action === 'created' ? ' with ' + bits : ' · added ' + bits) : (r.action === 'created' ? '' : ' · existing Shopify description / picture kept');
+          if(it.content_review) what += ' · content still needs checking';
+          it.msg = (r.warning || it.content_review) ? { type:'warn', text: what + (r.warning ? ' — ' + r.warning : '') } : { type:'ok', text: what };
+          shopifyData.selected.delete(id);
+          done++;
         }else{
           failed++;
           it.msg = { type:'err', text: r.error || 'Failed' };
         }
-      });
+      }catch(e){
+        console.error(e);
+        failed++;
+        it.msg = { type:'err', text: e.message };
+      }
       renderShopifyList();
     }
   }finally{
     shopifyData.busy = false;
+    shopifyData.stop = false;
     updateShopifySendButton();
   }
   const bits = [];
+  if(generated) bits.push(generated + ' generated');
+  if(send && ready) bits.push(ready + ' already generated');
   if(created) bits.push(created + ' created');
   if(updated) bits.push(updated + ' updated');
+  if(review) bits.push(review + ' to check');
   if(failed) bits.push(failed + ' failed');
-  toast('Shopify: ' + (bits.join(', ') || 'nothing sent'));
-  renderShopifyList();   // re-draws the status note too
+  if(stopped) bits.push('stopped early');
+  toast((send ? 'Shopify: ' : 'Generate: ') + (bits.join(', ') || 'nothing done'));
+  renderShopifyList();
+}
+
+/* ---- Generated content: view / edit / regenerate ---- */
+const SH_NUTRI_FIELDS = [
+  ['energy_kj','Energy (kJ)'], ['energy_kcal','Energy (kcal)'], ['fat','Fat'], ['saturates','of which saturates'],
+  ['carbohydrate','Carbohydrate'], ['sugars','of which sugars'], ['fibre','Fibre'], ['protein','Protein'], ['salt','Salt']
+];
+function shCleanPreview(html){
+  return String(html || '').replace(/<(script|style|iframe|object|embed)[\s\S]*?<\/\1>/gi, '').replace(/\son\w+\s*=\s*("[^"]*"|'[^']*')/gi, '');
+}
+async function openShopifyContent(stockid){
+  shopifyData.contentId = stockid;
+  const it = shopifyData.items.find(x => x.stockid === stockid);
+  document.getElementById('shContentTitle').textContent = it ? it.name : 'Product content';
+  document.getElementById('shContentBody').innerHTML = '<div class="loading">Loading…</div>';
+  const err = document.getElementById('shContentErr'); err.style.display = 'none';
+  document.getElementById('shContentSaveBtn').disabled = true;
+  openModal('modalShopifyContent');
+  try{
+    const c = await apiGet('stock/shopify/content/' + stockid + '/');
+    if(!c.exists){ document.getElementById('shContentBody').innerHTML = '<div class="empty-hint">Nothing generated for this product yet.</div>'; return; }
+    renderShopifyContentForm(c);
+    document.getElementById('shContentSaveBtn').disabled = false;
+  }catch(e){
+    console.error(e);
+    document.getElementById('shContentBody').innerHTML = '<div class="loading" style="color:var(--danger)">Could not load the content.</div>' + errDetailHtml(e);
+  }
+}
+function renderShopifyContentForm(c){
+  const n = c.nutrition || {};
+  const ta = (id, label, val, rows) => '<label class="shlabel" for="' + id + '">' + label + '</label><textarea class="shta" id="' + id + '" rows="' + rows + '">' + escapeHtml(val || '') + '</textarea>';
+  const warn = c.needs_review
+    ? '<div class="shwarnbox"><strong>Please check before this goes live.</strong> ' + escapeHtml(c.review_note || 'Some details could not be verified.')
+      + '<br>Compare the ingredients, allergens and nutrition with the real pack, correct anything that is wrong, then press <em>Save changes</em>.</div>'
+    : '';
+  const img = c.image_data_url
+    ? '<img src="' + c.image_data_url + '" alt="Generated picture" style="width:240px;height:240px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:8px;">'
+    : '<div class="empty-hint">No picture</div>';
+  const nutri = SH_NUTRI_FIELDS.map(f => '<div><label>' + f[1] + '</label><input type="text" id="shcN_' + f[0] + '" value="' + escapeHtml(n[f[0]] || '') + '"></div>').join('');
+  document.getElementById('shContentBody').innerHTML = warn
+    + '<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start;">'
+    +   '<div>' + img + '<div style="margin-top:8px;"><button class="btn-ghost shsmall" type="button" onclick="regenerateShopifyContent(\'image\')">&#8635; Regenerate picture</button></div></div>'
+    +   '<div style="flex:1;min-width:260px;">' + ta('shcShort', 'Short description', c.short_description, 3)
+    +   '<div style="margin-top:8px;"><button class="btn-ghost shsmall" type="button" onclick="regenerateShopifyContent(\'text\')">&#8635; Regenerate all text (replaces edits)</button></div></div>'
+    + '</div>'
+    + ta('shcDesc', 'Description (simple HTML: &lt;p&gt; &lt;ul&gt; &lt;li&gt; &lt;strong&gt;)', c.description_html, 9)
+    + '<label class="shlabel">How the description will look</label><div class="shpreview" id="shcPreview">' + shCleanPreview(c.description_html) + '</div>'
+    + ta('shcIng', 'Ingredients (allergens in CAPITALS)', c.ingredients, 4)
+    + '<label class="shlabel">Nutritional information</label>'
+    + '<div style="margin-bottom:8px;"><label style="font-size:11px;color:var(--text-dim);">Values are</label><input type="text" class="shinp" style="max-width:180px;" id="shcN_per" value="' + escapeHtml(n.per || 'per 100g') + '"></div>'
+    + '<div class="shnutri">' + nutri + '</div>'
+    + ta('shcStorage', 'Storage', c.storage, 2)
+    + '<label class="shlabel" for="shcSeoTitle">Search title (max 60 characters)</label><input type="text" class="shinp" id="shcSeoTitle" value="' + escapeHtml(c.seo_title || '') + '">'
+    + ta('shcSeoDesc', 'Search description (max 155 characters)', c.seo_description, 2)
+    + '<label class="shlabel" for="shcTags">Tags (comma separated)</label><input type="text" class="shinp" id="shcTags" value="' + escapeHtml((c.tags || []).join(', ')) + '">'
+    + '<div class="odcount" style="margin-top:12px;">Written by ' + escapeHtml(c.text_model || 'Gemini') + ' · picture by ' + escapeHtml(c.image_model || 'Gemini')
+    + '. Edits are used the next time the product is sent; a product that already has a description / picture on Shopify is not overwritten.</div>';
+  document.getElementById('shcDesc').addEventListener('input', function(){
+    document.getElementById('shcPreview').innerHTML = shCleanPreview(this.value);
+  });
+}
+async function saveShopifyContent(){
+  const id = shopifyData.contentId;
+  const v = k => document.getElementById(k).value;
+  const nutrition = { per: v('shcN_per') };
+  SH_NUTRI_FIELDS.forEach(f => { nutrition[f[0]] = v('shcN_' + f[0]); });
+  const btn = document.getElementById('shContentSaveBtn');
+  const err = document.getElementById('shContentErr');
+  err.style.display = 'none';
+  if(!v('shcShort').trim() || !v('shcDesc').trim()){ err.textContent = 'The short description and the description cannot be empty.'; err.style.display = ''; return; }
+  btn.disabled = true;
+  try{
+    await apiPut('stock/shopify/content/' + id + '/', {
+      short_description: v('shcShort'), description_html: v('shcDesc'), ingredients: v('shcIng'), nutrition,
+      storage: v('shcStorage'), seo_title: v('shcSeoTitle'), seo_description: v('shcSeoDesc'), tags: v('shcTags'), reviewed: true
+    });
+    const it = shopifyData.items.find(x => x.stockid === id);
+    if(it){ it.content_review = false; it.msg = null; }
+    closeModal('modalShopifyContent');
+    renderShopifyList();
+    toast('Saved');
+  }catch(e){
+    console.error(e);
+    err.textContent = 'Could not save: ' + e.message; err.style.display = '';
+  }finally{ btn.disabled = false; }
+}
+async function regenerateShopifyContent(part){
+  const id = shopifyData.contentId;
+  const what = part === 'image' ? 'the picture' : 'all the text (any edits you made will be replaced)';
+  if(!confirm('Regenerate ' + what + ' with Gemini? This uses Gemini credit.')) return;
+  document.getElementById('shContentBody').innerHTML = '<div class="loading">Regenerating — this takes about 20–40 seconds…</div>';
+  document.getElementById('shContentSaveBtn').disabled = true;
+  try{
+    const g = await apiPost('stock/shopify/generate/', { stockids: [id], force: true, part });
+    const r = (g.results || [])[0] || {};
+    if(!r.ok) throw new Error(r.error || 'Failed');
+    const it = shopifyData.items.find(x => x.stockid === id);
+    if(it){ it.content_ready = true; if(part !== 'image') it.content_review = !!r.needs_review; }
+    renderShopifyList();
+  }catch(e){
+    console.error(e);
+    toast('Regenerate failed: ' + e.message);
+  }
+  await openShopifyContent(id);
 }
 
 /* ============ RESTAURANT ORDERS ============ */
