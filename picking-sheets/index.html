@@ -631,6 +631,16 @@
   .shnutri label{display:block;font-size:11px;color:var(--text-dim);margin-bottom:3px;}
   .shnutri input,.shinp{width:100%;padding:7px 9px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:13px;box-sizing:border-box;}
   .shwarnbox{background:rgba(184,134,11,.12);border:1px solid rgba(184,134,11,.4);border-radius:6px;padding:10px 12px;font-size:13px;margin:0 0 10px;}
+  .shphotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-top:12px;}
+  .shphoto{border:1px solid var(--line);border-radius:8px;padding:8px;background:var(--panel2);}
+  .shphoto img{width:100%;height:140px;object-fit:contain;background:#fff;border-radius:6px;display:block;}
+  .shphoto select{width:100%;margin-top:6px;padding:5px 6px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--text);font-size:12px;}
+  .shphoto .shdel{margin-top:6px;width:100%;}
+  .shpicl{font-size:12px;color:var(--text-dim);margin-bottom:4px;font-weight:600;}
+  .shpick{display:flex;gap:14px;flex-wrap:wrap;}
+  .shpick img{width:200px;height:200px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:8px;display:block;}
+  .shpick .on img{border:3px solid var(--green);}
+  .shnophoto{color:var(--danger);font-weight:700;}
   .shpreview{border:1px solid var(--line);border-radius:6px;padding:10px 14px;font-size:13px;background:var(--panel2);}
   .shpreview h3{font-size:14px;margin:12px 0 4px;}
 
@@ -1263,6 +1273,34 @@
   </div>
 
   <!-- ADMIN: ADD/MANAGE USER MODAL -->
+  <div class="modal-backdrop" id="modalShopifyPhotos">
+    <div class="modal" style="width:820px;max-width:96vw;">
+      <h3 id="shPhotosTitle">Photos</h3>
+      <div class="odcount" style="margin:0 0 10px;line-height:1.5;">
+        Take a clear, straight-on photo of the <strong>FRONT</strong> of the pack first (this becomes the product picture), then the <strong>BACK</strong> — ingredients, allergens, nutrition table — and any other side with writing. Fill the frame, good light, no glare, and make sure the small print is readable. The ingredients and nutrition are read from these photos.
+      </div>
+      <div class="shbar">
+        <select id="shPhotoRoleNext" class="historysearch" style="min-width:210px;" title="What the next photo shows">
+          <option value="auto">Next photo: automatic (1st = front, then back)</option>
+          <option value="front">Next photo is: Front</option>
+          <option value="back">Next photo is: Back / ingredients</option>
+          <option value="nutrition">Next photo is: Nutrition panel</option>
+          <option value="side">Next photo is: Side</option>
+          <option value="other">Next photo is: Other</option>
+        </select>
+        <button class="btn-amber" type="button" onclick="document.getElementById('shPhotoCam').click()">&#128247; Take photo</button>
+        <button class="btn-ghost" type="button" onclick="document.getElementById('shPhotoPick').click()">Choose from gallery</button>
+        <input type="file" id="shPhotoCam" accept="image/*" capture="environment" style="display:none;" onchange="onShopifyPhotoFiles(this)">
+        <input type="file" id="shPhotoPick" accept="image/*" multiple style="display:none;" onchange="onShopifyPhotoFiles(this)">
+      </div>
+      <div class="odcount" id="shPhotoStatus" style="margin:8px 0 0;"></div>
+      <div id="shPhotosBody"><div class="loading">Loading…</div></div>
+      <div class="modal-close-row">
+        <button class="btn-ghost" type="button" onclick="closeModal('modalShopifyPhotos')">Done</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-backdrop" id="modalShopifyContent">
     <div class="modal" style="width:860px;max-width:96vw;">
       <h3 id="shContentTitle">Product content</h3>
@@ -8605,7 +8643,7 @@ async function openShopifyList(pref){
   renderShopifyCrumbs('shopifyCrumbs-list', 2);
   document.getElementById('shopifyListTitle').textContent = shopifyData.suppName + ' — ' + shopifyPrefLabel();
   document.getElementById('shopifyListSub').textContent =
-    'Generate writes the description, short description, ingredients, nutrition info and a picture with Gemini (saved, so each product is only generated once). Generate & Send does that if needed and then sends the product: products not on Shopify are created; products already there get their price and barcode updated, and a description / picture is only added if Shopify has none.';
+    'Step 1: press the camera button on a product and photograph the front and back of the real pack. Step 2: Generate — Gemini tidies the front photo into the product picture and reads the ingredients and nutrition from the other photos to write the page (saved, so each product is only generated once). Generate & Send does both steps and sends it: products not on Shopify are created; products already there get their price and barcode updated, and a description / picture is only added if Shopify has none.';
   document.getElementById('shopifyListFilter').value = '';
   document.getElementById('shopifyRangeFrom').value = '';
   document.getElementById('shopifyRangeTo').value = '';
@@ -8686,9 +8724,11 @@ function renderShopifyList(){
     const price = it.price ? ('£' + escapeHtml(it.price)) : '<span class="shmsg err">No price</span>';
     const onShopify = it.shopify_status !== 'not_found' && it.shopify_status !== 'unknown';
     const id = Number(it.stockid);
-    const contentCell = it.content_ready
-      ? `<button class="btn-ghost shsmall" type="button" onclick="openShopifyContent(${id})" title="View, edit or regenerate the generated content">${it.content_review ? '<span class="shreview">&#9888; Check</span>' : '<span class="shready">&#10003; View</span>'}</button>`
-      : '—';
+    const pc = Number(it.photo_count) || 0;
+    const photoBtn = `<button class="btn-ghost shsmall" type="button" onclick="openShopifyPhotos(${id})" title="Take photos of the front and back of the pack">&#128247; ${pc ? pc : '<span class="shnophoto">Add</span>'}</button>`;
+    const contentCell = photoBtn + (it.content_ready
+      ? ` <button class="btn-ghost shsmall" type="button" onclick="openShopifyContent(${id})" title="View, edit or regenerate the generated content">${it.content_review ? '<span class="shreview">&#9888; Check</span>' : '<span class="shready">&#10003; View</span>'}</button>`
+      : '');
     const genBtn = it.content_ready ? '' : `<button class="btn-ghost" type="button" onclick="generateShopifyOne(${id})">Generate</button> `;
     return `<tr data-stockid="${id}">
       <td class="shc"><input type="checkbox" class="odcheck" ${shopifyData.selected.has(it.stockid) ? 'checked' : ''} onchange="onShopifySelect(${id}, this.checked)"></td>
@@ -8822,6 +8862,8 @@ function generateShopifySelected(){
   const ids = shopifySelectedIds();
   if(ids.length === 0) return;
   const need = shopifyData.items.filter(it => shopifyData.selected.has(it.stockid) && !it.content_ready).length;
+  const nop = shopifyData.items.filter(it => shopifyData.selected.has(it.stockid) && !it.content_ready && !it.photo_count).length;
+  if(nop) toast(nop + ' selected product' + (nop === 1 ? ' has' : 's have') + ' no photos yet and will be skipped');
   if(!confirm('Generate content for ' + ids.length + ' product' + (ids.length === 1 ? '' : 's') + ' with Gemini?\n\n'
     + need + ' still need generating (about 20–40 seconds each, uses Gemini credit). The rest are already generated and are skipped.\n\nNothing is sent to Shopify.')) return;
   return shopifyRun(ids, false);
@@ -8830,6 +8872,8 @@ function sendShopifySelected(){
   const ids = shopifySelectedIds();
   if(ids.length === 0) return;
   const need = shopifyData.items.filter(it => shopifyData.selected.has(it.stockid) && !it.content_ready).length;
+  const nop = shopifyData.items.filter(it => shopifyData.selected.has(it.stockid) && !it.content_ready && !it.photo_count).length;
+  if(nop) toast(nop + ' selected product' + (nop === 1 ? ' has' : 's have') + ' no photos yet and will be skipped');
   const newStatus = String((shopifyData.shopify && shopifyData.shopify.new_product_status) || 'DRAFT').toLowerCase();
   if(!confirm('Generate & send ' + ids.length + ' product' + (ids.length === 1 ? '' : 's') + ' to Shopify?\n\n'
     + need + ' still need generating with Gemini (about 20–40 seconds each); the rest are sent straight away.\n'
@@ -8857,14 +8901,21 @@ async function shopifyRun(ids, send){
       note.style.color = '';
       note.textContent = (send ? 'Generating & sending ' : 'Generating ') + (i + 1) + ' of ' + ids.length + ': ' + it.name + '…';
       mark(id);
-      // 1) generate (skipped when already done — no cost)
+      // 1) generate (skipped when already done — no cost). Needs the photos first.
       if(!it.content_ready){
+        if(!it.photo_count){
+          it.msg = { type:'err', text:'No photos yet — press the camera button and photograph the front and back of the pack first' };
+          failed++;
+          renderShopifyList();
+          continue;
+        }
         try{
           const g = await apiPost('stock/shopify/generate/', { stockids: [id] });
           const r = (g.results || [])[0] || {};
           if(!r.ok) throw new Error(r.error || 'Generate failed');
           it.content_ready = true;
           it.content_review = !!r.needs_review;
+          it.genNote = r.note || '';
           generated++;
           if(r.needs_review) review++;
         }catch(e){
@@ -8878,8 +8929,8 @@ async function shopifyRun(ids, send){
         ready++;
       }
       if(!send){
-        it.msg = it.content_review
-          ? { type:'warn', text:'Generated — please check the ingredients / nutrition (press Check) before it goes live' }
+        it.msg = (it.content_review || it.genNote)
+          ? { type:'warn', text:(it.genNote ? it.genNote + ' · ' : '') + (it.content_review ? 'Generated — please check the ingredients / nutrition (press Check) before it goes live' : 'Content generated') }
           : { type:'ok', text:'Content generated' };
         shopifyData.selected.delete(id);
         done++;
@@ -8901,6 +8952,7 @@ async function shopifyRun(ids, send){
           let what = (r.action === 'created' ? 'Created on Shopify' : 'Updated on Shopify') + (r.price ? ' at £' + r.price : '');
           what += bits ? (r.action === 'created' ? ' with ' + bits : ' · added ' + bits) : (r.action === 'created' ? '' : ' · existing Shopify description / picture kept');
           if(it.content_review) what += ' · content still needs checking';
+          if(it.genNote) what += ' · ' + it.genNote;
           it.msg = (r.warning || it.content_review) ? { type:'warn', text: what + (r.warning ? ' — ' + r.warning : '') } : { type:'ok', text: what };
           shopifyData.selected.delete(id);
           done++;
@@ -8930,6 +8982,114 @@ async function shopifyRun(ids, send){
   if(stopped) bits.push('stopped early');
   toast((send ? 'Shopify: ' : 'Generate: ') + (bits.join(', ') || 'nothing done'));
   renderShopifyList();
+}
+
+/* ---- Photos (camera) ---- */
+function shReadImage(file){
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Could not read that photo')); };
+    img.src = url;
+  });
+}
+function shImageToBase64(img, maxSide, quality){
+  const sc = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+  const w = Math.max(1, Math.round(img.naturalWidth * sc)), h = Math.max(1, Math.round(img.naturalHeight * sc));
+  const cv = document.createElement('canvas');
+  cv.width = w; cv.height = h;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(img, 0, 0, w, h);
+  return cv.toDataURL('image/jpeg', quality).split(',')[1];
+}
+async function openShopifyPhotos(stockid){
+  shopifyData.photoId = stockid;
+  const it = shopifyData.items.find(x => x.stockid === stockid);
+  document.getElementById('shPhotosTitle').textContent = 'Photos — ' + (it ? it.name : '');
+  document.getElementById('shPhotoStatus').textContent = '';
+  document.getElementById('shPhotoRoleNext').value = 'auto';
+  document.getElementById('shPhotosBody').innerHTML = '<div class="loading">Loading…</div>';
+  openModal('modalShopifyPhotos');
+  await loadShopifyPhotos();
+}
+async function loadShopifyPhotos(){
+  const id = shopifyData.photoId;
+  try{
+    const d = await apiGet('stock/shopify/photos/' + id + '/');
+    renderShopifyPhotos(d.photos || []);
+  }catch(e){
+    console.error(e);
+    document.getElementById('shPhotosBody').innerHTML = '<div class="loading" style="color:var(--danger)">Could not load the photos.</div>' + errDetailHtml(e);
+  }
+}
+function renderShopifyPhotos(photos){
+  const id = shopifyData.photoId;
+  const it = shopifyData.items.find(x => x.stockid === id);
+  if(it){ it.photo_count = photos.length; renderShopifyList(); }
+  const box = document.getElementById('shPhotosBody');
+  if(!photos.length){ box.innerHTML = '<div class="empty-hint">No photos yet — press Take photo.</div>'; return; }
+  const roles = [['front','Front'],['back','Back / ingredients'],['nutrition','Nutrition panel'],['side','Side'],['other','Other']];
+  let note = '';
+  if(!photos.some(p => p.role === 'front')) note += '<div class="shmsg err">No photo is marked Front — the first photo will be used as the product picture.</div>';
+  if(!photos.some(p => p.role === 'back' || p.role === 'nutrition')) note += '<div class="shmsg warn">No back / nutrition photo yet — without it the ingredients and nutrition cannot be read from the pack.</div>';
+  if(it && it.content_ready) note += '<div class="shmsg warn">This product is already generated. After changing photos, open Content and use Regenerate to rebuild it from the new photos.</div>';
+  box.innerHTML = note + '<div class="shphotos">' + photos.map(p =>
+    '<div class="shphoto"><img src="' + escapeHtml(p.thumb || '') + '" alt="photo">'
+    + '<select onchange="setShopifyPhotoRole(' + Number(p.id) + ', this.value)">'
+    + roles.map(r => '<option value="' + r[0] + '"' + (p.role === r[0] ? ' selected' : '') + '>' + r[1] + '</option>').join('') + '</select>'
+    + '<button class="btn-ghost shsmall shdel" type="button" onclick="deleteShopifyPhoto(' + Number(p.id) + ')">Delete</button></div>'
+  ).join('') + '</div>';
+}
+async function onShopifyPhotoFiles(input){
+  const files = Array.from(input.files || []);
+  input.value = '';
+  const id = shopifyData.photoId;
+  if(!files.length || !id) return;
+  const status = document.getElementById('shPhotoStatus');
+  const roleSel = document.getElementById('shPhotoRoleNext');
+  let ok = 0, bad = 0;
+  for(let i = 0; i < files.length; i++){
+    status.style.color = '';
+    status.textContent = 'Uploading photo ' + (i + 1) + ' of ' + files.length + '…';
+    try{
+      const img = await shReadImage(files[i]);
+      const body = { mime: 'image/jpeg', data: shImageToBase64(img, 1800, 0.88), thumb: shImageToBase64(img, 420, 0.8) };
+      if(roleSel.value !== 'auto') body.role = roleSel.value;
+      await apiPost('stock/shopify/photos/' + id + '/', body);
+      ok++;
+      roleSel.value = 'auto';   // the next one is automatic again unless you choose
+    }catch(e){
+      console.error(e);
+      bad++;
+      status.style.color = 'var(--danger)';
+      status.textContent = 'Could not save a photo: ' + e.message;
+    }
+  }
+  if(!bad) status.textContent = ok + ' photo' + (ok === 1 ? '' : 's') + ' saved — take the next one (back of the pack) or press Done.';
+  await loadShopifyPhotos();
+}
+async function setShopifyPhotoRole(photoId, role){
+  try{
+    await apiPut('stock/shopify/photos/' + shopifyData.photoId + '/' + photoId + '/', { role });
+    await loadShopifyPhotos();
+  }catch(e){ console.error(e); toast('Could not change it: ' + e.message); }
+}
+async function deleteShopifyPhoto(photoId){
+  if(!confirm('Delete this photo?')) return;
+  try{
+    await apiDelete('stock/shopify/photos/' + shopifyData.photoId + '/' + photoId + '/');
+    await loadShopifyPhotos();
+  }catch(e){ console.error(e); toast('Could not delete: ' + e.message); }
+}
+async function chooseShopifyPicture(source){
+  const id = shopifyData.contentId;
+  try{
+    await apiPost('stock/shopify/picture/', { stockid: id, source });
+    toast(source === 'original' ? 'Your own photo will be used' : 'The tidied-up picture will be used');
+    await openShopifyContent(id);
+  }catch(e){ console.error(e); toast('Could not change it: ' + e.message); }
 }
 
 /* ---- Generated content: view / edit / regenerate ---- */
@@ -8965,13 +9125,20 @@ function renderShopifyContentForm(c){
     ? '<div class="shwarnbox"><strong>Please check before this goes live.</strong> ' + escapeHtml(c.review_note || 'Some details could not be verified.')
       + '<br>Compare the ingredients, allergens and nutrition with the real pack, correct anything that is wrong, then press <em>Save changes</em>.</div>'
     : '';
-  const img = c.image_data_url
-    ? '<img src="' + c.image_data_url + '" alt="Generated picture" style="width:240px;height:240px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:8px;">'
-    : '<div class="empty-hint">No picture</div>';
+  const src = c.image_source;   // 'edited' | 'original'
+  const box = (url, label, used, action) => '<div class="' + (used ? 'on' : '') + '"><div class="shpicl">' + label + '</div>'
+    + (url ? '<img src="' + url + '" alt="' + escapeHtml(label) + '">' : '<div class="empty-hint" style="width:200px;">None</div>')
+    + '<div style="margin-top:6px;">' + (used ? '<span class="shready">&#10003; This goes on Shopify</span>'
+        : (url ? '<button class="btn-ghost shsmall" type="button" onclick="chooseShopifyPicture(\'' + action + '\')">Use this one</button>' : '')) + '</div></div>';
+  const img = '<div class="shpick">'
+    + box(c.front_photo_data_url, 'Your front photo', src === 'original', 'original')
+    + box(c.edited_data_url, 'Tidied-up picture', src === 'edited', 'edited')
+    + '</div>'
+    + '<div class="odcount" style="margin-top:6px;max-width:440px;">Check the tidied picture against the real pack — the artwork, colours and every word must match. If anything is off, use your own photo or regenerate.</div>';
   const nutri = SH_NUTRI_FIELDS.map(f => '<div><label>' + f[1] + '</label><input type="text" id="shcN_' + f[0] + '" value="' + escapeHtml(n[f[0]] || '') + '"></div>').join('');
   document.getElementById('shContentBody').innerHTML = warn
     + '<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start;">'
-    +   '<div>' + img + '<div style="margin-top:8px;"><button class="btn-ghost shsmall" type="button" onclick="regenerateShopifyContent(\'image\')">&#8635; Regenerate picture</button></div></div>'
+    +   '<div>' + img + '<div style="margin-top:8px;"><button class="btn-ghost shsmall" type="button" onclick="regenerateShopifyContent(\'image\')">&#8635; Tidy the front photo again</button></div></div>'
     +   '<div style="flex:1;min-width:260px;">' + ta('shcShort', 'Short description', c.short_description, 3)
     +   '<div style="margin-top:8px;"><button class="btn-ghost shsmall" type="button" onclick="regenerateShopifyContent(\'text\')">&#8635; Regenerate all text (replaces edits)</button></div></div>'
     + '</div>'
@@ -9018,7 +9185,7 @@ async function saveShopifyContent(){
 }
 async function regenerateShopifyContent(part){
   const id = shopifyData.contentId;
-  const what = part === 'image' ? 'the picture' : 'all the text (any edits you made will be replaced)';
+  const what = part === 'image' ? 'the picture from your front photo' : 'all the text from your photos (any edits you made will be replaced)';
   if(!confirm('Regenerate ' + what + ' with Gemini? This uses Gemini credit.')) return;
   document.getElementById('shContentBody').innerHTML = '<div class="loading">Regenerating — this takes about 20–40 seconds…</div>';
   document.getElementById('shContentSaveBtn').disabled = true;
