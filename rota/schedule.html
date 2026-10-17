@@ -11,7 +11,7 @@
     --nav-blue:#3E97E8; --nav-blue-dark:#2E7FD1;
     --ink:#37424A; --slate:#6B7684; --line:#E3E7EB;
     --page-bg:#F5F7F8; --timeoff-bg:#69727C; --timeoff-fg:#ffffff;
-    --annual-bg:#C2570C; --annual-fg:#ffffff;
+    --annual-bg:#000000; --annual-fg:#ffffff;
   }
   *{box-sizing:border-box;}
   body{margin:0;font-family:'Inter',sans-serif;color:var(--ink);background:var(--page-bg);}
@@ -871,7 +871,7 @@
     return { bg: chipBg(st && st.bg ? st.bg : '#8A94A0'), fg: '#ffffff' };
   }
   const TIMEOFF_CHIP_BG = chipBg('#9AA3AC');
-  const ANNUAL_CHIP_BG = '#C2570C';
+  const ANNUAL_CHIP_BG = '#000000';
   // Time off now has two types. Entries saved before this change have no
   // type and are treated as plain week off.
   function offTypeOf(off){ return off && off.type === 'annual' ? 'annual' : 'weekoff'; }
