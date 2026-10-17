@@ -218,7 +218,52 @@
   .resultbox.bad{background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.25);color:var(--danger);}
   .resultbox ul{margin:8px 0 0;padding-left:18px;color:var(--ink);max-height:180px;overflow:auto;}
   .resultbox .warn{color:var(--gold);}
+
+  /* ---- Request cards (Sendcloud-style rows) ---- */
+  .hr-stat{padding:14px 18px;}
+  .hr-stat .hr-stat-num{font-size:26px;margin-top:4px;}
+  .rq-head,.rq-grid{
+    display:grid;gap:18px;align-items:center;
+    grid-template-columns:minmax(170px,1.4fr) minmax(200px,1.3fr) 90px 120px minmax(250px,auto);
+  }
+  .rq-head{
+    padding:0 20px 10px;color:var(--slate);font-size:11px;letter-spacing:1.2px;
+    text-transform:uppercase;font-family:'JetBrains Mono',monospace;
+  }
+  .rq-head.emp,.rq-grid.emp{grid-template-columns:minmax(200px,1.6fr) 120px 100px minmax(110px,auto);}
+  .rq-card{
+    background:var(--paper);border:1px solid var(--line);border-left:4px solid #c9d0db;
+    border-radius:12px;padding:16px 20px;margin-bottom:12px;transition:box-shadow .15s;
+  }
+  .rq-card:hover{box-shadow:0 4px 16px rgba(14,30,51,.08);}
+  .rq-card.st-pending{border-left-color:var(--gold-light);}
+  .rq-card.st-approved{border-left-color:var(--green);}
+  .rq-card.st-partial{border-left-color:var(--gold);}
+  .rq-card.st-declined{border-left-color:var(--danger);}
+  .rq-name{font-weight:600;font-size:15px;color:var(--blue-accent);font-family:'Space Grotesk',sans-serif;}
+  .rq-main{font-weight:600;font-size:14px;color:var(--navy-deep);}
+  .rq-sub{color:var(--slate);font-size:12.5px;margin-top:3px;}
+  .rq-daynum{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:700;color:var(--navy-deep);line-height:1.1;}
+  .rq-actions{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;}
+  .rq-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);}
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;
+    background:#e9edf3;color:var(--slate);font-size:12px;font-family:'Inter',sans-serif;border:1px solid transparent;
+  }
+  .chip b{color:var(--ink);font-weight:600;}
+  .chip.hl-blue{background:rgba(29,75,143,.1);color:var(--blue-accent);} .chip.hl-blue b{color:var(--blue-accent);}
+  .chip.hl-green{background:rgba(22,163,74,.12);color:#0e7a3b;} .chip.hl-green b{color:#0e7a3b;}
+  .chip.hl-amber{background:rgba(184,134,11,.14);color:var(--gold);} .chip.hl-amber b{color:var(--gold);}
+  .chip.hl-red{background:rgba(220,38,38,.1);color:var(--danger);} .chip.hl-red b{color:var(--danger);}
+  .chip-btn{background:#fff;border-color:var(--line);color:var(--ink);cursor:pointer;font-weight:500;}
+  .chip-btn:hover{border-color:var(--gold);}
+  @media(max-width:900px){
+    .rq-head{display:none;}
+    .rq-grid,.rq-grid.emp{grid-template-columns:1fr 1fr;}
+    .rq-actions{grid-column:1/-1;justify-content:flex-start;}
+  }
 </style>
+
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -395,34 +440,15 @@
         <button class="logout" onclick="logout()" style="margin-top:0;">Sign out</button>
       </div>
 
-      <div id="hrPanel-requests-table" class="hr-table-wrap">
-        <table class="hr-table">
-          <thead>
-            <tr>
-              <th>Timestamp</th><th>ID</th><th>Name</th><th>Department</th><th>Start Date</th><th>End Date</th>
-              <th>Type</th><th class="num">Days</th><th class="num">Allocation</th><th class="num">Taken</th>
-              <th class="num">Days Left</th><th class="num">Days / Week</th><th>Status</th><th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="hrTableBody">
-            <tr><td colspan="14" class="empty-hint">Loading…</td></tr>
-          </tbody>
-        </table>
+      <div id="hrPanel-requests-table">
+        <div class="rq-head"><div>Employee</div><div>Dates</div><div>Days</div><div>Status</div><div style="text-align:right;">Actions</div></div>
+        <div id="hrTableBody"><div class="empty-hint">Loading…</div></div>
       </div>
 
       <!-- EMPLOYEES TAB -->
-      <div id="hrPanel-employees" class="hr-table-wrap" style="display:none;">
-        <table class="hr-table">
-          <thead>
-            <tr>
-              <th>ID</th><th>Name</th><th>Department</th><th class="num">Allocation</th><th class="num">Taken</th>
-              <th class="num">Days Left</th><th class="num">Days / Week</th><th class="num">Pending</th><th>History</th>
-            </tr>
-          </thead>
-          <tbody id="hrEmployeesBody">
-            <tr><td colspan="9" class="empty-hint">Loading…</td></tr>
-          </tbody>
-        </table>
+      <div id="hrPanel-employees" style="display:none;">
+        <div class="rq-head emp"><div>Employee</div><div>Days left</div><div>Pending</div><div style="text-align:right;">History</div></div>
+        <div id="hrEmployeesBody"><div class="empty-hint">Loading…</div></div>
       </div>
 
       <!-- UPLOAD TAB -->
@@ -883,8 +909,8 @@ function setHrTab(tab){
 
 async function loadHrHolidayRequests(){
   const tbody = document.getElementById('hrTableBody');
-  tbody.innerHTML = '<tr><td colspan="14" class="empty-hint">Loading…</td></tr>';
-  document.getElementById('hrEmployeesBody').innerHTML = '<tr><td colspan="9" class="empty-hint">Loading…</td></tr>';
+  tbody.innerHTML = '<div class="empty-hint">Loading…</div>';
+  document.getElementById('hrEmployeesBody').innerHTML = '<div class="empty-hint">Loading…</div>';
   try{
     const [res, empRes] = await Promise.all([
       fetch(API_BASE + 'staff/leave-requests', { headers: authHeaders() }),
@@ -893,7 +919,7 @@ async function loadHrHolidayRequests(){
     if(res.status === 401 || empRes.status === 401){ logout(); return; }
     const data = await res.json();
     if(!res.ok || !data.ok){
-      tbody.innerHTML = '<tr><td colspan="14" class="empty-hint">Could not load requests.</td></tr>';
+      tbody.innerHTML = '<div class="empty-hint">Could not load requests.</div>';
     }else{
       hrRequests = data.requests || [];
       updateHrCounts();
@@ -903,7 +929,7 @@ async function loadHrHolidayRequests(){
     hrEmployees = (empRes.ok && empData.ok) ? (empData.employees || []) : [];
     renderEmployeesTable();
   }catch(e){
-    tbody.innerHTML = '<tr><td colspan="14" class="empty-hint">Could not load requests.</td></tr>';
+    tbody.innerHTML = '<div class="empty-hint">Could not load requests.</div>';
     console.error(e);
   }
 }
@@ -931,8 +957,15 @@ function setHrFilter(filter){
   renderHrTable();
 }
 
+function leftClass(v){
+  if(v === null || v === undefined || v === '') return '';
+  const n = Number(v);
+  if(isNaN(n)) return '';
+  return n <= 0 ? 'hl-red' : (n <= 5 ? 'hl-amber' : 'hl-green');
+}
+
 function renderHrTable(){
-  const tbody = document.getElementById('hrTableBody');
+  const box = document.getElementById('hrTableBody');
   const q = document.getElementById('hrNameFilter').value.trim().toLowerCase();
   let rows = hrRequests;
   if(hrFilter === 'approved') rows = rows.filter(r => isApprovedish(r.status));
@@ -940,64 +973,84 @@ function renderHrTable(){
   if(q) rows = rows.filter(r => (r.full_name || '').toLowerCase().includes(q) || String(r.employee_id ?? '').toLowerCase().includes(q));
 
   if(rows.length === 0){
-    tbody.innerHTML = '<tr><td colspan="14" class="empty-hint">No requests match.</td></tr>';
+    box.innerHTML = '<div class="empty-hint">No requests match.</div>';
     return;
   }
 
-  tbody.innerHTML = rows.map(r => {
-    const days = r.status === 'partial' && r.partial_days != null
-      ? fmtNum(r.partial_days) + ' of ' + fmtNum(r.days_requested)
-      : fmtNum(r.days_requested);
+  box.innerHTML = rows.map(r => {
+    const isPartial = r.status === 'partial' && r.partial_days != null;
+    const days = isPartial ? fmtNum(r.partial_days) : fmtNum(r.days_requested);
+    const daysSub = isPartial ? 'of ' + fmtNum(r.days_requested) + ' approved' : 'day' + (Number(r.days_requested) === 1 ? '' : 's');
     const statusLabel = r.status === 'declined' ? 'disapproved' : r.status;
     const disabled = (r.status === 'approved' || r.status === 'declined') ? 'disabled' : '';
+    const left = leftClass(r.holiday_balance);
     return `
-      <tr>
-        <td>${fmtDate(r.created_at)}</td>
-        <td>${esc(r.employee_id)}</td>
-        <td>${esc(r.full_name) || '—'}</td>
-        <td>${esc(r.department) || '—'}</td>
-        <td>${fmtDate(r.start_date)}</td>
-        <td>${fmtDate(r.end_date)}</td>
-        <td>Holiday</td>
-        <td class="num">${days}</td>
-        <td class="num">${fmtNum(r.holiday_allocation)}</td>
-        <td class="num">${fmtNum(r.holiday_taken)}</td>
-        <td class="num strong">${fmtNum(r.holiday_balance)}</td>
-        <td class="num">${fmtNum(r.weekly_working_days)}</td>
-        <td><span class="badge ${esc(r.status)}">${esc(statusLabel)}</span></td>
-        <td>
-          <div class="hr-actions">
+      <div class="rq-card st-${esc(r.status)}">
+        <div class="rq-grid">
+          <div>
+            <div class="rq-name">${esc(r.full_name) || 'Unnamed employee'}</div>
+            <div class="rq-sub">ID ${esc(r.employee_id)}${r.department ? ' · ' + esc(r.department) : ''}</div>
+          </div>
+          <div>
+            <div class="rq-main">${fmtDate(r.start_date)} → ${fmtDate(r.end_date)}</div>
+            <div class="rq-sub">Requested ${fmtDate(r.created_at)}</div>
+          </div>
+          <div>
+            <div class="rq-daynum">${days}</div>
+            <div class="rq-sub">${daysSub}</div>
+          </div>
+          <div><span class="badge ${esc(r.status)}">${esc(statusLabel)}</span></div>
+          <div class="rq-actions">
             <button class="btn-xs approve" ${disabled} onclick="hrDecide(${Number(r.request_id)},'approved')">Approve</button>
             <button class="btn-xs decline" ${disabled} onclick="hrDecide(${Number(r.request_id)},'declined')">Decline</button>
             <button class="btn-xs partial" ${disabled} onclick="openHrPartialModal(${Number(r.request_id)})">Partial</button>
-            <button class="btn-xs history" data-id="${esc(r.employee_id)}" data-name="${esc(r.full_name)}" onclick="openHistoryFromBtn(this)">History</button>
           </div>
-        </td>
-      </tr>`;
+        </div>
+        <div class="rq-chips">
+          <span class="chip ${left}">Days left <b>${fmtNum(r.holiday_balance)}</b></span>
+          <span class="chip">Allocation <b>${fmtNum(r.holiday_allocation)}</b></span>
+          <span class="chip">Taken <b>${fmtNum(r.holiday_taken)}</b></span>
+          <span class="chip">Works <b>${fmtNum(r.weekly_working_days)}</b> days / week</span>
+          ${r.reason ? `<span class="chip">Reason: <b>${esc(r.reason)}</b></span>` : ''}
+          ${r.decision_note ? `<span class="chip hl-amber">Note: <b>${esc(r.decision_note)}</b></span>` : ''}
+          <button class="chip chip-btn" data-id="${esc(r.employee_id)}" data-name="${esc(r.full_name)}" onclick="openHistoryFromBtn(this)">🕘 View history</button>
+        </div>
+      </div>`;
   }).join('');
 }
 
 function renderEmployeesTable(){
-  const tbody = document.getElementById('hrEmployeesBody');
+  const box = document.getElementById('hrEmployeesBody');
   const q = document.getElementById('hrNameFilter').value.trim().toLowerCase();
   let rows = hrEmployees;
   if(q) rows = rows.filter(e => (e.full_name || '').toLowerCase().includes(q) || String(e.employee_id ?? '').toLowerCase().includes(q));
   if(rows.length === 0){
-    tbody.innerHTML = '<tr><td colspan="9" class="empty-hint">No employees yet — use the Upload Excel tab to add them.</td></tr>';
+    box.innerHTML = '<div class="empty-hint">No employees yet — use the Upload Excel tab to add them.</div>';
     return;
   }
-  tbody.innerHTML = rows.map(e => `
-    <tr>
-      <td>${esc(e.employee_id)}</td>
-      <td>${esc(e.full_name) || '—'}</td>
-      <td>${esc(e.department) || '—'}</td>
-      <td class="num">${fmtNum(e.holiday_allocation)}</td>
-      <td class="num">${fmtNum(e.holiday_taken)}</td>
-      <td class="num strong">${fmtNum(e.holiday_balance)}</td>
-      <td class="num">${fmtNum(e.weekly_working_days)}</td>
-      <td class="num">${fmtNum(e.pending_requests)}</td>
-      <td><button class="btn-xs history" data-id="${esc(e.employee_id)}" data-name="${esc(e.full_name)}" onclick="openHistoryFromBtn(this)">History</button></td>
-    </tr>`).join('');
+  box.innerHTML = rows.map(e => `
+    <div class="rq-card">
+      <div class="rq-grid emp">
+        <div>
+          <div class="rq-name">${esc(e.full_name) || 'Unnamed employee'}</div>
+          <div class="rq-sub">ID ${esc(e.employee_id)}${e.department ? ' · ' + esc(e.department) : ''}</div>
+        </div>
+        <div>
+          <div class="rq-daynum">${fmtNum(e.holiday_balance)}</div>
+          <div class="rq-sub">days left</div>
+        </div>
+        <div>${Number(e.pending_requests) > 0 ? `<span class="badge pending">${Number(e.pending_requests)} pending</span>` : ''}</div>
+        <div class="rq-actions">
+          <button class="chip chip-btn" data-id="${esc(e.employee_id)}" data-name="${esc(e.full_name)}" onclick="openHistoryFromBtn(this)">🕘 View history</button>
+        </div>
+      </div>
+      <div class="rq-chips">
+        <span class="chip ${leftClass(e.holiday_balance)}">Days left <b>${fmtNum(e.holiday_balance)}</b></span>
+        <span class="chip">Allocation <b>${fmtNum(e.holiday_allocation)}</b></span>
+        <span class="chip">Taken <b>${fmtNum(e.holiday_taken)}</b></span>
+        <span class="chip">Works <b>${fmtNum(e.weekly_working_days)}</b> days / week</span>
+      </div>
+    </div>`).join('');
 }
 
 async function hrDecide(requestId, status, extra){
