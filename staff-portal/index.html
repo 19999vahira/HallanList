@@ -177,7 +177,50 @@
     color:var(--ink);font-size:14px;font-weight:500;cursor:pointer;font-family:'Inter',sans-serif;
   }
   .btn-ghost-inline:hover{border-color:var(--gold);}
+
+  /* ---- Holiday detail / history / upload additions ---- */
+  .wrap.xwide{max-width:1280px;}
+  .statgrid.four{grid-template-columns:repeat(4,1fr);}
+  @media(max-width:560px){.statgrid.four{grid-template-columns:repeat(2,1fr);}}
+  .weekline{color:var(--slate);font-size:12.5px;margin:-18px 0 22px;}
+  .hr-tabs{display:flex;gap:8px;margin:0 0 22px;flex-wrap:wrap;}
+  .hr-tab{
+    padding:9px 16px;border-radius:8px;border:1px solid var(--line);background:var(--panel);
+    color:var(--ink);font-size:13px;font-weight:500;cursor:pointer;font-family:'Inter',sans-serif;
+  }
+  .hr-tab:hover{border-color:var(--gold);}
+  .hr-tab.active{background:var(--navy-deep);color:#fff;border-color:var(--navy-deep);}
+  .btn-xs.history{background:#eef0f3;color:var(--ink);}
+  .btn-xs.history:hover{background:#e2e6ec;}
+  table.hr-table td.num,table.hr-table th.num{text-align:center;}
+  table.hr-table td.strong{font-weight:600;}
+  .hr-modal.wide{max-width:820px;max-height:88vh;overflow:auto;}
+  .hist-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0 18px;}
+  @media(max-width:560px){.hist-tiles{grid-template-columns:repeat(2,1fr);}}
+  .hist-tile{background:var(--navy-deep);border-radius:10px;padding:12px 14px;}
+  .hist-tile .l{color:#93a8c4;font-size:10px;text-transform:uppercase;letter-spacing:1.1px;font-family:'JetBrains Mono',monospace;}
+  .hist-tile .n{color:#fff;font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;margin-top:4px;}
+  .modal-close-row{display:flex;justify-content:flex-end;margin-top:16px;}
+  .modal-close-row .btn-ghost-inline{flex:none;padding:11px 22px;}
+  .upload-modes{display:flex;flex-direction:column;gap:8px;margin:0 0 16px;}
+  .chk{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin:0 0 10px;font-weight:400;cursor:pointer;}
+  .chk input{width:auto;margin:0;}
+  .upload-panel h3{font-size:17px;margin:0 0 4px;}
+  .upload-panel p.sub{color:var(--slate);font-size:13px;margin:0 0 18px;line-height:1.5;}
+  input[type=file]{
+    display:block;width:100%;padding:14px;border-radius:8px;border:1px dashed var(--line);
+    background:var(--paper);font-size:13px;margin-bottom:16px;font-family:'Inter',sans-serif;
+  }
+  .previewbox{border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:4px 0 18px;background:var(--paper);font-size:13px;}
+  .previewbox .meta{color:var(--slate);margin-bottom:10px;line-height:1.6;}
+  .resultbox{border-radius:10px;padding:14px 16px;font-size:13px;margin-top:18px;line-height:1.6;}
+  .resultbox.ok{background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.25);color:#0e7a3b;}
+  .resultbox.bad{background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.25);color:var(--danger);}
+  .resultbox ul{margin:8px 0 0;padding-left:18px;color:var(--ink);max-height:180px;overflow:auto;}
+  .resultbox .warn{color:var(--gold);}
 </style>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -263,10 +306,11 @@
       <div class="eyebrow">Holiday Portal</div>
       <h2 class="welcome-name" id="welcomeName">Welcome</h2>
       <p class="welcome-dept" id="welcomeDept"></p>
-      <div class="statgrid">
+      <div class="statgrid four">
         <div class="stat"><div class="num" id="statAllocation">—</div><div class="lbl">Allocation</div></div>
         <div class="stat"><div class="num" id="statTaken">—</div><div class="lbl">Taken</div></div>
-        <div class="stat"><div class="num" id="statBalance">—</div><div class="lbl">Balance</div></div>
+        <div class="stat"><div class="num" id="statBalance">—</div><div class="lbl">Days Left</div></div>
+        <div class="stat"><div class="num" id="statWeekly">—</div><div class="lbl">Days / Week</div></div>
       </div>
       <button class="btn-ghost-full" onclick="openHolidayForm()">📝 Request Holiday</button>
       <button class="logout" onclick="logout()">Sign out</button>
@@ -276,6 +320,12 @@
       <div class="eyebrow">Your Requests</div>
       <h2 style="font-size:18px;">Holiday Requests</h2>
       <div id="requestsList"><div class="empty-hint">Loading…</div></div>
+    </div>
+
+    <div class="card">
+      <div class="eyebrow">History</div>
+      <h2 style="font-size:18px;">Your Holiday History</h2>
+      <div id="myHistoryList"><div class="empty-hint">Loading…</div></div>
     </div>
   </div>
 </div>
@@ -305,49 +355,110 @@
 
 <!-- HR HOLIDAY ADMIN -->
 <div id="view-hr-admin" class="view">
-  <div class="wrap wide">
+  <div class="wrap xwide">
     <div class="card">
       <div class="eyebrow">Holiday Requests</div>
       <h2 class="welcome-name" id="hrWelcomeName">Welcome</h2>
       <p class="welcome-dept" id="hrWelcomeDept"></p>
 
-      <div class="hr-statgrid">
-        <div class="hr-stat active" id="hrStat-all" onclick="setHrFilter('all')">
-          <div class="hr-stat-lbl">All</div>
-          <div class="hr-stat-num" id="hrCount-all">—</div>
-        </div>
-        <div class="hr-stat" id="hrStat-pending" onclick="setHrFilter('pending')">
-          <div class="hr-stat-lbl">Pending</div>
-          <div class="hr-stat-num" id="hrCount-pending">—</div>
-        </div>
-        <div class="hr-stat" id="hrStat-approved" onclick="setHrFilter('approved')">
-          <div class="hr-stat-lbl">Approved</div>
-          <div class="hr-stat-num" id="hrCount-approved">—</div>
-        </div>
-        <div class="hr-stat" id="hrStat-declined" onclick="setHrFilter('declined')">
-          <div class="hr-stat-lbl">Disapproved</div>
-          <div class="hr-stat-num" id="hrCount-declined">—</div>
+      <div class="hr-tabs">
+        <button class="hr-tab active" id="hrTab-requests" onclick="setHrTab('requests')">Requests</button>
+        <button class="hr-tab" id="hrTab-employees" onclick="setHrTab('employees')">Employees</button>
+        <button class="hr-tab" id="hrTab-upload" onclick="setHrTab('upload')">Upload Excel</button>
+      </div>
+
+      <!-- REQUESTS TAB -->
+      <div id="hrPanel-requests">
+        <div class="hr-statgrid">
+          <div class="hr-stat active" id="hrStat-all" onclick="setHrFilter('all')">
+            <div class="hr-stat-lbl">All</div>
+            <div class="hr-stat-num" id="hrCount-all">—</div>
+          </div>
+          <div class="hr-stat" id="hrStat-pending" onclick="setHrFilter('pending')">
+            <div class="hr-stat-lbl">Pending</div>
+            <div class="hr-stat-num" id="hrCount-pending">—</div>
+          </div>
+          <div class="hr-stat" id="hrStat-approved" onclick="setHrFilter('approved')">
+            <div class="hr-stat-lbl">Approved</div>
+            <div class="hr-stat-num" id="hrCount-approved">—</div>
+          </div>
+          <div class="hr-stat" id="hrStat-declined" onclick="setHrFilter('declined')">
+            <div class="hr-stat-lbl">Disapproved</div>
+            <div class="hr-stat-num" id="hrCount-declined">—</div>
+          </div>
         </div>
       </div>
 
-      <div class="hr-toolbar">
-        <input type="text" id="hrNameFilter" placeholder="Filter by name…" oninput="renderHrTable()">
+      <div class="hr-toolbar" id="hrToolbar">
+        <input type="text" id="hrNameFilter" placeholder="Filter by name…" oninput="renderHrTable();renderEmployeesTable()">
         <button class="hr-refresh" onclick="loadHrHolidayRequests()">↻ Refresh</button>
         <button class="logout" onclick="logout()" style="margin-top:0;">Sign out</button>
       </div>
 
-      <div class="hr-table-wrap">
+      <div id="hrPanel-requests-table" class="hr-table-wrap">
         <table class="hr-table">
           <thead>
             <tr>
-              <th>Timestamp</th><th>ID</th><th>Name</th><th>Start Date</th><th>End Date</th>
-              <th>Type</th><th>Days</th><th>Balance</th><th>Status</th><th>Actions</th>
+              <th>Timestamp</th><th>ID</th><th>Name</th><th>Department</th><th>Start Date</th><th>End Date</th>
+              <th>Type</th><th class="num">Days</th><th class="num">Allocation</th><th class="num">Taken</th>
+              <th class="num">Days Left</th><th class="num">Days / Week</th><th>Status</th><th>Actions</th>
             </tr>
           </thead>
           <tbody id="hrTableBody">
-            <tr><td colspan="10" class="empty-hint">Loading…</td></tr>
+            <tr><td colspan="14" class="empty-hint">Loading…</td></tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- EMPLOYEES TAB -->
+      <div id="hrPanel-employees" class="hr-table-wrap" style="display:none;">
+        <table class="hr-table">
+          <thead>
+            <tr>
+              <th>ID</th><th>Name</th><th>Department</th><th class="num">Allocation</th><th class="num">Taken</th>
+              <th class="num">Days Left</th><th class="num">Days / Week</th><th class="num">Pending</th><th>History</th>
+            </tr>
+          </thead>
+          <tbody id="hrEmployeesBody">
+            <tr><td colspan="9" class="empty-hint">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- UPLOAD TAB -->
+      <div id="hrPanel-upload" class="upload-panel" style="display:none;">
+        <h3>Upload Excel</h3>
+        <p class="sub">Add or update employee holiday data, or load past holiday history, from an Excel (.xlsx / .xls) or .csv file. Column headings are matched automatically — download a template below if you're unsure.</p>
+
+        <div class="upload-modes">
+          <label class="chk"><input type="radio" name="uploadMode" value="employees" checked onchange="resetUpload()"> Employee data — allocation, taken, days left, days worked per week</label>
+          <label class="chk"><input type="radio" name="uploadMode" value="history" onchange="resetUpload()"> Holiday history — one row per past holiday</label>
+        </div>
+
+        <div class="hr-toolbar">
+          <button class="hr-refresh" onclick="downloadTemplate('employees')">⬇ Employee template</button>
+          <button class="hr-refresh" onclick="downloadTemplate('history')">⬇ History template</button>
+        </div>
+
+        <label for="uploadFile">Excel / CSV file</label>
+        <input type="file" id="uploadFile" accept=".xlsx,.xls,.csv" onchange="onUploadFile(this)">
+
+        <div id="uploadSheetRow" style="display:none;">
+          <label for="uploadSheet">Sheet to use</label>
+          <select id="uploadSheet" onchange="parseUploadSheet()"></select>
+        </div>
+
+        <div id="uploadOptsEmployees">
+          <label class="chk"><input type="checkbox" id="optCreateMissing" checked> Create employees that don't exist yet (existing ones are just updated)</label>
+        </div>
+        <div id="uploadOptsHistory" style="display:none;">
+          <label class="chk"><input type="checkbox" id="optReplaceHistory"> Replace previously uploaded history for the employees in this file</label>
+        </div>
+
+        <div id="uploadPreview" class="previewbox" style="display:none;"></div>
+
+        <button class="btn-primary" id="uploadBtn" onclick="submitUpload()" disabled>Upload</button>
+        <div id="uploadResult"></div>
       </div>
     </div>
   </div>
@@ -367,6 +478,16 @@
       <button class="btn-ghost-inline" onclick="closeHrPartialModal()">Cancel</button>
       <button class="btn-primary" id="hrPartialSubmitBtn" onclick="submitHrPartial()">Confirm</button>
     </div>
+  </div>
+</div>
+
+<!-- HOLIDAY HISTORY MODAL -->
+<div class="hr-modal-backdrop" id="hrHistoryModal" onclick="if(event.target===this)closeHistoryModal()">
+  <div class="hr-modal wide">
+    <h3 id="histTitle">Holiday history</h3>
+    <p class="sub" id="histSub"></p>
+    <div id="histBody"><div class="empty-hint">Loading…</div></div>
+    <div class="modal-close-row"><button class="btn-ghost-inline" onclick="closeHistoryModal()">Close</button></div>
   </div>
 </div>
 
@@ -511,11 +632,14 @@ function routeToPortal(emp, role){
     document.getElementById('hrWelcomeName').textContent = 'Welcome, ' + emp.name;
     document.getElementById('hrWelcomeDept').textContent = emp.department || '';
     showView('view-hr-admin');
+    setHrTab('requests');
     loadHrHolidayRequests();
   }else{
     renderHolidayPortal(emp);
     showView('view-holiday');
+    loadMySummary();
     loadMyRequests();
+    loadMyHistory();
   }
 }
 
@@ -637,6 +761,42 @@ function renderHolidayPortal(emp){
   document.getElementById('statAllocation').textContent = emp.holidayAllocation ?? '—';
   document.getElementById('statTaken').textContent = emp.holidayTaken ?? '—';
   document.getElementById('statBalance').textContent = emp.holidayBalance ?? '—';
+  document.getElementById('statWeekly').textContent = emp.weeklyWorkingDays ?? '—';
+}
+
+// Fresh numbers from the server (includes weekly working days).
+async function loadMySummary(){
+  try{
+    const res = await fetch(API_BASE + 'staff/holiday-summary', { headers: authHeaders() });
+    if(res.status === 401){ logout(); return; }
+    const data = await res.json();
+    if(!res.ok || !data.ok || !data.emp) return;
+    const e = data.emp;
+    document.getElementById('statAllocation').textContent = fmtNum(e.holiday_allocation);
+    document.getElementById('statTaken').textContent = fmtNum(e.holiday_taken);
+    document.getElementById('statBalance').textContent = fmtNum(e.holiday_balance);
+    document.getElementById('statWeekly').textContent = fmtNum(e.weekly_working_days);
+  }catch(e){
+    console.error(e);
+  }
+}
+
+async function loadMyHistory(){
+  const box = document.getElementById('myHistoryList');
+  box.innerHTML = '<div class="empty-hint">Loading…</div>';
+  try{
+    const res = await fetch(API_BASE + 'staff/holiday-history', { headers: authHeaders() });
+    if(res.status === 401){ logout(); return; }
+    const data = await res.json();
+    if(!res.ok || !data.ok){
+      box.innerHTML = '<div class="empty-hint">Could not load your history.</div>';
+      return;
+    }
+    box.innerHTML = histTable(data.history);
+  }catch(e){
+    box.innerHTML = '<div class="empty-hint">Could not load your history.</div>';
+    console.error(e);
+  }
 }
 
 async function loadMyRequests(){
@@ -663,12 +823,14 @@ async function loadMyRequests(){
     data.requests.forEach(r => {
       const row = document.createElement('div');
       row.className = 'reqrow';
-      const start = r.start_date ? new Date(r.start_date).toLocaleDateString() : '—';
-      const end = r.end_date ? new Date(r.end_date).toLocaleDateString() : '—';
+      const start = fmtDate(r.start_date);
+      const end = fmtDate(r.end_date);
+      const dayTxt = r.status === 'partial' && r.partial_days != null ? ' (' + r.partial_days + ' of ' + (r.days_requested ?? '—') + ' days approved)' : (r.days_requested ? ' (' + r.days_requested + ' days)' : '');
       row.innerHTML = `
         <div>
-          <div class="reqdates">${start} → ${end}${r.days_requested ? ' (' + r.days_requested + ' days)' : ''}</div>
+          <div class="reqdates">${start} → ${end}${dayTxt}</div>
           ${r.reason ? `<div class="reqreason">${escapeHtml(r.reason)}</div>` : ''}
+          ${r.decision_note ? `<div class="reqreason">Note: ${escapeHtml(r.decision_note)}</div>` : ''}
         </div>
         <span class="badge ${r.status}">${r.status}</span>
       `;
@@ -683,37 +845,78 @@ async function loadMyRequests(){
 function escapeHtml(s){
   const d = document.createElement('div');
   d.textContent = s;
-  return d.innerHTML;
+  return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 // ============ HR Holiday Requests admin ============
 let hrRequests = [];
+let hrEmployees = [];
 let hrFilter = 'all';
+let hrTab = 'requests';
 let hrPartialTargetId = null;
+
+function fmtDate(v){
+  if(!v) return '—';
+  const d = new Date(v);
+  if(isNaN(d)) return '—';
+  return d.toLocaleDateString('en-GB', { timeZone: 'UTC' });
+}
+function fmtNum(v){
+  if(v === null || v === undefined || v === '') return '—';
+  const n = Number(v);
+  return isNaN(n) ? '—' : String(n);
+}
+function esc(v){ return escapeHtml(String(v ?? '')); }
+
+function setHrTab(tab){
+  hrTab = tab;
+  ['requests','employees','upload'].forEach(t => {
+    document.getElementById('hrTab-' + t).classList.toggle('active', t === tab);
+  });
+  document.getElementById('hrPanel-requests').style.display = tab === 'requests' ? '' : 'none';
+  document.getElementById('hrPanel-requests-table').style.display = tab === 'requests' ? '' : 'none';
+  document.getElementById('hrPanel-employees').style.display = tab === 'employees' ? '' : 'none';
+  document.getElementById('hrPanel-upload').style.display = tab === 'upload' ? '' : 'none';
+  document.getElementById('hrToolbar').style.display = tab === 'upload' ? 'none' : '';
+  if(tab === 'employees') renderEmployeesTable();
+}
 
 async function loadHrHolidayRequests(){
   const tbody = document.getElementById('hrTableBody');
-  tbody.innerHTML = '<tr><td colspan="10" class="empty-hint">Loading…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="14" class="empty-hint">Loading…</td></tr>';
+  document.getElementById('hrEmployeesBody').innerHTML = '<tr><td colspan="9" class="empty-hint">Loading…</td></tr>';
   try{
-    const res = await fetch(API_BASE + 'staff/leave-requests', { headers: authHeaders() });
+    const [res, empRes] = await Promise.all([
+      fetch(API_BASE + 'staff/leave-requests', { headers: authHeaders() }),
+      fetch(API_BASE + 'staff/holiday-employees', { headers: authHeaders() })
+    ]);
+    if(res.status === 401 || empRes.status === 401){ logout(); return; }
     const data = await res.json();
-    if(res.status === 401){ logout(); return; }
     if(!res.ok || !data.ok){
-      tbody.innerHTML = '<tr><td colspan="10" class="empty-hint">Could not load requests.</td></tr>';
-      return;
+      tbody.innerHTML = '<tr><td colspan="14" class="empty-hint">Could not load requests.</td></tr>';
+    }else{
+      hrRequests = data.requests || [];
+      updateHrCounts();
+      renderHrTable();
     }
-    hrRequests = data.requests || [];
-    updateHrCounts();
-    renderHrTable();
+    const empData = await empRes.json().catch(() => ({}));
+    hrEmployees = (empRes.ok && empData.ok) ? (empData.employees || []) : [];
+    renderEmployeesTable();
   }catch(e){
-    tbody.innerHTML = '<tr><td colspan="10" class="empty-hint">Could not load requests.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="14" class="empty-hint">Could not load requests.</td></tr>';
     console.error(e);
   }
 }
 
+// "Approved" counts both fully and partly approved requests.
+const isApprovedish = s => s === 'approved' || s === 'partial';
+
 function updateHrCounts(){
   const counts = { all: hrRequests.length, pending: 0, approved: 0, declined: 0 };
-  hrRequests.forEach(r => { if(counts[r.status] !== undefined) counts[r.status]++; });
+  hrRequests.forEach(r => {
+    if(isApprovedish(r.status)) counts.approved++;
+    else if(counts[r.status] !== undefined) counts[r.status]++;
+  });
   document.getElementById('hrCount-all').textContent = counts.all;
   document.getElementById('hrCount-pending').textContent = counts.pending;
   document.getElementById('hrCount-approved').textContent = counts.approved;
@@ -730,46 +933,71 @@ function setHrFilter(filter){
 
 function renderHrTable(){
   const tbody = document.getElementById('hrTableBody');
-  const nameQuery = document.getElementById('hrNameFilter').value.trim().toLowerCase();
+  const q = document.getElementById('hrNameFilter').value.trim().toLowerCase();
   let rows = hrRequests;
-  if(hrFilter !== 'all') rows = rows.filter(r => r.status === hrFilter);
-  if(nameQuery) rows = rows.filter(r => (r.full_name || '').toLowerCase().includes(nameQuery));
+  if(hrFilter === 'approved') rows = rows.filter(r => isApprovedish(r.status));
+  else if(hrFilter !== 'all') rows = rows.filter(r => r.status === hrFilter);
+  if(q) rows = rows.filter(r => (r.full_name || '').toLowerCase().includes(q) || String(r.employee_id ?? '').toLowerCase().includes(q));
 
   if(rows.length === 0){
-    tbody.innerHTML = '<tr><td colspan="10" class="empty-hint">No requests match.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="14" class="empty-hint">No requests match.</td></tr>';
     return;
   }
 
   tbody.innerHTML = rows.map(r => {
-    const created = r.created_at ? new Date(r.created_at).toLocaleDateString() : '—';
-    const start = r.start_date ? new Date(r.start_date).toLocaleDateString() : '—';
-    const end = r.end_date ? new Date(r.end_date).toLocaleDateString() : '—';
-    const balance = (r.holiday_balance ?? r.holiday_balance === 0) ? r.holiday_balance : '—';
     const days = r.status === 'partial' && r.partial_days != null
-      ? r.partial_days + ' of ' + (r.days_requested ?? '—')
-      : (r.days_requested ?? '—');
+      ? fmtNum(r.partial_days) + ' of ' + fmtNum(r.days_requested)
+      : fmtNum(r.days_requested);
     const statusLabel = r.status === 'declined' ? 'disapproved' : r.status;
     const disabled = (r.status === 'approved' || r.status === 'declined') ? 'disabled' : '';
     return `
       <tr>
-        <td>${created}</td>
-        <td>${escapeHtml(r.employee_id ?? '')}</td>
-        <td>${escapeHtml(r.full_name ?? '')}</td>
-        <td>${start}</td>
-        <td>${end}</td>
+        <td>${fmtDate(r.created_at)}</td>
+        <td>${esc(r.employee_id)}</td>
+        <td>${esc(r.full_name) || '—'}</td>
+        <td>${esc(r.department) || '—'}</td>
+        <td>${fmtDate(r.start_date)}</td>
+        <td>${fmtDate(r.end_date)}</td>
         <td>Holiday</td>
-        <td>${days}</td>
-        <td>${balance}</td>
-        <td><span class="badge ${r.status}">${statusLabel}</span></td>
+        <td class="num">${days}</td>
+        <td class="num">${fmtNum(r.holiday_allocation)}</td>
+        <td class="num">${fmtNum(r.holiday_taken)}</td>
+        <td class="num strong">${fmtNum(r.holiday_balance)}</td>
+        <td class="num">${fmtNum(r.weekly_working_days)}</td>
+        <td><span class="badge ${esc(r.status)}">${esc(statusLabel)}</span></td>
         <td>
           <div class="hr-actions">
-            <button class="btn-xs approve" ${disabled} onclick="hrDecide(${r.request_id},'approved')">Approve</button>
-            <button class="btn-xs decline" ${disabled} onclick="hrDecide(${r.request_id},'declined')">Decline</button>
-            <button class="btn-xs partial" ${disabled} onclick="openHrPartialModal(${r.request_id})">Partial</button>
+            <button class="btn-xs approve" ${disabled} onclick="hrDecide(${Number(r.request_id)},'approved')">Approve</button>
+            <button class="btn-xs decline" ${disabled} onclick="hrDecide(${Number(r.request_id)},'declined')">Decline</button>
+            <button class="btn-xs partial" ${disabled} onclick="openHrPartialModal(${Number(r.request_id)})">Partial</button>
+            <button class="btn-xs history" data-id="${esc(r.employee_id)}" data-name="${esc(r.full_name)}" onclick="openHistoryFromBtn(this)">History</button>
           </div>
         </td>
       </tr>`;
   }).join('');
+}
+
+function renderEmployeesTable(){
+  const tbody = document.getElementById('hrEmployeesBody');
+  const q = document.getElementById('hrNameFilter').value.trim().toLowerCase();
+  let rows = hrEmployees;
+  if(q) rows = rows.filter(e => (e.full_name || '').toLowerCase().includes(q) || String(e.employee_id ?? '').toLowerCase().includes(q));
+  if(rows.length === 0){
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-hint">No employees yet — use the Upload Excel tab to add them.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(e => `
+    <tr>
+      <td>${esc(e.employee_id)}</td>
+      <td>${esc(e.full_name) || '—'}</td>
+      <td>${esc(e.department) || '—'}</td>
+      <td class="num">${fmtNum(e.holiday_allocation)}</td>
+      <td class="num">${fmtNum(e.holiday_taken)}</td>
+      <td class="num strong">${fmtNum(e.holiday_balance)}</td>
+      <td class="num">${fmtNum(e.weekly_working_days)}</td>
+      <td class="num">${fmtNum(e.pending_requests)}</td>
+      <td><button class="btn-xs history" data-id="${esc(e.employee_id)}" data-name="${esc(e.full_name)}" onclick="openHistoryFromBtn(this)">History</button></td>
+    </tr>`).join('');
 }
 
 async function hrDecide(requestId, status, extra){
@@ -823,6 +1051,306 @@ async function submitHrPartial(){
     btn.disabled = false;
     btn.textContent = 'Confirm';
   }
+}
+
+// ---- Holiday history popup (HR / manager) ----
+function histTiles(emp){
+  const e = emp || {};
+  return `
+    <div class="hist-tiles">
+      <div class="hist-tile"><div class="l">Allocation</div><div class="n">${fmtNum(e.holiday_allocation)}</div></div>
+      <div class="hist-tile"><div class="l">Taken</div><div class="n">${fmtNum(e.holiday_taken)}</div></div>
+      <div class="hist-tile"><div class="l">Days Left</div><div class="n">${fmtNum(e.holiday_balance)}</div></div>
+      <div class="hist-tile"><div class="l">Days / Week</div><div class="n">${fmtNum(e.weekly_working_days)}</div></div>
+    </div>`;
+}
+function histTable(items){
+  if(!items || items.length === 0) return '<div class="empty-hint">No holiday history recorded yet.</div>';
+  return `
+    <div class="hr-table-wrap">
+      <table class="hr-table">
+        <thead><tr><th>Start Date</th><th>End Date</th><th class="num">Days</th><th>Type</th><th>Note</th><th>Source</th></tr></thead>
+        <tbody>
+          ${items.map(h => `
+            <tr>
+              <td>${fmtDate(h.start_date)}</td>
+              <td>${fmtDate(h.end_date)}</td>
+              <td class="num">${fmtNum(h.days)}</td>
+              <td>${esc(h.type || 'Holiday')}</td>
+              <td style="white-space:normal;">${esc(h.note) || '—'}</td>
+              <td>${h.source === 'upload' ? 'Excel upload' : 'Request'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+function openHistoryFromBtn(btn){
+  openHistoryModal(btn.getAttribute('data-id'), btn.getAttribute('data-name'));
+}
+async function openHistoryModal(employeeId, name){
+  document.getElementById('histTitle').textContent = (name || 'Employee') + ' — holiday history';
+  document.getElementById('histSub').textContent = 'Staff ID ' + employeeId;
+  document.getElementById('histBody').innerHTML = '<div class="empty-hint">Loading…</div>';
+  document.getElementById('hrHistoryModal').classList.add('active');
+  try{
+    const res = await fetch(API_BASE + 'staff/holiday-history?employeeId=' + encodeURIComponent(employeeId), { headers: authHeaders() });
+    if(res.status === 401){ logout(); return; }
+    const data = await res.json();
+    if(!res.ok || !data.ok){
+      document.getElementById('histBody').innerHTML = '<div class="empty-hint">Could not load history.</div>';
+      return;
+    }
+    if(data.emp && data.emp.department) document.getElementById('histSub').textContent = data.emp.department + ' · Staff ID ' + employeeId;
+    document.getElementById('histBody').innerHTML = histTiles(data.emp) + histTable(data.history);
+  }catch(e){
+    document.getElementById('histBody').innerHTML = '<div class="empty-hint">Could not load history.</div>';
+    console.error(e);
+  }
+}
+function closeHistoryModal(){
+  document.getElementById('hrHistoryModal').classList.remove('active');
+}
+
+// ---- Excel / CSV upload (read in the browser with SheetJS, posted as JSON) ----
+let uploadWorkbook = null;
+let uploadRows = [];
+
+const norm = s => String(s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const COLS = {
+  employees: {
+    employeeId: ['staffid','employeeid','id','empid','employeeno','employeenumber','staffno','staffnumber','payrollno'],
+    name:       ['name','fullname','employeename','staffname'],
+    department: ['department','dept'],
+    position:   ['position','jobtitle','role'],
+    email:      ['email','emailaddress'],
+    allocation: ['allocation','holidayallocation','entitlement','holidayentitlement','annualleave','totalholiday','totalholidays','annualentitlement'],
+    taken:      ['taken','holidaytaken','daystaken','used','daysused'],
+    balance:    ['balance','holidaybalance','daysleft','left','remaining','remainingdays','daysremaining'],
+    weeklyDays: ['weeklyworkingdays','workingdays','daysperweek','weeklydays','workingdaysperweek','daysaweek','daysworkedperweek','weeklyworkdays']
+  },
+  history: {
+    employeeId: ['staffid','employeeid','id','empid','employeeno','employeenumber','staffno','staffnumber','payrollno'],
+    name:       ['name','fullname','employeename','staffname'],
+    startDate:  ['startdate','start','from','fromdate','datefrom','holidaystart'],
+    endDate:    ['enddate','end','to','todate','dateto','holidayend'],
+    days:       ['days','daystaken','numberofdays','duration','noofdays','totaldays'],
+    type:       ['type','holidaytype','leavetype'],
+    note:       ['note','notes','reason','comment','comments']
+  }
+};
+const REQUIRED = { employees: ['employeeId'], history: ['employeeId','startDate'] };
+const PRETTY = {
+  employeeId:'Staff ID', name:'Name', department:'Department', position:'Position', email:'Email',
+  allocation:'Allocation', taken:'Taken', balance:'Days Left', weeklyDays:'Days / Week',
+  startDate:'Start Date', endDate:'End Date', days:'Days', type:'Type', note:'Note'
+};
+
+function uploadMode(){
+  return document.querySelector('input[name="uploadMode"]:checked').value;
+}
+
+function resetUpload(){
+  uploadWorkbook = null;
+  uploadRows = [];
+  document.getElementById('uploadFile').value = '';
+  document.getElementById('uploadSheetRow').style.display = 'none';
+  document.getElementById('uploadPreview').style.display = 'none';
+  document.getElementById('uploadResult').innerHTML = '';
+  document.getElementById('uploadBtn').disabled = true;
+  const m = uploadMode();
+  document.getElementById('uploadOptsEmployees').style.display = m === 'employees' ? '' : 'none';
+  document.getElementById('uploadOptsHistory').style.display = m === 'history' ? '' : 'none';
+}
+
+function ymd(y, m, d){
+  return y + '-' + String(m).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+}
+// Excel serial numbers, real dates, yyyy-mm-dd and UK dd/mm/yyyy all end up as yyyy-mm-dd.
+function parseXlDate(v){
+  if(v === null || v === undefined || v === '') return null;
+  if(v instanceof Date && !isNaN(v)) return ymd(v.getFullYear(), v.getMonth() + 1, v.getDate());
+  if(typeof v === 'number'){
+    const p = XLSX.SSF.parse_date_code(v);
+    return p ? ymd(p.y, p.m, p.d) : null;
+  }
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(m) return ymd(+m[1], +m[2], +m[3]);
+  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+  if(m){
+    let y = +m[3]; if(y < 100) y += 2000;
+    return ymd(y, +m[2], +m[1]);
+  }
+  return null;
+}
+function parseXlNum(v){
+  if(v === null || v === undefined || v === '') return null;
+  const n = Number(String(v).replace(/,/g, '').trim());
+  return isNaN(n) ? null : n;
+}
+
+async function onUploadFile(input){
+  const file = input.files && input.files[0];
+  uploadWorkbook = null; uploadRows = [];
+  document.getElementById('uploadResult').innerHTML = '';
+  document.getElementById('uploadBtn').disabled = true;
+  if(!file){ document.getElementById('uploadPreview').style.display = 'none'; return; }
+  if(typeof XLSX === 'undefined'){
+    showUploadResult(false, 'The Excel reader could not load — check your internet connection and refresh the page.');
+    return;
+  }
+  try{
+    const buf = await file.arrayBuffer();
+    uploadWorkbook = XLSX.read(buf, { type: 'array' });
+    const sel = document.getElementById('uploadSheet');
+    sel.innerHTML = uploadWorkbook.SheetNames.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    // If the workbook has a sheet named after the chosen upload type, start on it.
+    const want = uploadMode() === 'employees' ? ['employee','staff','allocation'] : ['history','holiday'];
+    const hit = uploadWorkbook.SheetNames.find(n => want.some(w => n.toLowerCase().includes(w)));
+    if(hit) sel.value = hit;
+    document.getElementById('uploadSheetRow').style.display = uploadWorkbook.SheetNames.length > 1 ? '' : 'none';
+    parseUploadSheet();
+  }catch(e){
+    console.error(e);
+    showUploadResult(false, 'Could not read that file. Make sure it is a valid .xlsx, .xls or .csv.');
+  }
+}
+
+function parseUploadSheet(){
+  if(!uploadWorkbook) return;
+  const mode = uploadMode();
+  const ws = uploadWorkbook.Sheets[document.getElementById('uploadSheet').value];
+  const raw = XLSX.utils.sheet_to_json(ws, { defval: '', raw: true });
+  const prev = document.getElementById('uploadPreview');
+  uploadRows = [];
+
+  if(raw.length === 0){
+    prev.style.display = 'block';
+    prev.innerHTML = '<div class="meta">That sheet has no data rows.</div>';
+    document.getElementById('uploadBtn').disabled = true;
+    return;
+  }
+
+  // Work out which spreadsheet column feeds which field.
+  const headers = Object.keys(raw[0]);
+  const map = {};
+  Object.keys(COLS[mode]).forEach(field => {
+    const hit = headers.find(h => COLS[mode][field].includes(norm(h)));
+    if(hit) map[field] = hit;
+  });
+  const missing = REQUIRED[mode].filter(f => !map[f]);
+  if(missing.length){
+    prev.style.display = 'block';
+    prev.innerHTML = `<div class="meta"><strong style="color:var(--danger);">Missing column:</strong> ${missing.map(f => PRETTY[f]).join(', ')}.
+      Found columns: ${headers.map(esc).join(', ') || 'none'}. Rename your heading or download the template.</div>`;
+    document.getElementById('uploadBtn').disabled = true;
+    return;
+  }
+
+  raw.forEach((r, i) => {
+    const o = { row: i + 2 };
+    Object.keys(map).forEach(field => { o[field] = r[map[field]]; });
+    if(mode === 'employees'){
+      o.employeeId = String(o.employeeId ?? '').trim();
+      o.allocation = parseXlNum(o.allocation);
+      o.taken = parseXlNum(o.taken);
+      o.balance = parseXlNum(o.balance);
+      o.weeklyDays = parseXlNum(o.weeklyDays);
+    }else{
+      o.employeeId = String(o.employeeId ?? '').trim();
+      o.startDate = parseXlDate(o.startDate);
+      o.endDate = parseXlDate(o.endDate) || o.startDate;
+      o.days = parseXlNum(o.days);
+    }
+    // skip completely blank lines
+    if(o.employeeId || (mode === 'history' && o.startDate)) uploadRows.push(o);
+  });
+
+  const found = Object.keys(map).map(f => PRETTY[f]).join(', ');
+  let table = '';
+  if(mode === 'employees'){
+    table = `<div class="hr-table-wrap"><table class="hr-table"><thead><tr><th>ID</th><th>Name</th><th>Department</th><th class="num">Allocation</th><th class="num">Taken</th><th class="num">Days Left</th><th class="num">Days / Week</th></tr></thead><tbody>
+      ${uploadRows.slice(0,5).map(r => `<tr><td>${esc(r.employeeId)}</td><td>${esc(r.name)}</td><td>${esc(r.department)}</td><td class="num">${fmtNum(r.allocation)}</td><td class="num">${fmtNum(r.taken)}</td><td class="num">${fmtNum(r.balance)}</td><td class="num">${fmtNum(r.weeklyDays)}</td></tr>`).join('')}
+    </tbody></table></div>`;
+  }else{
+    table = `<div class="hr-table-wrap"><table class="hr-table"><thead><tr><th>ID</th><th>Name</th><th>Start</th><th>End</th><th class="num">Days</th><th>Type</th></tr></thead><tbody>
+      ${uploadRows.slice(0,5).map(r => `<tr><td>${esc(r.employeeId)}</td><td>${esc(r.name)}</td><td>${fmtDate(r.startDate)}</td><td>${fmtDate(r.endDate)}</td><td class="num">${fmtNum(r.days)}</td><td>${esc(r.type) || 'Holiday'}</td></tr>`).join('')}
+    </tbody></table></div>`;
+  }
+  prev.style.display = 'block';
+  prev.innerHTML = `<div class="meta"><strong>${uploadRows.length}</strong> row${uploadRows.length === 1 ? '' : 's'} ready. Columns recognised: ${esc(found)}.
+    ${uploadRows.length > 5 ? 'First 5 shown:' : ''}</div>${table}`;
+  document.getElementById('uploadBtn').disabled = uploadRows.length === 0;
+}
+
+function showUploadResult(ok, html){
+  document.getElementById('uploadResult').innerHTML = `<div class="resultbox ${ok ? 'ok' : 'bad'}">${html}</div>`;
+}
+
+async function submitUpload(){
+  if(uploadRows.length === 0) return;
+  const mode = uploadMode();
+  const btn = document.getElementById('uploadBtn');
+  btn.disabled = true;
+  btn.textContent = 'Uploading…';
+  document.getElementById('uploadResult').innerHTML = '';
+  try{
+    const res = await fetch(API_BASE + 'staff/holiday-upload', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        mode,
+        rows: uploadRows,
+        createMissing: document.getElementById('optCreateMissing').checked,
+        replaceHistory: document.getElementById('optReplaceHistory').checked
+      })
+    });
+    if(res.status === 401){ logout(); return; }
+    const data = await res.json();
+    if(!res.ok || !data.ok){
+      showUploadResult(false, esc(data.error || 'Upload failed.'));
+      return;
+    }
+    const parts = mode === 'employees'
+      ? [`${data.updated} updated`, `${data.created} created`, `${data.skipped} skipped`]
+      : [`${data.inserted} added`, `${data.duplicates} duplicates ignored`, `${data.skipped} skipped`];
+    let html = `<strong>Upload finished:</strong> ${parts.join(' · ')} (of ${data.total} rows).`;
+    if(data.warnings && data.warnings.length){
+      html += `<ul class="warn">${data.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul>`;
+    }
+    if(data.errors && data.errors.length){
+      html += `<ul>${data.errors.map(e => `<li>Row ${esc(e.row)}: ${esc(e.error)}</li>`).join('')}</ul>`;
+    }
+    showUploadResult(data.errors.length === 0, html);
+    loadHrHolidayRequests();
+  }catch(e){
+    showUploadResult(false, 'Could not reach the server — check your connection and try again.');
+    console.error(e);
+  }finally{
+    btn.disabled = uploadRows.length === 0;
+    btn.textContent = 'Upload';
+  }
+}
+
+function downloadTemplate(mode){
+  if(typeof XLSX === 'undefined'){ alert('The Excel library could not load — refresh the page and try again.'); return; }
+  let aoa, name;
+  if(mode === 'employees'){
+    aoa = [
+      ['Staff ID','Name','Department','Email','Holiday Allocation','Holiday Taken','Days Left','Weekly Working Days'],
+      ['101','Jane Smith','Warehouse','jane@example.com',28,10,18,5]
+    ];
+    name = 'Hallan-Employee-Holiday-Template.xlsx';
+  }else{
+    aoa = [
+      ['Staff ID','Name','Start Date','End Date','Days','Type','Note'],
+      ['101','Jane Smith','2026-08-03','2026-08-07',5,'Holiday','Summer break']
+    ];
+    name = 'Hallan-Holiday-History-Template.xlsx';
+  }
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), mode === 'employees' ? 'Employees' : 'History');
+  XLSX.writeFile(wb, name);
 }
 // ============ end HR Holiday Requests admin ============
 
