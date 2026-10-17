@@ -1066,6 +1066,12 @@
     const h = Math.floor(mins / 60), m = mins % 60;
     return m ? `${h}h ${String(m).padStart(2,'0')}m` : `${h}h`;
   }
+  // Working hours for the shift chip: 360 -> "6hr", 450 -> "7hr 30m", 45 -> "45m"
+  function fmtWorkHrs(mins){
+    const h = Math.floor(mins / 60), m = mins % 60;
+    if (!h) return `${m}m`;
+    return m ? `${h}hr ${m}m` : `${h}hr`;
+  }
   // "19:00" -> "7:00pm", "09:30" -> "9:30am"
   function fmtTime12(hm){
     if (!hm) return hm;
@@ -1301,9 +1307,10 @@
           const cc = chipColors(st);
           const mins = hoursMinusBreak(s.start, s.end, s.breakMins);
           totalMins += mins;
-          const breakNote = s.breakMins ? ` · ${s.breakMins}m break` : '';
+          const hrsNote = ` · ${fmtWorkHrs(mins)}`;
+          const breakNote = s.breakMins ? ` · break ${s.breakMins}min` : '';
           return `<div class="chip shift-chip" draggable="true" data-shift-id="${s.id}" data-emp="${emp.id}" data-date="${dateStr}" style="background:${cc.bg};color:${cc.fg};">
-            <div class="t">${fmtTime12(s.start)}–${fmtTime12(s.end)}</div><div class="l">${st.name}${breakNote}</div>
+            <div class="t">${fmtTime12(s.start)}–${fmtTime12(s.end)}</div><div class="l">${st.name}${hrsNote}${breakNote}</div>
           </div>`;
         }).join('');
 
