@@ -11,6 +11,7 @@
     --nav-blue:#3E97E8; --nav-blue-dark:#2E7FD1;
     --ink:#37424A; --slate:#6B7684; --line:#E3E7EB;
     --page-bg:#F5F7F8; --timeoff-bg:#69727C; --timeoff-fg:#ffffff;
+    --annual-bg:#C2570C; --annual-fg:#ffffff;
   }
   *{box-sizing:border-box;}
   body{margin:0;font-family:'Inter',sans-serif;color:var(--ink);background:var(--page-bg);}
@@ -39,6 +40,11 @@
   .btn:hover{border-color:#c7cfd6;}
   .btn-primary{background:var(--nav-blue);color:#fff;border:none;font-weight:600;}
   .btn-primary:hover{background:var(--nav-blue-dark);}
+  /* Week off / Annual off switch at the top of the time-off modal */
+  .to-type-toggle{display:flex;gap:8px;margin:2px 0 14px;}
+  .to-type-btn{flex:1;padding:10px 12px;border-radius:6px;border:2px solid var(--line);background:#fff;color:var(--ink);font-size:13.5px;font-weight:600;}
+  .to-type-btn[data-type="weekoff"].active{background:var(--timeoff-bg);border-color:var(--timeoff-bg);color:var(--timeoff-fg);}
+  .to-type-btn[data-type="annual"].active{background:var(--annual-bg);border-color:var(--annual-bg);color:var(--annual-fg);}
   .navbtn{width:30px;height:30px;border:1px solid var(--line);background:#fff;border-radius:6px;color:var(--slate);}
   .weeklabel{font-weight:700;color:var(--nav-blue);font-size:15px;min-width:190px;text-align:center;}
   .weeknav{display:flex;align-items:center;gap:6px;}
@@ -557,6 +563,10 @@
 <div class="overlay" id="timeoff-overlay">
   <div class="modal">
     <h3 id="timeoff-modal-title">Add time off</h3>
+    <div class="to-type-toggle" id="to-type-toggle">
+      <button type="button" class="to-type-btn active" data-type="weekoff">Week off</button>
+      <button type="button" class="to-type-btn" data-type="annual">Annual off</button>
+    </div>
     <label for="to-employee">Employee</label>
     <select id="to-employee"></select>
     <div class="row2">
@@ -861,6 +871,11 @@
     return { bg: chipBg(st && st.bg ? st.bg : '#8A94A0'), fg: '#ffffff' };
   }
   const TIMEOFF_CHIP_BG = chipBg('#9AA3AC');
+  const ANNUAL_CHIP_BG = '#C2570C';
+  // Time off now has two types. Entries saved before this change have no
+  // type and are treated as plain week off.
+  function offTypeOf(off){ return off && off.type === 'annual' ? 'annual' : 'weekoff'; }
+  function offLabel(off){ return offTypeOf(off) === 'annual' ? 'Annual off' : 'Week off'; }
   function employeeById(id){ return state.employees.find(e => e.id === id); }
   function uid(prefix){ return prefix + '_' + Math.random().toString(36).slice(2, 9); }
 
@@ -1277,8 +1292,8 @@
         const shifts = shiftsFor(emp.id, dateStr);
 
         const offChipsHtml = offs.map(off => `
-          <div class="chip timeoff-chip" data-timeoff-id="${off.id}" style="background:var(--timeoff-bg);color:var(--timeoff-fg);">
-            <div class="t">Time off</div><div class="l">${off.reason || ''}</div>
+          <div class="chip timeoff-chip" data-timeoff-id="${off.id}" style="background:${offTypeOf(off) === 'annual' ? 'var(--annual-bg)' : 'var(--timeoff-bg)'};color:${offTypeOf(off) === 'annual' ? 'var(--annual-fg)' : 'var(--timeoff-fg)'};">
+            <div class="t">${offLabel(off)}</div><div class="l">${off.reason || ''}</div>
           </div>`).join('');
 
         const shiftChipsHtml = shifts.map(s => {
@@ -1562,6 +1577,7 @@
         // (e.g. half-day off), so this no longer skips shifts on a day
         // that also has time off.
         timeOffsFor(emp.id, dateStr).forEach(off => {
+          if (offTypeOf(off) === 'annual') return; // annual off is personal to that week — never copied
           items.push({ empId: emp.id, empName: emp.name, dayOffset, kind: 'timeoff', timeOffData: { reason: off.reason || '' } });
         });
         shiftsFor(emp.id, dateStr).forEach(s => {
@@ -1591,7 +1607,7 @@
           return `<label style="display:flex;align-items:center;gap:9px;padding:8px 4px;font-size:13px;border-bottom:1px solid var(--line);">
             <input type="checkbox" class="bulkcopy-item" data-idx="${idx}" checked>
             <span style="flex:1;">${it.empName} — ${DAY_NAMES[it.dayOffset]}
-              <span style="color:var(--slate);">Time off${it.timeOffData.reason ? ' · ' + it.timeOffData.reason : ''}</span>
+              <span style="color:var(--slate);">Week off${it.timeOffData.reason ? ' · ' + it.timeOffData.reason : ''}</span>
             </span>
           </label>`;
         }
@@ -1647,7 +1663,7 @@
         // Pasted as a single-day time off entry on the target date — kept
         // separate per day (rather than merged into a from/to range) so
         // it lines up with however the days were selected in the copy list.
-        state.timeOff.push({ id: uid('to'), employeeId: item.empId, from: targetDateStr, to: targetDateStr, reason: item.timeOffData.reason || '' });
+        state.timeOff.push({ id: uid('to'), employeeId: item.empId, from: targetDateStr, to: targetDateStr, reason: item.timeOffData.reason || '', type: 'weekoff' });
         saveState();
       } else {
         addShift(item.empId, targetDateStr, { ...item.shiftData }, { skipConfirm: true });
@@ -1750,6 +1766,16 @@
      ================================================================= */
   const timeoffOverlay = document.getElementById('timeoff-overlay');
   let editingTimeOffId = null;
+  let currentOffType = 'weekoff';
+  function setOffType(type){
+    currentOffType = type === 'annual' ? 'annual' : 'weekoff';
+    document.querySelectorAll('#to-type-toggle .to-type-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.type === currentOffType);
+    });
+  }
+  document.querySelectorAll('#to-type-toggle .to-type-btn').forEach(b => {
+    b.addEventListener('click', () => setOffType(b.dataset.type));
+  });
 
   // prefill: optional { employeeId, date } — used by a day cell's "+ Off"
   // button so the modal opens ready to add another time-off entry for
@@ -1764,6 +1790,7 @@
     if (timeOffId) {
       const t = state.timeOff.find(x => x.id === timeOffId);
       document.getElementById('timeoff-modal-title').textContent = 'Edit time off';
+      setOffType(offTypeOf(t));
       sel.value = t.employeeId;
       document.getElementById('to-from').value = t.from;
       document.getElementById('to-to').value = t.to;
@@ -1771,6 +1798,7 @@
       document.getElementById('to-delete').style.display = 'inline';
     } else {
       document.getElementById('timeoff-modal-title').textContent = 'Add time off';
+      setOffType('weekoff');
       if (prefill && prefill.employeeId) sel.value = prefill.employeeId;
       const d = (prefill && prefill.date) || toDateStr(new Date());
       document.getElementById('to-from').value = d;
@@ -1798,9 +1826,9 @@
     if (!from || !to || from > to) { alert('Check the from/to dates.'); return; }
     if (editingTimeOffId) {
       const t = state.timeOff.find(x => x.id === editingTimeOffId);
-      Object.assign(t, { employeeId, from, to, reason });
+      Object.assign(t, { employeeId, from, to, reason, type: currentOffType });
     } else {
-      state.timeOff.push({ id: uid('to'), employeeId, from, to, reason });
+      state.timeOff.push({ id: uid('to'), employeeId, from, to, reason, type: currentOffType });
     }
     saveState(); renderSchedule();
     timeoffOverlay.classList.remove('show');
@@ -1827,7 +1855,7 @@
         const dayName = DAY_NAMES[d.getDay()===0?6:d.getDay()-1];
         const offs = timeOffsFor(emp.id, dateStr);
         offs.forEach(off => {
-          rows.push([emp.name, emp.department, dateStr, dayName, 'Time Off', '', '', '', ...(includeHours ? [off.reason || ''] : [])]);
+          rows.push([emp.name, emp.department, dateStr, dayName, offTypeOf(off) === 'annual' ? 'Annual Off' : 'Week Off', '', '', '', ...(includeHours ? [off.reason || ''] : [])]);
         });
         shiftsFor(emp.id, dateStr).forEach(s => {
           const st = shiftTypeById(s.shiftTypeId);
@@ -1894,7 +1922,7 @@
         const offs = timeOffsFor(emp.id, dateStr);
         const shifts = shiftsFor(emp.id, dateStr);
         offs.forEach(off => {
-          entries.push({ bg: TIMEOFF_CHIP_BG, fg: '#ffffff', title: 'All day', subtitle: `Time off${off.reason ? ' — ' + off.reason : ''}` });
+          entries.push({ bg: offTypeOf(off) === 'annual' ? ANNUAL_CHIP_BG : TIMEOFF_CHIP_BG, fg: '#ffffff', title: 'All day', subtitle: `${offLabel(off)}${off.reason ? ' — ' + off.reason : ''}` });
         });
         shifts.forEach(s => {
           const st = shiftTypeById(s.shiftTypeId);
@@ -2429,8 +2457,9 @@
       const label = (cellLines[i] || '').trim();
       const detail = (cellLines[i+1] || '').trim();
       if (!label) continue;
-      if (/^time\s*off/i.test(label)) {
-        entries.push({ type: 'timeoff', reason: label.replace(/^time\s*off\s*—?\s*/i, '') || '' , detail });
+      if (/^(time|week|annual)\s*off/i.test(label)) {
+        const isAnnual = /^annual\s*off/i.test(label);
+        entries.push({ type: 'timeoff', offType: isAnnual ? 'annual' : 'weekoff', reason: label.replace(/^(time|week|annual)\s*off\s*—?\s*/i, '') || '' , detail });
       } else {
         const tm = detail.match(TIME_RANGE_RE);
         if (tm) entries.push({ type: 'shift', shiftName: label, start: tm[1].padStart(5,'0'), end: tm[2].padStart(5,'0') });
@@ -2545,7 +2574,7 @@
         const dateStr = parsed.weekDates[dayIdx];
         entries.forEach(entry => {
           if (entry.type === 'timeoff') {
-            dayPlans.push({ dateStr, kind: 'timeoff', reason: entry.reason });
+            dayPlans.push({ dateStr, kind: 'timeoff', reason: entry.reason, offType: entry.offType || 'weekoff' });
             timeOffAdded++;
           } else {
             let st = existingShiftTypeByName.get(normName(entry.shiftName));
@@ -2579,7 +2608,7 @@
     plan.perEmployeePlan.forEach(({ emp, dayPlans }) => {
       dayPlans.forEach(dp => {
         if (dp.kind === 'timeoff') {
-          state.timeOff.push({ id: uid('to'), employeeId: emp.id, from: dp.dateStr, to: dp.dateStr, reason: dp.reason || '' });
+          state.timeOff.push({ id: uid('to'), employeeId: emp.id, from: dp.dateStr, to: dp.dateStr, reason: dp.reason || '', type: dp.offType || 'weekoff' });
         } else {
           if (!state.shifts[emp.id]) state.shifts[emp.id] = {};
           if (!state.shifts[emp.id][dp.dateStr]) state.shifts[emp.id][dp.dateStr] = [];
@@ -2623,7 +2652,7 @@
         <b>${p.emp.name}</b>${p.isNewEmp ? ' <span style="color:#2E6FA8;">(new)</span>' : ''}
         ${p.dayPlans.length ? '<br>' + p.dayPlans.map(dp =>
           dp.kind === 'timeoff'
-            ? `${dp.dateStr}: Time off${dp.reason ? ' — ' + dp.reason : ''}`
+            ? `${dp.dateStr}: ${dp.offType === 'annual' ? 'Annual off' : 'Week off'}${dp.reason ? ' — ' + dp.reason : ''}`
             : `${dp.dateStr}: ${dp.shiftName} ${dp.start}-${dp.end}`
         ).join('<br>') : '<span style="color:var(--slate);">No shifts this week</span>'}
       </div>
@@ -3234,7 +3263,7 @@
           <td style="font-weight:700;">${fmtHM(mins)}</td>
           <td>${off ? fmtHM(schedMins) : '0:00'}</td>
           <td>${balance ? fmtHM(balance) : '0:00'}</td>
-          <td>${off ? (off.reason || 'Absence') : '—'}</td>
+          <td>${off ? (off.reason || (offTypeOf(off) === 'annual' ? 'Annual off' : 'Absence')) : '—'}</td>
           <td><input type="text" class="tsd-comment" value="${commentValue.replace(/"/g,'&quot;')}" placeholder="Remarks"></td>
           <td><button class="btn" data-tsd-save="${emp.id}|${dateStr}">Save</button></td>
         </tr>`);
@@ -3307,7 +3336,7 @@
         const mins = dayMinutes(rec);
         const sched = scheduledFor(emp.id, dateStr);
         const schedMins = sched ? hoursMinusBreak(sched.start, sched.end, sched.breakMins) : 0;
-        rows.push([emp.name, emp.personnelNumber||'', dateStr, rec.in||'', rec.out||'', rec.breakStart||'', rec.breakEnd||'', fmtHM(schedMins), fmtHM(mins), off?fmtHM(schedMins):'0:00', fmtHM(mins-schedMins), off?(off.reason||'Absence'):'', rec.comment||'']);
+        rows.push([emp.name, emp.personnelNumber||'', dateStr, rec.in||'', rec.out||'', rec.breakStart||'', rec.breakEnd||'', fmtHM(schedMins), fmtHM(mins), off?fmtHM(schedMins):'0:00', fmtHM(mins-schedMins), off?(off.reason||(offTypeOf(off)==='annual'?'Annual off':'Absence')):'', rec.comment||'']);
       });
     });
     const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
