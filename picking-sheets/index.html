@@ -2833,6 +2833,11 @@
         <div class="count">Damage logged in the warehouse — add it to a supplier return, or clear it</div>
         <div class="count" id="returnsWarehouseDamageCount" style="margin-top:4px;"></div>
       </div>
+      <div class="bincard" style="--tile-color:#b91c1c;" onclick="openReturnsWriteoff()">
+        <h4>📝 Write-off</h4>
+        <div class="count">Damage moved here from Warehouse Damages — add it to a supplier return, or clear it</div>
+        <div class="count" id="returnsWriteoffCount" style="margin-top:4px;"></div>
+      </div>
       <div class="bincard" onclick="openReturnsListsHub()">
         <h4>📋 Lists</h4>
         <div class="count">Find a supplier's returns — pending, awaiting credit note, or returned</div>
@@ -2900,13 +2905,32 @@
     <div class="hero">
       <div class="eyebrow">Supplier Returns</div>
       <h2>Warehouse Damages</h2>
-      <p>Damage logged from the warehouse floor. Tap an item to mark it down to a reduced price or add it to a supplier's return list (quantity, reason and photos carry over and can be changed), or tap ✕ to clear it.</p>
+      <p>Damage logged from the warehouse floor. Tap an item to mark it down to a reduced price, add it to a supplier's return list (quantity, reason and photos carry over and can be changed), or move it to the Write-off list. Tap ✕ to clear it.</p>
     </div>
     <div class="actionbar">
       <span id="returnsWarehouseDamageCountBar" class="mono" style="color:var(--text-dim);font-size:12px;"></span>
       <button class="btn-ghost" onclick="loadReturnsWarehouseDamages()">Refresh</button>
     </div>
     <div id="returnsWarehouseDamageList"><div class="loading">Loading…</div></div>
+  </div>
+
+  <!-- RETURNS: WRITE-OFF LIST — damage moved here from Warehouse Damages -->
+  <div id="view-returns-writeoff" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openReturnsHub()">Returns</button><span class="sep">/</span>
+      <span class="current">Write-off</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Supplier Returns</div>
+      <h2>Write-off</h2>
+      <p>Items moved here from Warehouse Damages. Tap an item to add it to a supplier's return list (quantity, reason and photos carry over and can be changed), or tap ✕ to clear it.</p>
+    </div>
+    <div class="actionbar">
+      <span id="returnsWriteoffCountBar" class="mono" style="color:var(--text-dim);font-size:12px;"></span>
+      <button class="btn-ghost" onclick="loadReturnsWriteoff()">Refresh</button>
+    </div>
+    <div id="returnsWriteoffList"><div class="loading">Loading…</div></div>
   </div>
 
   <!-- RETURNS: LISTS — supplier search / browse -->
@@ -3473,6 +3497,10 @@
     <div class="supplier-pick-row" style="display:block;" onclick="chooseDamageReturnToSupplier()">
       <div><span class="spname">↩️ Return to Supplier</span></div>
       <div style="font-size:12px;color:var(--text-dim);margin-top:4px;">Send it back to the supplier for a credit note</div>
+    </div>
+    <div class="supplier-pick-row" style="display:block;" onclick="chooseDamageMoveToWriteoff()">
+      <div><span class="spname">📝 Move to Write-off List</span></div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:4px;">Take it off this list and put it on the Write-off list</div>
     </div>
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="cancelReturnsDamageChoice()">Cancel</button>
@@ -5178,8 +5206,11 @@ function updateWarehouseDamagePhotoBadgeCount(){
   if(it) it.image_count = n;
   const rit = returnsWarehouseDamageItems.find(i => i.damage_id === damageId);
   if(rit) rit.image_count = n;
+  const wit = returnsWriteoffItems.find(i => i.damage_id === damageId);
+  if(wit) wit.image_count = n;
   renderWarehouseDamageDetailTable();
   renderReturnsWarehouseDamages();
+  renderReturnsWriteoff();
 }
 
 /* ---- Damaged List — every entry logged so far, editable in place ---- */
@@ -14825,6 +14856,7 @@ function openReturnsHub(){
   showView('view-returns-hub');
   refreshReturnsAdjustCount();
   refreshReturnsWarehouseDamageCount();
+  refreshReturnsWriteoffCount();
 }
 
 /* ---- Scan ---- */
@@ -15303,14 +15335,18 @@ async function confirmReturnsDetails(){
       if(leftDmg > 0){
         const rowDmg = returnsWarehouseDamageItems.find(x => x.damage_id === doneId);
         if(rowDmg) rowDmg.quantity = leftDmg;
+        const rowWo = returnsWriteoffItems.find(x => x.damage_id === doneId);
+        if(rowWo) rowWo.quantity = leftDmg;
       }else{
         returnsWarehouseDamageItems = returnsWarehouseDamageItems.filter(x => x.damage_id !== doneId);
+        returnsWriteoffItems = returnsWriteoffItems.filter(x => x.damage_id !== doneId);
       }
       returnsPendingDamage = null;
       returnsPendingProduct = null;
       returnsPendingSupplier = null;
       closeModal('modalReturnsDetails');
       renderReturnsWarehouseDamages();
+      renderReturnsWriteoff();
       toast('Added to ' + destLabel + (leftDmg > 0 ? ' — ' + leftDmg + ' still on the list' : ''));
       return;
     }
@@ -15827,6 +15863,135 @@ async function refreshReturnsWarehouseDamageCount(){
   if(!el) return;
   try{
     const data = await apiGet('returns/warehouse-damages/');
+    const n = (data.items || []).length;
+    el.textContent = n ? (n + ' waiting') : '';
+  }catch(e){ el.textContent = ''; }
+}
+/* ---- Write-off list: damage entries moved here from Warehouse Damages
+   ("Move to Write-off List"). Tap a row -> the same supplier pick and
+   quantity/reason/photos modals as Warehouse Damages -> added to that
+   supplier's PENDING return list (the server deletes the entry, or keeps
+   the remainder here after a partial send). ✕ deletes it after a confirm. ---- */
+let returnsWriteoffItems = [];
+
+async function chooseDamageMoveToWriteoff(){
+  const it = returnsDamageChoiceItem;
+  if(!it) return;
+  closeModal('modalReturnsDamageChoice');
+  try{
+    await apiPut('returns/warehouse-damages/' + it.damage_id + '/writeoff/', {});
+    returnsWarehouseDamageItems = returnsWarehouseDamageItems.filter(x => x.damage_id !== it.damage_id);
+    returnsDamageChoiceItem = null;
+    renderReturnsWarehouseDamages();
+    toast('Moved to Write-off list');
+  }catch(e){
+    toast('Could not move to write-off list: ' + (e && e.message ? e.message : 'unknown error'));
+    console.error(e);
+  }
+}
+function openReturnsWriteoff(){
+  returnsPendingDamage = null;
+  returnsDamageChoiceItem = null;
+  showView('view-returns-writeoff');
+  loadReturnsWriteoff();
+}
+async function loadReturnsWriteoff(){
+  const box = document.getElementById('returnsWriteoffList');
+  box.innerHTML = '<div class="loading">Loading…</div>';
+  try{
+    const data = await apiGet('returns/writeoff-list/');
+    returnsWriteoffItems = data.items || [];
+    renderReturnsWriteoff();
+  }catch(e){
+    box.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not load the write-off list</div>';
+    console.error(e);
+  }
+}
+function renderReturnsWriteoff(){
+  const box = document.getElementById('returnsWriteoffList');
+  const bar = document.getElementById('returnsWriteoffCountBar');
+  if(!box) return;
+  if(bar) bar.textContent = returnsWriteoffItems.length + ' item' + (returnsWriteoffItems.length===1?'':'s');
+  if(returnsWriteoffItems.length === 0){
+    box.innerHTML = '<div class="empty-hint">Nothing on the write-off list.</div>';
+    return;
+  }
+  box.innerHTML = returnsWriteoffItems.map(it => {
+    const qty = Math.abs(Number(it.quantity)) || 0;
+    const photoCount = Number(it.image_count) || 0;
+    const locNote = it.location ? (' &middot; 📍 ' + escapeHtml(it.location)) : '';
+    const movedNote = 'Moved to write-off ' + escapeHtml(it.writeoff_at_txt || '') + (it.writeoff_by ? ' by ' + escapeHtml(it.writeoff_by) : '');
+    return `
+    <div class="pickrow" style="cursor:pointer;" onclick="pickReturnsWriteoff(${Number(it.damage_id)})">
+      <div class="pickinfo">
+        <div class="pname">${escapeHtml(it.item_name)} <span style="color:var(--text-dim);font-weight:400;">× ${qty}</span></div>
+        <div class="pbarcode">${escapeHtml(it.reason || 'No reason')} &middot; ${escapeHtml(it.created_at_txt || '')}${locNote}</div>
+        <div class="pbarcode">${movedNote}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex:none;">
+        <a href="#" class="minibtn minibtn-undo" style="margin-right:0;font-size:13px;padding:6px 10px;" title="View / add photos"
+          onclick="event.preventDefault(); event.stopPropagation(); openWarehouseDamagePhotoGallery(${Number(it.damage_id)}, ${jsArg(it.item_name)})">📷${photoCount ? ' ' + photoCount : ' Add'}</a>
+        <a href="#" class="minibtn minibtn-remove" style="margin-right:0;" title="Clear this entry"
+          onclick="event.preventDefault(); event.stopPropagation(); dismissReturnsWriteoff(${Number(it.damage_id)})">✕</a>
+      </div>
+    </div>`;
+  }).join('');
+}
+async function pickReturnsWriteoff(damageId){
+  const it = returnsWriteoffItems.find(x => x.damage_id === damageId);
+  if(!it || returnsWarehouseDamageBusy) return;
+  returnsWarehouseDamageBusy = true;
+  let suppliers = [];
+  let defaultVat = null;
+  let stockQty = null;
+  let photos = [];
+  try{
+    const data = await apiGet('returns/stock-suppliers/' + it.stockid + '/');
+    suppliers = data.suppliers || [];
+    defaultVat = data.default_vat;
+    stockQty = data.quantity;
+  }catch(e){
+    console.error(e);
+    toast('Could not load this product’s suppliers — search for one instead');
+  }
+  try{
+    const imgData = await apiGet('warehouse/damage-logs/' + it.damage_id + '/images/');
+    photos = (imgData.images || []).map(i => ({ data: i.data, filename: i.filename }));
+  }catch(e){
+    console.error(e); // non-fatal — the item can still be added without its photos carrying over
+  }
+  returnsWarehouseDamageBusy = false;
+  returnsPendingDamage = {
+    damage_id: it.damage_id,
+    qty: Math.abs(Number(it.quantity)) || 1,
+    reason: it.reason || '',
+    location: it.location || '',
+    photos
+  };
+  returnsPendingProduct = { stockid: it.stockid, name: it.item_name, barcode: it.barcode || null, suppliers, default_vat: defaultVat, quantity: stockQty };
+  openReturnsSupplierPick();
+}
+async function dismissReturnsWriteoff(damageId){
+  const it = returnsWriteoffItems.find(x => x.damage_id === damageId);
+  if(!it) return;
+  const qty = Math.abs(Number(it.quantity)) || 0;
+  if(!confirm('Delete this entry from the write-off list?\n\n' + it.item_name + ' × ' + qty + '\n\nThis cannot be undone.')) return;
+  try{
+    await apiDelete('warehouse/damage-logs/' + damageId + '/');
+    returnsWriteoffItems = returnsWriteoffItems.filter(x => x.damage_id !== damageId);
+    renderReturnsWriteoff();
+    toast('Entry cleared');
+  }catch(e){
+    toast('Could not clear entry: ' + (e && e.message ? e.message : 'unknown error'));
+    console.error(e);
+  }
+}
+// Small count under the hub card — best-effort, never blocks or errors the hub.
+async function refreshReturnsWriteoffCount(){
+  const el = document.getElementById('returnsWriteoffCount');
+  if(!el) return;
+  try{
+    const data = await apiGet('returns/writeoff-list/');
     const n = (data.items || []).length;
     el.textContent = n ? (n + ' waiting') : '';
   }catch(e){ el.textContent = ''; }
