@@ -427,6 +427,22 @@
   }
   .btn-amber:hover{background:#ddb752;}
 
+  /* ---- Suppliers > Credit Notes ---- */
+  table.cn-table input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:14px;
+    background:#fff;color:var(--text);font-family:inherit;box-sizing:border-box;}
+  table.cn-table input:focus{outline:2px solid var(--accent);outline-offset:-1px;}
+  table.cn-table td.cn-desc-cell{min-width:220px;}
+  table.cn-table td.cn-num-cell{min-width:110px;}
+  table.cn-table td.cn-num-cell input{text-align:right;font-family:'JetBrains Mono',monospace;}
+  table.cn-table td.cn-linetotal{white-space:nowrap;}
+  .cn-totals{margin:18px 0 6px auto;max-width:300px;border-top:2px solid var(--line);padding-top:10px;}
+  .cn-totals div{display:flex;justify-content:space-between;padding:4px 0;font-size:14px;}
+  .cn-totals b{font-family:'JetBrains Mono',monospace;}
+  .cn-totals .cn-grand{border-top:1px solid var(--line);margin-top:6px;padding-top:8px;font-size:16px;}
+  .cn-actions{display:flex;gap:6px;flex-wrap:wrap;}
+  .cn-actions button{padding:6px 12px;font-size:12px;}
+  table.cn-list td,table.cn-list th{white-space:nowrap;}
+
   /* ---- modal ---- */
   .modal-backdrop{
     position:fixed;inset:0;background:rgba(10,12,15,.7);display:none;align-items:flex-start;justify-content:center;
@@ -1094,11 +1110,11 @@
         <h3>Shelf Replenishment</h3>
         <p>Start a shelf, then print what's sold since you started — resets each time you print.</p>
       </div>
-      <div class="tile" data-module="supplier" style="--tile-color:#0f766e;" onclick="openSupplierOrders()">
+      <div class="tile" data-module="supplier" style="--tile-color:#0f766e;" onclick="openSuppliersHome()">
         <div class="tile-icon">🚚</div>
-        <div class="num">07 &middot; ORDER</div>
-        <h3>Supplier Orders</h3>
-        <p>Search a supplier — see sales history and a reorder suggestion per item.</p>
+        <div class="num">07 &middot; SUPPLY</div>
+        <h3>Suppliers</h3>
+        <p>Supplier orders with reorder suggestions, plus credit notes — create, pending and completed.</p>
       </div>
       <div class="tile" data-module="invoices" style="--tile-color:#4338ca;" onclick="openInvoices()">
         <div class="tile-icon">🧾</div>
@@ -2245,19 +2261,140 @@
     <div id="replenStatusBox"></div>
   </div>
 
+  <!-- SUPPLIERS: MENU -->
+  <div id="view-suppliers-home" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span><span class="current">Suppliers</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Suppliers</div>
+      <h2>Suppliers</h2>
+      <p>Place supplier orders, or raise and track supplier credit notes.</p>
+    </div>
+    <div class="catgrid">
+      <div class="bincard" onclick="openSupplierOrders()">
+        <h4>🚚 Supplier Orders</h4>
+        <div class="count">Sales history, reorder suggestions and orders</div>
+      </div>
+      <div class="bincard" onclick="openCreditNotesHome()">
+        <h4>🧾 Credit Notes</h4>
+        <div class="count">Create, pending and completed</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CREDIT NOTES: MENU -->
+  <div id="view-credit-notes-home" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openSuppliersHome()">Suppliers</button><span class="sep">/</span>
+      <span class="current">Credit Notes</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Suppliers</div>
+      <h2>Credit Notes</h2>
+      <p>Create a credit note, then track it from Pending through to Completed.</p>
+    </div>
+    <div class="catgrid">
+      <div class="bincard" onclick="openCreditNoteForm()">
+        <h4>➕ Create Credit Note</h4>
+        <div class="count">Description, amount and VAT per line</div>
+      </div>
+      <div class="bincard" onclick="openCreditNotesList('PENDING')">
+        <h4>⏳ Pending</h4>
+        <div class="count" id="cnCountPending">Download, edit or mark completed</div>
+      </div>
+      <div class="bincard" onclick="openCreditNotesList('COMPLETED')">
+        <h4>✅ Completed</h4>
+        <div class="count" id="cnCountCompleted">Finished credit notes</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CREDIT NOTES: PENDING / COMPLETED LIST -->
+  <div id="view-credit-notes-list" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openSuppliersHome()">Suppliers</button><span class="sep">/</span>
+      <button onclick="openCreditNotesHome()">Credit Notes</button><span class="sep">/</span>
+      <span class="current" id="cnListCrumb">Pending</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Credit Notes</div>
+      <h2 id="cnListTitle">Pending Credit Notes</h2>
+      <p id="cnListSub">Download a credit note, edit it, or mark it completed.</p>
+    </div>
+    <div class="actionbar">
+      <input type="text" id="cnListSearch" class="historysearch" style="max-width:360px;"
+             placeholder="Search number, supplier or reference…" oninput="renderCreditNotesList()" autocomplete="off">
+      <button class="btn-amber" id="cnListCreateBtn" onclick="openCreditNoteForm()">+ Create Credit Note</button>
+    </div>
+    <div id="cnListBox"><div class="loading">Loading…</div></div>
+  </div>
+
+  <!-- CREDIT NOTES: CREATE / EDIT FORM -->
+  <div id="view-credit-note-form" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openSuppliersHome()">Suppliers</button><span class="sep">/</span>
+      <button onclick="openCreditNotesHome()">Credit Notes</button><span class="sep">/</span>
+      <span class="current" id="cnFormCrumb">Create</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Credit Notes</div>
+      <h2 id="cnFormTitle">Create Credit Note</h2>
+      <p>Add a line for each item being credited. The total updates as you type.</p>
+    </div>
+    <div class="ni-card">
+      <div class="ni-grid">
+        <div class="ni-f">
+          <label for="cnSupplier">Supplier (optional)</label>
+          <input type="text" id="cnSupplier" maxlength="200" placeholder="e.g. Top-Op Foods" autocomplete="off">
+        </div>
+        <div class="ni-f">
+          <label for="cnReference">Reference (optional)</label>
+          <input type="text" id="cnReference" maxlength="100" placeholder="Supplier's credit note / invoice no." autocomplete="off">
+        </div>
+      </div>
+    </div>
+    <div class="ni-card">
+      <div style="overflow-x:auto;">
+        <table class="finaltable cn-table">
+          <thead><tr>
+            <th>Description</th>
+            <th class="qtycell">Amount (£)</th>
+            <th class="qtycell">VAT (£)</th>
+            <th class="qtycell">Line total</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="cnLines"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:12px;">
+        <button class="btn-ghost" onclick="cnAddLine()">+ Add another line</button>
+      </div>
+      <div class="cn-totals">
+        <div><span>Amount</span><b id="cnTotNet">£0.00</b></div>
+        <div><span>VAT</span><b id="cnTotVat">£0.00</b></div>
+        <div class="cn-grand"><span>Total</span><b id="cnTotGross">£0.00</b></div>
+      </div>
+      <div class="ni-warn" id="cnFormErr"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;flex-wrap:wrap;">
+        <button class="btn-ghost" onclick="cnCancelForm()">Cancel</button>
+        <button class="btn-amber" id="cnSubmitBtn" onclick="cnSubmit()">Submit</button>
+      </div>
+    </div>
+  </div>
+
   <!-- SUPPLIER ORDERS: LANDING -->
   <div id="view-supplier-search" class="view">
     <div class="crumbrow">
-      <button onclick="goHome()">Home</button><span class="sep">/</span><span class="current">Supplier Orders</span>
+      <button onclick="goHome()">Home</button><span class="sep">/</span><button onclick="openSuppliersHome()">Suppliers</button><span class="sep">/</span><span class="current">Supplier Orders</span>
     </div>
     <div class="hero">
       <div class="eyebrow">Order</div>
       <h2>Supplier Orders</h2>
       <p>Select a supplier to see sales history, reorder suggestions and place an order.</p>
-    </div>
-    <div class="actionbar">
-      <span></span>
-      <button class="btn-danger-ghost" onclick="openSupplierPasswordModal()">Change Password</button>
     </div>
     <div class="catgrid">
       <div class="bincard" onclick="openSupplierSelectPage()">
@@ -2271,6 +2408,7 @@
   <div id="view-supplier-select" class="view">
     <div class="crumbrow">
       <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openSuppliersHome()">Suppliers</button><span class="sep">/</span>
       <button onclick="openSupplierOrders()">Supplier Orders</button><span class="sep">/</span>
       <span class="current">Select Supplier</span>
     </div>
@@ -2293,6 +2431,7 @@
   <div id="view-supplier-hub" class="view">
     <div class="crumbrow">
       <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openSuppliersHome()">Suppliers</button><span class="sep">/</span>
       <button onclick="openSupplierOrders()">Supplier Orders</button><span class="sep">/</span>
       <span class="current" id="supplierHubCrumb">Supplier</span>
     </div>
@@ -2325,6 +2464,7 @@
   <div id="view-supplier-placeorder" class="view">
     <div class="crumbrow">
       <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openSuppliersHome()">Suppliers</button><span class="sep">/</span>
       <button onclick="openSupplierOrders()">Supplier Orders</button><span class="sep">/</span>
       <button onclick="openSupplierHub(currentSupplier)" id="supplierPOCrumbBtn">Supplier</button><span class="sep">/</span>
       <span class="current">Place Order</span>
@@ -2408,6 +2548,7 @@
   <div id="view-supplier-orderlist" class="view">
     <div class="crumbrow">
       <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openSuppliersHome()">Suppliers</button><span class="sep">/</span>
       <button onclick="openSupplierOrders()">Supplier Orders</button><span class="sep">/</span>
       <button onclick="openSupplierHub(currentSupplier)" id="supplierOLCrumbBtn">Supplier</button><span class="sep">/</span>
       <button onclick="openSupplierPlaceOrder()">Place Order</button><span class="sep">/</span>
@@ -2429,6 +2570,7 @@
   <div id="view-supplier-basic" class="view">
     <div class="crumbrow">
       <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openSuppliersHome()">Suppliers</button><span class="sep">/</span>
       <button onclick="openSupplierOrders()">Supplier Orders</button><span class="sep">/</span>
       <button onclick="openSupplierHub(currentSupplier)" id="supplierBasicCrumbBtn">Supplier</button><span class="sep">/</span>
       <span class="current">Basic List</span>
@@ -2457,6 +2599,7 @@
   <div id="view-supplier-advanced" class="view">
     <div class="crumbrow">
       <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openSuppliersHome()">Suppliers</button><span class="sep">/</span>
       <button onclick="openSupplierOrders()">Supplier Orders</button><span class="sep">/</span>
       <button onclick="openSupplierHub(currentSupplier)" id="supplierAdvCrumbBtn">Supplier</button><span class="sep">/</span>
       <span class="current">Advanced List</span>
@@ -2485,6 +2628,7 @@
   <div id="view-supplier-compare" class="view">
     <div class="crumbrow">
       <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openSuppliersHome()">Suppliers</button><span class="sep">/</span>
       <button onclick="openSupplierOrders()">Supplier Orders</button><span class="sep">/</span>
       <button onclick="openSupplierHub(currentSupplier)" id="supplierCmpCrumbBtn">Supplier</button><span class="sep">/</span>
       <span class="current">Compare</span>
@@ -3128,22 +3272,6 @@
     <div id="newItemsSheet"></div>
     <datalist id="newItemsDeptDatalist"></datalist>
     <datalist id="newItemsSuppDatalist"></datalist>
-  </div>
-</div>
-
-<!-- SUPPLIER ORDERS: CHANGE PASSWORD -->
-<div class="modal-backdrop" id="modalSupplierPassword">
-  <div class="modal" style="width:380px;">
-    <h3>Change Supplier Orders password</h3>
-    <p class="modal-sub">Enter the current password, then choose a new one.</p>
-    <input type="password" id="soOldPassword" placeholder="Current password" autocomplete="off">
-    <input type="password" id="soNewPassword" placeholder="New password" autocomplete="off">
-    <input type="password" id="soNewPassword2" placeholder="Confirm new password" autocomplete="off">
-    <div class="errdetail" id="soPasswordErr" style="display:none;"></div>
-    <div class="modal-close-row">
-      <button class="btn-ghost" onclick="closeModal('modalSupplierPassword')">Cancel</button>
-      <button class="btn-amber" onclick="submitSupplierPasswordChange()">Update password</button>
-    </div>
   </div>
 </div>
 
@@ -11352,20 +11480,13 @@ function printReplenPDF(){
 let currentSupplier = null; // { suppid, name }
 let supplierSearchDebounce = null;
 
-async function openSupplierOrders(){
-  const pw = prompt('This list is confidential.\nEnter the Supplier Orders password:');
-  if(pw === null) return;
-  try{
-    const data = await apiPost('supplier-orders/auth/verify', { password: pw });
-    if(!data.ok){
-      toast('Incorrect password');
-      return;
-    }
-  }catch(e){
-    toast('Could not check password');
-    console.error(e);
-    return;
-  }
+// Suppliers menu (Home tile) -> Supplier Orders / Credit Notes
+function openSuppliersHome(){
+  showView('view-suppliers-home');
+}
+// Supplier Orders landing — the password prompt has been removed; access is
+// controlled by the Suppliers permission in Manage Users.
+function openSupplierOrders(){
   showView('view-supplier-search');
 }
 function openSupplierSelectPage(){
@@ -11373,34 +11494,6 @@ function openSupplierSelectPage(){
   document.getElementById('supplierSearchResults').innerHTML = '<div class="empty-hint">Start typing a supplier name.</div>';
   showView('view-supplier-select');
   document.getElementById('supplierSearchInput').focus();
-}
-function openSupplierPasswordModal(){
-  document.getElementById('soOldPassword').value = '';
-  document.getElementById('soNewPassword').value = '';
-  document.getElementById('soNewPassword2').value = '';
-  const err = document.getElementById('soPasswordErr');
-  err.style.display = 'none';
-  err.textContent = '';
-  openModal('modalSupplierPassword');
-}
-async function submitSupplierPasswordChange(){
-  const oldPw = document.getElementById('soOldPassword').value;
-  const newPw = document.getElementById('soNewPassword').value;
-  const newPw2 = document.getElementById('soNewPassword2').value;
-  const err = document.getElementById('soPasswordErr');
-  const showErr = (msg) => { err.textContent = msg; err.style.display = 'block'; err.style.color = 'var(--danger)'; };
-  if(!oldPw || !newPw){ showErr('Enter the current password and a new password.'); return; }
-  if(newPw !== newPw2){ showErr('New password and confirmation do not match.'); return; }
-  if(newPw.length < 4){ showErr('New password should be at least 4 characters.'); return; }
-  try{
-    await apiPost('supplier-orders/auth/change', { old_password: oldPw, new_password: newPw });
-    toast('Password updated');
-    closeModal('modalSupplierPassword');
-  }catch(e){
-    console.error(e);
-    const msg = /incorrect/i.test(e.message) ? 'Current password is incorrect.' : 'Could not update password.';
-    showErr(msg);
-  }
 }
 
 function onSupplierSearch(){
@@ -11445,6 +11538,322 @@ function openSupplierHub(supplier){
   document.getElementById('supplierHubCrumb').textContent = supplier.name;
   document.getElementById('supplierHubTitle').textContent = supplier.name;
   showView('view-supplier-hub');
+}
+
+
+/* ============ SUPPLIERS > CREDIT NOTES ============ */
+let cnEditingId = null;      // null = creating a new credit note, otherwise the id being edited
+let cnListStatus = 'PENDING';
+let cnListItems = [];
+let cnSubmitting = false;
+
+function cnFormatNo(id){ return 'CN-' + String(id).padStart(4, '0'); }
+function cnMoney(n){
+  const v = Number(n) || 0;
+  return '£' + v.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function cnDate(s){
+  if(!s) return '—';
+  const d = new Date(s);
+  if(isNaN(d)) return '—';
+  return d.toLocaleDateString('en-GB', { timeZone: 'Europe/London' });
+}
+function cnToPence(v){
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+}
+
+async function openCreditNotesHome(){
+  showView('view-credit-notes-home');
+  const pEl = document.getElementById('cnCountPending');
+  const cEl = document.getElementById('cnCountCompleted');
+  try{
+    const s = await apiGet('supplier-orders/credit-notes/summary');
+    pEl.textContent = s.pending + (s.pending === 1 ? ' credit note' : ' credit notes') + ' — download, edit or complete';
+    cEl.textContent = s.completed + (s.completed === 1 ? ' credit note' : ' credit notes');
+  }catch(e){
+    console.error(e);
+  }
+}
+
+/* ---- Create / edit form ---- */
+function cnResetFormFields(){
+  document.getElementById('cnSupplier').value = '';
+  document.getElementById('cnReference').value = '';
+  document.getElementById('cnLines').innerHTML = '';
+  document.getElementById('cnFormErr').textContent = '';
+}
+function openCreditNoteForm(){
+  cnEditingId = null;
+  cnResetFormFields();
+  document.getElementById('cnFormTitle').textContent = 'Create Credit Note';
+  document.getElementById('cnFormCrumb').textContent = 'Create';
+  document.getElementById('cnSubmitBtn').textContent = 'Submit';
+  cnAddLine();
+  cnRecalc();
+  showView('view-credit-note-form');
+  const first = document.querySelector('#cnLines .cn-desc');
+  if(first) first.focus();
+}
+async function cnEdit(id){
+  try{
+    const cn = await apiGet('supplier-orders/credit-notes/' + encodeURIComponent(id));
+    if(cn.status !== 'PENDING'){ toast('Only pending credit notes can be edited'); return; }
+    cnEditingId = cn.credit_note_id;
+    cnResetFormFields();
+    document.getElementById('cnSupplier').value = cn.supplier_name || '';
+    document.getElementById('cnReference').value = cn.reference || '';
+    (cn.lines || []).forEach(l => cnAddLine(l));
+    if(!(cn.lines || []).length) cnAddLine();
+    document.getElementById('cnFormTitle').textContent = 'Edit Credit Note ' + cnFormatNo(cn.credit_note_id);
+    document.getElementById('cnFormCrumb').textContent = 'Edit ' + cnFormatNo(cn.credit_note_id);
+    document.getElementById('cnSubmitBtn').textContent = 'Save changes';
+    cnRecalc();
+    showView('view-credit-note-form');
+  }catch(e){
+    toast('Could not open credit note');
+    console.error(e);
+  }
+}
+function cnAddLine(line){
+  const tbody = document.getElementById('cnLines');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td class="cn-desc-cell"><input type="text" class="cn-desc" maxlength="500" placeholder="Description" autocomplete="off"></td>
+    <td class="cn-num-cell"><input type="number" class="cn-amt" step="0.01" min="0" inputmode="decimal" placeholder="0.00"></td>
+    <td class="cn-num-cell"><input type="number" class="cn-vat" step="0.01" min="0" inputmode="decimal" placeholder="0.00"></td>
+    <td class="qtycell cn-linetotal">£0.00</td>
+    <td><button class="btn-danger-ghost cn-remove" type="button" title="Remove this line" style="padding:6px 10px;font-size:12px;">✕</button></td>`;
+  if(line){
+    tr.querySelector('.cn-desc').value = line.description || '';
+    tr.querySelector('.cn-amt').value = (line.amount === null || line.amount === undefined) ? '' : Number(line.amount).toFixed(2);
+    tr.querySelector('.cn-vat').value = (line.vat_amount === null || line.vat_amount === undefined) ? '' : Number(line.vat_amount).toFixed(2);
+  }
+  tr.querySelector('.cn-amt').addEventListener('input', cnRecalc);
+  tr.querySelector('.cn-vat').addEventListener('input', cnRecalc);
+  tr.querySelector('.cn-remove').addEventListener('click', () => {
+    if(document.querySelectorAll('#cnLines tr').length <= 1){
+      // keep one row on screen — just clear it
+      tr.querySelector('.cn-desc').value = '';
+      tr.querySelector('.cn-amt').value = '';
+      tr.querySelector('.cn-vat').value = '';
+    }else{
+      tr.remove();
+    }
+    cnRecalc();
+  });
+  tbody.appendChild(tr);
+  cnRecalc();
+  if(!line) tr.querySelector('.cn-desc').focus();
+}
+function cnRecalc(){
+  let netP = 0, vatP = 0;
+  document.querySelectorAll('#cnLines tr').forEach(tr => {
+    const a = cnToPence(tr.querySelector('.cn-amt').value);
+    const v = cnToPence(tr.querySelector('.cn-vat').value);
+    netP += a; vatP += v;
+    tr.querySelector('.cn-linetotal').textContent = cnMoney((a + v) / 100);
+  });
+  document.getElementById('cnTotNet').textContent = cnMoney(netP / 100);
+  document.getElementById('cnTotVat').textContent = cnMoney(vatP / 100);
+  document.getElementById('cnTotGross').textContent = cnMoney((netP + vatP) / 100);
+}
+function cnCancelForm(){
+  const rows = document.querySelectorAll('#cnLines tr');
+  let dirty = !!(document.getElementById('cnSupplier').value.trim() || document.getElementById('cnReference').value.trim());
+  rows.forEach(tr => {
+    if(tr.querySelector('.cn-desc').value.trim() || tr.querySelector('.cn-amt').value || tr.querySelector('.cn-vat').value) dirty = true;
+  });
+  if(dirty && cnEditingId === null && !confirm('Discard this credit note?')) return;
+  if(cnEditingId !== null) openCreditNotesList('PENDING'); else openCreditNotesHome();
+}
+async function cnSubmit(){
+  if(cnSubmitting) return;
+  const err = document.getElementById('cnFormErr');
+  err.textContent = '';
+  const lines = [];
+  let problem = '';
+  document.querySelectorAll('#cnLines tr').forEach((tr, i) => {
+    const description = tr.querySelector('.cn-desc').value.trim();
+    const amount = tr.querySelector('.cn-amt').value;
+    const vat = tr.querySelector('.cn-vat').value;
+    if(!description && amount === '' && vat === '') return; // blank row — ignore
+    if(!problem && !description) problem = 'Line ' + (i + 1) + ': enter a description.';
+    if(!problem && amount === '') problem = 'Line ' + (i + 1) + ': enter an amount.';
+    if(!problem && (parseFloat(amount) < 0 || (vat !== '' && parseFloat(vat) < 0))) problem = 'Line ' + (i + 1) + ': amount and VAT cannot be negative.';
+    lines.push({ description, amount, vat_amount: vat });
+  });
+  if(!problem && !lines.length) problem = 'Add at least one line with a description and amount.';
+  if(problem){ err.textContent = problem; return; }
+  const body = {
+    supplier_name: document.getElementById('cnSupplier').value.trim(),
+    reference: document.getElementById('cnReference').value.trim(),
+    lines
+  };
+  const btn = document.getElementById('cnSubmitBtn');
+  cnSubmitting = true; btn.disabled = true;
+  try{
+    if(cnEditingId === null){
+      const r = await apiPost('supplier-orders/credit-notes', body);
+      toast('Credit note ' + cnFormatNo(r.credit_note_id) + ' added to Pending');
+    }else{
+      await apiPut('supplier-orders/credit-notes/' + encodeURIComponent(cnEditingId), body);
+      toast('Credit note ' + cnFormatNo(cnEditingId) + ' updated');
+    }
+    cnEditingId = null;
+    openCreditNotesList('PENDING');
+  }catch(e){
+    console.error(e);
+    err.textContent = (e && e.message) ? e.message : 'Could not save the credit note.';
+  }finally{
+    cnSubmitting = false; btn.disabled = false;
+  }
+}
+
+/* ---- Pending / Completed lists ---- */
+async function openCreditNotesList(status){
+  cnListStatus = status;
+  const pending = status === 'PENDING';
+  document.getElementById('cnListCrumb').textContent = pending ? 'Pending' : 'Completed';
+  document.getElementById('cnListTitle').textContent = pending ? 'Pending Credit Notes' : 'Completed Credit Notes';
+  document.getElementById('cnListSub').textContent = pending
+    ? 'Download a credit note, edit it, or mark it completed.'
+    : 'Credit notes that have been completed.';
+  document.getElementById('cnListCreateBtn').style.display = pending ? '' : 'none';
+  document.getElementById('cnListSearch').value = '';
+  document.getElementById('cnListBox').innerHTML = '<div class="loading">Loading…</div>';
+  showView('view-credit-notes-list');
+  await cnLoadList();
+}
+async function cnLoadList(){
+  const box = document.getElementById('cnListBox');
+  try{
+    const data = await apiGet('supplier-orders/credit-notes?status=' + encodeURIComponent(cnListStatus));
+    cnListItems = data.items || [];
+    renderCreditNotesList();
+  }catch(e){
+    box.innerHTML = '<div class="empty-hint" style="color:var(--danger)">Could not load credit notes</div>';
+    console.error(e);
+  }
+}
+function renderCreditNotesList(){
+  const box = document.getElementById('cnListBox');
+  const pending = cnListStatus === 'PENDING';
+  const q = document.getElementById('cnListSearch').value.trim().toLowerCase();
+  const items = cnListItems.filter(c => !q ||
+    cnFormatNo(c.credit_note_id).toLowerCase().includes(q) ||
+    String(c.supplier_name || '').toLowerCase().includes(q) ||
+    String(c.reference || '').toLowerCase().includes(q));
+  if(!items.length){
+    box.innerHTML = '<div class="empty-hint">' + (cnListItems.length
+      ? 'No credit notes match your search.'
+      : (pending ? 'No pending credit notes.' : 'No completed credit notes yet.')) + '</div>';
+    return;
+  }
+  const rows = items.map(c => {
+    const id = Number(c.credit_note_id);
+    const actions = pending
+      ? `<button class="btn-ghost" onclick="cnDownload(${id})">Download</button>
+         <button class="btn-ghost" onclick="cnEdit(${id})">Edit</button>
+         <button class="btn-amber" onclick="cnComplete(${id})">Completed</button>`
+      : `<button class="btn-ghost" onclick="cnDownload(${id})">Download</button>`;
+    return `<tr>
+      <td><b>${cnFormatNo(id)}</b></td>
+      <td>${cnDate(pending ? c.created_at : c.completed_at)}</td>
+      <td>${escapeHtml(c.supplier_name || '—')}</td>
+      <td>${escapeHtml(c.reference || '—')}</td>
+      <td class="qtycell">${Number(c.line_count) || 0}</td>
+      <td class="qtycell">${cnMoney(c.net_total)}</td>
+      <td class="qtycell">${cnMoney(c.vat_total)}</td>
+      <td class="qtycell">${cnMoney(c.gross_total)}</td>
+      <td><div class="cn-actions">${actions}</div></td>
+    </tr>`;
+  }).join('');
+  box.innerHTML = `<div style="overflow-x:auto;"><table class="finaltable cn-list">
+    <thead><tr>
+      <th>No.</th><th>${pending ? 'Created' : 'Completed'}</th><th>Supplier</th><th>Reference</th>
+      <th class="qtycell">Lines</th><th class="qtycell">Amount</th><th class="qtycell">VAT</th><th class="qtycell">Total</th><th></th>
+    </tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+async function cnComplete(id){
+  if(!confirm('Mark credit note ' + cnFormatNo(id) + ' as completed?\n\nIt will move to the Completed list and can no longer be edited.')) return;
+  try{
+    await apiPost('supplier-orders/credit-notes/' + encodeURIComponent(id) + '/complete', {});
+    toast('Credit note ' + cnFormatNo(id) + ' moved to Completed');
+    await cnLoadList();
+  }catch(e){
+    toast((e && e.message) ? e.message : 'Could not complete credit note');
+    console.error(e);
+  }
+}
+
+/* ---- Download as PDF ---- */
+async function cnDownload(id){
+  try{
+    if(!window.jspdf){ toast('PDF library is still loading — try again in a moment'); return; }
+    const cn = await apiGet('supplier-orders/credit-notes/' + encodeURIComponent(id));
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const left = 14, right = 196;
+    const no = cnFormatNo(cn.credit_note_id);
+
+    doc.setFont(undefined, 'bold'); doc.setFontSize(18); doc.setTextColor(20);
+    doc.text('CREDIT NOTE', left, 20);
+    doc.setFontSize(12);
+    doc.text(no, right, 20, { align: 'right' });
+    doc.setFont(undefined, 'normal'); doc.setFontSize(10); doc.setTextColor(90);
+    doc.text('Hallan Cash & Carry', left, 26);
+
+    let y = 36;
+    doc.setTextColor(20);
+    const meta = [
+      ['Supplier', cn.supplier_name || '—'],
+      ['Reference', cn.reference || '—'],
+      ['Status', cn.status === 'COMPLETED' ? 'Completed' : 'Pending'],
+      ['Created', cnDate(cn.created_at) + (cn.created_by ? ' by ' + cn.created_by : '')]
+    ];
+    if(cn.status === 'COMPLETED') meta.push(['Completed', cnDate(cn.completed_at) + (cn.completed_by ? ' by ' + cn.completed_by : '')]);
+    meta.forEach(([k, v]) => {
+      doc.setFont(undefined, 'bold'); doc.text(k + ':', left, y);
+      doc.setFont(undefined, 'normal'); doc.text(String(v), left + 28, y);
+      y += 6;
+    });
+
+    const money = n => '£' + (Number(n) || 0).toFixed(2);
+    const body = (cn.lines || []).map(l => [
+      String(l.description || ''),
+      money(l.amount),
+      money(l.vat_amount),
+      money((Number(l.amount) || 0) + (Number(l.vat_amount) || 0))
+    ]);
+    doc.autoTable({
+      startY: y + 4,
+      head: [['Description', 'Amount', 'VAT', 'Line total']],
+      body,
+      foot: [
+        ['Total', money(cn.net_total), money(cn.vat_total), money(cn.gross_total)]
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: [30, 34, 42] },
+      footStyles: { fillColor: [235, 235, 235], textColor: 20, fontStyle: 'bold' },
+      styles: { fontSize: 10 },
+      columnStyles: {
+        0: { cellWidth: 'auto' },
+        1: { halign: 'right', cellWidth: 30 },
+        2: { halign: 'right', cellWidth: 30 },
+        3: { halign: 'right', cellWidth: 32 }
+      },
+      didParseCell: function(data){
+        if(data.section === 'head' && data.column.index > 0) data.cell.styles.halign = 'right';
+        if(data.section === 'foot' && data.column.index > 0) data.cell.styles.halign = 'right';
+      },
+      margin: { left: left, right: 14 }
+    });
+    doc.save('credit-note-' + no + '.pdf');
+  }catch(e){
+    toast('Could not generate PDF');
+    console.error(e);
+  }
 }
 
 /* ---- Place Order ---- */
