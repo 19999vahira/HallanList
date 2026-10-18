@@ -442,6 +442,12 @@
   .cn-actions{display:flex;gap:6px;flex-wrap:wrap;}
   .cn-actions button{padding:6px 12px;font-size:12px;}
   table.cn-list td,table.cn-list th{white-space:nowrap;}
+  .cn-supwrap{position:relative;}
+  .cn-suplist{position:absolute;left:0;right:0;top:100%;z-index:30;background:#fff;border:1px solid var(--line);
+    border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:260px;overflow-y:auto;margin-top:2px;}
+  .cn-suplist .cn-supitem{padding:9px 12px;font-size:14px;cursor:pointer;}
+  .cn-suplist .cn-supitem:hover,.cn-suplist .cn-supitem.active{background:var(--panel2);}
+  .cn-suplist .cn-supempty{padding:9px 12px;font-size:13px;color:var(--text-dim);}
 
   /* ---- modal ---- */
   .modal-backdrop{
@@ -2347,13 +2353,15 @@
     </div>
     <div class="ni-card">
       <div class="ni-grid">
-        <div class="ni-f">
-          <label for="cnSupplier">Supplier (optional)</label>
-          <input type="text" id="cnSupplier" maxlength="200" placeholder="e.g. Top-Op Foods" autocomplete="off">
+        <div class="ni-f cn-supwrap">
+          <label for="cnSupplier">Supplier</label>
+          <input type="text" id="cnSupplier" maxlength="200" placeholder="Search and select a supplier…" autocomplete="off"
+                 oninput="cnOnSupplierInput()" onfocus="cnOnSupplierInput()" onkeydown="cnSupplierKey(event)">
+          <div class="cn-suplist" id="cnSupplierList" style="display:none;"></div>
         </div>
         <div class="ni-f">
-          <label for="cnReference">Reference (optional)</label>
-          <input type="text" id="cnReference" maxlength="100" placeholder="Supplier's credit note / invoice no." autocomplete="off">
+          <label for="cnReference">Reference</label>
+          <input type="text" id="cnReference" maxlength="100" placeholder="Credit note reference no." autocomplete="off">
         </div>
       </div>
     </div>
@@ -11546,6 +11554,71 @@ let cnEditingId = null;      // null = creating a new credit note, otherwise the
 let cnListStatus = 'PENDING';
 let cnListItems = [];
 let cnSubmitting = false;
+let cnSelectedSupplier = '';   // supplier name chosen from the dropdown
+let cnSupplierDebounce = null;
+let cnSupplierActive = -1;
+
+/* ---- Searchable supplier dropdown ---- */
+function cnOnSupplierInput(){
+  const input = document.getElementById('cnSupplier');
+  const list = document.getElementById('cnSupplierList');
+  // typing again invalidates the previous selection until a new one is picked
+  if(input.value.trim() !== cnSelectedSupplier) cnSelectedSupplier = '';
+  clearTimeout(cnSupplierDebounce);
+  const q = input.value.trim();
+  if(!q){
+    list.style.display = 'block';
+    list.innerHTML = '<div class="cn-supempty">Start typing a supplier name…</div>';
+    return;
+  }
+  list.style.display = 'block';
+  list.innerHTML = '<div class="cn-supempty">Searching…</div>';
+  cnSupplierDebounce = setTimeout(async () => {
+    try{
+      const data = await apiGet('suppliers/search/?q=' + encodeURIComponent(q));
+      if(input.value.trim() !== q) return; // stale response
+      const items = data.items || [];
+      cnSupplierActive = -1;
+      if(!items.length){ list.innerHTML = '<div class="cn-supempty">No matching suppliers.</div>'; return; }
+      list.innerHTML = '';
+      items.forEach(s => {
+        const div = document.createElement('div');
+        div.className = 'cn-supitem';
+        div.textContent = s.name;
+        div.addEventListener('mousedown', e => { e.preventDefault(); cnPickSupplier(s.name); });
+        list.appendChild(div);
+      });
+    }catch(e){
+      list.innerHTML = '<div class="cn-supempty" style="color:var(--danger)">Search failed</div>';
+      console.error(e);
+    }
+  }, 250);
+}
+function cnPickSupplier(name){
+  cnSelectedSupplier = name;
+  document.getElementById('cnSupplier').value = name;
+  document.getElementById('cnSupplierList').style.display = 'none';
+  document.getElementById('cnFormErr').textContent = '';
+}
+function cnSupplierKey(e){
+  const list = document.getElementById('cnSupplierList');
+  const items = list.querySelectorAll('.cn-supitem');
+  if(e.key === 'Escape'){ list.style.display = 'none'; return; }
+  if(!items.length) return;
+  if(e.key === 'ArrowDown' || e.key === 'ArrowUp'){
+    e.preventDefault();
+    cnSupplierActive = e.key === 'ArrowDown' ? Math.min(items.length - 1, cnSupplierActive + 1) : Math.max(0, cnSupplierActive - 1);
+    items.forEach((el, i) => el.classList.toggle('active', i === cnSupplierActive));
+    items[cnSupplierActive].scrollIntoView({ block: 'nearest' });
+  }else if(e.key === 'Enter'){
+    e.preventDefault();
+    cnPickSupplier(items[Math.max(0, cnSupplierActive)].textContent);
+  }
+}
+document.addEventListener('click', e => {
+  const list = document.getElementById('cnSupplierList');
+  if(list && !e.target.closest('.cn-supwrap')) list.style.display = 'none';
+});
 
 function cnFormatNo(id){ return 'CN-' + String(id).padStart(4, '0'); }
 function cnMoney(n){
@@ -11579,8 +11652,10 @@ async function openCreditNotesHome(){
 /* ---- Create / edit form ---- */
 function cnResetFormFields(){
   document.getElementById('cnSupplier').value = '';
+  cnSelectedSupplier = '';
+  document.getElementById('cnSupplierList').style.display = 'none';
   document.getElementById('cnReference').value = '';
-  document.getElementById('cnLines').innerHTML = '';
+  document.getElementById('cnLines').innerHTML = ''; 
   document.getElementById('cnFormErr').textContent = '';
 }
 function openCreditNoteForm(){
@@ -11602,6 +11677,7 @@ async function cnEdit(id){
     cnEditingId = cn.credit_note_id;
     cnResetFormFields();
     document.getElementById('cnSupplier').value = cn.supplier_name || '';
+    cnSelectedSupplier = cn.supplier_name || '';
     document.getElementById('cnReference').value = cn.reference || '';
     (cn.lines || []).forEach(l => cnAddLine(l));
     if(!(cn.lines || []).length) cnAddLine();
@@ -11673,6 +11749,8 @@ async function cnSubmit(){
   err.textContent = '';
   const lines = [];
   let problem = '';
+  if(!cnSelectedSupplier) problem = 'Choose a supplier from the dropdown list.';
+  else if(!document.getElementById('cnReference').value.trim()) problem = 'Enter a reference number.';
   document.querySelectorAll('#cnLines tr').forEach((tr, i) => {
     const description = tr.querySelector('.cn-desc').value.trim();
     const amount = tr.querySelector('.cn-amt').value;
@@ -11686,7 +11764,7 @@ async function cnSubmit(){
   if(!problem && !lines.length) problem = 'Add at least one line with a description and amount.';
   if(problem){ err.textContent = problem; return; }
   const body = {
-    supplier_name: document.getElementById('cnSupplier').value.trim(),
+    supplier_name: cnSelectedSupplier,
     reference: document.getElementById('cnReference').value.trim(),
     lines
   };
