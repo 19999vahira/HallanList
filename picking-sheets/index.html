@@ -9267,6 +9267,39 @@ const SH_NUTRI_FIELDS = [
 function shCleanPreview(html){
   return String(html || '').replace(/<(script|style|iframe|object|embed)[\s\S]*?<\/\1>/gi, '').replace(/\son\w+\s*=\s*("[^"]*"|'[^']*')/gi, '');
 }
+/* ---- Website (WooCommerce) status line in the content window ---- */
+function wooFmt(d){ if(!d) return ''; const t = new Date(d); return isNaN(t) ? '' : t.toLocaleString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }); }
+async function loadWooStatusLine(stockid){
+  const box = document.getElementById('shcWoo');
+  if(!box) return;
+  try{
+    const w = await apiGet('stock/woo/product/' + stockid + '/');
+    if(shopifyData.contentId !== stockid) return;
+    const q = w.queue, l = w.link, site = w.website || {};
+    const parts = [];
+    if(site.status && site.status !== 'not_found' && site.status !== 'unknown'){
+      const label = ({ publish:'Published', draft:'Draft', pending:'Pending review', private:'Private', future:'Scheduled' })[site.status] || site.status;
+      parts.push('On the website: ' + (site.url ? '<a href="' + escapeHtml(site.url) + '" target="_blank" rel="noopener">' + escapeHtml(label) + '</a>' : escapeHtml(label)));
+    } else if(site.status === 'not_found'){ parts.push('Not on the website yet'); }
+    if(q && (q.status === 'PENDING' || q.status === 'PROCESSING')) parts.push('<strong>Waiting to be sent</strong> (the sync runs every 2 minutes)');
+    else if(q && q.status === 'ERROR') parts.push('<strong style="color:var(--danger)">Last send failed:</strong> ' + escapeHtml(q.message || 'unknown error'));
+    else if(q && q.status === 'DONE') parts.push('Last sent ' + escapeHtml(wooFmt(q.finished_at)) + ' (' + escapeHtml(q.result_action || 'done') + ')' + (q.message ? ' — ' + escapeHtml(q.message) : ''));
+    else if(!q) parts.push('Not sent yet');
+    if(w.sync && w.sync.stale) parts.push('<strong style="color:var(--danger)">The website sync has not reported in recently — check the scheduled task.</strong>');
+    const canSend = !(q && (q.status === 'PENDING' || q.status === 'PROCESSING'));
+    box.innerHTML = parts.join('<br>') + (canSend ? '<div style="margin-top:8px;"><button class="btn-ghost shsmall" type="button" onclick="queueWooNow(' + stockid + ')">Send to website now (replaces the website text)</button></div>' : '');
+  }catch(e){
+    console.error(e);
+    box.textContent = 'Website status unavailable: ' + e.message;
+  }
+}
+async function queueWooNow(stockid){
+  try{
+    await apiPost('stock/woo/queue/', { stockids: [stockid], mode: 'FULL' });
+    toast('Queued — it reaches the website within about 2 minutes');
+    loadWooStatusLine(stockid);
+  }catch(e){ console.error(e); toast('Could not queue: ' + e.message); }
+}
 async function openShopifyContent(stockid){
   shopifyData.contentId = stockid;
   const it = shopifyData.items.find(x => x.stockid === stockid);
@@ -9280,6 +9313,7 @@ async function openShopifyContent(stockid){
     if(!c.exists){ document.getElementById('shContentBody').innerHTML = '<div class="empty-hint">Nothing generated for this product yet.</div>'; return; }
     renderShopifyContentForm(c);
     document.getElementById('shContentSaveBtn').disabled = false;
+    loadWooStatusLine(stockid);
   }catch(e){
     console.error(e);
     document.getElementById('shContentBody').innerHTML = '<div class="loading" style="color:var(--danger)">Could not load the content.</div>' + errDetailHtml(e);
@@ -9312,6 +9346,7 @@ function renderShopifyContentForm(c){
     + ta('shcDesc', 'Description (simple HTML: &lt;p&gt; &lt;ul&gt; &lt;li&gt; &lt;strong&gt;)', c.description_html, 9)
     + '<label class="shlabel">How the description will look</label><div class="shpreview" id="shcPreview">' + shCleanPreview(c.description_html) + '</div>'
     + ta('shcIng', 'Ingredients (allergens in CAPITALS)', c.ingredients, 4)
+    + ta('shcAllergens', 'Allergens (as printed on the pack, e.g. Contains: MILK, SOYA. May contain: NUTS. Leave empty if not stated)', c.allergens, 2)
     + '<label class="shlabel">Nutritional information</label>'
     + '<div style="margin-bottom:8px;"><label style="font-size:11px;color:var(--text-dim);">Values are</label><input type="text" class="shinp" style="max-width:180px;" id="shcN_per" value="' + escapeHtml(n.per || 'per 100g') + '"></div>'
     + '<div class="shnutri">' + nutri + '</div>'
@@ -9320,7 +9355,8 @@ function renderShopifyContentForm(c){
     + ta('shcSeoDesc', 'Search description (max 155 characters)', c.seo_description, 2)
     + '<label class="shlabel" for="shcTags">Tags (comma separated)</label><input type="text" class="shinp" id="shcTags" value="' + escapeHtml((c.tags || []).join(', ')) + '">'
     + '<div class="odcount" style="margin-top:12px;">Written by ' + escapeHtml(c.text_model || 'Gemini') + ' · picture by ' + escapeHtml(c.image_model || 'Gemini')
-    + '. Edits are used the next time the product is sent; a product that already has a description / picture on Shopify is not overwritten.</div>';
+    + '. Edits are used the next time the product is sent; a product that already has a description / picture on Shopify is not overwritten.</div>'
+    + '<div class="shwarnbox" style="background:var(--bg-soft,#f6f6f6);border-color:#ccc;color:inherit;margin-top:12px;" id="shcWoo">Website (WooCommerce): checking…</div>';
   document.getElementById('shcDesc').addEventListener('input', function(){
     document.getElementById('shcPreview').innerHTML = shCleanPreview(this.value);
   });
@@ -9336,15 +9372,15 @@ async function saveShopifyContent(){
   if(!v('shcShort').trim() || !v('shcDesc').trim()){ err.textContent = 'The short description and the description cannot be empty.'; err.style.display = ''; return; }
   btn.disabled = true;
   try{
-    await apiPut('stock/shopify/content/' + id + '/', {
-      short_description: v('shcShort'), description_html: v('shcDesc'), ingredients: v('shcIng'), nutrition,
+    const saved = await apiPut('stock/shopify/content/' + id + '/', {
+      short_description: v('shcShort'), description_html: v('shcDesc'), ingredients: v('shcIng'), allergens: v('shcAllergens'), nutrition,
       storage: v('shcStorage'), seo_title: v('shcSeoTitle'), seo_description: v('shcSeoDesc'), tags: v('shcTags'), reviewed: true
     });
     const it = shopifyData.items.find(x => x.stockid === id);
     if(it){ it.content_review = false; it.msg = null; }
     closeModal('modalShopifyContent');
     renderShopifyList();
-    toast('Saved');
+    toast(saved && saved.website_queued ? 'Saved — will reach the website within about 2 minutes' : 'Saved');
   }catch(e){
     console.error(e);
     err.textContent = 'Could not save: ' + e.message; err.style.display = '';
