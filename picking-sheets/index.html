@@ -818,6 +818,7 @@
   .vimport-modal.state-failed .vimport-close-row{display:block;}
 
   .pickprinttable{display:none;}
+  .picking-printed{display:none;}
 
   @media print{
     .retsign{border:none;padding:0;margin-top:34px;background:none;}
@@ -856,6 +857,7 @@
     .pickprinttable .tickbox{
       display:inline-block;width:16px;height:16px;border:1.5px solid #111;
     }
+    .picking-printed{display:inline;}
   }
 
   /* ---- WhatsApp broadcast ---- */
@@ -1539,7 +1541,11 @@
     </div>
     <div class="hero">
       <h2 id="pickingTitle"></h2>
-      <p>Picking time: <span class="mono" id="pickingTimer">00:00:00</span> &middot; <span id="pickingProgress"></span></p>
+      <p>
+        <span class="no-print">Picking time: <span class="mono" id="pickingTimer">00:00:00</span> &middot; </span>
+        <span class="picking-printed">Printed: <span class="mono" id="pickingPrintedAt"></span> &middot; </span>
+        <span id="pickingProgress"></span>
+      </p>
       <p class="staffline" id="pickingPickedBy" style="display:none;"></p>
     </div>
     <div class="actionbar no-print">
@@ -20004,6 +20010,20 @@ function updatePickingProgress(){
   if(partial > 0) txt += ' · ' + partial + ' partial';
   document.getElementById('pickingProgress').textContent = txt;
 }
+function formatUkPrintedAt(date){
+  const fmt = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London',
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: false
+  });
+  const parts = fmt.formatToParts(date).reduce((acc, p) => { acc[p.type] = p.value; return acc; }, {});
+  return parts.day + '/' + parts.month + '/' + parts.year + ' ' + parts.hour + ':' + parts.minute;
+}
+function stampPickingPrintTime(){
+  const el = document.getElementById('pickingPrintedAt');
+  if(el) el.textContent = formatUkPrintedAt(new Date());
+}
+window.addEventListener('beforeprint', stampPickingPrintTime);
 async function endPickingList(){
   if(!confirm('End this picking list? It will be marked closed.')) return;
   stopActiveTimer();
