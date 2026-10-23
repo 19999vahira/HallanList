@@ -628,6 +628,8 @@
   /* ---- Stock Info > Shopify ---- */
   .odweb.active{background:#e6f6ec;color:#17803d;border-color:#b7e3c6;}
   .odweb.archived,.odweb.unlisted{background:#f0e9fb;color:#6a3fb5;border-color:#d8c8f1;}
+  .odwebq{display:inline-block;margin-left:6px;font-size:11px;color:#667085;vertical-align:middle;}
+  .odwebq.err{color:var(--danger);font-weight:600;}
   .shbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
   .shbar select.historysearch{width:auto;min-width:190px;cursor:pointer;}
   table.shtable th.shc,table.shtable td.shc{text-align:center;white-space:nowrap;width:1%;}
@@ -2082,12 +2084,15 @@
         <select id="shopifyStatusFilter" class="historysearch" onchange="onShopifyFilterChange()" title="Filter by whether the product is on Shopify">
           <option value="all">Shopify: All</option>
         </select>
+        <select id="shopifyWebFilter" class="historysearch" onchange="onShopifyFilterChange()" title="Filter by the product's status on the WordPress website">
+          <option value="all">WordPress: All</option>
+        </select>
         <select id="shopifyOnlineFilter" class="historysearch" onchange="onShopifyFilterChange()" title="Filter by Online Data progress (images, description, other details)">
           <option value="all">Online Data: All</option>
           <option value="complete">Online Data: Complete</option>
           <option value="incomplete">Online Data: Incomplete</option>
         </select>
-        <button class="btn-ghost" type="button" id="shopifyRefreshBtn" onclick="refreshShopifyStatus()" title="Re-read product statuses from Shopify">&#8635; Refresh Shopify status</button>
+        <button class="btn-ghost" type="button" id="shopifyRefreshBtn" onclick="refreshShopifyStatus()" title="Re-read product statuses from Shopify and from the WordPress website">&#8635; Refresh Shopify &amp; website status</button>
       </div>
       <div class="shbar">
         <span class="odcount" id="shopifyListCount"></span>
@@ -8690,7 +8695,9 @@ const shopifyData = {
   items: [],
   selected: new Set(),
   shopify: null,        // { configured, ok, error, total, fetched_at, new_product_status }
+  website: null,        // { configured, ok, warning, total, fetched_at } for the WordPress website
   statusFilter: 'all',
+  webFilter: 'all',
   onlineFilter: 'all',
   busy: false,
   supplierDebounce: null
@@ -8700,6 +8707,25 @@ const SHOPIFY_LABELS = {
   not_found:'Not on Shopify', unknown:'Unknown'
 };
 function shopifyLabel(st){ return SHOPIFY_LABELS[st] || st; }
+const WEB_LABELS = {
+  publish:'Published', draft:'Draft', pending:'Pending review', private:'Private',
+  future:'Scheduled', trash:'Trashed', not_found:'Not on website', unknown:'Unknown'
+};
+function webLabel(st){ return WEB_LABELS[st] || st; }
+/* WordPress badge: clicking it opens the product's Edit page in wp-admin (new tab). */
+function wordpressBadge(it){
+  const ws = it.web_status || 'unknown';
+  const label = 'WordPress: ' + webLabel(ws);
+  let b;
+  if(it.web_edit_url && ws !== 'not_found' && ws !== 'unknown'){
+    b = `<a class="odweb ${escapeHtml(ws)}" href="${escapeHtml(it.web_edit_url)}" target="_blank" rel="noopener" title="Open this product in WordPress (product id ${Number(it.web_id) || ''})">${escapeHtml(label)}</a>`;
+  }else{
+    b = `<span class="odweb ${escapeHtml(ws)}">${escapeHtml(label)}</span>`;
+  }
+  if(it.web_queue === 'PENDING' || it.web_queue === 'PROCESSING') b += '<span class="odwebq" title="The sync runs every 2 minutes">&#8635; sending to website…</span>';
+  else if(it.web_queue === 'ERROR') b += `<span class="odwebq err" title="${escapeHtml(it.web_queue_msg || 'The last send to the website failed')}">&#9888; website send failed</span>`;
+  return b;
+}
 function shopifyPrefLabel(){ return shopifyData.pref === 'yes' ? 'Preferred List' : 'Non-Preferred List'; }
 
 /* Breadcrumbs: level 0 = supplier search ... 2 = product list */
@@ -8810,6 +8836,7 @@ async function openShopifyList(pref){
   shopifyData.items = [];
   shopifyData.selected = new Set();
   shopifyData.statusFilter = 'all';
+  shopifyData.webFilter = 'all';
   shopifyData.onlineFilter = 'all';
   shopifyData.tab = 'todo';
   shopifyData.stop = false;
@@ -8821,6 +8848,7 @@ async function openShopifyList(pref){
   document.getElementById('shopifyRangeFrom').value = '';
   document.getElementById('shopifyRangeTo').value = '';
   document.getElementById('shopifyOnlineFilter').value = 'all';
+  document.getElementById('shopifyWebFilter').value = 'all';
   document.getElementById('shopifyListCount').textContent = '';
   document.getElementById('shopifyListNote').textContent = '';
   document.getElementById('shopifyListBox').innerHTML = '<div class="loading">Loading…</div>';
@@ -8835,6 +8863,7 @@ async function loadShopifyItems(forceShopify){
     const old = new Map(shopifyData.items.map(x => [x.stockid, x.msg]));
     shopifyData.items = (data.items || []).map(x => ({ ...x, msg: old.get(x.stockid) || null }));
     shopifyData.shopify = data.shopify || null;
+    shopifyData.website = data.website || null;
     renderShopifyList();
   }catch(e){
     document.getElementById('shopifyListBox').innerHTML = '<div class="loading" style="color:var(--danger)">Could not load products.</div>' + errDetailHtml(e);
@@ -8843,12 +8872,13 @@ async function loadShopifyItems(forceShopify){
 }
 function shopifyVisibleItems(){
   const q = document.getElementById('shopifyListFilter').value.trim().toLowerCase();
-  const sf = shopifyData.statusFilter, of = shopifyData.onlineFilter;
+  const sf = shopifyData.statusFilter, of = shopifyData.onlineFilter, wf = shopifyData.webFilter;
   const wantDone = shopifyData.tab === 'done';
   return shopifyData.items.filter(it =>
     (!!it.sh_completed === wantDone) &&
     (!q || (it.name || '').toLowerCase().includes(q) || (it.barcodes || '').toLowerCase().includes(q) || (it.sku || '').toLowerCase().includes(q)) &&
     (sf === 'all' || it.shopify_status === sf) &&
+    (wf === 'all' || it.web_status === wf) &&
     (of === 'all' || (of === 'complete' ? it.online_complete : !it.online_complete)));
 }
 function renderShopifyTabs(){
@@ -8892,6 +8922,7 @@ function renderShopifyList(){
           ? `<a class="odweb ${escapeHtml(it.shopify_status)}" href="${escapeHtml(it.shopify_url)}" target="_blank" rel="noopener" title="Open in Shopify">${escapeHtml(shopifyLabel(it.shopify_status))}</a>`
           : `<span class="odweb ${escapeHtml(it.shopify_status)}">${escapeHtml(shopifyLabel(it.shopify_status))}</span>`)
       : '';
+    const wpBadge = (shopifyData.website && shopifyData.website.ok) ? wordpressBadge(it) : '';
     const sub = [it.sku ? ('SKU ' + it.sku) : ''].filter(Boolean).join(' · ');
     const msg = it.msg ? `<div class="shmsg ${escapeHtml(it.msg.type)}">${escapeHtml(it.msg.text)}</div>` : '';
     const price = it.price ? ('£' + escapeHtml(it.price)) : '<span class="shmsg err">No price</span>';
@@ -8906,7 +8937,7 @@ function renderShopifyList(){
     return `<tr data-stockid="${id}">
       <td class="shc"><input type="checkbox" class="odcheck" ${shopifyData.selected.has(it.stockid) ? 'checked' : ''} onchange="onShopifySelect(${id}, this.checked)"></td>
       <td class="shc shn">${idx + 1}</td>
-      <td><div class="odname">${escapeHtml(it.name)}${badge}</div>${sub ? `<div class="odbarcode">${escapeHtml(sub)}</div>` : ''}${msg}</td>
+      <td><div class="odname">${escapeHtml(it.name)}${badge}${wpBadge}</div>${sub ? `<div class="odbarcode">${escapeHtml(sub)}</div>` : ''}${msg}</td>
       <td class="shnum">${price}</td>
       <td class="shnum">${Number(it.qty) || 0}</td>
       <td class="shc">${it.online_complete ? '<span class="odtick">&#10003;</span>' : '—'}</td>
@@ -8920,7 +8951,36 @@ function renderShopifyList(){
     + '<th class="shc">#</th><th>Product</th><th class="shnum">Price (inc. VAT)</th><th class="shnum">Stock</th><th class="shc">Online Data</th><th class="shc">Content</th><th class="shc">Shopify</th><th class="shc">Completed</th>'
     + '</tr></thead><tbody>' + rows + '</tbody></table>';
 }
+function updateShopifyWebControls(all){
+  const sel = document.getElementById('shopifyWebFilter');
+  if(!sel) return;
+  const w = shopifyData.website;
+  if(!(w && w.ok)){
+    sel.innerHTML = '<option value="all">WordPress: not connected</option>';
+    sel.disabled = true;
+    shopifyData.webFilter = 'all';
+    return;
+  }
+  const counts = {};
+  all.forEach(it => { const k = it.web_status || 'unknown'; counts[k] = (counts[k] || 0) + 1; });
+  const order = ['publish','draft','pending','private','future','trash','not_found','unknown'];
+  const keys = order.filter(k => counts[k]).concat(Object.keys(counts).filter(k => !order.includes(k)));
+  let html = '<option value="all">WordPress: All (' + all.length + ')</option>';
+  keys.forEach(k => { html += '<option value="' + escapeHtml(k) + '">' + escapeHtml(webLabel(k)) + ' (' + counts[k] + ')</option>'; });
+  if(shopifyData.webFilter !== 'all' && !counts[shopifyData.webFilter]) shopifyData.webFilter = 'all';
+  sel.innerHTML = html;
+  sel.value = shopifyData.webFilter;
+  sel.disabled = false;
+}
+function webNoteText(){
+  const w = shopifyData.website;
+  if(!w) return '';
+  if(!w.ok) return ' · WordPress status unavailable' + (w.warning ? ': ' + w.warning : ' - has the website sync (Hallan-WooSync.ps1) loaded any products yet?');
+  const when = w.fetched_at ? new Date(w.fetched_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
+  return ' · Website synced ' + (when ? 'at ' + when + ' ' : '') + '(' + w.total + ' products on the website)' + (w.warning ? ' - ' + w.warning : '');
+}
 function updateShopifyControls(all){
+  updateShopifyWebControls(all);
   const sel = document.getElementById('shopifyStatusFilter');
   const note = document.getElementById('shopifyListNote');
   const btn = document.getElementById('shopifyRefreshBtn');
@@ -8935,6 +8995,7 @@ function updateShopifyControls(all){
     note.textContent = !web ? ''
       : !web.configured ? 'Shopify is not connected — add the SHOPIFY_ settings on Render.'
       : ('Could not read Shopify: ' + (web.error || 'unknown error'));
+    if(web) note.textContent += webNoteText();
     return;
   }
   const counts = {};
@@ -8951,10 +9012,11 @@ function updateShopifyControls(all){
   note.style.color = '';
   const when = web.fetched_at ? new Date(web.fetched_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
   note.textContent = 'Shopify checked at ' + when + ' · ' + web.total + ' products in the Shopify store · new products are created as '
-    + String(web.new_product_status || 'DRAFT').toLowerCase();
+    + String(web.new_product_status || 'DRAFT').toLowerCase() + webNoteText();
 }
 function onShopifyFilterChange(){
   shopifyData.statusFilter = document.getElementById('shopifyStatusFilter').value;
+  shopifyData.webFilter = document.getElementById('shopifyWebFilter').value;
   shopifyData.onlineFilter = document.getElementById('shopifyOnlineFilter').value;
   renderShopifyList();
 }
@@ -8962,7 +9024,7 @@ async function refreshShopifyStatus(){
   const btn = document.getElementById('shopifyRefreshBtn');
   const old = btn.innerHTML;
   btn.disabled = true; btn.textContent = 'Refreshing…';
-  try{ await loadShopifyItems(true); toast('Shopify status refreshed'); }
+  try{ await loadShopifyItems(true); toast('Shopify and website status refreshed'); }
   finally{ btn.innerHTML = old; btn.disabled = false; }
 }
 
@@ -9155,6 +9217,8 @@ async function shopifyRun(ids, send){
   if(stopped) bits.push('stopped early');
   toast((send ? 'Shopify: ' : 'Generate: ') + (bits.join(', ') || 'nothing done'));
   renderShopifyList();
+  // pick up the website queue / status (the website sync runs every 2 minutes; Refresh shows the result later)
+  try{ await loadShopifyItems(false); }catch(e){ console.error(e); }
 }
 
 /* ---- Photos (camera) ---- */
@@ -9285,7 +9349,8 @@ async function loadWooStatusLine(stockid){
     const parts = [];
     if(site.status && site.status !== 'not_found' && site.status !== 'unknown'){
       const label = ({ publish:'Published', draft:'Draft', pending:'Pending review', private:'Private', future:'Scheduled' })[site.status] || site.status;
-      parts.push('On the website: ' + (site.url ? '<a href="' + escapeHtml(site.url) + '" target="_blank" rel="noopener">' + escapeHtml(label) + '</a>' : escapeHtml(label)));
+      const editLink = site.edit_url ? '<a href="' + escapeHtml(site.edit_url) + '" target="_blank" rel="noopener" title="Open in WordPress (product id ' + escapeHtml(String(site.id || '')) + ')">' + escapeHtml(label) + '</a>' : escapeHtml(label);
+      parts.push('On the website: ' + editLink + (site.url ? ' · <a href="' + escapeHtml(site.url) + '" target="_blank" rel="noopener">view page</a>' : ''));
     } else if(site.status === 'not_found'){ parts.push('Not on the website yet'); }
     if(q && (q.status === 'PENDING' || q.status === 'PROCESSING')) parts.push('<strong>Waiting to be sent</strong> (the sync runs every 2 minutes)');
     else if(q && q.status === 'ERROR') parts.push('<strong style="color:var(--danger)">Last send failed:</strong> ' + escapeHtml(q.message || 'unknown error'));
