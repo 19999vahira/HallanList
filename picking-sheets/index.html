@@ -455,6 +455,16 @@
   .lbl-editing .lbl-el{cursor:move;}
   .lbl-editing .lbl-el:hover{outline:1px dashed #94a3b8;}
   .lbl-editing .lbl-el.sel{outline:1px dashed #2563eb;}
+  .lbl-previewcol{position:sticky;top:var(--lbl-top,96px);align-self:start;z-index:5;}
+  .lbl-h{position:absolute;background:#2563eb;border:1px solid #fff;box-sizing:border-box;border-radius:2px;touch-action:none;z-index:3;}
+  .lbl-h[data-handle="r"]{cursor:ew-resize;}
+  .lbl-h[data-handle="b"]{cursor:ns-resize;}
+  .lbl-h[data-handle="c"]{cursor:nwse-resize;}
+  @media(max-width:900px){
+    .lbl-previewcol{order:-1;background:var(--bg);padding:6px 0;}
+    .lbl-previewcol .ni-hint,#lblZoomWrap{display:none;}
+    .lbl-stagebox{padding:8px;}
+  }
   .lbl-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px;}
   .lbl-toolbar .grow{flex:1;}
   .lbl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;}
@@ -1247,7 +1257,7 @@
     <div class="hero">
       <div class="eyebrow">Labels</div>
       <h2 id="lblEditorTitle">New label</h2>
-      <p>Set the size, add text and barcodes, and size each one how you like. Drag items on the preview to move them.</p>
+      <p>Set the size, add text and barcodes, and size each one how you like. Drag an item on the preview to move it, and drag the blue squares on the selected item to resize it. The preview stays in view while you edit.</p>
     </div>
     <div class="lbl-layout">
       <div>
@@ -1270,12 +1280,12 @@
           <div id="lblCards"></div>
         </div>
       </div>
-      <div>
+      <div class="lbl-previewcol">
         <div class="lbl-stagebox" id="lblStageBox">
           <div class="lbl-stagewrap lbl-editing" id="lblStageWrap"></div>
         </div>
         <div class="lbl-toolbar">
-          <div class="lbl-f" style="min-width:150px;"><label>Preview zoom</label>
+          <div class="lbl-f" id="lblZoomWrap" style="min-width:150px;"><label>Preview zoom</label>
             <input type="range" id="lblZoom" min="40" max="200" value="100" oninput="lblZoomMul=this.value/100;lblRenderStage()">
           </div>
           <div class="grow"></div>
@@ -21120,14 +21130,25 @@ function lblBarcodeSvg(el){
     return { svg: '', error: (err && err.message) ? err.message : 'Not a valid barcode number' };
   }
 }
+function lblHandleHtml(kind){
+  const hs = 9 / (LBL_PX_PER_MM * lblCurScale); // always ~9 screen pixels
+  const half = (hs / 2).toFixed(3) + 'mm';
+  let pos;
+  if(kind === 'r') pos = 'right:0;top:50%;margin-top:-' + half + ';';
+  else if(kind === 'b') pos = 'bottom:0;left:50%;margin-left:-' + half + ';';
+  else pos = 'right:0;bottom:0;';
+  return '<div class="lbl-h" data-handle="' + kind + '" style="' + pos + 'width:' + hs.toFixed(3) + 'mm;height:' + hs.toFixed(3) + 'mm;"></div>';
+}
 function lblElementHtml(el, editing){
   const eid = editing ? ' data-eid="' + el.id + '"' : '';
-  const cls = 'lbl-el' + (editing && el.id === lblSelId ? ' sel' : '');
+  const isSel = editing && el.id === lblSelId;
+  const cls = 'lbl-el' + (isSel ? ' sel' : '');
   const pos = 'position:absolute;left:' + (Number(el.x) || 0) + 'mm;top:' + (Number(el.y) || 0) + 'mm;';
   if(el.type === 'text'){
     return '<div class="' + cls + '"' + eid + ' style="' + pos + 'width:' + (Number(el.w) || 10) + 'mm;font-size:' + (Number(el.fontSize) || 10) + 'pt;'
       + 'font-weight:' + (el.bold ? 700 : 400) + ';text-align:' + (el.align || 'left') + ';line-height:1.15;font-family:Arial,Helvetica,sans-serif;'
-      + 'color:#000;white-space:pre-wrap;word-break:break-word;">' + escapeHtml(el.text || '') + '</div>';
+      + 'color:#000;white-space:pre-wrap;word-break:break-word;">' + escapeHtml(el.text || '')
+      + (isSel ? lblHandleHtml('r') + lblHandleHtml('c') : '') + '</div>';
   }
   const bc = lblBarcodeSvg(el);
   lblErrCache[el.id] = bc.error;
@@ -21139,7 +21160,8 @@ function lblElementHtml(el, editing){
     ? '<div style="font-size:' + (Number(el.numberSize) || 8) + 'pt;line-height:1.1;margin-top:0.4mm;text-align:center;white-space:nowrap;font-family:Arial,Helvetica,sans-serif;color:#000;">' + escapeHtml(String(el.value).trim()) + '</div>'
     : '';
   return '<div class="' + cls + '"' + eid + ' style="' + pos + 'width:' + bw + 'mm;">'
-    + '<div style="width:' + bw + 'mm;height:' + bh + 'mm;">' + inner + '</div>' + num + '</div>';
+    + '<div style="position:relative;width:' + bw + 'mm;height:' + bh + 'mm;">' + inner
+    + (isSel ? lblHandleHtml('r') + lblHandleHtml('b') + lblHandleHtml('c') : '') + '</div>' + num + '</div>';
 }
 function lblSheetHtml(w, h, elements, editing){
   return '<div style="position:relative;width:' + w + 'mm;height:' + h + 'mm;background:#fff;overflow:hidden;">'
@@ -21151,7 +21173,11 @@ function lblRenderStage(){
   const pw = lblDraft.width * LBL_PX_PER_MM, ph = lblDraft.height * LBL_PX_PER_MM;
   const box = document.getElementById('lblStageBox');
   const avail = Math.max(220, (box.clientWidth || 600) - 40);
-  const fit = Math.min(avail / pw, 460 / ph, 8);
+  const small = window.innerWidth <= 900;
+  const fit = Math.min(avail / pw, (small ? 150 : 400) / ph, 8);
+  const hdr = document.querySelector('header.topbar');
+  const ev = document.getElementById('view-label-editor');
+  if(hdr && ev) ev.style.setProperty('--lbl-top', (hdr.offsetHeight + 8) + 'px');
   lblCurScale = Math.max(0.2, fit * lblZoomMul);
   wrap.style.width = (pw * lblCurScale) + 'px';
   wrap.style.height = (ph * lblCurScale) + 'px';
@@ -21177,8 +21203,15 @@ document.getElementById('lblStageWrap').addEventListener('pointerdown', function
   const el = lblDraft.elements.find(x => x.id === id);
   if(!el) return;
   e.preventDefault();
-  if(lblSelId !== id) lblSelect(id);
-  lblDrag = { id: id, sx: e.clientX, sy: e.clientY, ox: Number(el.x) || 0, oy: Number(el.y) || 0, moved: false };
+  const handle = e.target.getAttribute && e.target.getAttribute('data-handle');
+  if(handle){
+    lblDrag = { mode: 'resize', handle: handle, id: id, sx: e.clientX, sy: e.clientY,
+      ow: Number(el.w) || 10, oh: Number(el.h) || 10, ofs: Number(el.fontSize) || 10,
+      ohmm: Math.max(1, n.offsetHeight / LBL_PX_PER_MM), moved: false };
+  } else {
+    if(lblSelId !== id) lblSelect(id);
+    lblDrag = { mode: 'move', id: id, sx: e.clientX, sy: e.clientY, ox: Number(el.x) || 0, oy: Number(el.y) || 0, moved: false };
+  }
   window.addEventListener('pointermove', lblDragMove);
   window.addEventListener('pointerup', lblDragEnd);
   window.addEventListener('pointercancel', lblDragEnd);
@@ -21188,6 +21221,25 @@ function lblDragMove(e){
   const el = lblDraft.elements.find(x => x.id === lblDrag.id);
   if(!el) return;
   const k = LBL_PX_PER_MM * lblCurScale;
+  if(lblDrag.mode === 'resize'){
+    const dx = (e.clientX - lblDrag.sx) / k, dy = (e.clientY - lblDrag.sy) / k;
+    const h = lblDrag.handle;
+    if(el.type === 'text'){
+      if(h === 'r' || h === 'c') el.w = Math.max(3, lblRound1(lblDrag.ow + dx));
+      if(h === 'c') el.fontSize = Math.max(2, Math.round(lblDrag.ofs * ((lblDrag.ohmm + dy) / lblDrag.ohmm) * 2) / 2);
+    } else {
+      if(h === 'r' || h === 'c') el.w = Math.max(5, lblRound1(lblDrag.ow + dx));
+      if(h === 'b' || h === 'c') el.h = Math.max(2, lblRound1(lblDrag.oh + dy));
+    }
+    lblDrag.moved = true;
+    lblDraft.dirty = true;
+    lblRenderStage();
+    ['w', 'h', 'fontSize'].forEach(p => {
+      const inp = document.querySelector('#lblCards [data-lbl-eid="' + el.id + '"][data-lbl-prop="' + p + '"]');
+      if(inp && el[p] !== undefined) inp.value = el[p];
+    });
+    return;
+  }
   const nx = Math.max(0, Math.min(lblDraft.width - 1, lblRound1(lblDrag.ox + (e.clientX - lblDrag.sx) / k)));
   const ny = Math.max(0, Math.min(lblDraft.height - 1, lblRound1(lblDrag.oy + (e.clientY - lblDrag.sy) / k)));
   if(nx === el.x && ny === el.y) return;
