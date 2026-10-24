@@ -16,6 +16,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+<!-- Label Printer: draws the barcodes (Code 128, EAN, UPC, Code 39, ITF) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js" defer></script>
 <!-- Meta's SDK, used only by the "Connect a WhatsApp Number" button on the WhatsApp Broadcast page -->
 <!-- Facebook SDK is no longer loaded on every page: it is loaded on demand by ensureFacebookSdk() when the WhatsApp signup button is used. -->
 <style>
@@ -426,6 +428,43 @@
     border-radius:6px;cursor:pointer;font-size:13px;font-family:'Inter',sans-serif;
   }
   .btn-amber:hover{background:#ddb752;}
+
+  /* ---- Label Printer ---- */
+  .lbl-layout{display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:22px;align-items:start;}
+  @media(max-width:900px){.lbl-layout{grid-template-columns:1fr;}}
+  .lbl-panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px;}
+  .lbl-panel h4{margin:0 0 10px;font-size:14px;}
+  .lbl-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:10px;margin-bottom:10px;}
+  .lbl-f label{display:block;font-size:11px;color:var(--text-dim);margin-bottom:3px;}
+  .lbl-f input[type=text],.lbl-f input[type=number],.lbl-f select,.lbl-f textarea{
+    width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--line);border-radius:6px;
+    font-size:14px;background:#fff;color:var(--text);font-family:inherit;}
+  .lbl-f textarea{resize:vertical;min-height:54px;}
+  .lbl-f input:focus,.lbl-f select:focus,.lbl-f textarea:focus{outline:2px solid var(--accent);outline-offset:-1px;}
+  .lbl-f.chk label{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);margin:0;padding-top:20px;cursor:pointer;}
+  .lbl-card{background:#fff;border:1px solid var(--line);border-left:4px solid var(--line);border-radius:8px;padding:12px;margin-bottom:10px;cursor:pointer;}
+  .lbl-card.sel{border-left-color:var(--accent);box-shadow:0 0 0 1px var(--accent);}
+  .lbl-card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;}
+  .lbl-card-head b{font-size:13px;}
+  .lbl-card-head .cn-actions button{padding:4px 9px;font-size:11px;}
+  .lbl-warn{color:var(--danger);font-size:12px;min-height:0;margin:-4px 0 6px;}
+  .lbl-addrow{display:flex;gap:8px;flex-wrap:wrap;}
+  .lbl-stagebox{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;overflow:auto;}
+  .lbl-stagewrap{position:relative;margin:0 auto;background:#fff;box-shadow:0 0 0 1px #9aa3b2,0 8px 22px -10px rgba(0,0,0,.35);user-select:none;-webkit-user-select:none;}
+  .lbl-el{touch-action:none;}
+  .lbl-editing .lbl-el{cursor:move;}
+  .lbl-editing .lbl-el:hover{outline:1px dashed #94a3b8;}
+  .lbl-editing .lbl-el.sel{outline:1px dashed #2563eb;}
+  .lbl-toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px;}
+  .lbl-toolbar .grow{flex:1;}
+  .lbl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;}
+  .lbl-savedcard{background:var(--panel);border:1px solid var(--line);border-top:4px solid #db2777;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:8px;}
+  .lbl-thumbbox{background:var(--panel2);border-radius:6px;min-height:130px;display:flex;align-items:center;justify-content:center;padding:8px;}
+  .lbl-thumb{background:#fff;box-shadow:0 0 0 1px #9aa3b2;overflow:hidden;flex:none;}
+  .lbl-savedcard h4{margin:0;font-size:15px;word-break:break-word;}
+  .lbl-savedcard .lbl-meta{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);}
+  .lbl-savedcard .cn-actions button{padding:7px 12px;font-size:12px;}
+  .lbl-search{max-width:320px;width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid var(--line);border-radius:6px;font-size:14px;background:#fff;color:var(--text);}
 
   /* ---- Suppliers > Credit Notes ---- */
   table.cn-table input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:14px;
@@ -1160,6 +1199,12 @@
         <h3>Returns</h3>
         <p>Scan stock back to a supplier, then track it to Awaiting Credit Note and Returned Goods.</p>
       </div>
+      <div class="tile" data-module="labels" style="--tile-color:#db2777;" onclick="openLabelPrinter()">
+        <div class="tile-icon">🏷️</div>
+        <div class="num">12 &middot; LABELS</div>
+        <h3>Label Printer</h3>
+        <p>Design custom labels — any size, text and barcodes — save them by name and print.</p>
+      </div>
       <div class="tile" data-admin-only="1" style="--tile-color:#475569;display:none;" onclick="openManageUsers()">
         <div class="tile-icon">👤</div>
         <div class="num">ADMIN</div>
@@ -1171,6 +1216,74 @@
         <div class="num">ADMIN</div>
         <h3>Add IP Address</h3>
         <p>Approve a network so the portal can be used from it.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- LABEL PRINTER: SAVED LABELS -->
+  <div id="view-labels" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span><span class="current">Label Printer</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Labels</div>
+      <h2>Label Printer</h2>
+      <p>Design a label of any size with text and barcodes, save it with a name, then re-open it to edit or print whenever you need.</p>
+    </div>
+    <div class="actionbar" style="gap:12px;flex-wrap:wrap;">
+      <input type="text" class="lbl-search" id="lblSearch" placeholder="Search saved labels…" oninput="lblListFilter=this.value;lblRenderList()">
+      <button class="btn-amber" onclick="lblNewLabel()">＋ New label</button>
+    </div>
+    <div id="lblList"><div class="empty-hint">Loading…</div></div>
+  </div>
+
+  <!-- LABEL PRINTER: EDITOR -->
+  <div id="view-label-editor" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="lblCancelEditor()">Label Printer</button><span class="sep">/</span>
+      <span class="current" id="lblEditorCrumb">New label</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Labels</div>
+      <h2 id="lblEditorTitle">New label</h2>
+      <p>Set the size, add text and barcodes, and size each one how you like. Drag items on the preview to move them.</p>
+    </div>
+    <div class="lbl-layout">
+      <div>
+        <div class="lbl-panel">
+          <h4>Label size</h4>
+          <div class="lbl-row">
+            <div class="lbl-f"><label>Width (mm)</label><input type="number" id="lblW" min="5" max="500" step="0.5" oninput="lblOnSizeInput()"></div>
+            <div class="lbl-f"><label>Length / height (mm)</label><input type="number" id="lblH" min="5" max="500" step="0.5" oninput="lblOnSizeInput()"></div>
+          </div>
+          <div class="lbl-f"><label>Common sizes</label>
+            <select id="lblPreset" onchange="lblApplyPreset(this.value)"></select>
+          </div>
+        </div>
+        <div class="lbl-panel">
+          <h4>Items on the label</h4>
+          <div class="lbl-addrow" style="margin-bottom:12px;">
+            <button class="btn-ghost" onclick="lblAddEl('text')">＋ Text</button>
+            <button class="btn-ghost" onclick="lblAddEl('barcode')">＋ Barcode</button>
+          </div>
+          <div id="lblCards"></div>
+        </div>
+      </div>
+      <div>
+        <div class="lbl-stagebox" id="lblStageBox">
+          <div class="lbl-stagewrap lbl-editing" id="lblStageWrap"></div>
+        </div>
+        <div class="lbl-toolbar">
+          <div class="lbl-f" style="min-width:150px;"><label>Preview zoom</label>
+            <input type="range" id="lblZoom" min="40" max="200" value="100" oninput="lblZoomMul=this.value/100;lblRenderStage()">
+          </div>
+          <div class="grow"></div>
+          <button class="btn-ghost" onclick="lblCancelEditor()">Cancel</button>
+          <button class="btn-ghost" onclick="lblPrintDraft()">🖨️ Print</button>
+          <button class="btn-amber" onclick="lblSaveClick()">💾 Save</button>
+        </div>
+        <p class="ni-hint" style="margin-top:10px;">Sizes are in millimetres; text size is in points. Preview is to scale. Keep barcodes wide enough to scan (about 25 mm or more for most numbers) and leave a little blank space either side.</p>
       </div>
     </div>
   </div>
@@ -4081,6 +4194,37 @@
     <div class="searchresults" id="searchResults"></div>
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalAddItem')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- LABEL PRINTER: SAVE MODAL -->
+<div class="modal-backdrop" id="modalLabelSave">
+  <div class="modal">
+    <h3>Save label</h3>
+    <p class="modal-sub">Give this label a name so you can find it in your saved labels.</p>
+    <input type="text" id="lblSaveName" maxlength="200" placeholder="e.g. Shelf label 50x30" onkeydown="if(event.key==='Enter')lblConfirmSave()">
+    <label id="lblSaveAsNewRow" style="display:none;font-size:13px;gap:6px;align-items:center;margin:2px 0 6px;cursor:pointer;">
+      <input type="checkbox" id="lblSaveAsNew" style="width:auto;margin:0;"> Save as a new label (keep the original unchanged)
+    </label>
+    <div class="ni-warn" id="lblSaveErr"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalLabelSave')">Cancel</button>
+      <button class="btn-amber" id="lblSaveBtn" onclick="lblConfirmSave()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- LABEL PRINTER: PRINT MODAL -->
+<div class="modal-backdrop" id="modalLabelPrint">
+  <div class="modal">
+    <h3 id="lblPrintTitle">Print label</h3>
+    <p class="modal-sub" id="lblPrintSub">Choose how many copies to print.</p>
+    <input type="number" id="lblCopies" min="1" max="500" value="1" style="width:100%;padding:11px 13px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:16px;box-sizing:border-box;margin-bottom:10px;" onkeydown="if(event.key==='Enter')lblDoPrint()">
+    <p class="ni-hint">In the print window pick your label printer and set margins to None / scale 100%.</p>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalLabelPrint')">Cancel</button>
+      <button class="btn-amber" onclick="lblDoPrint()">Print</button>
     </div>
   </div>
 </div>
@@ -20691,6 +20835,477 @@ async function shareOrEmailPDF(doc, filename, subject){
 function errDetailHtml(e){
   const msg = (e && e.message) ? e.message : String(e);
   return '<div class="errdetail">' + escapeHtml(msg) + '</div>';
+}
+
+/* ============ LABEL PRINTER ============ */
+// A label = width/height in mm + a list of elements (text or barcode).
+// Every element is positioned (x, y in mm from the top-left) and sized
+// independently. The same builder (lblSheetHtml) draws the editor preview,
+// the saved-label thumbnails and the print page, so what you see is what
+// prints. Saved labels live on the server (/api/labels).
+const LBL_PX_PER_MM = 96 / 25.4;
+const LBL_PRESETS = [
+  { w: 50,  h: 30 }, { w: 40, h: 30 }, { w: 60, h: 40 }, { w: 70, h: 40 },
+  { w: 100, h: 50 }, { w: 100, h: 70 }, { w: 100, h: 150 }
+];
+const LBL_FORMATS = [
+  ['CODE128', 'Code 128 (any number / text)'],
+  ['EAN13',   'EAN-13 (12–13 digits)'],
+  ['EAN8',    'EAN-8 (7–8 digits)'],
+  ['UPC',     'UPC-A (11–12 digits)'],
+  ['CODE39',  'Code 39'],
+  ['ITF',     'ITF (even number of digits)']
+];
+let lblSaved = [];          // saved labels from the server
+let lblDraft = null;        // label being edited: {id,name,width,height,elements,dirty}
+let lblSelId = null;        // selected element id
+let lblZoomMul = 1;         // preview zoom multiplier (on top of auto-fit)
+let lblCurScale = 1;        // actual preview scale in use (for dragging)
+let lblPrintTarget = null;  // {name,width,height,elements} waiting in the print modal
+let lblDrag = null;
+let lblListFilter = '';
+let lblErrCache = {};       // element id -> barcode error text
+
+function lblUid(){ return 'e' + Math.random().toString(36).slice(2, 9); }
+function lblRound1(n){ return Math.round(n * 10) / 10; }
+function lblNewText(){
+  return { id: lblUid(), type: 'text', text: 'Product name', x: 2, y: 2, w: 46, fontSize: 11, bold: true, align: 'center' };
+}
+function lblNewBarcode(){
+  return { id: lblUid(), type: 'barcode', value: '5012345678900', format: 'CODE128', x: 5, y: 10, w: 40, h: 12, showNumber: true, numberSize: 8 };
+}
+
+/* ---------- saved labels list ---------- */
+function openLabelPrinter(){
+  showView('view-labels');
+  lblLoadSaved();
+}
+async function lblLoadSaved(){
+  const el = document.getElementById('lblList');
+  if(!lblSaved.length) el.innerHTML = '<div class="empty-hint">Loading…</div>';
+  try{
+    const data = await apiGet('labels');
+    lblSaved = data.labels || [];
+    lblRenderList();
+  }catch(e){
+    if(e && e.silent) return;
+    el.innerHTML = '<div class="empty-hint">Could not load saved labels.</div>' + errDetailHtml(e);
+  }
+}
+function lblThumbHtml(l){
+  const pw = l.width_mm * LBL_PX_PER_MM, ph = l.height_mm * LBL_PX_PER_MM;
+  const s = Math.min(210 / pw, 130 / ph, 3);
+  return '<div class="lbl-thumb" style="width:' + (pw * s).toFixed(1) + 'px;height:' + (ph * s).toFixed(1) + 'px;">'
+    + '<div style="width:' + l.width_mm + 'mm;height:' + l.height_mm + 'mm;transform:scale(' + s.toFixed(4) + ');transform-origin:0 0;">'
+    + lblSheetHtml(l.width_mm, l.height_mm, l.elements, false) + '</div></div>';
+}
+function lblRenderList(){
+  const el = document.getElementById('lblList');
+  if(!el) return;
+  const q = (lblListFilter || '').trim().toLowerCase();
+  const rows = lblSaved.filter(l => !q || String(l.name || '').toLowerCase().includes(q));
+  if(!lblSaved.length){
+    el.innerHTML = '<div class="empty-hint">No saved labels yet. Tap “＋ New label” to design your first one.</div>';
+    return;
+  }
+  if(!rows.length){ el.innerHTML = '<div class="empty-hint">No saved labels match that search.</div>'; return; }
+  el.innerHTML = '<div class="lbl-grid">' + rows.map(l => {
+    const when = l.updated_at ? new Date(l.updated_at).toLocaleDateString('en-GB') : '';
+    return '<div class="lbl-savedcard">'
+      + '<div class="lbl-thumbbox">' + lblThumbHtml(l) + '</div>'
+      + '<h4>' + escapeHtml(l.name) + '</h4>'
+      + '<div class="lbl-meta">' + l.width_mm + ' × ' + l.height_mm + ' mm' + (when ? ' · ' + when : '') + (l.updated_by ? ' · ' + escapeHtml(l.updated_by) : '') + '</div>'
+      + '<div class="cn-actions">'
+      + '<button class="btn-amber" onclick="lblEditSaved(' + l.label_id + ')">✏️ Edit</button>'
+      + '<button class="btn-ghost" onclick="lblPrintSaved(' + l.label_id + ')">🖨️ Print</button>'
+      + '<button class="btn-ghost" onclick="lblDeleteSaved(' + l.label_id + ')">🗑️ Delete</button>'
+      + '</div></div>';
+  }).join('') + '</div>';
+}
+async function lblDeleteSaved(id){
+  const l = lblSaved.find(x => x.label_id === id);
+  if(!l) return;
+  if(!confirm('Delete the label “' + l.name + '”? This cannot be undone.')) return;
+  try{
+    await apiDelete('labels/' + id);
+    toast('Label deleted');
+    await lblLoadSaved();
+  }catch(e){ if(!(e && e.silent)) toast('Could not delete: ' + ((e.body && e.body.error) || e.message)); }
+}
+
+/* ---------- opening the editor ---------- */
+function lblNewLabel(){
+  lblDraft = { id: null, name: '', width: 50, height: 30, elements: [lblNewText(), lblNewBarcode()], dirty: false };
+  lblOpenEditor();
+}
+function lblEditSaved(id){
+  const l = lblSaved.find(x => x.label_id === id);
+  if(!l) return;
+  lblDraft = {
+    id: l.label_id, name: l.name, width: l.width_mm, height: l.height_mm,
+    elements: JSON.parse(JSON.stringify(l.elements || [])), dirty: false
+  };
+  lblOpenEditor();
+}
+function lblOpenEditor(){
+  showView('view-label-editor');
+  lblSelId = lblDraft.elements.length ? lblDraft.elements[0].id : null;
+  lblZoomMul = 1;
+  document.getElementById('lblZoom').value = 100;
+  const title = lblDraft.id ? 'Edit: ' + lblDraft.name : 'New label';
+  document.getElementById('lblEditorTitle').textContent = title;
+  document.getElementById('lblEditorCrumb').textContent = lblDraft.id ? lblDraft.name : 'New label';
+  document.getElementById('lblW').value = lblDraft.width;
+  document.getElementById('lblH').value = lblDraft.height;
+  lblFillPresets();
+  lblRenderCards();
+  lblRenderStage();
+}
+function lblCancelEditor(){
+  if(lblDraft && lblDraft.dirty && !confirm('Discard your changes to this label?')) return;
+  lblDraft = null;
+  openLabelPrinter();
+}
+
+/* ---------- size ---------- */
+function lblFillPresets(){
+  const sel = document.getElementById('lblPreset');
+  let html = '<option value="">Custom</option>';
+  LBL_PRESETS.forEach((p, i) => {
+    html += '<option value="' + i + '"' + (p.w === lblDraft.width && p.h === lblDraft.height ? ' selected' : '') + '>' + p.w + ' × ' + p.h + ' mm</option>';
+  });
+  sel.innerHTML = html;
+}
+function lblApplyPreset(v){
+  if(v === '') return;
+  const p = LBL_PRESETS[Number(v)];
+  if(!p || !lblDraft) return;
+  lblDraft.width = p.w; lblDraft.height = p.h; lblDraft.dirty = true;
+  document.getElementById('lblW').value = p.w;
+  document.getElementById('lblH').value = p.h;
+  lblRenderStage();
+}
+function lblOnSizeInput(){
+  if(!lblDraft) return;
+  const w = parseFloat(document.getElementById('lblW').value);
+  const h = parseFloat(document.getElementById('lblH').value);
+  if(!(w >= 5 && w <= 500 && h >= 5 && h <= 500)) return; // wait until it's a sensible number
+  lblDraft.width = w; lblDraft.height = h; lblDraft.dirty = true;
+  lblFillPresets();
+  lblRenderStage();
+}
+
+/* ---------- element cards (the form on the left) ---------- */
+function lblNumField(el, prop, label, step, min){
+  return '<div class="lbl-f"><label>' + label + '</label><input type="number" step="' + step + '"' + (min !== undefined ? ' min="' + min + '"' : '')
+    + ' value="' + el[prop] + '" data-lbl-eid="' + el.id + '" data-lbl-prop="' + prop + '" data-lbl-kind="num"></div>';
+}
+function lblRenderCards(){
+  const box = document.getElementById('lblCards');
+  if(!lblDraft.elements.length){
+    box.innerHTML = '<div class="empty-hint">Nothing on this label yet — add some text or a barcode.</div>';
+    return;
+  }
+  box.innerHTML = lblDraft.elements.map((el, i) => {
+    const head = '<div class="lbl-card-head"><b>' + (el.type === 'text' ? '🔤 Text' : '▮▯▮ Barcode') + ' ' + (i + 1) + '</b>'
+      + '<div class="cn-actions"><button class="btn-ghost" onclick="event.stopPropagation();lblDupEl(\'' + el.id + '\')">Duplicate</button>'
+      + '<button class="btn-ghost" onclick="event.stopPropagation();lblRemoveEl(\'' + el.id + '\')">Remove</button></div></div>';
+    let body;
+    if(el.type === 'text'){
+      body = '<div class="lbl-f" style="margin-bottom:10px;"><label>Text</label><textarea data-lbl-eid="' + el.id + '" data-lbl-prop="text" data-lbl-kind="str">' + escapeHtml(el.text) + '</textarea></div>'
+        + '<div class="lbl-row">' + lblNumField(el, 'fontSize', 'Text size (pt)', '0.5', 1) + lblNumField(el, 'w', 'Box width (mm)', '0.5', 1) + '</div>'
+        + '<div class="lbl-row">' + lblNumField(el, 'x', 'Left (mm)', '0.5') + lblNumField(el, 'y', 'Top (mm)', '0.5') + '</div>'
+        + '<div class="lbl-row"><div class="lbl-f"><label>Align</label><select data-lbl-eid="' + el.id + '" data-lbl-prop="align" data-lbl-kind="str">'
+        + ['left', 'center', 'right'].map(a => '<option value="' + a + '"' + (el.align === a ? ' selected' : '') + '>' + a[0].toUpperCase() + a.slice(1) + '</option>').join('')
+        + '</select></div><div class="lbl-f chk"><label><input type="checkbox" data-lbl-eid="' + el.id + '" data-lbl-prop="bold" data-lbl-kind="bool"' + (el.bold ? ' checked' : '') + '> Bold</label></div></div>';
+    } else {
+      body = '<div class="lbl-f" style="margin-bottom:10px;"><label>Barcode number</label><input type="text" value="' + escapeHtml(el.value) + '" data-lbl-eid="' + el.id + '" data-lbl-prop="value" data-lbl-kind="str"></div>'
+        + '<div class="lbl-f" style="margin-bottom:10px;"><label>Barcode type</label><select data-lbl-eid="' + el.id + '" data-lbl-prop="format" data-lbl-kind="str">'
+        + LBL_FORMATS.map(f => '<option value="' + f[0] + '"' + (el.format === f[0] ? ' selected' : '') + '>' + f[1] + '</option>').join('')
+        + '</select></div>'
+        + '<div class="lbl-warn" id="lblWarn-' + el.id + '"></div>'
+        + '<div class="lbl-row">' + lblNumField(el, 'w', 'Barcode width (mm)', '0.5', 5) + lblNumField(el, 'h', 'Bar height (mm)', '0.5', 2) + '</div>'
+        + '<div class="lbl-row">' + lblNumField(el, 'x', 'Left (mm)', '0.5') + lblNumField(el, 'y', 'Top (mm)', '0.5') + '</div>'
+        + '<div class="lbl-row"><div class="lbl-f chk"><label><input type="checkbox" data-lbl-eid="' + el.id + '" data-lbl-prop="showNumber" data-lbl-kind="bool"' + (el.showNumber ? ' checked' : '') + '> Show number under barcode</label></div>'
+        + lblNumField(el, 'numberSize', 'Number size (pt)', '0.5', 1) + '</div>';
+    }
+    return '<div class="lbl-card' + (el.id === lblSelId ? ' sel' : '') + '" data-card="' + el.id + '">' + head + body + '</div>';
+  }).join('');
+}
+function lblSelect(id){
+  lblSelId = id;
+  document.querySelectorAll('#lblCards .lbl-card').forEach(c => c.classList.toggle('sel', c.getAttribute('data-card') === id));
+  lblRenderStage();
+}
+function lblAddEl(type){
+  const el = type === 'text' ? lblNewText() : lblNewBarcode();
+  // drop the new item a little lower than the last so they don't sit on top of each other
+  const last = lblDraft.elements[lblDraft.elements.length - 1];
+  if(last){ el.y = Math.min(Math.max(0, lblDraft.height - 6), lblRound1((Number(last.y) || 0) + 6)); }
+  lblDraft.elements.push(el);
+  lblDraft.dirty = true;
+  lblSelId = el.id;
+  lblRenderCards();
+  lblRenderStage();
+  const card = document.querySelector('#lblCards [data-card="' + el.id + '"]');
+  if(card && card.scrollIntoView) card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+function lblRemoveEl(id){
+  lblDraft.elements = lblDraft.elements.filter(e => e.id !== id);
+  lblDraft.dirty = true;
+  if(lblSelId === id) lblSelId = null;
+  lblRenderCards();
+  lblRenderStage();
+}
+function lblDupEl(id){
+  const src = lblDraft.elements.find(e => e.id === id);
+  if(!src) return;
+  const copy = JSON.parse(JSON.stringify(src));
+  copy.id = lblUid();
+  copy.y = lblRound1((Number(copy.y) || 0) + 4);
+  const i = lblDraft.elements.indexOf(src);
+  lblDraft.elements.splice(i + 1, 0, copy);
+  lblDraft.dirty = true;
+  lblSelId = copy.id;
+  lblRenderCards();
+  lblRenderStage();
+}
+// One delegated listener updates whichever field was edited.
+document.getElementById('lblCards').addEventListener('input', function(e){
+  if(!lblDraft) return;
+  const t = e.target;
+  const id = t.getAttribute && t.getAttribute('data-lbl-eid');
+  if(!id) return;
+  const el = lblDraft.elements.find(x => x.id === id);
+  if(!el) return;
+  const prop = t.getAttribute('data-lbl-prop');
+  const kind = t.getAttribute('data-lbl-kind');
+  let v;
+  if(kind === 'num'){
+    v = parseFloat(t.value);
+    if(!isFinite(v)) return;
+    if((prop === 'w' || prop === 'h' || prop === 'fontSize' || prop === 'numberSize') && v <= 0) return;
+  } else if(kind === 'bool'){ v = t.checked; }
+  else { v = t.value; }
+  el[prop] = v;
+  lblDraft.dirty = true;
+  if(lblSelId !== id){ lblSelId = id; document.querySelectorAll('#lblCards .lbl-card').forEach(c => c.classList.toggle('sel', c.getAttribute('data-card') === id)); }
+  lblRenderStage();
+});
+document.getElementById('lblCards').addEventListener('click', function(e){
+  const card = e.target.closest && e.target.closest('[data-card]');
+  if(card && card.getAttribute('data-card') !== lblSelId) lblSelect(card.getAttribute('data-card'));
+});
+
+/* ---------- drawing a label ---------- */
+// Returns { svg, error }. JsBarcode throws if the number isn't valid for the
+// chosen type (e.g. letters in an EAN-13) — that message is shown to the user.
+function lblBarcodeSvg(el){
+  const value = String(el.value == null ? '' : el.value).trim();
+  if(!value) return { svg: '', error: 'Enter a number for this barcode' };
+  if(typeof JsBarcode === 'undefined') return { svg: '', error: 'Barcode library not loaded yet — check your connection and refresh' };
+  try{
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    JsBarcode(svg, value, { format: el.format || 'CODE128', displayValue: false, margin: 0, width: 2, height: 100, background: 'transparent', lineColor: '#000' });
+    const bw = parseFloat(svg.getAttribute('width')) || 100;
+    const bh = parseFloat(svg.getAttribute('height')) || 100;
+    svg.removeAttribute('style');
+    svg.setAttribute('viewBox', '0 0 ' + bw + ' ' + bh);
+    svg.setAttribute('width', '100%');
+    svg.setAttribute('height', '100%');
+    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.setAttribute('shape-rendering', 'crispEdges');
+    return { svg: svg.outerHTML, error: '' };
+  }catch(err){
+    return { svg: '', error: (err && err.message) ? err.message : 'Not a valid barcode number' };
+  }
+}
+function lblElementHtml(el, editing){
+  const eid = editing ? ' data-eid="' + el.id + '"' : '';
+  const cls = 'lbl-el' + (editing && el.id === lblSelId ? ' sel' : '');
+  const pos = 'position:absolute;left:' + (Number(el.x) || 0) + 'mm;top:' + (Number(el.y) || 0) + 'mm;';
+  if(el.type === 'text'){
+    return '<div class="' + cls + '"' + eid + ' style="' + pos + 'width:' + (Number(el.w) || 10) + 'mm;font-size:' + (Number(el.fontSize) || 10) + 'pt;'
+      + 'font-weight:' + (el.bold ? 700 : 400) + ';text-align:' + (el.align || 'left') + ';line-height:1.15;font-family:Arial,Helvetica,sans-serif;'
+      + 'color:#000;white-space:pre-wrap;word-break:break-word;">' + escapeHtml(el.text || '') + '</div>';
+  }
+  const bc = lblBarcodeSvg(el);
+  lblErrCache[el.id] = bc.error;
+  const bw = Number(el.w) || 30, bh = Number(el.h) || 10;
+  const inner = bc.error
+    ? '<div style="width:100%;height:100%;border:1px dashed #dc2626;color:#dc2626;font:8px Arial;display:flex;align-items:center;justify-content:center;text-align:center;box-sizing:border-box;">Invalid barcode</div>'
+    : bc.svg;
+  const num = (el.showNumber && !bc.error && String(el.value).trim())
+    ? '<div style="font-size:' + (Number(el.numberSize) || 8) + 'pt;line-height:1.1;margin-top:0.4mm;text-align:center;white-space:nowrap;font-family:Arial,Helvetica,sans-serif;color:#000;">' + escapeHtml(String(el.value).trim()) + '</div>'
+    : '';
+  return '<div class="' + cls + '"' + eid + ' style="' + pos + 'width:' + bw + 'mm;">'
+    + '<div style="width:' + bw + 'mm;height:' + bh + 'mm;">' + inner + '</div>' + num + '</div>';
+}
+function lblSheetHtml(w, h, elements, editing){
+  return '<div style="position:relative;width:' + w + 'mm;height:' + h + 'mm;background:#fff;overflow:hidden;">'
+    + (elements || []).map(el => lblElementHtml(el, editing)).join('') + '</div>';
+}
+function lblRenderStage(){
+  const wrap = document.getElementById('lblStageWrap');
+  if(!wrap || !lblDraft) return;
+  const pw = lblDraft.width * LBL_PX_PER_MM, ph = lblDraft.height * LBL_PX_PER_MM;
+  const box = document.getElementById('lblStageBox');
+  const avail = Math.max(220, (box.clientWidth || 600) - 40);
+  const fit = Math.min(avail / pw, 460 / ph, 8);
+  lblCurScale = Math.max(0.2, fit * lblZoomMul);
+  wrap.style.width = (pw * lblCurScale) + 'px';
+  wrap.style.height = (ph * lblCurScale) + 'px';
+  wrap.innerHTML = '<div style="width:' + lblDraft.width + 'mm;height:' + lblDraft.height + 'mm;transform:scale(' + lblCurScale + ');transform-origin:0 0;">'
+    + lblSheetHtml(lblDraft.width, lblDraft.height, lblDraft.elements, true) + '</div>';
+  lblDraft.elements.forEach(el => {
+    if(el.type !== 'barcode') return;
+    const w = document.getElementById('lblWarn-' + el.id);
+    if(w) w.textContent = lblErrCache[el.id] || '';
+  });
+}
+window.addEventListener('resize', function(){
+  const v = document.getElementById('view-label-editor');
+  if(v && v.classList.contains('active')) lblRenderStage();
+});
+
+/* ---------- dragging items on the preview ---------- */
+document.getElementById('lblStageWrap').addEventListener('pointerdown', function(e){
+  if(!lblDraft) return;
+  const n = e.target.closest && e.target.closest('[data-eid]');
+  if(!n) return;
+  const id = n.getAttribute('data-eid');
+  const el = lblDraft.elements.find(x => x.id === id);
+  if(!el) return;
+  e.preventDefault();
+  if(lblSelId !== id) lblSelect(id);
+  lblDrag = { id: id, sx: e.clientX, sy: e.clientY, ox: Number(el.x) || 0, oy: Number(el.y) || 0, moved: false };
+  window.addEventListener('pointermove', lblDragMove);
+  window.addEventListener('pointerup', lblDragEnd);
+  window.addEventListener('pointercancel', lblDragEnd);
+});
+function lblDragMove(e){
+  if(!lblDrag || !lblDraft) return;
+  const el = lblDraft.elements.find(x => x.id === lblDrag.id);
+  if(!el) return;
+  const k = LBL_PX_PER_MM * lblCurScale;
+  const nx = Math.max(0, Math.min(lblDraft.width - 1, lblRound1(lblDrag.ox + (e.clientX - lblDrag.sx) / k)));
+  const ny = Math.max(0, Math.min(lblDraft.height - 1, lblRound1(lblDrag.oy + (e.clientY - lblDrag.sy) / k)));
+  if(nx === el.x && ny === el.y) return;
+  el.x = nx; el.y = ny;
+  lblDrag.moved = true;
+  lblDraft.dirty = true;
+  const node = document.querySelector('#lblStageWrap [data-eid="' + el.id + '"]');
+  if(node){ node.style.left = nx + 'mm'; node.style.top = ny + 'mm'; }
+  const ix = document.querySelector('#lblCards [data-lbl-eid="' + el.id + '"][data-lbl-prop="x"]');
+  const iy = document.querySelector('#lblCards [data-lbl-eid="' + el.id + '"][data-lbl-prop="y"]');
+  if(ix) ix.value = nx;
+  if(iy) iy.value = ny;
+}
+function lblDragEnd(){
+  lblDrag = null;
+  window.removeEventListener('pointermove', lblDragMove);
+  window.removeEventListener('pointerup', lblDragEnd);
+  window.removeEventListener('pointercancel', lblDragEnd);
+}
+
+/* ---------- save ---------- */
+function lblValidateElements(elements){
+  const errs = [];
+  (elements || []).forEach(el => {
+    if(el.type !== 'barcode') return;
+    const r = lblBarcodeSvg(el);
+    if(r.error) errs.push('Barcode “' + (el.value || '') + '”: ' + r.error);
+  });
+  return errs;
+}
+function lblSaveClick(){
+  if(!lblDraft) return;
+  if(!lblDraft.elements.length){ toast('Add some text or a barcode first'); return; }
+  const errs = lblValidateElements(lblDraft.elements);
+  if(errs.length){ toast(errs[0]); return; }
+  document.getElementById('lblSaveName').value = lblDraft.name || '';
+  document.getElementById('lblSaveErr').textContent = '';
+  const asNewRow = document.getElementById('lblSaveAsNewRow');
+  asNewRow.style.display = lblDraft.id ? 'flex' : 'none';
+  document.getElementById('lblSaveAsNew').checked = false;
+  openModal('modalLabelSave');
+  setTimeout(() => { const i = document.getElementById('lblSaveName'); i.focus(); i.select(); }, 50);
+}
+async function lblConfirmSave(){
+  if(!lblDraft) return;
+  const errEl = document.getElementById('lblSaveErr');
+  const btn = document.getElementById('lblSaveBtn');
+  const name = document.getElementById('lblSaveName').value.trim();
+  errEl.textContent = '';
+  if(!name){ errEl.textContent = 'Enter a name for this label.'; return; }
+  const asNew = !lblDraft.id || document.getElementById('lblSaveAsNew').checked;
+  const body = { name: name, width_mm: lblDraft.width, height_mm: lblDraft.height, config: { elements: lblDraft.elements } };
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try{
+    if(asNew) await apiPost('labels', body);
+    else await apiPut('labels/' + lblDraft.id, body);
+    closeModal('modalLabelSave');
+    lblDraft = null;
+    toast('Label saved');
+    openLabelPrinter();
+  }catch(e){
+    if(e && e.silent) return;
+    errEl.textContent = (e.body && e.body.error) || e.message || 'Could not save the label.';
+  }finally{
+    btn.disabled = false; btn.textContent = 'Save';
+  }
+}
+
+/* ---------- print ---------- */
+function lblPrintSaved(id){
+  const l = lblSaved.find(x => x.label_id === id);
+  if(!l) return;
+  lblOpenPrint({ name: l.name, width: l.width_mm, height: l.height_mm, elements: l.elements });
+}
+function lblPrintDraft(){
+  if(!lblDraft) return;
+  if(!lblDraft.elements.length){ toast('Add some text or a barcode first'); return; }
+  lblOpenPrint({ name: lblDraft.name || 'Label', width: lblDraft.width, height: lblDraft.height, elements: lblDraft.elements });
+}
+function lblOpenPrint(target){
+  const errs = lblValidateElements(target.elements);
+  if(errs.length){ toast(errs[0]); return; }
+  lblPrintTarget = target;
+  document.getElementById('lblPrintTitle').textContent = 'Print: ' + target.name;
+  document.getElementById('lblPrintSub').textContent = target.width + ' × ' + target.height + ' mm — how many copies?';
+  document.getElementById('lblCopies').value = 1;
+  openModal('modalLabelPrint');
+  setTimeout(() => { const i = document.getElementById('lblCopies'); i.focus(); i.select(); }, 50);
+}
+function lblDoPrint(){
+  const t = lblPrintTarget;
+  if(!t) return;
+  let copies = parseInt(document.getElementById('lblCopies').value, 10);
+  if(!(copies >= 1)) copies = 1;
+  if(copies > 500) copies = 500;
+  const one = lblSheetHtml(t.width, t.height, t.elements, false);
+  let pages = '';
+  for(let i = 0; i < copies; i++) pages += '<div class="pg">' + one + '</div>';
+  const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + escapeHtml(t.name) + '</title><style>'
+    + '@page{size:' + t.width + 'mm ' + t.height + 'mm;margin:0;}'
+    + 'html,body{margin:0;padding:0;background:#fff;}'
+    + '.pg{width:' + t.width + 'mm;height:' + t.height + 'mm;overflow:hidden;page-break-after:always;break-after:page;}'
+    + '.pg:last-child{page-break-after:auto;break-after:auto;}'
+    + '</style></head><body>' + pages + '</body></html>';
+  closeModal('modalLabelPrint');
+  const old = document.getElementById('lblPrintFrame');
+  if(old) old.remove();
+  const f = document.createElement('iframe');
+  f.id = 'lblPrintFrame';
+  f.setAttribute('aria-hidden', 'true');
+  f.style.cssText = 'position:fixed;left:-10000px;top:0;width:' + t.width + 'mm;height:' + t.height + 'mm;border:0;';
+  f.onload = function(){
+    try{ f.contentWindow.focus(); f.contentWindow.print(); }
+    catch(e){ toast('Could not open the print window.'); }
+    setTimeout(() => { if(f.parentNode) f.remove(); }, 60000);
+  };
+  f.srcdoc = html;
+  document.body.appendChild(f);
 }
 
 /* close modals on backdrop click */
