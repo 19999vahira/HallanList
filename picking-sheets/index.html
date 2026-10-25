@@ -1436,8 +1436,7 @@
     <div class="modal" style="width:820px;max-width:96vw;">
       <h3 id="shPhotosTitle">Photos</h3>
       <div class="odcount" style="margin:0 0 10px;line-height:1.5;">
-        The pictures already on the website (WordPress) are copied in here automatically: the <strong>1st</strong> becomes <strong>FRONT</strong> (this is the product picture) and the <strong>2nd</strong> becomes <strong>BACK</strong> (ingredients, allergens, nutrition are read from it). <strong>Check both:</strong> use <em>Use as FRONT / Use as BACK</em> if they are the wrong way round, and <em>Delete</em> any picture you do not like, then add your own with <em>Take photo</em> (clear, straight-on, fill the frame, no glare, small print readable). When the picture is tidied, prices, expiry dates and website watermarks are removed automatically and every word is checked.
-      </div>
+        Press <strong>Pull from website</strong> to copy this product's pictures from the website (WordPress) into this window: the <strong>1st</strong> becomes <strong>FRONT</strong> (this is the product picture) and the <strong>2nd</strong> becomes <strong>BACK</strong> (ingredients, allergens, nutrition are read from it). Nothing is pulled until you press it. <strong>Check both:</strong> use <em>Use as FRONT / Use as BACK</em> if they are the wrong way round, <em>Delete</em> any picture you do not like, or add your own with <em>Take photo</em> (clear, straight-on, fill the frame, no glare, small print readable). When the picture is tidied, prices, expiry dates and website watermarks are removed and every word is checked.</div>
       <div class="shbar">
         <select id="shPhotoRoleNext" class="historysearch" style="min-width:210px;" title="What the next photo shows">
           <option value="auto">Next photo: automatic (1st = front, then back)</option>
@@ -1449,7 +1448,7 @@
         </select>
         <button class="btn-amber" type="button" onclick="document.getElementById('shPhotoCam').click()">&#128247; Take photo</button>
         <button class="btn-ghost" type="button" onclick="document.getElementById('shPhotoPick').click()">Choose from gallery</button>
-        <button class="btn-ghost" type="button" id="shPhotoImportBtn" onclick="importShopifyWebsitePhotos()" title="Copy this product's front / back pictures from the website again">&#8635; Import from website</button>
+        <button class="btn-ghost" type="button" id="shPhotoImportBtn" onclick="importShopifyWebsitePhotos()" title="Copy this product's front and back pictures from the website into the portal">&#11015; Pull from website</button>
         <input type="file" id="shPhotoCam" accept="image/*" capture="environment" style="display:none;" onchange="onShopifyPhotoFiles(this)">
         <input type="file" id="shPhotoPick" accept="image/*" multiple style="display:none;" onchange="onShopifyPhotoFiles(this)">
       </div>
@@ -9304,7 +9303,7 @@ async function shopifyRun(ids, send){
       // 1) generate (skipped when already done — no cost). Needs the photos first.
       if(!it.content_ready){
         if(!it.photo_count){
-          it.msg = { type:'err', text:'No photos yet — press the camera button: the website pictures are copied in automatically (or press Import from website), or photograph the front and back of the pack' };
+          it.msg = { type:'err', text:'No photos yet — press the camera button: press Pull from website to copy its pictures from the website, or photograph the front and back of the pack' };
           failed++;
           renderShopifyList();
           continue;
@@ -9450,7 +9449,7 @@ async function loadShopifyPhotos(){
     const d = await apiGet('stock/shopify/photos/' + id + '/');
     if(shopifyData.photoId !== id) return;
     renderShopifyPhotos(d.photos || [], d.import || null);
-    // the website import is done by the sync task within about a minute: keep looking until it has answered
+    // the pull is done by the sync task within about a minute: keep looking until it has answered
     clearTimeout(shopifyData.photoPollTimer);
     if(d.import && d.import.status === 'PENDING' && (shopifyData.photoPollN || 0) < 30){
       shopifyData.photoPollN = (shopifyData.photoPollN || 0) + 1;
@@ -9468,12 +9467,12 @@ function renderShopifyPhotos(photos, imp){
   const box = document.getElementById('shPhotosBody');
   let impNote = '';
   if(imp){
-    if(imp.status === 'PENDING') impNote = '<div class="shmsg warn">Copying the pictures from the website… this takes about a minute (the sync task runs every minute).</div>';
-    else if(imp.status === 'ERROR') impNote = '<div class="shmsg err">Website import failed: ' + escapeHtml(imp.message || 'unknown error') + '</div>';
-    else if(imp.message) impNote = '<div class="odcount" style="margin:8px 0 0;">Website import: ' + escapeHtml(imp.message) + '</div>';
+    if(imp.status === 'PENDING') impNote = '<div class="shmsg warn">Pulling the pictures from the website… this takes about a minute (the sync task runs every minute).</div>';
+    else if(imp.status === 'ERROR') impNote = '<div class="shmsg err">Pull from website failed: ' + escapeHtml(imp.message || 'unknown error') + '</div>';
+    else if(imp.message) impNote = '<div class="odcount" style="margin:8px 0 0;">Pull from website: ' + escapeHtml(imp.message) + '</div>';
   }
   if(!photos.length){
-    box.innerHTML = impNote + '<div class="empty-hint">No photos yet — they are copied from the website automatically (press <em>Import from website</em> to do it now), or press Take photo.</div>';
+    box.innerHTML = impNote + '<div class="empty-hint">No photos yet — press <em>Pull from website</em> to copy the pictures of this product, or press Take photo.</div>';
     return;
   }
   const roles = [['front','Front'],['back','Back / ingredients'],['nutrition','Nutrition panel'],['side','Side'],['other','Other']];
@@ -9506,13 +9505,13 @@ async function importShopifyWebsitePhotos(){
   status.style.color = '';
   try{
     await apiPost('stock/shopify/photos/' + id + '/import-website/', {});
-    status.textContent = 'Asked for the website pictures — they appear here within about a minute. Pictures you already have (or a front / back you already set) are left as they are.';
+    status.textContent = 'Added to the pull list — the pictures appear here within about a minute. Pictures you already have (or a front / back you already set) are left as they are.';
     shopifyData.photoPollN = 0;
     await loadShopifyPhotos();
   }catch(e){
     console.error(e);
     status.style.color = 'var(--danger)';
-    status.textContent = 'Could not ask for the website pictures: ' + e.message;
+    status.textContent = 'Could not add this product to the pull list: ' + e.message;
   }
 }
 async function onShopifyPhotoFiles(input){
@@ -9551,7 +9550,7 @@ async function setShopifyPhotoRole(photoId, role){
 }
 async function deleteShopifyPhoto(photoId, role){
   const what = role === 'front' ? 'FRONT picture (the product picture)' : role === 'back' ? 'BACK picture' : 'photo';
-  if(!confirm('Delete this ' + what + '? It will not be copied back from the website unless you press Import from website.')) return;
+  if(!confirm('Delete this ' + what + '? It will not come back unless you press Pull from website.')) return;
   try{
     await apiDelete('stock/shopify/photos/' + shopifyData.photoId + '/' + photoId + '/');
     await loadShopifyPhotos();
@@ -9644,7 +9643,8 @@ function renderShopifyContentForm(c){
     + box(c.front_photo_data_url, 'Your front photo', src === 'original', 'original')
     + box(c.edited_data_url, 'Tidied-up picture', src === 'edited', 'edited')
     + '</div>'
-    + '<div class="odcount" style="margin-top:6px;max-width:440px;">The tidied picture is checked automatically (no price, no date, no watermark, every word readable). Still compare it with the real pack — the artwork, colours and every word must match. If anything is off, use your own photo or tidy it again (each tidy-up makes one new paid picture). A picture that failed the check is not sent to the website until you press <em>Use this one</em> or <em>Save changes</em>.</div>';
+    + (c.image_model ? '<div class="odcount" style="margin-top:6px;max-width:440px;">Tidied picture made by: <strong>' + escapeHtml(({ 'gemini-3-pro-image':'Nano Banana Pro (gemini-3-pro-image)', 'gemini-nano-banana-2.1':'Nano Banana 2.1 (gemini-nano-banana-2.1)' })[c.image_model] || c.image_model) + '</strong></div>' : '')
+    + '<div class="odcount" style="margin-top:6px;max-width:440px;">The tidied picture is checked automatically (no price, no date, no watermark, every word readable). Still compare it with the real pack — the artwork, colours and every word must match. If anything is off, use your own photo or tidy it again (each tidy-up makes one new paid picture). The picture is edited at most twice; if the check still found a problem it is listed in the yellow note at the top and the best picture is used anyway, so compare it with your photo. The Hallan logo is added faintly over the middle.</div>';
   const nutri = SH_NUTRI_FIELDS.map(f => '<div><label>' + f[1] + '</label><input type="text" id="shcN_' + f[0] + '" value="' + escapeHtml(n[f[0]] || '') + '"></div>').join('');
   document.getElementById('shContentBody').innerHTML = warn
     + '<div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start;">'
