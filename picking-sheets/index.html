@@ -1257,7 +1257,7 @@
     <div class="hero">
       <div class="eyebrow">Labels</div>
       <h2 id="lblEditorTitle">New label</h2>
-      <p>Set the size, add text and barcodes, and size each one how you like. Drag an item on the preview to move it, and drag the blue squares on the selected item to resize it. The preview stays in view while you edit.</p>
+      <p>Set the size, add text and barcodes, and size each one how you like. Drag an item on the preview to move it, and drag the blue squares on the selected item to resize it. To change text, click the selected text block (or double-click it) and type directly on the label; click outside, or press Ctrl+Enter, to finish, or Esc to undo. The preview stays in view while you edit.</p>
     </div>
     <div class="lbl-layout">
       <div>
@@ -20876,6 +20876,8 @@ let lblZoomMul = 1;         // preview zoom multiplier (on top of auto-fit)
 let lblCurScale = 1;        // actual preview scale in use (for dragging)
 let lblPrintTarget = null;  // {name,width,height,elements} waiting in the print modal
 let lblDrag = null;
+let lblInlineId = null;     // id of the text element being edited directly on the label
+let lblInlineOrig = '';     // its text when editing started (for Escape)
 let lblListFilter = '';
 let lblErrCache = {};       // element id -> barcode error text
 
@@ -21173,6 +21175,7 @@ function lblSheetHtml(w, h, elements, editing){
 function lblRenderStage(){
   const wrap = document.getElementById('lblStageWrap');
   if(!wrap || !lblDraft) return;
+  if(lblInlineId) lblEndInline(true, true); // keep any typed text before the preview is redrawn
   const pw = lblDraft.width * LBL_PX_PER_MM, ph = lblDraft.height * LBL_PX_PER_MM;
   const box = document.getElementById('lblStageBox');
   const avail = Math.max(220, (box.clientWidth || 600) - 40);
@@ -21198,13 +21201,117 @@ window.addEventListener('resize', function(){
 });
 
 /* ---------- dragging items on the preview ---------- */
+/* ---------- editing text directly on the label ---------- */
+function lblInlineNode(){
+  return lblInlineId ? document.querySelector('#lblStageWrap [data-eid="' + lblInlineId + '"]') : null;
+}
+function lblStartInline(id){
+  if(!lblDraft) return;
+  const el = lblDraft.elements.find(x => x.id === id);
+  if(!el || el.type !== 'text') return;
+  if(lblInlineId === id) return;
+  if(lblInlineId) lblEndInline(true);
+  if(lblSelId !== id) lblSelect(id);
+  const node = document.querySelector('#lblStageWrap [data-eid="' + id + '"]');
+  if(!node) return;
+  lblInlineId = id;
+  lblInlineOrig = el.text || '';
+  node.innerHTML = '';                      // drop the resize handles while typing
+  node.textContent = lblInlineOrig;
+  node.setAttribute('data-inline', '1');
+  try{ node.contentEditable = 'plaintext-only'; }catch(err){}
+  if(node.contentEditable !== 'plaintext-only') node.contentEditable = 'true';
+  node.spellcheck = false;
+  node.style.cursor = 'text';
+  node.style.userSelect = 'text';
+  node.style.webkitUserSelect = 'text';
+  node.style.outline = '2px solid #2563eb';
+  node.style.background = 'rgba(37,99,235,.06)';
+  node.addEventListener('input', lblInlineInput);
+  node.addEventListener('keydown', lblInlineKey);
+  node.addEventListener('blur', lblInlineBlur);
+  node.addEventListener('paste', lblInlinePaste);
+  node.focus();
+  try{
+    const r = document.createRange();
+    r.selectNodeContents(node);
+    const s = window.getSelection();
+    s.removeAllRanges(); s.addRange(r);   // select all so typing replaces the text
+  }catch(err){}
+}
+function lblInlineRead(node){
+  let t = (node.innerText != null ? node.innerText : node.textContent) || '';
+  t = t.replace(/\r\n?/g, '\n');
+  if(t.endsWith('\n')) t = t.slice(0, -1); // browsers add one trailing newline in editable blocks
+  return t;
+}
+function lblInlineInput(e){
+  const el = lblDraft && lblDraft.elements.find(x => x.id === lblInlineId);
+  if(!el) return;
+  el.text = lblInlineRead(e.currentTarget);
+  lblDraft.dirty = true;
+  const ta = document.querySelector('#lblCards textarea[data-lbl-eid="' + el.id + '"]');
+  if(ta) ta.value = el.text;
+}
+function lblInlinePaste(e){
+  // paste as plain text only
+  e.preventDefault();
+  const txt = (e.clipboardData || window.clipboardData).getData('text');
+  document.execCommand('insertText', false, txt.replace(/\r\n?/g, '\n'));
+}
+function lblInlineKey(e){
+  e.stopPropagation();
+  if(e.key === 'Escape'){ e.preventDefault(); lblEndInline(false); }
+  else if(e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); lblEndInline(true); }
+}
+function lblInlineBlur(){
+  if(lblInlineId) lblEndInline(true);
+}
+// commit=true keeps the typed text, false restores the original. noRender=true skips
+// the redraw (used when a redraw is already about to happen).
+function lblEndInline(commit, noRender){
+  const id = lblInlineId;
+  if(!id) return;
+  const node = lblInlineNode();
+  lblInlineId = null;                        // clear first so blur/redraw can't re-enter
+  const el = lblDraft && lblDraft.elements.find(x => x.id === id);
+  if(node){
+    node.removeEventListener('input', lblInlineInput);
+    node.removeEventListener('keydown', lblInlineKey);
+    node.removeEventListener('blur', lblInlineBlur);
+    node.removeEventListener('paste', lblInlinePaste);
+  }
+  if(el){
+    if(commit && node){ const t = lblInlineRead(node); if(t !== el.text){ el.text = t; lblDraft.dirty = true; } }
+    if(!commit){ el.text = lblInlineOrig; }
+    const ta = document.querySelector('#lblCards textarea[data-lbl-eid="' + id + '"]');
+    if(ta) ta.value = el.text;
+  }
+  const sel = window.getSelection && window.getSelection();
+  if(sel && sel.removeAllRanges) sel.removeAllRanges();
+  if(!noRender) lblRenderStage();
+}
+document.getElementById('lblStageWrap').addEventListener('dblclick', function(e){
+  if(!lblDraft || lblInlineId) return;
+  if(e.target.closest && e.target.closest('[data-handle]')) return;
+  const n = e.target.closest && e.target.closest('[data-eid]');
+  if(n) lblStartInline(n.getAttribute('data-eid'));
+});
+
 document.getElementById('lblStageWrap').addEventListener('pointerdown', function(e){
   if(!lblDraft) return;
-  const n = e.target.closest && e.target.closest('[data-eid]');
+  let n = e.target.closest && e.target.closest('[data-eid]');
+  if(lblInlineId){
+    // clicking inside the box being edited just moves the caret; anywhere else finishes the edit
+    if(n && n.getAttribute('data-eid') === lblInlineId) return;
+    lblEndInline(true);
+    if(n) n = document.querySelector('#lblStageWrap [data-eid="' + n.getAttribute('data-eid') + '"]') || n; // preview was redrawn
+  }
   if(!n) return;
   const id = n.getAttribute('data-eid');
   const el = lblDraft.elements.find(x => x.id === id);
   if(!el) return;
+  const wasSel = (lblSelId === id);
   e.preventDefault();
   const handle = e.target.getAttribute && e.target.getAttribute('data-handle');
   if(handle){
@@ -21213,7 +21320,7 @@ document.getElementById('lblStageWrap').addEventListener('pointerdown', function
       ohmm: Math.max(1, n.offsetHeight / LBL_PX_PER_MM), moved: false };
   } else {
     if(lblSelId !== id) lblSelect(id);
-    lblDrag = { mode: 'move', id: id, sx: e.clientX, sy: e.clientY, ox: Number(el.x) || 0, oy: Number(el.y) || 0, moved: false };
+    lblDrag = { mode: 'move', id: id, sx: e.clientX, sy: e.clientY, ox: Number(el.x) || 0, oy: Number(el.y) || 0, moved: false, wasSel: wasSel };
   }
   window.addEventListener('pointermove', lblDragMove);
   window.addEventListener('pointerup', lblDragEnd);
@@ -21257,7 +21364,13 @@ function lblDragMove(e){
   if(iy) iy.value = ny;
 }
 function lblDragEnd(){
+  const d = lblDrag;
   lblDrag = null;
+  // a plain click (no drag) on a text block that was already selected starts typing on the label
+  if(d && d.mode === 'move' && !d.moved && d.wasSel){
+    const el = lblDraft && lblDraft.elements.find(x => x.id === d.id);
+    if(el && el.type === 'text') setTimeout(function(){ lblStartInline(d.id); }, 0);
+  }
   window.removeEventListener('pointermove', lblDragMove);
   window.removeEventListener('pointerup', lblDragEnd);
   window.removeEventListener('pointercancel', lblDragEnd);
