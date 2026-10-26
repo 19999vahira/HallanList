@@ -6053,7 +6053,10 @@ function downloadWholesaleCSV(testOnly){
   // as a real run (same Trade 3 price level, same Include VAT handling in
   // vector_price_import.ps1) since the whole point is checking that exact
   // path with one row.
-  apiPost('vector-import/queue', { file_name: fileName, csv_content: buildCSVText(headers, csvRows), type: 'WHOLESALE' })
+  // Veg downloads are queued under their own name so Vector's import window
+  // shows which list it is importing (the browser download keeps the fixed name).
+  const queueFileName = wholesaleFlyerMode === 'veg' ? fileName.replace('wholesale-price-update', 'wholesale-veg-price-update') : fileName;
+  apiPost('vector-import/queue', { file_name: queueFileName, csv_content: buildCSVText(headers, csvRows), type: 'WHOLESALE' })
     .then(res => { if(res && res.queue_id) trackVectorImportStatus(res.queue_id, 'WHOLESALE'); })
     .catch(e => console.error('Could not queue wholesale CSV for remote import', e));
 }
