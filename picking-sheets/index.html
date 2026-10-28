@@ -1257,7 +1257,7 @@
     <div class="hero">
       <div class="eyebrow">Labels</div>
       <h2 id="lblEditorTitle">New label</h2>
-      <p>Set the size, add text and barcodes, and size each one how you like. Drag an item on the preview to move it, and drag the blue squares on the selected item to resize it. To change text, click the selected text block (or double-click it) and type directly on the label; click outside, or press Ctrl+Enter, to finish, or Esc to undo. The preview stays in view while you edit.</p>
+      <p>Press ＋ Add product to fill the label from a product, or set the size and add text and barcodes yourself, and size each one how you like. Drag an item on the preview to move it, and drag the blue squares on the selected item to resize it. To change text, click the selected text block (or double-click it) and type directly on the label; click outside, or press Ctrl+Enter, to finish, or Esc to undo. The preview stays in view while you edit.</p>
     </div>
     <div class="lbl-layout">
       <div>
@@ -1274,6 +1274,7 @@
         <div class="lbl-panel">
           <h4>Items on the label</h4>
           <div class="lbl-addrow" style="margin-bottom:12px;">
+            <button class="btn-amber" onclick="lblAddProduct()">＋ Add product</button>
             <button class="btn-ghost" onclick="lblAddEl('text')">＋ Text</button>
             <button class="btn-ghost" onclick="lblAddEl('barcode')">＋ Barcode</button>
           </div>
@@ -4558,7 +4559,7 @@ let currentMakingItems = [];
 let currentPickingList = null;
 let currentPickingItems = [];
 let scannerListEl = null;
-let scannerTarget = 'retail'; // 'retail' (Making List), 'warehouse' (Warehouse category), or 'location' (Row products)
+let scannerTarget = 'retail'; // 'retail' (Making List), 'warehouse' (Warehouse category), 'location' (Row products), or 'label' (Label Printer: Add product)
 let historyLists = [];
 let wholesaleRows = [];
 let wholesaleAdjust = {}; // keyed by stock_name -> { margin, price } — recomputed fresh from synced data on every load, UNLESS a row is locked (see below)
@@ -19923,6 +19924,8 @@ function openScanner(target){
     sub.textContent = 'Adding to "' + currentMakingList.list_name + '" — scan now, it looks up automatically';
   } else if(scannerTarget === 'location' && currentRow){
     sub.textContent = 'Adding to Row ' + currentRow.row_name + ' — scan now, it looks up automatically';
+  } else if(scannerTarget === 'label'){
+    sub.textContent = 'Scan the barcode (or search by name) to fill the label with the product name, price and barcode';
   } else {
     sub.textContent = 'Scan now — it looks up automatically';
   }
@@ -20032,7 +20035,7 @@ function renderScanResultCard(stock, scannedCode){
   card.className = 'scanresult-card';
   let qty = 1;
   const barcodeText = stock.barcode || scannedCode || '—';
-  const showStepper = scannerTarget !== 'location';
+  const showStepper = scannerTarget !== 'location' && scannerTarget !== 'label';
   card.innerHTML = `
     <div class="srname">${escapeHtml(stock.name)}</div>
     <div class="srbarcode">Barcode: ${escapeHtml(barcodeText)}</div>
@@ -20045,7 +20048,7 @@ function renderScanResultCard(stock, scannedCode){
         <button class="ibplus" type="button">+</button>
       </div>` : ''}
       <button class="btn-ghost srskip">Skip</button>
-      <button class="btn-amber">${scannerTarget === 'location' ? 'Add to row' : 'Add to list'}</button>
+      <button class="btn-amber">${scannerTarget === 'location' ? 'Add to row' : (scannerTarget === 'label' ? 'Use on label' : 'Add to list')}</button>
     </div>
   `;
   if(showStepper){
@@ -20060,6 +20063,7 @@ function renderScanResultCard(stock, scannedCode){
   card.querySelector('.btn-amber').onclick = () => {
     if(scannerTarget === 'warehouse'){ addScannedItemToWarehouseCategory(stock, qty); }
     else if(scannerTarget === 'location'){ addScannedItemToRow(stock); }
+    else if(scannerTarget === 'label'){ closeScanner(); lblApplyProduct(stock); return; }
     else { addScannedItemToMakingList(stock, qty); }
     card.remove();
     document.getElementById('manualBarcodeInput').focus();
@@ -20950,8 +20954,64 @@ async function lblDeleteSaved(id){
 
 /* ---------- opening the editor ---------- */
 function lblNewLabel(){
-  lblDraft = { id: null, name: '', width: 50, height: 30, elements: [lblNewText(), lblNewBarcode()], dirty: false };
+  lblDraft = { id: null, name: '', width: 50, height: 30, elements: lblProductElements(50, 30, 'Product name', '£0.00', '5012345678900'), dirty: false };
   lblOpenEditor();
+}
+
+/* ---------- Add product: name (Text 1) + price (Text 2) + barcode ---------- */
+function lblClamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
+// EAN-13 / EAN-8 only when the check digit is right (otherwise the barcode library refuses to draw it); anything else is Code 128.
+function lblPickFormat(v){
+  const s = String(v || '').trim();
+  if(/^\d{13}$/.test(s) || /^\d{8}$/.test(s)){
+    const d = s.split('').map(Number), chk = d.pop();
+    let sum = 0;
+    d.reverse().forEach((n, i) => { sum += n * ((i % 2 === 0) ? 3 : 1); });
+    if((10 - (sum % 10)) % 10 === chk) return s.length === 13 ? 'EAN13' : 'EAN8';
+  }
+  return 'CODE128';
+}
+// The three items for a product label, laid out to fit the label size: Text 1 = name, Text 2 = price, then the barcode.
+function lblProductElements(W, H, name, price, barcode){
+  const m = 2;
+  const nameEl = { id: lblUid(), type: 'text', text: name, x: m, y: m, w: lblRound1(Math.max(5, W - 2 * m)),
+    fontSize: lblRound1(lblClamp(H * 0.30, 6, 14)), bold: true, align: 'center' };
+  const priceEl = { id: lblUid(), type: 'text', text: price, x: m, y: lblRound1(m + H * 0.27), w: lblRound1(Math.max(5, W - 2 * m)),
+    fontSize: lblRound1(lblClamp(H * 0.46, 8, 28)), bold: true, align: 'center' };
+  const bcEl = { id: lblUid(), type: 'barcode', value: barcode, format: lblPickFormat(barcode),
+    x: lblRound1(W * 0.1), y: lblRound1(H * 0.55), w: lblRound1(Math.max(10, W * 0.8)), h: lblRound1(Math.max(4, H * 0.30)),
+    showNumber: true, numberSize: lblRound1(lblClamp(H * 0.22, 5, 10)) };
+  return [nameEl, priceEl, bcEl];
+}
+function lblAddProduct(){
+  if(!lblDraft) return;
+  openScanner('label');
+}
+async function lblApplyProduct(stock){
+  if(!lblDraft || !stock) return;
+  if(lblDraft.dirty && lblDraft.elements.length && !confirm('Replace the items on this label with the product name, price and barcode?')) return;
+  toast('Getting ' + (stock.name || 'product') + '…');
+  let info = null;
+  try{
+    if(stock.stockid) info = await apiGet('stock/' + stock.stockid + '/label-info/');
+  }catch(e){ if(!(e && e.silent)) console.error(e); }
+  if(!lblDraft) return;
+  const name = String((info && info.name) || stock.name || '').trim() || 'Product name';
+  const codes = (info && info.barcodes) || [];
+  // use the barcode that was scanned if there is one, otherwise prefer a 13-digit, then an 8-digit, then any
+  const barcode = String(stock.barcode || '').trim()
+    || codes.find(c => /^\d{13}$/.test(c)) || codes.find(c => /^\d{8}$/.test(c)) || codes[0] || '';
+  const priceNum = info && info.retail_price !== null && info.retail_price !== undefined ? Number(info.retail_price) : NaN;
+  const price = isFinite(priceNum) ? '£' + priceNum.toFixed(2) : 'Price not set';
+  lblDraft.elements = lblProductElements(lblDraft.width, lblDraft.height, name, price, barcode);
+  if(!lblDraft.id) lblDraft.name = name;
+  lblDraft.dirty = true;
+  lblSelId = lblDraft.elements[0].id;
+  lblRenderCards();
+  lblRenderStage();
+  if(!isFinite(priceNum)) toast('No retail price found for this product — type it on the label');
+  else if(!barcode) toast('This product has no barcode on file — type one on the label');
+  else toast('Label filled for ' + name);
 }
 function lblEditSaved(id){
   const l = lblSaved.find(x => x.label_id === id);
