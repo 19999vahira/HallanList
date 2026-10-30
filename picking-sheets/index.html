@@ -1055,6 +1055,32 @@
   #hlLogo.editing .hl-hint{display:block;position:absolute;bottom:calc(100% + 14px);right:0;white-space:nowrap;
     background:var(--header-bg);color:var(--header-text);font:500 11px 'Inter',sans-serif;padding:5px 9px;border-radius:6px;}
   @media print{ #hlLogo{display:none !important;} }
+
+  /* ---- standard labels / print queue ---- */
+  .lbl-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+  .lbl-chips button{padding:5px 11px;font-size:12px;}
+  .lbl-stepper{display:flex;gap:8px;align-items:center;margin-bottom:10px;}
+  .lbl-stepper input{flex:1;min-width:0;text-align:center;}
+  .lbl-stepper button{padding:9px 16px;font-size:18px;line-height:1;}
+  .lbl-choice-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin:12px 0;max-height:58vh;overflow:auto;padding:2px;}
+  .lbl-choice{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px;cursor:pointer;display:flex;flex-direction:column;gap:6px;align-items:center;justify-content:center;text-align:center;}
+  .lbl-choice:hover{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);}
+  .lbl-choice b{font-size:13px;word-break:break-word;}
+  .lbl-choice small{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-dim);}
+  .lbl-std .lbl-el{outline:1px dashed #cbd5e1;}
+  .lbl-qtop{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+  .lbl-qgroup{border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden;background:#fff;}
+  .lbl-qhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 12px;background:var(--panel2);}
+  .lbl-qhead b{font-size:14px;}
+  .lbl-qhead span{font-size:12px;color:var(--text-dim);flex:1;}
+  .lbl-qrow{display:grid;grid-template-columns:auto 1fr auto auto;gap:12px;align-items:center;padding:10px 12px;border-top:1px solid var(--line);}
+  .lbl-qrow.done{opacity:.55;}
+  .lbl-qrow .lbl-thumbbox{min-height:0;padding:4px;}
+  .lbl-qsum{font-size:13px;word-break:break-word;}
+  .lbl-qsum small{display:block;font-size:11px;color:var(--text-dim);margin-top:2px;}
+  .lbl-qrow input[type=number]{width:74px;padding:7px 8px;border:1px solid var(--line);border-radius:6px;font-size:14px;background:#fff;color:var(--text);}
+  .lbl-qdone{display:inline-block;font-size:11px;color:#16a34a;font-weight:600;margin-left:6px;}
+  @media(max-width:600px){.lbl-qrow{grid-template-columns:auto 1fr;}}
 </style>
 </head>
 <body>
@@ -1259,8 +1285,70 @@
     <div class="actionbar" style="gap:12px;flex-wrap:wrap;">
       <input type="text" class="lbl-search" id="lblSearch" placeholder="Search saved labels…" oninput="lblListFilter=this.value;lblRenderList()">
       <button class="btn-amber" onclick="lblNewLabel()">＋ New label</button>
+      <button class="btn-ghost" onclick="openLabelStandards()">📐 Standard labels</button>
+      <button class="btn-ghost" onclick="openLabelQueue()">🧾 Print queue (<span class="lbl-qcount">0</span>)</button>
     </div>
     <div id="lblList"><div class="empty-hint">Loading…</div></div>
+  </div>
+
+  <!-- LABEL PRINTER: STANDARD LABELS -->
+  <div id="view-label-standards" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openLabelPrinter()">Label Printer</button><span class="sep">/</span>
+      <span class="current">Standard labels</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Labels</div>
+      <h2>Standard labels</h2>
+      <p>A standard label is a ready-made layout: the label size plus the size and position of each text box and barcode. Text boxes set to auto-fit always use the biggest text size that fits. Start a new label from a standard, or add several of them to the print queue.</p>
+    </div>
+    <div class="actionbar" style="gap:12px;flex-wrap:wrap;">
+      <button class="btn-amber" onclick="lblNewStandard()">＋ New standard label</button>
+      <button class="btn-ghost" onclick="openLabelQueue()">🧾 Print queue (<span class="lbl-qcount">0</span>)</button>
+    </div>
+    <div id="lblStdList"><div class="empty-hint">Loading…</div></div>
+  </div>
+
+  <!-- LABEL PRINTER: PRINT QUEUE -->
+  <div id="view-label-queue" class="view">
+    <div class="crumbrow">
+      <button onclick="goHome()">Home</button><span class="sep">/</span>
+      <button onclick="openLabelPrinter()">Label Printer</button><span class="sep">/</span>
+      <span class="current">Print queue</span>
+    </div>
+    <div class="hero">
+      <div class="eyebrow">Labels</div>
+      <h2>Print queue</h2>
+      <p>Pick a standard label, fill in the text and barcode, set how many copies and add it to the queue. Repeat for as many labels as you need, then print them all in one go.</p>
+    </div>
+    <div class="lbl-layout">
+      <div>
+        <div class="lbl-panel">
+          <h4>Add a label to the queue</h4>
+          <div class="lbl-f" style="margin-bottom:10px;"><label>Standard or saved label</label><select id="lblQuickSrc" onchange="lblQuickPick(this.value)"></select></div>
+          <div id="lblQuickFields"></div>
+          <div class="lbl-row"><div class="lbl-f"><label>Copies of this label</label><input type="number" id="lblQuickCopies" min="1" max="500" value="1"></div></div>
+          <div class="lbl-addrow">
+            <button class="btn-ghost" onclick="lblQuickScan()">📷 Scan product</button>
+            <button class="btn-amber" onclick="lblQuickAdd()">＋ Add to queue</button>
+          </div>
+          <div class="lbl-thumbbox" id="lblQuickPreview" style="margin-top:14px;"></div>
+        </div>
+      </div>
+      <div>
+        <div class="lbl-panel">
+          <div class="lbl-qtop">
+            <h4 style="margin:0;">Labels in the queue</h4>
+            <div class="cn-actions">
+              <button class="btn-ghost" onclick="lblQueueClear(true)">Clear printed</button>
+              <button class="btn-ghost" onclick="lblQueueClear(false)">Clear all</button>
+            </div>
+          </div>
+          <div id="lblQueueList"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- LABEL PRINTER: EDITOR -->
@@ -1286,11 +1374,13 @@
           <div class="lbl-f"><label>Common sizes</label>
             <select id="lblPreset" onchange="lblApplyPreset(this.value)"></select>
           </div>
+          <button class="btn-ghost" id="lblRelayoutBtn" style="display:none;margin-top:10px;" onclick="lblRelayout()">↺ Reset layout for this size</button>
         </div>
         <div class="lbl-panel">
           <h4>Items on the label</h4>
+          <p class="ni-hint" id="lblStdHint" style="display:none;margin:0 0 10px;">Standard label: set the label size, then size and place every text box and barcode. Tick “Auto-fit text size to the box” so text always uses the biggest size that fits. Labels started from this standard begin with this layout. Labels already made from it are not changed.</p>
           <div class="lbl-addrow" style="margin-bottom:12px;">
-            <button class="btn-amber" onclick="lblAddProduct()">＋ Add product</button>
+            <button class="btn-amber" id="lblAddProductBtn" onclick="lblAddProduct()">＋ Add product</button>
             <button class="btn-ghost" onclick="lblAddEl('text')">＋ Text</button>
             <button class="btn-ghost" onclick="lblAddEl('barcode')">＋ Barcode</button>
             <button class="btn-ghost" onclick="lblAddLogo()">＋ Logo</button>
@@ -1308,8 +1398,8 @@
           </div>
           <div class="grow"></div>
           <button class="btn-ghost" onclick="lblCancelEditor()">Cancel</button>
-          <button class="btn-ghost" onclick="lblPrintDraft()">🖨️ Print</button>
-          <button class="btn-amber" onclick="lblSaveClick()">💾 Save</button>
+          <button class="btn-ghost" id="lblPrintBtn" onclick="lblPrintDraft()">🖨️ Print</button>
+          <button class="btn-amber" id="lblSaveMainBtn" onclick="lblSaveClick()">💾 Save</button>
         </div>
         <p class="ni-hint" style="margin-top:10px;">Sizes are in millimetres; text size is in points. Preview is to scale. Keep barcodes wide enough to scan (about 25 mm or more for most numbers) and leave a little blank space either side.</p>
       </div>
@@ -4228,8 +4318,8 @@
 <!-- LABEL PRINTER: SAVE MODAL -->
 <div class="modal-backdrop" id="modalLabelSave">
   <div class="modal">
-    <h3>Save label</h3>
-    <p class="modal-sub">Give this label a name so you can find it in your saved labels.</p>
+    <h3 id="lblSaveTitle">Save label</h3>
+    <p class="modal-sub" id="lblSaveSub">Give this label a name so you can find it in your saved labels.</p>
     <input type="text" id="lblSaveName" maxlength="200" placeholder="e.g. Shelf label 50x30" onkeydown="if(event.key==='Enter')lblConfirmSave()">
     <label id="lblSaveAsNewRow" style="display:none;font-size:13px;gap:6px;align-items:center;margin:2px 0 6px;cursor:pointer;">
       <input type="checkbox" id="lblSaveAsNew" style="width:auto;margin:0;"> Save as a new label (keep the original unchanged)
@@ -4242,16 +4332,42 @@
   </div>
 </div>
 
+<!-- LABEL PRINTER: NEW LABEL CHOOSER -->
+<div class="modal-backdrop" id="modalLabelNew">
+  <div class="modal" style="max-width:760px;width:94vw;">
+    <h3>New label</h3>
+    <p class="modal-sub">Use a standard label to start with the size and layout already set, or start with a blank label.</p>
+    <div id="lblNewChoices"></div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalLabelNew');openLabelStandards()">Manage standard labels</button>
+      <button class="btn-ghost" onclick="closeModal('modalLabelNew')">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- LABEL PRINTER: PRINT MODAL -->
 <div class="modal-backdrop" id="modalLabelPrint">
   <div class="modal">
     <h3 id="lblPrintTitle">Print label</h3>
     <p class="modal-sub" id="lblPrintSub">Choose how many copies to print.</p>
-    <input type="number" id="lblCopies" min="1" max="500" value="1" style="width:100%;padding:11px 13px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:16px;box-sizing:border-box;margin-bottom:10px;" onkeydown="if(event.key==='Enter')lblDoPrint()">
-    <p class="ni-hint">In the print window pick your label printer and set margins to None / scale 100%.</p>
+    <div class="lbl-stepper">
+      <button class="btn-ghost" type="button" onclick="lblCopiesStep(-1)" aria-label="One fewer">−</button>
+      <input type="number" id="lblCopies" min="1" max="500" value="1" style="padding:11px 13px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:16px;box-sizing:border-box;" onkeydown="if(event.key==='Enter')lblDoPrint()">
+      <button class="btn-ghost" type="button" onclick="lblCopiesStep(1)" aria-label="One more">＋</button>
+    </div>
+    <div class="lbl-chips">
+      <button class="btn-ghost" type="button" onclick="lblSetCopies(1)">1</button>
+      <button class="btn-ghost" type="button" onclick="lblSetCopies(5)">5</button>
+      <button class="btn-ghost" type="button" onclick="lblSetCopies(10)">10</button>
+      <button class="btn-ghost" type="button" onclick="lblSetCopies(25)">25</button>
+      <button class="btn-ghost" type="button" onclick="lblSetCopies(50)">50</button>
+      <button class="btn-ghost" type="button" onclick="lblSetCopies(100)">100</button>
+    </div>
+    <p class="ni-hint">“Print now” opens the print window straight away. “Add to queue” keeps this label so you can print it together with others.</p>
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalLabelPrint')">Cancel</button>
-      <button class="btn-amber" onclick="lblDoPrint()">Print</button>
+      <button class="btn-ghost" onclick="lblPrintAddToQueue()">🧾 Add to queue</button>
+      <button class="btn-amber" onclick="lblDoPrint()">🖨️ Print now</button>
     </div>
   </div>
 </div>
@@ -20928,6 +21044,7 @@ function lblVisible(elements){ return (elements || []).filter(e => !(e.type === 
 function lblElBox(el){
   const x = Number(el.x) || 0, y = Number(el.y) || 0;
   if(el.type === 'text'){
+    if(el.fit && Number(el.h) > 0) return { x: x, y: y, w: Number(el.w) || 10, h: Number(el.h) };
     const fs = Number(el.fontSize) || 10, w = Number(el.w) || 10;
     const cw = fs * 0.3528 * (el.bold ? 0.62 : 0.55), lh = fs * 0.3528 * 1.15;
     let lines = 0, widest = 0;
@@ -21007,6 +21124,8 @@ function lblLogoCloseHtml(){
 function openLabelPrinter(){
   showView('view-labels');
   lblLoadSaved();
+  lblLoadStandards();
+  lblQueueBadge();
 }
 async function lblLoadSaved(){
   const el = document.getElementById('lblList');
@@ -21020,9 +21139,9 @@ async function lblLoadSaved(){
     el.innerHTML = '<div class="empty-hint">Could not load saved labels.</div>' + errDetailHtml(e);
   }
 }
-function lblThumbHtml(l){
+function lblThumbHtml(l, maxW, maxH){
   const pw = l.width_mm * LBL_PX_PER_MM, ph = l.height_mm * LBL_PX_PER_MM;
-  const s = Math.min(210 / pw, 130 / ph, 3);
+  const s = Math.min((maxW || 210) / pw, (maxH || 130) / ph, 3);
   return '<div class="lbl-thumb" style="width:' + (pw * s).toFixed(1) + 'px;height:' + (ph * s).toFixed(1) + 'px;">'
     + '<div style="width:' + l.width_mm + 'mm;height:' + l.height_mm + 'mm;transform:scale(' + s.toFixed(4) + ');transform-origin:0 0;">'
     + lblSheetHtml(l.width_mm, l.height_mm, l.elements, false) + '</div></div>';
@@ -21063,7 +21182,13 @@ async function lblDeleteSaved(id){
 
 /* ---------- opening the editor ---------- */
 function lblNewLabel(){
-  lblDraft = { id: null, name: '', width: 50, height: 30, elements: lblProductElements(50, 30, 'Product name', '£0.00', '5012345678900'), dirty: false };
+  lblRenderNewChoices();
+  openModal('modalLabelNew');
+  if(!lblStandards.length) lblLoadStandards().then(lblRenderNewChoices);   // in case they have not arrived yet
+}
+function lblNewBlank(){
+  closeModal('modalLabelNew');
+  lblDraft = { kind: 'label', id: null, name: '', width: 50, height: 30, elements: lblProductElements(50, 30, 'Product name', '£0.00', '5012345678900'), dirty: false };
   lblOpenEditor();
 }
 
@@ -21096,17 +21221,16 @@ function lblProductElements(W, H, name, price, barcode){
 }
 function lblAddProduct(){
   if(!lblDraft) return;
+  lblScanMode = 'draft';
   openScanner('label');
 }
-async function lblApplyProduct(stock){
-  if(!lblDraft || !stock) return;
-  if(lblDraft.dirty && lblDraft.elements.length && !confirm('Replace the items on this label with the product name, price and barcode?')) return;
+// Looks the product up and returns what goes on a label: { name, price, barcode, priceNum }.
+async function lblFetchProductInfo(stock){
   toast('Getting ' + (stock.name || 'product') + '…');
   let info = null;
   try{
     if(stock.stockid) info = await apiGet('stock/' + stock.stockid + '/label-info/');
   }catch(e){ if(!(e && e.silent)) console.error(e); }
-  if(!lblDraft) return;
   const name = String((info && info.name) || stock.name || '').trim() || 'Product name';
   const codes = (info && info.barcodes) || [];
   // use the barcode that was scanned if there is one, otherwise prefer a 13-digit, then an 8-digit, then any
@@ -21114,23 +21238,61 @@ async function lblApplyProduct(stock){
     || codes.find(c => /^\d{13}$/.test(c)) || codes.find(c => /^\d{8}$/.test(c)) || codes[0] || '';
   const priceNum = info && info.retail_price !== null && info.retail_price !== undefined ? Number(info.retail_price) : NaN;
   const price = isFinite(priceNum) ? '£' + priceNum.toFixed(2) : 'Price not set';
-  const keepLogo = lblDraft.elements.find(e => e.type === 'logo');
-  lblDraft.elements = lblProductElements(lblDraft.width, lblDraft.height, name, price, barcode);
-  if(keepLogo) lblDraft.elements = lblDraft.elements.filter(e => e.type !== 'logo').concat([keepLogo]); // keep its position / size / removed state
-  if(!lblDraft.id) lblDraft.name = name;
+  return { name: name, price: price, barcode: barcode, priceNum: priceNum };
+}
+// Puts a product into the boxes of a standard-style layout: "Product name" box, "Price" box, first barcode.
+function lblFillSlots(elements, name, price, barcode){
+  const texts = elements.filter(e => e.type === 'text');
+  const anyRole = texts.some(e => e.role === 'name' || e.role === 'price');
+  const nameEl = anyRole ? texts.find(e => e.role === 'name') : texts[0];
+  const priceEl = anyRole ? texts.find(e => e.role === 'price') : texts[1];
+  if(nameEl){ nameEl.text = name; if(nameEl.fit && Number(nameEl.h) > 0) lblFitText(nameEl); }
+  if(priceEl){ priceEl.text = price; if(priceEl.fit && Number(priceEl.h) > 0) lblFitText(priceEl); }
+  const bc = elements.find(e => e.type === 'barcode');
+  if(bc){
+    bc.value = barcode;
+    if(['CODE128', 'EAN13', 'EAN8'].includes(bc.format)) bc.format = lblPickFormat(barcode);
+  }
+}
+async function lblApplyProduct(stock){
+  if(!stock) return;
+  if(lblScanMode === 'quick'){            // scanned from the print queue page
+    lblScanMode = 'draft';
+    const q = await lblFetchProductInfo(stock);
+    if(!lblQuick || !lblQuick.elements) return;
+    lblFillSlots(lblQuick.elements, q.name, q.price, q.barcode);
+    lblQuickRender();
+    if(!isFinite(q.priceNum)) toast('No retail price found for this product — type it in');
+    else if(!q.barcode) toast('This product has no barcode on file — type one in');
+    else toast('Filled for ' + q.name);
+    return;
+  }
+  if(!lblDraft) return;
+  const slotMode = !!lblDraft.standardId || lblDraft.elements.some(e => e.type === 'text' && e.role);
+  if(!slotMode && lblDraft.dirty && lblDraft.elements.length && !confirm('Replace the items on this label with the product name, price and barcode?')) return;
+  const p = await lblFetchProductInfo(stock);
+  if(!lblDraft) return;
+  if(slotMode){
+    lblFillSlots(lblDraft.elements, p.name, p.price, p.barcode);   // keeps the standard layout, boxes re-fit to the new text
+  } else {
+    const keepLogo = lblDraft.elements.find(e => e.type === 'logo');
+    lblDraft.elements = lblProductElements(lblDraft.width, lblDraft.height, p.name, p.price, p.barcode);
+    if(keepLogo) lblDraft.elements = lblDraft.elements.filter(e => e.type !== 'logo').concat([keepLogo]); // keep its position / size / removed state
+  }
+  if(!lblDraft.id) lblDraft.name = p.name;
   lblDraft.dirty = true;
   lblSelId = lblDraft.elements[0].id;
   lblRenderCards();
   lblRenderStage();
-  if(!isFinite(priceNum)) toast('No retail price found for this product — type it on the label');
-  else if(!barcode) toast('This product has no barcode on file — type one on the label');
-  else toast('Label filled for ' + name);
+  if(!isFinite(p.priceNum)) toast('No retail price found for this product — type it on the label');
+  else if(!p.barcode) toast('This product has no barcode on file — type one on the label');
+  else toast('Label filled for ' + p.name);
 }
 function lblEditSaved(id){
   const l = lblSaved.find(x => x.label_id === id);
   if(!l) return;
   lblDraft = {
-    id: l.label_id, name: l.name, width: l.width_mm, height: l.height_mm,
+    kind: 'label', id: l.label_id, name: l.name, width: l.width_mm, height: l.height_mm,
     elements: JSON.parse(JSON.stringify(l.elements || [])), dirty: false
   };
   lblOpenEditor();
@@ -21140,9 +21302,16 @@ function lblOpenEditor(){
   lblSelId = lblDraft.elements.length ? lblDraft.elements[0].id : null;
   lblZoomMul = 1;
   document.getElementById('lblZoom').value = 100;
-  const title = lblDraft.id ? 'Edit: ' + lblDraft.name : 'New label';
+  const std = lblDraft.kind === 'standard';
+  const title = std ? (lblDraft.id ? 'Edit standard: ' + lblDraft.name : 'New standard label') : (lblDraft.id ? 'Edit: ' + lblDraft.name : 'New label');
   document.getElementById('lblEditorTitle').textContent = title;
-  document.getElementById('lblEditorCrumb').textContent = lblDraft.id ? lblDraft.name : 'New label';
+  document.getElementById('lblEditorCrumb').textContent = std ? (lblDraft.id ? lblDraft.name : 'New standard label') : (lblDraft.id ? lblDraft.name : 'New label');
+  document.getElementById('lblAddProductBtn').style.display = std ? 'none' : '';
+  document.getElementById('lblPrintBtn').style.display = std ? 'none' : '';
+  document.getElementById('lblStdHint').style.display = std ? '' : 'none';
+  document.getElementById('lblRelayoutBtn').style.display = std ? '' : 'none';
+  document.getElementById('lblSaveMainBtn').textContent = std ? '💾 Save standard' : '💾 Save';
+  document.getElementById('lblStageWrap').classList.toggle('lbl-std', std);
   document.getElementById('lblW').value = lblDraft.width;
   document.getElementById('lblH').value = lblDraft.height;
   lblFillPresets();
@@ -21151,8 +21320,9 @@ function lblOpenEditor(){
 }
 function lblCancelEditor(){
   if(lblDraft && lblDraft.dirty && !confirm('Discard your changes to this label?')) return;
+  const wasStd = lblDraft && lblDraft.kind === 'standard';
   lblDraft = null;
-  openLabelPrinter();
+  if(wasStd) openLabelStandards(); else openLabelPrinter();
 }
 
 /* ---------- size ---------- */
@@ -21184,9 +21354,9 @@ function lblOnSizeInput(){
 }
 
 /* ---------- element cards (the form on the left) ---------- */
-function lblNumField(el, prop, label, step, min){
-  return '<div class="lbl-f"><label>' + label + '</label><input type="number" step="' + step + '"' + (min !== undefined ? ' min="' + min + '"' : '')
-    + ' value="' + el[prop] + '" data-lbl-eid="' + el.id + '" data-lbl-prop="' + prop + '" data-lbl-kind="num"></div>';
+function lblNumField(el, prop, label, step, min, disabled){
+  return '<div class="lbl-f"><label>' + label + '</label><input type="number" step="' + step + '"' + (min !== undefined ? ' min="' + min + '"' : '') + (disabled ? ' disabled' : '')
+    + ' value="' + (el[prop] === undefined ? '' : el[prop]) + '" data-lbl-eid="' + el.id + '" data-lbl-prop="' + prop + '" data-lbl-kind="num"></div>';
 }
 function lblRenderCards(){
   const box = document.getElementById('lblCards');
@@ -21204,7 +21374,12 @@ function lblRenderCards(){
         + '<div class="lbl-row">' + lblNumField(el, 'x', 'Left (mm)', '0.5') + lblNumField(el, 'y', 'Top (mm)', '0.5') + '</div>';
     } else if(el.type === 'text'){
       body = '<div class="lbl-f" style="margin-bottom:10px;"><label>Text</label><textarea data-lbl-eid="' + el.id + '" data-lbl-prop="text" data-lbl-kind="str">' + escapeHtml(el.text) + '</textarea></div>'
-        + '<div class="lbl-row">' + lblNumField(el, 'fontSize', 'Text size (pt)', '0.5', 1) + lblNumField(el, 'w', 'Box width (mm)', '0.5', 1) + '</div>'
+        + '<div class="lbl-row">' + lblNumField(el, 'fontSize', el.fit ? 'Text size (auto, pt)' : 'Text size (pt)', '0.5', 1, !!el.fit) + lblNumField(el, 'w', 'Box width (mm)', '0.5', 1) + '</div>'
+        + (el.fit ? '<div class="lbl-row">' + lblNumField(el, 'h', 'Box height (mm)', '0.5', 1) + lblNumField(el, 'maxFont', 'Largest text size (pt)', '1', 2) + '</div>' : '')
+        + '<div class="lbl-row"><div class="lbl-f chk"><label><input type="checkbox" data-lbl-eid="' + el.id + '" data-lbl-prop="fit" data-lbl-kind="bool"' + (el.fit ? ' checked' : '') + '> Auto-fit text size to the box</label></div></div>'
+        + (lblDraft.kind === 'standard' ? '<div class="lbl-f" style="margin-bottom:10px;"><label>Filled by “Add product” and the queue as</label><select data-lbl-eid="' + el.id + '" data-lbl-prop="role" data-lbl-kind="str">'
+          + [['', 'Free text'], ['name', 'Product name'], ['price', 'Price']].map(r => '<option value="' + r[0] + '"' + ((el.role || '') === r[0] ? ' selected' : '') + '>' + r[1] + '</option>').join('')
+          + '</select></div>' : '')
         + '<div class="lbl-row">' + lblNumField(el, 'x', 'Left (mm)', '0.5') + lblNumField(el, 'y', 'Top (mm)', '0.5') + '</div>'
         + '<div class="lbl-row"><div class="lbl-f"><label>Align</label><select data-lbl-eid="' + el.id + '" data-lbl-prop="align" data-lbl-kind="str">'
         + ['left', 'center', 'right'].map(a => '<option value="' + a + '"' + (el.align === a ? ' selected' : '') + '>' + a[0].toUpperCase() + a.slice(1) + '</option>').join('')
@@ -21230,6 +21405,10 @@ function lblSelect(id){
 }
 function lblAddEl(type){
   const el = type === 'text' ? lblNewText() : lblNewBarcode();
+  if(type === 'text' && lblDraft.kind === 'standard'){
+    Object.assign(el, { text: 'Text', w: lblRound1(Math.max(5, lblDraft.width - 4)), h: 8, fit: true, maxFont: 60, role: '' });
+    lblFitText(el);
+  }
   // drop the new item a little lower than the last so they don't sit on top of each other
   const last = lblDraft.elements[lblDraft.elements.length - 1];
   if(last){ el.y = Math.min(Math.max(0, lblDraft.height - 6), lblRound1((Number(last.y) || 0) + 6)); }
@@ -21280,6 +21459,14 @@ document.getElementById('lblCards').addEventListener('input', function(e){
   } else if(kind === 'bool'){ v = t.checked; }
   else { v = t.value; }
   el[prop] = v;
+  if(el.type === 'text'){
+    if(prop === 'fit'){ lblFitToggle(el); lblRenderCards(); }
+    else if(el.fit && Number(el.h) > 0 && ['text', 'w', 'h', 'maxFont', 'bold'].includes(prop)){
+      lblFitText(el);
+      const fi = document.querySelector('#lblCards [data-lbl-eid="' + el.id + '"][data-lbl-prop="fontSize"]');
+      if(fi) fi.value = el.fontSize;
+    }
+  }
   lblDraft.dirty = true;
   if(lblSelId !== id){ lblSelId = id; document.querySelectorAll('#lblCards .lbl-card').forEach(c => c.classList.toggle('sel', c.getAttribute('data-card') === id)); }
   lblRenderStage();
@@ -21333,10 +21520,13 @@ function lblElementHtml(el, editing){
       + (isSel ? lblLogoCloseHtml() + lblHandleHtml('c') : '') + '</div>';
   }
   if(el.type === 'text'){
-    return '<div class="' + cls + '"' + eid + ' style="' + pos + 'width:' + (Number(el.w) || 10) + 'mm;font-size:' + (Number(el.fontSize) || 10) + 'pt;'
+    const fixed = !!el.fit && Number(el.h) > 0;
+    return '<div class="' + cls + '"' + eid + ' style="' + pos + 'width:' + (Number(el.w) || 10) + 'mm;'
+      + (fixed ? 'height:' + Number(el.h) + 'mm;padding-top:' + (Number(el.pt) || 0) + 'mm;box-sizing:border-box;overflow:hidden;' : '')
+      + 'font-size:' + (Number(el.fontSize) || 10) + 'pt;'
       + 'font-weight:' + (el.bold ? 700 : 400) + ';text-align:' + (el.align || 'left') + ';line-height:1.15;font-family:Arial,Helvetica,sans-serif;'
       + 'color:#000;white-space:pre-wrap;word-break:break-word;">' + escapeHtml(el.text || '')
-      + (isSel ? lblHandleHtml('r') + lblHandleHtml('c') : '') + '</div>';
+      + (isSel ? (fixed ? lblHandleHtml('r') + lblHandleHtml('b') + lblHandleHtml('c') : lblHandleHtml('r') + lblHandleHtml('c')) : '') + '</div>';
   }
   const bc = lblBarcodeSvg(el);
   lblErrCache[el.id] = bc.error;
@@ -21433,6 +21623,13 @@ function lblInlineInput(e){
   if(!el) return;
   el.text = lblInlineRead(e.currentTarget);
   lblDraft.dirty = true;
+  if(el.fit && Number(el.h) > 0){
+    lblFitText(el);
+    e.currentTarget.style.fontSize = el.fontSize + 'pt';
+    e.currentTarget.style.paddingTop = (Number(el.pt) || 0) + 'mm';
+    const fi = document.querySelector('#lblCards [data-lbl-eid="' + el.id + '"][data-lbl-prop="fontSize"]');
+    if(fi) fi.value = el.fontSize;
+  }
   const ta = document.querySelector('#lblCards textarea[data-lbl-eid="' + el.id + '"]');
   if(ta) ta.value = el.text;
 }
@@ -21467,6 +21664,7 @@ function lblEndInline(commit, noRender){
   if(el){
     if(commit && node){ const t = lblInlineRead(node); if(t !== el.text){ el.text = t; lblDraft.dirty = true; } }
     if(!commit){ el.text = lblInlineOrig; }
+    if(el.type === 'text' && el.fit && Number(el.h) > 0) lblFitText(el);
     const ta = document.querySelector('#lblCards textarea[data-lbl-eid="' + id + '"]');
     if(ta) ta.value = el.text;
   }
@@ -21520,6 +21718,10 @@ function lblDragMove(e){
     const h = lblDrag.handle;
     if(el.type === 'logo'){
       el.w = Math.max(3, lblRound1(lblDrag.ow + (dx + dy) / 2)); // stays square
+    } else if(el.type === 'text' && el.fit && Number(el.h) > 0){
+      if(h === 'r' || h === 'c') el.w = Math.max(3, lblRound1(lblDrag.ow + dx));
+      if(h === 'b' || h === 'c') el.h = Math.max(2, lblRound1(lblDrag.oh + dy));
+      lblFitText(el);
     } else if(el.type === 'text'){
       if(h === 'r' || h === 'c') el.w = Math.max(3, lblRound1(lblDrag.ow + dx));
       if(h === 'c') el.fontSize = Math.max(2, Math.round(lblDrag.ofs * ((lblDrag.ohmm + dy) / lblDrag.ohmm) * 2) / 2);
@@ -21578,6 +21780,10 @@ function lblSaveClick(){
   const errs = lblValidateElements(lblDraft.elements);
   if(errs.length){ toast(errs[0]); return; }
   document.getElementById('lblSaveName').value = lblDraft.name || '';
+  document.getElementById('lblSaveTitle').textContent = lblDraft.kind === 'standard' ? 'Save standard label' : 'Save label';
+  document.getElementById('lblSaveSub').textContent = lblDraft.kind === 'standard'
+    ? 'Give this standard label a name so you can pick it when you create a new label.'
+    : 'Give this label a name so you can find it in your saved labels.';
   document.getElementById('lblSaveErr').textContent = '';
   const asNewRow = document.getElementById('lblSaveAsNewRow');
   asNewRow.style.display = lblDraft.id ? 'flex' : 'none';
@@ -21595,13 +21801,15 @@ async function lblConfirmSave(){
   const asNew = !lblDraft.id || document.getElementById('lblSaveAsNew').checked;
   const body = { name: name, width_mm: lblDraft.width, height_mm: lblDraft.height, config: { elements: lblDraft.elements } };
   btn.disabled = true; btn.textContent = 'Saving…';
+  const isStd = lblDraft.kind === 'standard';
+  const ep = isStd ? 'labels-standards' : 'labels';
   try{
-    if(asNew) await apiPost('labels', body);
-    else await apiPut('labels/' + lblDraft.id, body);
+    if(asNew) await apiPost(ep, body);
+    else await apiPut(ep + '/' + lblDraft.id, body);
     closeModal('modalLabelSave');
     lblDraft = null;
-    toast('Label saved');
-    openLabelPrinter();
+    toast(isStd ? 'Standard label saved' : 'Label saved');
+    if(isStd) openLabelStandards(); else openLabelPrinter();
   }catch(e){
     if(e && e.silent) return;
     errEl.textContent = (e.body && e.body.error) || e.message || 'Could not save the label.';
@@ -21626,7 +21834,7 @@ function lblOpenPrint(target){
   if(errs.length){ toast(errs[0]); return; }
   lblPrintTarget = target;
   document.getElementById('lblPrintTitle').textContent = 'Print: ' + target.name;
-  document.getElementById('lblPrintSub').textContent = target.width + ' × ' + target.height + ' mm — how many copies?';
+  document.getElementById('lblPrintSub').textContent = target.width + ' × ' + target.height + ' mm — how many labels do you want to print?';
   document.getElementById('lblCopies').value = 1;
   openModal('modalLabelPrint');
   setTimeout(() => { const i = document.getElementById('lblCopies'); i.focus(); i.select(); }, 50);
@@ -21634,17 +21842,19 @@ function lblOpenPrint(target){
 function lblDoPrint(){
   const t = lblPrintTarget;
   if(!t) return;
-  let copies = parseInt(document.getElementById('lblCopies').value, 10);
-  if(!(copies >= 1)) copies = 1;
-  if(copies > 500) copies = 500;
+  const copies = lblReadCopies();
   const one = lblSheetHtml(t.width, t.height, t.elements, false);
   let pages = '';
   for(let i = 0; i < copies; i++) pages += '<div class="pg">' + one + '</div>';
-  const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + escapeHtml(t.name) + '</title><style>'
-    + '@page{size:' + t.width + 'mm ' + t.height + 'mm;margin:0;}'
+  lblRunPrint(t.name, t.width, t.height, pages);
+}
+// pages = HTML of '<div class="pg">' blocks, all of the same label size
+function lblRunPrint(title, w, h, pages){
+  const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + escapeHtml(title) + '</title><style>'
+    + '@page{size:' + w + 'mm ' + h + 'mm;margin:0;}'
     + 'html,body{margin:0;padding:0;background:#fff;}'
     + '.lbl-logo-img{background:url(' + LBL_LOGO_URI + ') center/contain no-repeat;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'
-    + '.pg{width:' + t.width + 'mm;height:' + t.height + 'mm;overflow:hidden;page-break-after:always;break-after:page;}'
+    + '.pg{width:' + w + 'mm;height:' + h + 'mm;overflow:hidden;page-break-after:always;break-after:page;}'
     + '.pg:last-child{page-break-after:auto;break-after:auto;}'
     + '</style></head><body>' + pages + '</body></html>';
   closeModal('modalLabelPrint');
@@ -21653,7 +21863,7 @@ function lblDoPrint(){
   const f = document.createElement('iframe');
   f.id = 'lblPrintFrame';
   f.setAttribute('aria-hidden', 'true');
-  f.style.cssText = 'position:fixed;left:-10000px;top:0;width:' + t.width + 'mm;height:' + t.height + 'mm;border:0;';
+  f.style.cssText = 'position:fixed;left:-10000px;top:0;width:' + w + 'mm;height:' + h + 'mm;border:0;';
   f.onload = function(){
     try{ f.contentWindow.focus(); f.contentWindow.print(); }
     catch(e){ toast('Could not open the print window.'); }
@@ -21662,6 +21872,412 @@ function lblDoPrint(){
   f.srcdoc = html;
   document.body.appendChild(f);
 }
+// copies box -> a whole number from 1 to 500
+function lblReadCopies(){
+  let c = parseInt(document.getElementById('lblCopies').value, 10);
+  if(!(c >= 1)) c = 1;
+  return Math.min(500, c);
+}
+function lblSetCopies(n){ document.getElementById('lblCopies').value = n; }
+function lblCopiesStep(d){ lblSetCopies(Math.max(1, Math.min(500, lblReadCopies() + d))); }
+function lblPrintAddToQueue(){
+  const t = lblPrintTarget;
+  if(!t) return;
+  const copies = lblReadCopies();
+  lblQueuePush(t.name, t.width, t.height, t.elements, copies);
+  closeModal('modalLabelPrint');
+  toast('Added to the print queue: ' + copies + ' × ' + t.name);
+}
+
+/* ============ STANDARD LABELS, AUTO-FIT TEXT AND THE PRINT QUEUE ============ */
+let lblStandards = [];        // standard labels from the server
+let lblQueue = [];            // print queue (kept in this browser): [{qid,name,width,height,elements,copies,printed}]
+let lblQuick = null;          // working copy used by the queue page's "add a label" form
+let lblScanMode = 'draft';    // where a scanned product goes: 'draft' (label editor) or 'quick' (queue page)
+let lblMeasureCtx = null;
+const LBL_QUEUE_KEY = 'hallan_label_queue';
+
+function lblCloneEls(els){ return JSON.parse(JSON.stringify(els || [])).map(e => { e.id = lblUid(); return e; }); }
+
+/* ---------- auto-fit: the biggest text size that fits a box ---------- */
+// How many lines the text takes in a box boxPx wide (same wrapping as the label: words never split). Infinity if one word is wider than the box.
+function lblWrapCount(text, fontPx, bold, boxPx){
+  if(!lblMeasureCtx) lblMeasureCtx = document.createElement('canvas').getContext('2d');
+  const ctx = lblMeasureCtx;
+  ctx.font = (bold ? '700 ' : '400 ') + fontPx + 'px Arial, Helvetica, sans-serif';
+  let lines = 0;
+  const paras = String(text == null ? '' : text).split('\n');
+  for(const p of paras){
+    let cur = '', n = 1;
+    for(const w of p.split(' ')){
+      if(ctx.measureText(w).width > boxPx + 0.01) return Infinity;
+      const test = cur ? cur + ' ' + w : w;
+      if(ctx.measureText(test).width <= boxPx + 0.01) cur = test;
+      else { n++; cur = w; }
+    }
+    lines += n;
+  }
+  return lines;
+}
+// Sets el.fontSize to the largest size (0.5 pt steps, up to el.maxFont) whose wrapped text fits el.w × el.h,
+// and el.pt (top padding) so the text sits in the middle of the box.
+function lblFitText(el){
+  const wPx = (Number(el.w) || 10) * LBL_PX_PER_MM * 0.98;      // 2% safety margin
+  const hMm = Number(el.h) > 0 ? Number(el.h) : 8;
+  const hPx = hMm * LBL_PX_PER_MM;
+  const maxPt = Math.max(2, Number(el.maxFont) || 60);
+  const fits = pt => {
+    const px = pt * 96 / 72;
+    const n = lblWrapCount(el.text, px, el.bold, wPx);
+    return n !== Infinity && n * px * 1.15 <= hPx + 0.01;
+  };
+  let a = 4, b = Math.round(maxPt * 2), best = 2;                  // search in half points
+  while(a <= b){
+    const m = (a + b) >> 1;
+    if(fits(m / 2)){ best = m / 2; a = m + 1; } else b = m - 1;
+  }
+  const px = best * 96 / 72;
+  const n = lblWrapCount(el.text, px, el.bold, wPx);
+  const textMm = (n === Infinity ? 1 : n) * px * 1.15 / LBL_PX_PER_MM;
+  el.fontSize = best;
+  el.pt = Math.max(0, Math.round((hMm - textMm) / 2 * 100) / 100);
+}
+// called when "Auto-fit" is ticked / unticked on a text box
+function lblFitToggle(el){
+  if(el.fit){
+    if(!(Number(el.h) > 0)){
+      const px = (Number(el.fontSize) || 10) * 96 / 72;
+      const n = lblWrapCount(el.text, px, el.bold, (Number(el.w) || 10) * LBL_PX_PER_MM);
+      el.h = lblRound1(Math.max(4, (n === Infinity ? 1 : n) * px * 1.15 / LBL_PX_PER_MM));
+    }
+    if(!(Number(el.maxFont) > 0)) el.maxFont = 60;
+    lblFitText(el);
+  } else {
+    el.pt = 0;
+  }
+}
+
+/* ---------- standard labels ---------- */
+// Starting layout for a new standard: product name box, price box, barcode and the logo, all sized for W × H.
+function lblStandardDefaultElements(W, H){
+  const m = 2, iw = lblRound1(Math.max(5, W - 2 * m));
+  const nameH = lblRound1(lblClamp(H * 0.24, 4, 60)), priceH = lblRound1(lblClamp(H * 0.28, 4, 60));
+  const nameEl = { id: lblUid(), type: 'text', role: 'name', text: 'Product name', x: m, y: m, w: iw, h: nameH,
+    fit: true, maxFont: 60, fontSize: 10, pt: 0, bold: true, align: 'center' };
+  const priceY = lblRound1(m + nameH + 0.5);
+  const priceEl = { id: lblUid(), type: 'text', role: 'price', text: '£0.00', x: m, y: priceY, w: iw, h: priceH,
+    fit: true, maxFont: 60, fontSize: 10, pt: 0, bold: true, align: 'center' };
+  const bcY = lblRound1(priceY + priceH + 1);
+  const numSize = lblRound1(lblClamp(H * 0.2, 5, 9));
+  const bcH = lblRound1(Math.max(4, H - bcY - m - (numSize * 0.3528 * 1.1 + 0.4)));
+  const bcEl = { id: lblUid(), type: 'barcode', value: '5012345678900', format: 'CODE128', x: lblRound1(W * 0.1), y: bcY,
+    w: lblRound1(Math.max(10, W * 0.8)), h: bcH, showNumber: true, numberSize: numSize };
+  lblFitText(nameEl); lblFitText(priceEl);
+  const items = [nameEl, priceEl, bcEl];
+  items.push(lblDefaultLogo(W, H, items));
+  return items;
+}
+async function lblLoadStandards(){
+  try{
+    const data = await apiGet('labels-standards');
+    lblStandards = (data.standards || []).map(s => { s.elements = lblEnsureLogo(s.width_mm, s.height_mm, s.elements); return s; });
+    lblRenderStandards();
+  }catch(e){
+    if(e && e.silent) return;
+    console.error(e);
+    const el = document.getElementById('lblStdList');
+    if(el && !lblStandards.length) el.innerHTML = '<div class="empty-hint">Could not load standard labels.</div>' + errDetailHtml(e);
+  }
+}
+function openLabelStandards(){
+  showView('view-label-standards');
+  lblQueueBadge();
+  lblLoadStandards();
+}
+function lblRenderStandards(){
+  const el = document.getElementById('lblStdList');
+  if(!el) return;
+  if(!lblStandards.length){
+    el.innerHTML = '<div class="empty-hint">No standard labels yet. Tap “＋ New standard label” to set up your first one.</div>';
+    return;
+  }
+  el.innerHTML = '<div class="lbl-grid">' + lblStandards.map(s => {
+    const texts = (s.elements || []).filter(e => e.type === 'text').length;
+    const codes = (s.elements || []).filter(e => e.type === 'barcode').length;
+    return '<div class="lbl-savedcard">'
+      + '<div class="lbl-thumbbox">' + lblThumbHtml(s) + '</div>'
+      + '<h4>' + escapeHtml(s.name) + '</h4>'
+      + '<div class="lbl-meta">' + s.width_mm + ' × ' + s.height_mm + ' mm · ' + texts + ' text box' + (texts === 1 ? '' : 'es') + ' · ' + codes + ' barcode' + (codes === 1 ? '' : 's') + '</div>'
+      + '<div class="cn-actions">'
+      + '<button class="btn-amber" onclick="lblEditStandard(' + s.standard_id + ')">✏️ Edit</button>'
+      + '<button class="btn-ghost" onclick="lblNewFromStandard(' + s.standard_id + ')">＋ Use</button>'
+      + '<button class="btn-ghost" onclick="openLabelQueue(\'s:' + s.standard_id + '\')">🧾 Queue</button>'
+      + '<button class="btn-ghost" onclick="lblDeleteStandard(' + s.standard_id + ')">🗑️ Delete</button>'
+      + '</div></div>';
+  }).join('') + '</div>';
+}
+function lblNewStandard(){
+  lblDraft = { kind: 'standard', id: null, name: '', width: 50, height: 30, elements: lblStandardDefaultElements(50, 30), dirty: false };
+  lblOpenEditor();
+}
+function lblEditStandard(id){
+  const s = lblStandards.find(x => x.standard_id === id);
+  if(!s) return;
+  lblDraft = { kind: 'standard', id: s.standard_id, name: s.name, width: s.width_mm, height: s.height_mm,
+    elements: JSON.parse(JSON.stringify(s.elements || [])), dirty: false };
+  lblOpenEditor();
+}
+async function lblDeleteStandard(id){
+  const s = lblStandards.find(x => x.standard_id === id);
+  if(!s) return;
+  if(!confirm('Delete the standard label “' + s.name + '”? Labels already made from it are not affected.')) return;
+  try{
+    await apiDelete('labels-standards/' + id);
+    toast('Standard label deleted');
+    await lblLoadStandards();
+  }catch(e){ if(!(e && e.silent)) toast('Could not delete: ' + ((e.body && e.body.error) || e.message)); }
+}
+// standard editor: throw away the boxes and lay them out again for the current label size
+function lblRelayout(){
+  if(!lblDraft || lblDraft.kind !== 'standard') return;
+  if(!confirm('Replace the boxes with a fresh layout for ' + lblDraft.width + ' × ' + lblDraft.height + ' mm?')) return;
+  lblDraft.elements = lblStandardDefaultElements(lblDraft.width, lblDraft.height);
+  lblDraft.dirty = true;
+  lblSelId = lblDraft.elements[0].id;
+  lblRenderCards();
+  lblRenderStage();
+}
+
+/* ---------- new label from a standard ---------- */
+function lblRenderNewChoices(){
+  const box = document.getElementById('lblNewChoices');
+  if(!box) return;
+  let html = '<div class="lbl-choice-grid">'
+    + '<div class="lbl-choice" onclick="lblNewBlank()"><div style="font-size:34px;line-height:1;">＋</div><b>Blank label</b><small>choose your own size</small></div>';
+  lblStandards.forEach(s => {
+    html += '<div class="lbl-choice" onclick="lblNewFromStandard(' + s.standard_id + ')">' + lblThumbHtml(s, 140, 86)
+      + '<b>' + escapeHtml(s.name) + '</b><small>' + s.width_mm + ' × ' + s.height_mm + ' mm</small></div>';
+  });
+  html += '</div>';
+  if(!lblStandards.length) html += '<p class="ni-hint">No standard labels yet — use “Manage standard labels” below to create one.</p>';
+  box.innerHTML = html;
+}
+function lblNewFromStandard(id){
+  const s = lblStandards.find(x => x.standard_id === id);
+  if(!s) return;
+  closeModal('modalLabelNew');
+  const els = lblCloneEls(s.elements);
+  els.forEach(e => { if(e.type === 'text' && e.fit && Number(e.h) > 0) lblFitText(e); });
+  lblDraft = { kind: 'label', id: null, name: '', width: s.width_mm, height: s.height_mm, standardId: s.standard_id, elements: els, dirty: false };
+  lblOpenEditor();
+  // start typing straight away in the first text box (its text is selected, the size follows what you type)
+  setTimeout(() => {
+    const t = lblDraft && lblDraft.elements.find(e => e.type === 'text');
+    if(t){ lblSelect(t.id); lblStartInline(t.id); }
+  }, 80);
+}
+
+/* ---------- print queue ---------- */
+function lblQueueLoad(){
+  try{
+    const q = JSON.parse(localStorage.getItem(LBL_QUEUE_KEY) || '[]');
+    lblQueue = Array.isArray(q) ? q.filter(e => e && Array.isArray(e.elements) && e.width > 0 && e.height > 0) : [];
+  }catch(e){ lblQueue = []; }
+}
+function lblQueueBadge(){
+  const n = lblQueue.filter(e => !e.printed).length;
+  document.querySelectorAll('.lbl-qcount').forEach(x => { x.textContent = String(n); });
+}
+function lblQueueSave(){
+  try{ localStorage.setItem(LBL_QUEUE_KEY, JSON.stringify(lblQueue)); }
+  catch(e){ toast('Could not keep the queue in this browser (storage is full or blocked)'); }
+  lblQueueBadge();
+}
+function lblQueuePush(name, w, h, elements, copies){
+  lblQueue.push({ qid: lblUid(), name: name, width: w, height: h, elements: JSON.parse(JSON.stringify(elements || [])), copies: copies, printed: false });
+  lblQueueSave();
+}
+async function openLabelQueue(pick){
+  showView('view-label-queue');
+  lblQueueRender();
+  await Promise.all([lblLoadStandards(), lblLoadSaved()]);
+  lblQuickFillSources(typeof pick === 'string' ? pick : '');
+  lblQuickPick(document.getElementById('lblQuickSrc').value);
+}
+function lblQuickFillSources(pick){
+  const sel = document.getElementById('lblQuickSrc');
+  const keep = pick || sel.value;
+  let html = '<option value="">— choose a label —</option>';
+  if(lblStandards.length){
+    html += '<optgroup label="Standard labels">' + lblStandards.map(s => '<option value="s:' + s.standard_id + '">' + escapeHtml(s.name) + ' (' + s.width_mm + ' × ' + s.height_mm + ' mm)</option>').join('') + '</optgroup>';
+  }
+  if(lblSaved.length){
+    html += '<optgroup label="Saved labels">' + lblSaved.map(l => '<option value="l:' + l.label_id + '">' + escapeHtml(l.name) + ' (' + l.width_mm + ' × ' + l.height_mm + ' mm)</option>').join('') + '</optgroup>';
+  }
+  sel.innerHTML = html;
+  if(keep && Array.from(sel.options).some(o => o.value === keep)) sel.value = keep;
+  else if(lblStandards.length) sel.value = 's:' + lblStandards[0].standard_id;
+}
+function lblQuickPick(val){
+  if(!val){ lblQuick = null; lblQuickRender(); return; }
+  const id = Number(val.slice(2));
+  const src = val[0] === 's' ? lblStandards.find(x => x.standard_id === id) : lblSaved.find(x => x.label_id === id);
+  if(!src){ lblQuick = null; lblQuickRender(); return; }
+  const els = lblCloneEls(src.elements);
+  els.forEach(e => { if(e.type === 'text' && e.fit && Number(e.h) > 0) lblFitText(e); });
+  lblQuick = { src: val, name: src.name, width: src.width_mm, height: src.height_mm, elements: els };
+  lblQuickRender();
+  const first = document.querySelector('#lblQuickFields [data-qf]');
+  if(first && window.innerWidth > 900){ first.focus(); if(first.select) first.select(); }
+}
+function lblQuickRender(){
+  const box = document.getElementById('lblQuickFields');
+  if(!box) return;
+  if(!lblQuick){
+    box.innerHTML = '<div class="empty-hint" style="margin-bottom:10px;">Choose a standard (or saved) label above, then type what goes on it.</div>';
+    lblQuickPreview();
+    return;
+  }
+  let ti = 0;
+  box.innerHTML = lblQuick.elements.filter(e => e.type === 'text' || e.type === 'barcode').map(e => {
+    if(e.type === 'text'){
+      ti++;
+      const lab = e.role === 'name' ? 'Product name' : (e.role === 'price' ? 'Price' : 'Text ' + ti);
+      return '<div class="lbl-f" style="margin-bottom:10px;"><label>' + lab + '</label><textarea rows="1" data-qf="' + e.id + '">' + escapeHtml(e.text || '') + '</textarea></div>';
+    }
+    return '<div class="lbl-f" style="margin-bottom:10px;"><label>Barcode number</label><input type="text" data-qf="' + e.id + '" value="' + escapeHtml(e.value || '') + '"></div>';
+  }).join('');
+  lblQuickPreview();
+}
+function lblQuickPreview(){
+  const box = document.getElementById('lblQuickPreview');
+  if(!box) return;
+  box.innerHTML = lblQuick
+    ? lblThumbHtml({ width_mm: lblQuick.width, height_mm: lblQuick.height, elements: lblQuick.elements }, 280, 160)
+    : '<span class="ni-hint">The label preview shows here.</span>';
+}
+document.getElementById('lblQuickFields').addEventListener('input', function(e){
+  const t = e.target;
+  const id = t.getAttribute && t.getAttribute('data-qf');
+  if(!id || !lblQuick) return;
+  const el = lblQuick.elements.find(x => x.id === id);
+  if(!el) return;
+  if(el.type === 'text'){
+    el.text = t.value;
+    if(el.fit && Number(el.h) > 0) lblFitText(el);    // biggest size that fits, as you type
+  } else {
+    el.value = t.value;
+    if(['CODE128', 'EAN13', 'EAN8'].includes(el.format)) el.format = lblPickFormat(t.value);
+  }
+  lblQuickPreview();
+});
+function lblQuickScan(){
+  if(!lblQuick){ toast('Choose a label first'); return; }
+  lblScanMode = 'quick';
+  openScanner('label');
+}
+function lblQuickAdd(){
+  if(!lblQuick){ toast('Choose a label first'); return; }
+  const errs = lblValidateElements(lblQuick.elements);
+  if(errs.length){ toast(errs[0]); return; }
+  let copies = parseInt(document.getElementById('lblQuickCopies').value, 10);
+  if(!(copies >= 1)) copies = 1;
+  copies = Math.min(500, copies);
+  lblQueuePush(lblQuick.name, lblQuick.width, lblQuick.height, lblQuick.elements, copies);
+  lblQueueRender();
+  toast('Added: ' + copies + ' × ' + lblEntrySummary(lblQuick.elements).slice(0, 40));
+  const first = document.querySelector('#lblQuickFields [data-qf]');
+  if(first){ first.focus(); if(first.select) first.select(); }
+}
+function lblEntrySummary(elements){
+  const parts = (elements || []).filter(e => e.type === 'text' && String(e.text || '').trim()).map(e => String(e.text).replace(/\s+/g, ' ').trim());
+  return parts.join(' · ') || '(no text)';
+}
+function lblQueueRender(){
+  const box = document.getElementById('lblQueueList');
+  if(!box) return;
+  lblQueueBadge();
+  if(!lblQueue.length){
+    box.innerHTML = '<div class="empty-hint">The queue is empty. Add labels with the form, or tap “Add to queue” in the Print window of any saved label.</div>';
+    return;
+  }
+  const groups = [], byKey = {};
+  lblQueue.forEach(e => {
+    const k = e.width + 'x' + e.height;
+    if(!byKey[k]){ byKey[k] = { key: k, w: e.width, h: e.height, items: [] }; groups.push(byKey[k]); }
+    byKey[k].items.push(e);
+  });
+  box.innerHTML = groups.map(g => {
+    const pending = g.items.filter(e => !e.printed);
+    const total = pending.reduce((a, e) => a + e.copies, 0);
+    return '<div class="lbl-qgroup"><div class="lbl-qhead"><b>' + g.w + ' × ' + g.h + ' mm</b>'
+      + '<span>' + pending.length + ' label' + (pending.length === 1 ? '' : 's') + ' waiting · ' + total + ' to print</span>'
+      + '<button class="btn-amber" onclick="lblQueuePrint(\'' + g.key + '\')">🖨️ Print these</button></div>'
+      + g.items.map(e => {
+        const codes = e.elements.filter(x => x.type === 'barcode').map(x => x.value).filter(Boolean).join(', ');
+        return '<div class="lbl-qrow' + (e.printed ? ' done' : '') + '">'
+          + '<div class="lbl-thumbbox">' + lblThumbHtml({ width_mm: e.width, height_mm: e.height, elements: e.elements }, 96, 60) + '</div>'
+          + '<div class="lbl-qsum">' + escapeHtml(lblEntrySummary(e.elements)) + (e.printed ? '<span class="lbl-qdone">✓ printed</span>' : '')
+          + '<small>' + escapeHtml(e.name) + (codes ? ' · ' + escapeHtml(codes) : '') + '</small></div>'
+          + '<div class="lbl-f"><label>Copies</label><input type="number" min="1" max="500" value="' + e.copies + '" onchange="lblQueueCopies(\'' + e.qid + '\',this.value)"></div>'
+          + '<button class="btn-ghost" onclick="lblQueueRemove(\'' + e.qid + '\')">Remove</button></div>';
+      }).join('') + '</div>';
+  }).join('');
+}
+function lblQueueCopies(qid, v){
+  const e = lblQueue.find(x => x.qid === qid);
+  if(!e) return;
+  let n = parseInt(v, 10);
+  if(!(n >= 1)) n = 1;
+  e.copies = Math.min(500, n);
+  e.printed = false;
+  lblQueueSave();
+  lblQueueRender();
+}
+function lblQueueRemove(qid){
+  lblQueue = lblQueue.filter(x => x.qid !== qid);
+  lblQueueSave();
+  lblQueueRender();
+}
+function lblQueueClear(onlyPrinted){
+  if(onlyPrinted){
+    if(!lblQueue.some(e => e.printed)){ toast('Nothing has been printed yet'); return; }
+    lblQueue = lblQueue.filter(e => !e.printed);
+  } else {
+    if(!lblQueue.length) return;
+    if(!confirm('Remove all ' + lblQueue.length + ' label' + (lblQueue.length === 1 ? '' : 's') + ' from the queue?')) return;
+    lblQueue = [];
+  }
+  lblQueueSave();
+  lblQueueRender();
+}
+// Prints every waiting label of one size in a single print job, each one as many times as its copies say.
+function lblQueuePrint(key){
+  let items = lblQueue.filter(e => (e.width + 'x' + e.height) === key && !e.printed);
+  if(!items.length){
+    items = lblQueue.filter(e => (e.width + 'x' + e.height) === key);
+    if(!items.length) return;
+    if(!confirm('These labels were already printed. Print them again?')) return;
+  }
+  for(const e of items){
+    const errs = lblValidateElements(e.elements);
+    if(errs.length){ toast(lblEntrySummary(e.elements).slice(0, 30) + ': ' + errs[0]); return; }
+  }
+  const total = items.reduce((a, e) => a + e.copies, 0);
+  if(total > 3000){ toast('That is ' + total + ' labels — please print them in smaller batches (up to 3000 at once).'); return; }
+  let pages = '';
+  items.forEach(e => {
+    const one = lblSheetHtml(e.width, e.height, e.elements, false);
+    for(let i = 0; i < e.copies; i++) pages += '<div class="pg">' + one + '</div>';
+  });
+  lblRunPrint('Label queue', items[0].width, items[0].height, pages);
+  items.forEach(e => { e.printed = true; });
+  lblQueueSave();
+  lblQueueRender();
+  toast(total + ' label' + (total === 1 ? '' : 's') + ' sent to print');
+}
+lblQueueLoad();
+lblQueueBadge();
 
 /* close modals on backdrop click */
 document.querySelectorAll('.modal-backdrop').forEach(b=>{
