@@ -21125,7 +21125,7 @@ function openLabelPrinter(){
   showView('view-labels');
   lblLoadSaved();
   lblLoadStandards();
-  lblQueueBadge();
+  lblQueueLoad();
 }
 async function lblLoadSaved(){
   const el = document.getElementById('lblList');
@@ -21880,18 +21880,21 @@ function lblReadCopies(){
 }
 function lblSetCopies(n){ document.getElementById('lblCopies').value = n; }
 function lblCopiesStep(d){ lblSetCopies(Math.max(1, Math.min(500, lblReadCopies() + d))); }
-function lblPrintAddToQueue(){
+async function lblPrintAddToQueue(){
   const t = lblPrintTarget;
   if(!t) return;
   const copies = lblReadCopies();
-  lblQueuePush(t.name, t.width, t.height, t.elements, copies);
-  closeModal('modalLabelPrint');
-  toast('Added to the print queue: ' + copies + ' × ' + t.name);
+  try{
+    await lblQueuePush(t.name, t.width, t.height, t.elements, copies);
+    closeModal('modalLabelPrint');
+    toast('Added to the print queue: ' + copies + ' × ' + t.name);
+  }catch(e){ lblQueueErr(e, 'Could not add to the queue'); }
 }
 
 /* ============ STANDARD LABELS, AUTO-FIT TEXT AND THE PRINT QUEUE ============ */
 let lblStandards = [];        // standard labels from the server
-let lblQueue = [];            // print queue (kept in this browser): [{qid,name,width,height,elements,copies,printed}]
+let lblQueue = [];            // print queue (kept on the server, shared by all devices): [{qid,name,width,height,elements,copies,printed}]
+let lblQueueSig = '';         // fingerprint of the last queue we drew, so we only redraw when something changed
 let lblQuick = null;          // working copy used by the queue page's "add a label" form
 let lblScanMode = 'draft';    // where a scanned product goes: 'draft' (label editor) or 'quick' (queue page)
 let lblMeasureCtx = null;
@@ -21991,7 +21994,7 @@ async function lblLoadStandards(){
 }
 function openLabelStandards(){
   showView('view-label-standards');
-  lblQueueBadge();
+  lblQueueLoad();
   lblLoadStandards();
 }
 function lblRenderStandards(){
@@ -22078,29 +22081,66 @@ function lblNewFromStandard(id){
 }
 
 /* ---------- print queue ---------- */
-function lblQueueLoad(){
+// Reads the shared queue from the server. Called when a label page opens, every few seconds while the queue page is open,
+// and whenever the tab comes back into view - so a label scanned on one device appears on the others.
+async function lblQueueLoad(){
   try{
-    const q = JSON.parse(localStorage.getItem(LBL_QUEUE_KEY) || '[]');
-    lblQueue = Array.isArray(q) ? q.filter(e => e && Array.isArray(e.elements) && e.width > 0 && e.height > 0) : [];
-  }catch(e){ lblQueue = []; }
+    await lblQueueMigrateOld();
+    const data = await apiGet('labels-queue');
+    lblQueue = (data.items || []).map(r => ({
+      qid: String(r.queue_id), name: r.name, width: r.width_mm, height: r.height_mm,
+      elements: r.elements || [], copies: r.copies, printed: !!r.printed, by: r.created_by
+    }));
+    lblQueueBadge();
+    const sig = JSON.stringify(lblQueue.map(e => [e.qid, e.copies, e.printed]));
+    const box = document.getElementById('lblQueueList');
+    const typing = box && box.contains(document.activeElement) && document.activeElement.tagName === 'INPUT';
+    if(sig !== lblQueueSig && !typing){ lblQueueSig = sig; lblQueueRender(); }
+  }catch(e){
+    if(e && e.silent) return;
+    console.error('label queue', e);
+  }
+}
+// One-time: labels queued on this device before the queue moved to the server are uploaded, then forgotten locally.
+async function lblQueueMigrateOld(){
+  let old = [];
+  try{ old = JSON.parse(localStorage.getItem(LBL_QUEUE_KEY) || '[]'); }catch(e){ old = []; }
+  if(!Array.isArray(old) || !old.length){ try{ localStorage.removeItem(LBL_QUEUE_KEY); }catch(e){} return; }
+  for(const e of old){
+    if(!e || !Array.isArray(e.elements) || !(e.width > 0) || !(e.height > 0)) continue;
+    await apiPost('labels-queue', { name: e.name, width_mm: e.width, height_mm: e.height, config: { elements: e.elements }, copies: e.copies || 1, printed: !!e.printed });
+  }
+  try{ localStorage.removeItem(LBL_QUEUE_KEY); }catch(e){}
 }
 function lblQueueBadge(){
   const n = lblQueue.filter(e => !e.printed).length;
   document.querySelectorAll('.lbl-qcount').forEach(x => { x.textContent = String(n); });
 }
-function lblQueueSave(){
-  try{ localStorage.setItem(LBL_QUEUE_KEY, JSON.stringify(lblQueue)); }
-  catch(e){ toast('Could not keep the queue in this browser (storage is full or blocked)'); }
-  lblQueueBadge();
+async function lblQueuePush(name, w, h, elements, copies){
+  await apiPost('labels-queue', { name: name, width_mm: w, height_mm: h, config: { elements: elements || [] }, copies: copies });
+  lblQueueSig = '';
+  await lblQueueLoad();
 }
-function lblQueuePush(name, w, h, elements, copies){
-  lblQueue.push({ qid: lblUid(), name: name, width: w, height: h, elements: JSON.parse(JSON.stringify(elements || [])), copies: copies, printed: false });
-  lblQueueSave();
+function lblQueueErr(e, what){
+  if(e && e.silent) return;
+  toast(what + ': ' + ((e && e.body && e.body.error) || (e && e.message) || 'failed'));
 }
+// keep the queue page live while it is open on screen
+setInterval(() => {
+  if(document.hidden) return;
+  const v = document.getElementById('view-label-queue');
+  if(v && v.classList.contains('active')) lblQueueLoad();
+}, 8000);
+document.addEventListener('visibilitychange', () => {
+  if(document.hidden) return;
+  const v = document.getElementById('view-label-queue');
+  if(v && v.classList.contains('active')) lblQueueLoad();
+});
 async function openLabelQueue(pick){
   showView('view-label-queue');
   lblQueueRender();
-  await Promise.all([lblLoadStandards(), lblLoadSaved()]);
+  lblQueueSig = '';
+  await Promise.all([lblLoadStandards(), lblLoadSaved(), lblQueueLoad()]);
   lblQuickFillSources(typeof pick === 'string' ? pick : '');
   lblQuickPick(document.getElementById('lblQuickSrc').value);
 }
@@ -22176,15 +22216,15 @@ function lblQuickScan(){
   lblScanMode = 'quick';
   openScanner('label');
 }
-function lblQuickAdd(){
+async function lblQuickAdd(){
   if(!lblQuick){ toast('Choose a label first'); return; }
   const errs = lblValidateElements(lblQuick.elements);
   if(errs.length){ toast(errs[0]); return; }
   let copies = parseInt(document.getElementById('lblQuickCopies').value, 10);
   if(!(copies >= 1)) copies = 1;
   copies = Math.min(500, copies);
-  lblQueuePush(lblQuick.name, lblQuick.width, lblQuick.height, lblQuick.elements, copies);
-  lblQueueRender();
+  try{ await lblQueuePush(lblQuick.name, lblQuick.width, lblQuick.height, lblQuick.elements, copies); }
+  catch(e){ lblQueueErr(e, 'Could not add to the queue'); return; }
   toast('Added: ' + copies + ' × ' + lblEntrySummary(lblQuick.elements).slice(0, 40));
   const first = document.querySelector('#lblQuickFields [data-qf]');
   if(first){ first.focus(); if(first.select) first.select(); }
@@ -22224,35 +22264,38 @@ function lblQueueRender(){
       }).join('') + '</div>';
   }).join('');
 }
-function lblQueueCopies(qid, v){
+async function lblQueueCopies(qid, v){
   const e = lblQueue.find(x => x.qid === qid);
   if(!e) return;
   let n = parseInt(v, 10);
   if(!(n >= 1)) n = 1;
-  e.copies = Math.min(500, n);
-  e.printed = false;
-  lblQueueSave();
-  lblQueueRender();
+  n = Math.min(500, n);
+  try{ await apiPut('labels-queue/' + qid, { copies: n }); }
+  catch(err){ lblQueueErr(err, 'Could not change the copies'); }
+  lblQueueSig = '';
+  await lblQueueLoad();
 }
-function lblQueueRemove(qid){
-  lblQueue = lblQueue.filter(x => x.qid !== qid);
-  lblQueueSave();
-  lblQueueRender();
+async function lblQueueRemove(qid){
+  try{ await apiDelete('labels-queue/' + qid); }
+  catch(err){ lblQueueErr(err, 'Could not remove it'); }
+  lblQueueSig = '';
+  await lblQueueLoad();
 }
-function lblQueueClear(onlyPrinted){
+async function lblQueueClear(onlyPrinted){
   if(onlyPrinted){
     if(!lblQueue.some(e => e.printed)){ toast('Nothing has been printed yet'); return; }
-    lblQueue = lblQueue.filter(e => !e.printed);
   } else {
     if(!lblQueue.length) return;
-    if(!confirm('Remove all ' + lblQueue.length + ' label' + (lblQueue.length === 1 ? '' : 's') + ' from the queue?')) return;
-    lblQueue = [];
+    if(!confirm('Remove all ' + lblQueue.length + ' label' + (lblQueue.length === 1 ? '' : 's') + ' from the queue (on every device)?')) return;
   }
-  lblQueueSave();
-  lblQueueRender();
+  try{ await apiPost('labels-queue/clear', { only_printed: !!onlyPrinted }); }
+  catch(err){ lblQueueErr(err, 'Could not clear the queue'); }
+  lblQueueSig = '';
+  await lblQueueLoad();
 }
 // Prints every waiting label of one size in a single print job, each one as many times as its copies say.
-function lblQueuePrint(key){
+async function lblQueuePrint(key){
+  await lblQueueLoad();   // pick up anything added or already printed on another device
   let items = lblQueue.filter(e => (e.width + 'x' + e.height) === key && !e.printed);
   if(!items.length){
     items = lblQueue.filter(e => (e.width + 'x' + e.height) === key);
@@ -22271,14 +22314,12 @@ function lblQueuePrint(key){
     for(let i = 0; i < e.copies; i++) pages += '<div class="pg">' + one + '</div>';
   });
   lblRunPrint('Label queue', items[0].width, items[0].height, pages);
-  items.forEach(e => { e.printed = true; });
-  lblQueueSave();
-  lblQueueRender();
+  try{ await apiPost('labels-queue/mark-printed', { ids: items.map(e => Number(e.qid)) }); }
+  catch(err){ lblQueueErr(err, 'Printed, but could not mark them as printed'); }
+  lblQueueSig = '';
+  await lblQueueLoad();
   toast(total + ' label' + (total === 1 ? '' : 's') + ' sent to print');
 }
-lblQueueLoad();
-lblQueueBadge();
-
 /* close modals on backdrop click */
 document.querySelectorAll('.modal-backdrop').forEach(b=>{
   b.addEventListener('click', e=>{
