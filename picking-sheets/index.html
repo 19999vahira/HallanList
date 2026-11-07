@@ -460,6 +460,21 @@
   .lbl-h[data-handle="r"]{cursor:ew-resize;}
   .lbl-h[data-handle="b"]{cursor:ns-resize;}
   .lbl-h[data-handle="c"]{cursor:nwse-resize;}
+  /* ---- picture crop window ---- */
+  .lbl-crop-stage{position:relative;margin:14px auto 18px;user-select:none;-webkit-user-select:none;touch-action:none;
+    background:repeating-conic-gradient(#d9dde3 0% 25%,#fff 0% 50%) 0 0/16px 16px;}
+  .lbl-crop-stage img{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;}
+  .lbl-crop-dim{position:absolute;background:rgba(10,12,15,.6);pointer-events:none;}
+  .lbl-crop-box{position:absolute;box-sizing:border-box;border:2px solid #fff;outline:1px solid #2563eb;cursor:move;touch-action:none;}
+  .lbl-crop-box i{position:absolute;width:18px;height:18px;background:#2563eb;border:2px solid #fff;box-sizing:border-box;border-radius:4px;touch-action:none;}
+  .lbl-crop-box i[data-ch="nw"]{left:-11px;top:-11px;cursor:nwse-resize;}
+  .lbl-crop-box i[data-ch="ne"]{right:-11px;top:-11px;cursor:nesw-resize;}
+  .lbl-crop-box i[data-ch="sw"]{left:-11px;bottom:-11px;cursor:nesw-resize;}
+  .lbl-crop-box i[data-ch="se"]{right:-11px;bottom:-11px;cursor:nwse-resize;}
+  .lbl-crop-box i[data-ch="n"]{left:50%;top:-11px;margin-left:-9px;cursor:ns-resize;}
+  .lbl-crop-box i[data-ch="s"]{left:50%;bottom:-11px;margin-left:-9px;cursor:ns-resize;}
+  .lbl-crop-box i[data-ch="w"]{top:50%;left:-11px;margin-top:-9px;cursor:ew-resize;}
+  .lbl-crop-box i[data-ch="e"]{top:50%;right:-11px;margin-top:-9px;cursor:ew-resize;}
   @media(max-width:900px){
     .lbl-previewcol{order:-1;background:var(--bg);padding:6px 0;}
     .lbl-previewcol .ni-hint,#lblZoomWrap{display:none;}
@@ -1383,6 +1398,8 @@
             <button class="btn-amber" id="lblAddProductBtn" onclick="lblAddProduct()">＋ Add product</button>
             <button class="btn-ghost" onclick="lblAddEl('text')">＋ Text</button>
             <button class="btn-ghost" onclick="lblAddEl('barcode')">＋ Barcode</button>
+            <button class="btn-ghost" onclick="lblAddPicture()">＋ Picture</button>
+            <input type="file" id="lblPicInput" accept="image/*" style="display:none" onchange="lblPicChosen(this)">
             <button class="btn-ghost" onclick="lblAddLogo()">＋ Logo</button>
           </div>
           <div id="lblCards"></div>
@@ -4328,6 +4345,28 @@
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalLabelSave')">Cancel</button>
       <button class="btn-amber" id="lblSaveBtn" onclick="lblConfirmSave()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- LABEL PRINTER: CROP A PICTURE -->
+<div class="modal-backdrop" id="modalLabelCrop">
+  <div class="modal" style="width:auto;min-width:min(340px,92vw);max-width:96vw;">
+    <h3>Crop picture</h3>
+    <p class="modal-sub">Drag the box to move it, or drag its edges and corners to change what is kept. Everything outside the box is cut from the label.</p>
+    <div class="lbl-crop-stage" id="lblCropStage">
+      <img id="lblCropImg" alt="" draggable="false">
+      <div class="lbl-crop-dim" id="lblCropD0"></div><div class="lbl-crop-dim" id="lblCropD1"></div>
+      <div class="lbl-crop-dim" id="lblCropD2"></div><div class="lbl-crop-dim" id="lblCropD3"></div>
+      <div class="lbl-crop-box" id="lblCropBox" data-ch="move">
+        <i data-ch="nw"></i><i data-ch="n"></i><i data-ch="ne"></i><i data-ch="e"></i>
+        <i data-ch="se"></i><i data-ch="s"></i><i data-ch="sw"></i><i data-ch="w"></i>
+      </div>
+    </div>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="lblCropReset()">Reset</button>
+      <button class="btn-ghost" onclick="lblCropCancel()">Cancel</button>
+      <button class="btn-amber" onclick="lblCropApply()">Apply crop</button>
     </div>
   </div>
 </div>
@@ -21058,6 +21097,7 @@ function lblElBox(el){
     else if(el.align === 'right') bx = x + w - widest;
     return { x: bx, y: y, w: widest, h: lines * lh };
   }
+  if(el.type === 'image') return { x: x, y: y, w: Number(el.w) || 10, h: Number(el.h) || 10 };
   if(el.type === 'barcode'){
     const w = Number(el.w) || 30, h = Number(el.h) || 10;
     const num = el.showNumber ? (Number(el.numberSize) || 8) * 0.3528 * 1.1 + 0.4 : 0;
@@ -21361,17 +21401,24 @@ function lblNumField(el, prop, label, step, min, disabled){
 function lblRenderCards(){
   const box = document.getElementById('lblCards');
   if(!lblVisible(lblDraft.elements).length){
-    box.innerHTML = '<div class="empty-hint">Nothing on this label yet — add some text or a barcode.</div>';
+    box.innerHTML = '<div class="empty-hint">Nothing on this label yet — add some text, a barcode or a picture.</div>';
     return;
   }
   box.innerHTML = lblVisible(lblDraft.elements).map((el, i) => {
-    const head = '<div class="lbl-card-head"><b>' + (el.type === 'logo' ? '🖼️ Logo' : (el.type === 'text' ? '🔤 Text' : '▮▯▮ Barcode') + ' ' + (i + 1)) + '</b>'
+    const head = '<div class="lbl-card-head"><b>' + (el.type === 'logo' ? '🖼️ Logo' : (el.type === 'image' ? '📷 Picture' : el.type === 'text' ? '🔤 Text' : '▮▯▮ Barcode') + ' ' + (i + 1)) + '</b>'
       + '<div class="cn-actions">' + (el.type === 'logo' ? '' : '<button class="btn-ghost" onclick="event.stopPropagation();lblDupEl(\'' + el.id + '\')">Duplicate</button>')
       + '<button class="btn-ghost" onclick="event.stopPropagation();lblRemoveEl(\'' + el.id + '\')">Remove</button></div></div>';
     let body;
     if(el.type === 'logo'){
       body = '<div class="lbl-row">' + lblNumField(el, 'w', 'Logo size (mm)', '0.5', 3) + '</div>'
         + '<div class="lbl-row">' + lblNumField(el, 'x', 'Left (mm)', '0.5') + lblNumField(el, 'y', 'Top (mm)', '0.5') + '</div>';
+    } else if(el.type === 'image'){
+      body = '<div class="lbl-row">' + lblNumField(el, 'w', 'Width (mm)', '0.5', 2) + lblNumField(el, 'h', 'Height (mm)', '0.5', 2) + '</div>'
+        + '<div class="lbl-row"><div class="lbl-f chk"><label><input type="checkbox" data-lbl-eid="' + el.id + '" data-lbl-prop="lock" data-lbl-kind="bool"' + (el.lock !== false ? ' checked' : '') + '> Keep proportions</label></div></div>'
+        + '<div class="lbl-row">' + lblNumField(el, 'x', 'Left (mm)', '0.5') + lblNumField(el, 'y', 'Top (mm)', '0.5') + '</div>'
+        + '<div class="lbl-addrow"><button class="btn-ghost" onclick="event.stopPropagation();lblOpenCrop(\'' + el.id + '\')">✂ Crop</button>'
+        + '<button class="btn-ghost" onclick="event.stopPropagation();lblReplacePicture(\'' + el.id + '\')">Replace picture</button></div>'
+        + '<p class="ni-hint" style="margin:8px 0 0;">Tip: double-click the picture on the label to crop it.</p>';
     } else if(el.type === 'text'){
       body = '<div class="lbl-f" style="margin-bottom:10px;"><label>Text</label><textarea data-lbl-eid="' + el.id + '" data-lbl-prop="text" data-lbl-kind="str">' + escapeHtml(el.text) + '</textarea></div>'
         + '<div class="lbl-row">' + lblNumField(el, 'fontSize', el.fit ? 'Text size (auto, pt)' : 'Text size (pt)', '0.5', 1, !!el.fit) + lblNumField(el, 'w', 'Box width (mm)', '0.5', 1) + '</div>'
@@ -21459,6 +21506,10 @@ document.getElementById('lblCards').addEventListener('input', function(e){
   } else if(kind === 'bool'){ v = t.checked; }
   else { v = t.value; }
   el[prop] = v;
+  if(el.type === 'image'){
+    if(prop === 'lock'){ if(v) lblImgKeepRatio(el, 'w'); lblSyncInputs(el, ['w', 'h']); }
+    else if((prop === 'w' || prop === 'h') && el.lock !== false){ lblImgKeepRatio(el, prop); lblSyncInputs(el, [prop === 'w' ? 'h' : 'w']); }
+  }
   if(el.type === 'text'){
     if(prop === 'fit'){ lblFitToggle(el); lblRenderCards(); }
     else if(el.fit && Number(el.h) > 0 && ['text', 'w', 'h', 'maxFont', 'bold'].includes(prop)){
@@ -21518,6 +21569,14 @@ function lblElementHtml(el, editing){
     const ls = Number(el.w) || 8;
     return '<div class="' + cls + ' lbl-logo-img"' + eid + ' style="' + pos + 'width:' + ls + 'mm;height:' + ls + 'mm;">'
       + (isSel ? lblLogoCloseHtml() + lblHandleHtml('c') : '') + '</div>';
+  }
+  if(el.type === 'image'){
+    if(!lblImgOk(el)) return '';
+    const c = lblCropOf(el);
+    return '<div class="' + cls + '"' + eid + ' style="' + pos + 'width:' + (Number(el.w) || 10) + 'mm;height:' + (Number(el.h) || 10) + 'mm;overflow:hidden;">'
+      + '<img src="' + lblImgSrc(el, editing) + '" alt="" draggable="false" style="position:absolute;display:block;max-width:none;max-height:none;pointer-events:none;'
+      + 'left:' + (-c.x / c.w * 100).toFixed(4) + '%;top:' + (-c.y / c.h * 100).toFixed(4) + '%;width:' + (100 / c.w).toFixed(4) + '%;height:' + (100 / c.h).toFixed(4) + '%;">'
+      + (isSel ? lblHandleHtml('r') + lblHandleHtml('b') + lblHandleHtml('c') : '') + '</div>';
   }
   if(el.type === 'text'){
     const fixed = !!el.fit && Number(el.h) > 0;
@@ -21676,7 +21735,11 @@ document.getElementById('lblStageWrap').addEventListener('dblclick', function(e)
   if(!lblDraft || lblInlineId) return;
   if(e.target.closest && e.target.closest('[data-handle]')) return;
   const n = e.target.closest && e.target.closest('[data-eid]');
-  if(n) lblStartInline(n.getAttribute('data-eid'));
+  if(n){
+    const id = n.getAttribute('data-eid');
+    const el = lblDraft.elements.find(x => x.id === id);
+    if(el && el.type === 'image') lblOpenCrop(id); else lblStartInline(id);
+  }
 });
 
 document.getElementById('lblStageWrap').addEventListener('pointerdown', function(e){
@@ -21693,6 +21756,17 @@ document.getElementById('lblStageWrap').addEventListener('pointerdown', function
   const el = lblDraft.elements.find(x => x.id === id);
   if(!el) return;
   if(e.target.getAttribute && e.target.getAttribute('data-act') === 'logo-x'){ e.preventDefault(); lblHideLogo(id); return; }
+  if(el.type === 'image' && !(e.target.getAttribute && e.target.getAttribute('data-handle'))){
+    // two quick presses on the same picture (mouse or finger) open the crop window
+    const now = Date.now();
+    if(lblLastTap.id === id && now - lblLastTap.t < 450 && Math.abs(e.clientX - lblLastTap.x) < 14 && Math.abs(e.clientY - lblLastTap.y) < 14){
+      lblLastTap = { id: null, t: 0, x: 0, y: 0 };
+      e.preventDefault();
+      lblOpenCrop(id);
+      return;
+    }
+    lblLastTap = { id: id, t: now, x: e.clientX, y: e.clientY };
+  }
   const wasSel = (lblSelId === id);
   e.preventDefault();
   const handle = e.target.getAttribute && e.target.getAttribute('data-handle');
@@ -21718,6 +21792,18 @@ function lblDragMove(e){
     const h = lblDrag.handle;
     if(el.type === 'logo'){
       el.w = Math.max(3, lblRound1(lblDrag.ow + (dx + dy) / 2)); // stays square
+    } else if(el.type === 'image'){
+      const locked = el.lock !== false, r = lblImgRatio(el);
+      let nw = lblDrag.ow, nh = lblDrag.oh;
+      if(h === 'r' || h === 'c') nw = lblDrag.ow + dx;
+      if(h === 'b' || h === 'c') nh = lblDrag.oh + dy;
+      if(locked){
+        if(h === 'r') nh = nw / r;
+        else if(h === 'b') nw = nh * r;
+        else { const sw = nw / lblDrag.ow, sh = nh / lblDrag.oh; nw = lblDrag.ow * (Math.abs(sw - 1) >= Math.abs(sh - 1) ? sw : sh); }
+      }
+      el.w = Math.max(2, lblRound1(nw));
+      el.h = Math.max(2, lblRound1(locked ? el.w / r : nh));
     } else if(el.type === 'text' && el.fit && Number(el.h) > 0){
       if(h === 'r' || h === 'c') el.w = Math.max(3, lblRound1(lblDrag.ow + dx));
       if(h === 'b' || h === 'c') el.h = Math.max(2, lblRound1(lblDrag.oh + dy));
@@ -21776,7 +21862,7 @@ function lblValidateElements(elements){
 }
 function lblSaveClick(){
   if(!lblDraft) return;
-  if(!lblVisible(lblDraft.elements).length){ toast('Add some text or a barcode first'); return; }
+  if(!lblVisible(lblDraft.elements).length){ toast('Add some text, a barcode or a picture first'); return; }
   const errs = lblValidateElements(lblDraft.elements);
   if(errs.length){ toast(errs[0]); return; }
   document.getElementById('lblSaveName').value = lblDraft.name || '';
@@ -21826,7 +21912,7 @@ function lblPrintSaved(id){
 }
 function lblPrintDraft(){
   if(!lblDraft) return;
-  if(!lblVisible(lblDraft.elements).length){ toast('Add some text or a barcode first'); return; }
+  if(!lblVisible(lblDraft.elements).length){ toast('Add some text, a barcode or a picture first'); return; }
   lblOpenPrint({ name: lblDraft.name || 'Label', width: lblDraft.width, height: lblDraft.height, elements: lblDraft.elements });
 }
 function lblOpenPrint(target){
@@ -21890,6 +21976,300 @@ async function lblPrintAddToQueue(){
     toast('Added to the print queue: ' + copies + ' × ' + t.name);
   }catch(e){ lblQueueErr(e, 'Could not add to the queue'); }
 }
+
+
+/* ============ PICTURES ON LABELS ============ */
+// A picture is a normal label item: {type:'image', src, nw, nh, x, y, w, h, crop:{x,y,w,h}, lock}.
+// src is a (downscaled) data: URL kept inside the label, so it saves, prints and queues like everything else.
+// crop is the part of the picture that is shown, as fractions (0-1) of the whole picture; the box (w x h, mm) is
+// the size that part is drawn at on the label.
+const LBL_IMG_MAX_PX = 1200;        // longest side kept when a picture is added
+const LBL_IMG_MAX_CHARS = 900000;   // keep each stored picture under this many characters
+let lblLastTap = { id: null, t: 0, x: 0, y: 0 };
+let lblPicTarget = null;            // id of the picture being replaced (null = adding a new one)
+const lblBlobCache = new Map();
+
+function lblImgOk(el){
+  return !!el && typeof el.src === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,/.test(el.src.slice(0, 40));
+}
+function lblCropOf(el){
+  const c = (el && el.crop) || {};
+  let w = Number(c.w), h = Number(c.h);
+  w = lblClamp(isFinite(w) && w > 0 ? w : 1, 0.01, 1);
+  h = lblClamp(isFinite(h) && h > 0 ? h : 1, 0.01, 1);
+  let x = Number(c.x), y = Number(c.y);
+  x = lblClamp(isFinite(x) ? x : 0, 0, 1 - w);
+  y = lblClamp(isFinite(y) ? y : 0, 0, 1 - h);
+  return { x: x, y: y, w: w, h: h };
+}
+// width / height of the part of the picture that is showing
+function lblImgRatio(el){
+  const c = lblCropOf(el);
+  if(el.nw > 0 && el.nh > 0) return (c.w * el.nw) / (c.h * el.nh);
+  return (Number(el.w) || 1) / (Number(el.h) || 1);
+}
+function lblImgKeepRatio(el, from){
+  const r = lblImgRatio(el);
+  if(from === 'h') el.w = Math.max(1, lblRound1((Number(el.h) || 1) * r));
+  else el.h = Math.max(1, lblRound1((Number(el.w) || 1) / r));
+}
+function lblSyncInputs(el, props){
+  props.forEach(p => {
+    const inp = document.querySelector('#lblCards [data-lbl-eid="' + el.id + '"][data-lbl-prop="' + p + '"]');
+    if(inp && el[p] !== undefined && document.activeElement !== inp) inp.value = el[p];
+  });
+}
+// While editing, a short blob: URL is used instead of the long data: URL so the preview redraws smoothly.
+function lblImgSrc(el, editing){
+  const s = el.src;
+  if(!editing) return s;
+  let u = lblBlobCache.get(s);
+  if(!u){
+    try{
+      const m = /^data:([^;,]+);base64,/.exec(s.slice(0, 60));
+      const bin = atob(s.slice(m[0].length));
+      const arr = new Uint8Array(bin.length);
+      for(let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      u = URL.createObjectURL(new Blob([arr], { type: m[1] }));
+      if(lblBlobCache.size > 40){
+        const k = lblBlobCache.keys().next().value;
+        URL.revokeObjectURL(lblBlobCache.get(k));
+        lblBlobCache.delete(k);
+      }
+      lblBlobCache.set(s, u);
+    }catch(err){ u = s; }
+  }
+  return u;
+}
+// Reads a picture file, shrinks it and returns { src, nw, nh }.
+function lblReadPicture(file){
+  return new Promise((resolve, reject) => {
+    if(!file || !/^image\//.test(file.type || '')){ reject(new Error('Please choose a picture file (JPG, PNG, WebP or GIF).')); return; }
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = function(){
+      try{
+        const ow = img.naturalWidth || 300, oh = img.naturalHeight || 150;
+        let scale = Math.min(1, LBL_IMG_MAX_PX / Math.max(ow, oh));
+        const preferPng = !/jpe?g/i.test(file.type);
+        for(let attempt = 0; attempt < 8; attempt++){
+          const cw = Math.max(1, Math.round(ow * scale)), ch = Math.max(1, Math.round(oh * scale));
+          const cv = document.createElement('canvas');
+          cv.width = cw; cv.height = ch;
+          const ctx = cv.getContext('2d');
+          ctx.drawImage(img, 0, 0, cw, ch);
+          let alpha = false;
+          const d = ctx.getImageData(0, 0, cw, ch).data;
+          for(let i = 3; i < d.length; i += 4){ if(d[i] < 250){ alpha = true; break; } }
+          let src = '';
+          if(alpha || preferPng) src = cv.toDataURL('image/png');
+          if(!alpha && (!src || src.length > LBL_IMG_MAX_CHARS * 0.6)) src = cv.toDataURL('image/jpeg', 0.85);
+          if(src.length <= LBL_IMG_MAX_CHARS || attempt === 7){
+            if(src.length > LBL_IMG_MAX_CHARS) throw new Error('too big');
+            resolve({ src: src, nw: cw, nh: ch });
+            return;
+          }
+          scale *= 0.75;
+        }
+      }catch(err){ reject(new Error('Could not use that picture — try a smaller one.')); }
+      finally{ URL.revokeObjectURL(url); }
+    };
+    img.onerror = function(){ URL.revokeObjectURL(url); reject(new Error('Could not read that picture. Try a JPG or PNG.')); };
+    img.src = url;
+  });
+}
+function lblAddPicture(){
+  if(!lblDraft) return;
+  lblPicTarget = null;
+  const inp = document.getElementById('lblPicInput');
+  inp.value = '';
+  inp.click();
+}
+function lblReplacePicture(id){
+  if(!lblDraft) return;
+  lblPicTarget = id;
+  const inp = document.getElementById('lblPicInput');
+  inp.value = '';
+  inp.click();
+}
+// a free spot (mm) for a w x h picture, away from everything already on the label
+function lblFreeSpot(w, h){
+  const W = lblDraft.width, H = lblDraft.height;
+  const boxes = lblDraft.elements.map(lblElBox).filter(Boolean);
+  const free = (x, y) => boxes.every(b => x + w + 0.5 <= b.x || x >= b.x + b.w + 0.5 || y + h + 0.5 <= b.y || y >= b.y + b.h + 0.5);
+  for(let y = 1; y + h <= H - 1 + 1e-9; y += 1){
+    for(let x = 1; x + w <= W - 1 + 1e-9; x += 1){ if(free(x, y)) return { x: x, y: y }; }
+  }
+  return null;
+}
+async function lblPicChosen(input){
+  const file = input.files && input.files[0];
+  input.value = '';
+  if(!file || !lblDraft) return;
+  let pic;
+  try{ pic = await lblReadPicture(file); }
+  catch(err){ toast(err.message || 'Could not read that picture.'); return; }
+  if(!lblDraft) return;
+  const W = lblDraft.width, H = lblDraft.height;
+  const old = lblPicTarget ? lblDraft.elements.find(e => e.id === lblPicTarget && e.type === 'image') : null;
+  lblPicTarget = null;
+  if(old){
+    // new picture in the same place and at the same width (height follows the picture's shape)
+    old.src = pic.src; old.nw = pic.nw; old.nh = pic.nh; old.crop = { x: 0, y: 0, w: 1, h: 1 };
+    const r = pic.nw / pic.nh;
+    let w = Number(old.w) || 10, h = w / r;
+    const f = Math.min(1, W / w, H / h);
+    old.w = lblRound1(w * f); old.h = lblRound1(h * f);
+    old.x = lblClamp(Number(old.x) || 0, 0, Math.max(0, lblRound1(W - old.w)));
+    old.y = lblClamp(Number(old.y) || 0, 0, Math.max(0, lblRound1(H - old.h)));
+    lblSelId = old.id;
+  } else {
+    const r = pic.nw / pic.nh;
+    let w = Math.min(W * 0.4, H * 0.5 * r), h;
+    w = Math.max(3, w); h = w / r;
+    let spot = null;
+    for(const s of [1, 0.75, 0.5]){
+      const tw = w * s, th = h * s;
+      spot = lblFreeSpot(tw, th);
+      if(spot){ w = tw; h = th; break; }
+    }
+    if(!spot) spot = { x: 2, y: 2 };
+    const el = { id: lblUid(), type: 'image', src: pic.src, nw: pic.nw, nh: pic.nh, x: lblRound1(spot.x), y: lblRound1(spot.y),
+      w: lblRound1(w), h: lblRound1(h), crop: { x: 0, y: 0, w: 1, h: 1 }, lock: true };
+    lblDraft.elements.push(el);
+    lblSelId = el.id;
+  }
+  lblDraft.dirty = true;
+  lblRenderCards();
+  lblRenderStage();
+  const card = document.querySelector('#lblCards [data-card="' + lblSelId + '"]');
+  if(card && card.scrollIntoView) card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+/* ---------- cropping ---------- */
+let lblCropSt = null;   // { id, W, H (px shown), x, y, w, h (crop box, px), drag }
+const LBL_CROP_MIN = 14;
+function lblOpenCrop(id){
+  if(!lblDraft) return;
+  const el = lblDraft.elements.find(e => e.id === id && e.type === 'image');
+  if(!el || !lblImgOk(el)) return;
+  if(document.getElementById('modalLabelCrop').classList.contains('active')) return;
+  if(lblInlineId) lblEndInline(true);
+  if(lblSelId !== id) lblSelect(id);
+  const img = document.getElementById('lblCropImg');
+  const start = function(){
+    const nw = el.nw > 0 ? el.nw : (img.naturalWidth || 100), nh = el.nh > 0 ? el.nh : (img.naturalHeight || 100);
+    const padX = window.innerWidth <= 480 ? 18 : 26;
+    const maxW = Math.max(160, Math.min(560, window.innerWidth * 0.92 - 2 * padX - 28));
+    const maxH = Math.max(140, Math.min(460, window.innerHeight * 0.5));
+    const s = Math.min(maxW / nw, maxH / nh, 4);
+    const W = Math.round(nw * s), H = Math.round(nh * s);
+    const stage = document.getElementById('lblCropStage');
+    stage.style.width = W + 'px'; stage.style.height = H + 'px';
+    const c = lblCropOf(el);
+    lblCropSt = { id: id, W: W, H: H, x: c.x * W, y: c.y * H, w: c.w * W, h: c.h * H, drag: null };
+    lblCropPaint();
+  };
+  img.onload = start;
+  img.src = el.src;
+  openModal('modalLabelCrop');
+  if(img.complete && img.naturalWidth) start();
+}
+function lblCropPaint(){
+  const s = lblCropSt;
+  if(!s) return;
+  const box = document.getElementById('lblCropBox');
+  box.style.left = s.x + 'px'; box.style.top = s.y + 'px'; box.style.width = s.w + 'px'; box.style.height = s.h + 'px';
+  const set = (i, l, t, w, h) => { const d = document.getElementById('lblCropD' + i); d.style.left = l + 'px'; d.style.top = t + 'px'; d.style.width = Math.max(0, w) + 'px'; d.style.height = Math.max(0, h) + 'px'; };
+  set(0, 0, 0, s.W, s.y);                         // above
+  set(1, 0, s.y + s.h, s.W, s.H - s.y - s.h);     // below
+  set(2, 0, s.y, s.x, s.h);                       // left
+  set(3, s.x + s.w, s.y, s.W - s.x - s.w, s.h);   // right
+}
+function lblCropReset(){
+  const s = lblCropSt;
+  if(!s) return;
+  s.x = 0; s.y = 0; s.w = s.W; s.h = s.H;
+  lblCropPaint();
+}
+function lblCropClose(){
+  lblCropSt = null;
+  closeModal('modalLabelCrop');
+}
+function lblCropCancel(){ lblCropClose(); }
+function lblCropApply(){
+  const s = lblCropSt;
+  if(!s || !lblDraft){ lblCropClose(); return; }
+  const el = lblDraft.elements.find(e => e.id === s.id && e.type === 'image');
+  if(!el){ lblCropClose(); return; }
+  const c0 = lblCropOf(el);
+  const r4 = v => Math.round(v * 10000) / 10000;
+  let w1 = lblClamp(s.w / s.W, 0.01, 1), h1 = lblClamp(s.h / s.H, 0.01, 1);
+  const c1 = { x: lblClamp(s.x / s.W, 0, 1 - w1), y: lblClamp(s.y / s.H, 0, 1 - h1), w: w1, h: h1 };
+  if(Math.abs(c1.x - c0.x) < 1e-4 && Math.abs(c1.y - c0.y) < 1e-4 && Math.abs(c1.w - c0.w) < 1e-4 && Math.abs(c1.h - c0.h) < 1e-4){ lblCropClose(); return; }
+  // the picture keeps its size and place on the label: the box just shrinks (or grows back) to the new crop
+  const sx = (Number(el.w) || 10) / c0.w, sy = (Number(el.h) || 10) / c0.h;
+  let nx = (Number(el.x) || 0) + (c1.x - c0.x) * sx, ny = (Number(el.y) || 0) + (c1.y - c0.y) * sy;
+  let nw = c1.w * sx, nh = c1.h * sy;
+  const W = lblDraft.width, H = lblDraft.height;
+  const f = Math.min(1, W / nw, H / nh);         // never bigger than the label itself
+  nw *= f; nh *= f;
+  el.crop = { x: r4(c1.x), y: r4(c1.y), w: r4(c1.w), h: r4(c1.h) };
+  el.w = Math.max(1, lblRound1(nw)); el.h = Math.max(1, lblRound1(nh));
+  el.x = lblRound1(lblClamp(nx, 0, Math.max(0, W - el.w)));
+  el.y = lblRound1(lblClamp(ny, 0, Math.max(0, H - el.h)));
+  lblDraft.dirty = true;
+  lblCropClose();
+  lblRenderCards();
+  lblRenderStage();
+  toast('Picture cropped');
+}
+(function(){
+  const stage = document.getElementById('lblCropStage');
+  if(!stage) return;
+  stage.addEventListener('pointerdown', function(e){
+    const s = lblCropSt;
+    if(!s) return;
+    const ch = e.target.getAttribute && e.target.getAttribute('data-ch');
+    if(!ch) return;
+    e.preventDefault();
+    s.drag = { mode: ch, sx: e.clientX, sy: e.clientY, ox: s.x, oy: s.y, ow: s.w, oh: s.h };
+    try{ stage.setPointerCapture(e.pointerId); }catch(err){}
+  });
+  stage.addEventListener('pointermove', function(e){
+    const s = lblCropSt;
+    if(!s || !s.drag) return;
+    const d = s.drag, dx = e.clientX - d.sx, dy = e.clientY - d.sy, M = LBL_CROP_MIN;
+    let x = d.ox, y = d.oy, w = d.ow, h = d.oh;
+    if(d.mode === 'move'){
+      x = lblClamp(d.ox + dx, 0, s.W - d.ow);
+      y = lblClamp(d.oy + dy, 0, s.H - d.oh);
+    } else {
+      if(d.mode.indexOf('w') >= 0){ const nx = lblClamp(d.ox + dx, 0, d.ox + d.ow - M); w = d.ox + d.ow - nx; x = nx; }
+      if(d.mode.indexOf('e') >= 0){ w = lblClamp(d.ow + dx, M, s.W - d.ox); }
+      if(d.mode.indexOf('n') >= 0){ const ny = lblClamp(d.oy + dy, 0, d.oy + d.oh - M); h = d.oy + d.oh - ny; y = ny; }
+      if(d.mode.indexOf('s') >= 0){ h = lblClamp(d.oh + dy, M, s.H - d.oy); }
+    }
+    s.x = x; s.y = y; s.w = w; s.h = h;
+    lblCropPaint();
+  });
+  const end = function(e){
+    const s = lblCropSt;
+    if(s) s.drag = null;
+    try{ stage.releasePointerCapture(e.pointerId); }catch(err){}
+    // a drag that ends outside the window must not count as a click on the dark background (that would close it)
+    const swallow = function(ev){ ev.stopPropagation(); window.removeEventListener('click', swallow, true); };
+    window.addEventListener('click', swallow, true);
+    setTimeout(function(){ window.removeEventListener('click', swallow, true); }, 100);
+  };
+  stage.addEventListener('pointerup', end);
+  stage.addEventListener('pointercancel', end);
+  document.addEventListener('keydown', function(e){
+    if(!lblCropSt) return;
+    if(e.key === 'Escape'){ e.preventDefault(); lblCropCancel(); }
+    else if(e.key === 'Enter'){ e.preventDefault(); lblCropApply(); }
+  });
+})();
 
 /* ============ STANDARD LABELS, AUTO-FIT TEXT AND THE PRINT QUEUE ============ */
 let lblStandards = [];        // standard labels from the server
