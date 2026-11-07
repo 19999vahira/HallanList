@@ -4402,6 +4402,9 @@
       <button class="btn-ghost" type="button" onclick="lblSetCopies(50)">50</button>
       <button class="btn-ghost" type="button" onclick="lblSetCopies(100)">100</button>
     </div>
+    <div class="lbl-f" style="margin:4px 0 8px;"><label>Printer resolution (used to sharpen pictures)</label>
+      <select class="lbl-dpi-sel" onchange="lblSetDpi(this.value)"><option value="203">203 dpi (most label printers)</option><option value="300">300 dpi</option></select>
+    </div>
     <p class="ni-hint">“Print now” opens the print window straight away. “Add to queue” keeps this label so you can print it together with others.</p>
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalLabelPrint')">Cancel</button>
@@ -21416,6 +21419,11 @@ function lblRenderCards(){
       body = '<div class="lbl-row">' + lblNumField(el, 'w', 'Width (mm)', '0.5', 2) + lblNumField(el, 'h', 'Height (mm)', '0.5', 2) + '</div>'
         + '<div class="lbl-row"><div class="lbl-f chk"><label><input type="checkbox" data-lbl-eid="' + el.id + '" data-lbl-prop="lock" data-lbl-kind="bool"' + (el.lock !== false ? ' checked' : '') + '> Keep proportions</label></div></div>'
         + '<div class="lbl-row">' + lblNumField(el, 'x', 'Left (mm)', '0.5') + lblNumField(el, 'y', 'Top (mm)', '0.5') + '</div>'
+        + '<div class="lbl-f" style="margin-bottom:10px;"><label>Print as</label><select data-lbl-eid="' + el.id + '" data-lbl-prop="printMode" data-lbl-kind="str">'
+        + [['bw', 'Sharp black & white (best for label printers)'], ['dither', 'Dotted black & white (for photos)'], ['original', 'Original (the printer decides)']]
+            .map(r => '<option value="' + r[0] + '"' + ((el.printMode || 'bw') === r[0] ? ' selected' : '') + '>' + r[1] + '</option>').join('')
+        + '</select></div>'
+        + ((el.printMode || 'bw') !== 'original' ? '<div class="lbl-row">' + lblNumField({ id: el.id, bwLevel: (el.bwLevel != null ? el.bwLevel : 50) }, 'bwLevel', 'Darkness (10 lighter – 90 darker)', '5', 10) + '</div>' : '')
         + '<div class="lbl-addrow"><button class="btn-ghost" onclick="event.stopPropagation();lblOpenCrop(\'' + el.id + '\')">✂ Crop</button>'
         + '<button class="btn-ghost" onclick="event.stopPropagation();lblReplacePicture(\'' + el.id + '\')">Replace picture</button></div>'
         + '<p class="ni-hint" style="margin:8px 0 0;">Tip: double-click the picture on the label to crop it.</p>';
@@ -21507,7 +21515,8 @@ document.getElementById('lblCards').addEventListener('input', function(e){
   else { v = t.value; }
   el[prop] = v;
   if(el.type === 'image'){
-    if(prop === 'lock'){ if(v) lblImgKeepRatio(el, 'w'); lblSyncInputs(el, ['w', 'h']); }
+    if(prop === 'printMode'){ lblRenderCards(); }
+    else if(prop === 'lock'){ if(v) lblImgKeepRatio(el, 'w'); lblSyncInputs(el, ['w', 'h']); }
     else if((prop === 'w' || prop === 'h') && el.lock !== false){ lblImgKeepRatio(el, prop); lblSyncInputs(el, [prop === 'w' ? 'h' : 'w']); }
   }
   if(el.type === 'text'){
@@ -21574,7 +21583,7 @@ function lblElementHtml(el, editing){
     if(!lblImgOk(el)) return '';
     const c = lblCropOf(el);
     return '<div class="' + cls + '"' + eid + ' style="' + pos + 'width:' + (Number(el.w) || 10) + 'mm;height:' + (Number(el.h) || 10) + 'mm;overflow:hidden;">'
-      + '<img src="' + lblImgSrc(el, editing) + '" alt="" draggable="false" style="position:absolute;display:block;max-width:none;max-height:none;pointer-events:none;'
+      + '<img src="' + lblImgSrc(el, editing) + '" alt="" draggable="false" style="position:absolute;display:block;max-width:none;max-height:none;pointer-events:none;' + (el._px ? 'image-rendering:pixelated;' : '')
       + 'left:' + (-c.x / c.w * 100).toFixed(4) + '%;top:' + (-c.y / c.h * 100).toFixed(4) + '%;width:' + (100 / c.w).toFixed(4) + '%;height:' + (100 / c.h).toFixed(4) + '%;">'
       + (isSel ? lblHandleHtml('r') + lblHandleHtml('b') + lblHandleHtml('c') : '') + '</div>';
   }
@@ -21925,11 +21934,11 @@ function lblOpenPrint(target){
   openModal('modalLabelPrint');
   setTimeout(() => { const i = document.getElementById('lblCopies'); i.focus(); i.select(); }, 50);
 }
-function lblDoPrint(){
+async function lblDoPrint(){
   const t = lblPrintTarget;
   if(!t) return;
   const copies = lblReadCopies();
-  const one = lblSheetHtml(t.width, t.height, t.elements, false);
+  const one = lblSheetHtml(t.width, t.height, await lblPrintReady(t.elements), false);
   let pages = '';
   for(let i = 0; i < copies; i++) pages += '<div class="pg">' + one + '</div>';
   lblRunPrint(t.name, t.width, t.height, pages);
@@ -21940,6 +21949,7 @@ function lblRunPrint(title, w, h, pages){
     + '@page{size:' + w + 'mm ' + h + 'mm;margin:0;}'
     + 'html,body{margin:0;padding:0;background:#fff;}'
     + '.lbl-logo-img{background:url(' + LBL_LOGO_URI + ') center/contain no-repeat;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'
+    + 'img{-webkit-print-color-adjust:exact;print-color-adjust:exact;}'
     + '.pg{width:' + w + 'mm;height:' + h + 'mm;overflow:hidden;page-break-after:always;break-after:page;}'
     + '.pg:last-child{page-break-after:auto;break-after:auto;}'
     + '</style></head><body>' + pages + '</body></html>';
@@ -22135,7 +22145,7 @@ async function lblPicChosen(input){
     }
     if(!spot) spot = { x: 2, y: 2 };
     const el = { id: lblUid(), type: 'image', src: pic.src, nw: pic.nw, nh: pic.nh, x: lblRound1(spot.x), y: lblRound1(spot.y),
-      w: lblRound1(w), h: lblRound1(h), crop: { x: 0, y: 0, w: 1, h: 1 }, lock: true };
+      w: lblRound1(w), h: lblRound1(h), crop: { x: 0, y: 0, w: 1, h: 1 }, lock: true, printMode: 'bw', bwLevel: 50 };
     lblDraft.elements.push(el);
     lblSelId = el.id;
   }
@@ -22145,6 +22155,79 @@ async function lblPicChosen(input){
   const card = document.querySelector('#lblCards [data-card="' + lblSelId + '"]');
   if(card && card.scrollIntoView) card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
+
+/* ---------- print quality: pictures are turned into crisp 1-bit bitmaps at the printer's own resolution ---------- */
+// Label printers only print black dots. If the browser hands the driver a grey / colour picture, the driver
+// dithers it itself and resamples it, which looks fuzzy. So just before printing, each picture is cut to its
+// crop, resized to exactly (box size x printer dpi) pixels and made pure black & white.
+function lblGetDpi(){
+  let v = 203;
+  try{ v = parseInt(localStorage.getItem('hallan_label_dpi'), 10) || 203; }catch(err){}
+  return v === 300 ? 300 : 203;
+}
+function lblSetDpi(v){
+  const n = parseInt(v, 10) === 300 ? 300 : 203;
+  try{ localStorage.setItem('hallan_label_dpi', String(n)); }catch(err){}
+  document.querySelectorAll('.lbl-dpi-sel').forEach(s => { s.value = String(n); });
+}
+function lblLoadImg(src){
+  return new Promise((resolve, reject) => {
+    const i = new Image();
+    i.onload = () => resolve(i);
+    i.onerror = () => reject(new Error('picture'));
+    i.src = src;
+  });
+}
+async function lblPrintReady(elements){
+  const dpi = lblGetDpi(), out = [];
+  for(const el of (elements || [])){
+    if(el && el.type === 'image' && lblImgOk(el) && (el.printMode || 'bw') !== 'original'){
+      try{ out.push(await lblProcessImage(el, dpi)); continue; }catch(err){}
+    }
+    out.push(el);
+  }
+  return out;
+}
+async function lblProcessImage(el, dpi){
+  const img = await lblLoadImg(el.src);
+  const c = lblCropOf(el), iw = img.naturalWidth, ih = img.naturalHeight;
+  const tw = Math.max(1, Math.round((Number(el.w) || 10) * dpi / 25.4));
+  const th = Math.max(1, Math.round((Number(el.h) || 10) * dpi / 25.4));
+  const cv = document.createElement('canvas');
+  cv.width = tw; cv.height = th;
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, tw, th);   // transparent parts print as white
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, c.x * iw, c.y * ih, c.w * iw, c.h * ih, 0, 0, tw, th);
+  const id = ctx.getImageData(0, 0, tw, th), d = id.data;
+  const level = lblClamp(Number(el.bwLevel) || 50, 10, 90);
+  const shift = 255 * level / 100 - 127.5;               // darker setting = more black
+  const g = new Float32Array(tw * th);
+  for(let i = 0, p = 0; i < g.length; i++, p += 4) g[i] = 0.299 * d[p] + 0.587 * d[p + 1] + 0.114 * d[p + 2] - shift;
+  if(el.printMode === 'dither'){
+    // Atkinson dithering: keeps the highlights clean, good for photos on thermal paper
+    for(let y = 0; y < th; y++){
+      for(let x = 0; x < tw; x++){
+        const i = y * tw + x, old = g[i], nv = old < 127.5 ? 0 : 255, e = (old - nv) / 8;
+        g[i] = nv;
+        if(x + 1 < tw) g[i + 1] += e;
+        if(x + 2 < tw) g[i + 2] += e;
+        if(y + 1 < th){
+          if(x > 0) g[i + tw - 1] += e;
+          g[i + tw] += e;
+          if(x + 1 < tw) g[i + tw + 1] += e;
+        }
+        if(y + 2 < th) g[i + 2 * tw] += e;
+      }
+    }
+  } else {
+    for(let i = 0; i < g.length; i++) g[i] = g[i] < 127.5 ? 0 : 255;
+  }
+  for(let i = 0, p = 0; i < g.length; i++, p += 4){ const v = g[i] < 127.5 ? 0 : 255; d[p] = v; d[p + 1] = v; d[p + 2] = v; d[p + 3] = 255; }
+  ctx.putImageData(id, 0, 0);
+  return Object.assign({}, el, { src: cv.toDataURL('image/png'), nw: tw, nh: th, crop: { x: 0, y: 0, w: 1, h: 1 }, _px: true });
+}
+document.querySelectorAll('.lbl-dpi-sel').forEach(s => { s.value = String(lblGetDpi()); });
 
 /* ---------- cropping ---------- */
 let lblCropSt = null;   // { id, W, H (px shown), x, y, w, h (crop box, px), drag }
@@ -22632,6 +22715,7 @@ function lblQueueRender(){
     const total = pending.reduce((a, e) => a + e.copies, 0);
     return '<div class="lbl-qgroup"><div class="lbl-qhead"><b>' + g.w + ' × ' + g.h + ' mm</b>'
       + '<span>' + pending.length + ' label' + (pending.length === 1 ? '' : 's') + ' waiting · ' + total + ' to print</span>'
+      + '<select class="lbl-dpi-sel" onchange="lblSetDpi(this.value)" title="Printer resolution, used to sharpen pictures"><option value="203">203 dpi</option><option value="300">300 dpi</option></select>'
       + '<button class="btn-amber" onclick="lblQueuePrint(\'' + g.key + '\')">🖨️ Print these</button></div>'
       + g.items.map(e => {
         const codes = e.elements.filter(x => x.type === 'barcode').map(x => x.value).filter(Boolean).join(', ');
@@ -22643,6 +22727,7 @@ function lblQueueRender(){
           + '<button class="btn-ghost" onclick="lblQueueRemove(\'' + e.qid + '\')">Remove</button></div>';
       }).join('') + '</div>';
   }).join('');
+  document.querySelectorAll('.lbl-dpi-sel').forEach(s => { s.value = String(lblGetDpi()); });
 }
 async function lblQueueCopies(qid, v){
   const e = lblQueue.find(x => x.qid === qid);
@@ -22689,10 +22774,10 @@ async function lblQueuePrint(key){
   const total = items.reduce((a, e) => a + e.copies, 0);
   if(total > 3000){ toast('That is ' + total + ' labels — please print them in smaller batches (up to 3000 at once).'); return; }
   let pages = '';
-  items.forEach(e => {
-    const one = lblSheetHtml(e.width, e.height, e.elements, false);
+  for(const e of items){
+    const one = lblSheetHtml(e.width, e.height, await lblPrintReady(e.elements), false);
     for(let i = 0; i < e.copies; i++) pages += '<div class="pg">' + one + '</div>';
-  });
+  }
   lblRunPrint('Label queue', items[0].width, items[0].height, pages);
   try{ await apiPost('labels-queue/mark-printed', { ids: items.map(e => Number(e.qid)) }); }
   catch(err){ lblQueueErr(err, 'Printed, but could not mark them as printed'); }
