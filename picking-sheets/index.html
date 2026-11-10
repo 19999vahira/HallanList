@@ -3290,6 +3290,7 @@
         <button class="btn-ghost" onclick="promptReturnsAction('list','print')">Print</button>
         <button class="btn-ghost" onclick="promptReturnsAction('list','pdf')">Download PDF</button>
         <button class="btn-amber" id="returnsItemsReturnedBtn" style="display:none;" onclick="markReturnsItemsReturned()">Items Returned</button>
+        <button class="btn-ghost" id="returnsPartialCreditBtn" style="display:none;" onclick="openReturnsPartialCredit()">Partial Credit Received</button>
         <button class="btn-amber" id="returnsCreditNoteBtn" style="display:none;" onclick="markReturnsCreditNoteReceived()">Credit Notes Received</button>
       </div>
     </div>
@@ -3688,6 +3689,24 @@
     <div id="goodsInScanFeedback"></div>
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalGoodsInScanner')">Done scanning</button>
+    </div>
+  </div>
+</div>
+
+<!-- RETURNS: PARTIAL CREDIT — tick the items the supplier has credited -->
+<div class="modal-backdrop" id="modalReturnsPartialCredit">
+  <div class="modal" style="width:560px;max-width:96vw;">
+    <h3>Partial credit received</h3>
+    <p class="modal-sub">Tick the items the supplier has <b>credited</b>. Unticked items stay in Awaiting Credit Note.</p>
+    <div style="display:flex;gap:8px;margin:6px 0 8px;">
+      <button class="btn-ghost" type="button" onclick="returnsPartialSetAll(true)">Tick all</button>
+      <button class="btn-ghost" type="button" onclick="returnsPartialSetAll(false)">Untick all</button>
+    </div>
+    <div id="returnsPartialList" style="max-height:48vh;overflow:auto;border:1px solid var(--border,#d9dde3);border-radius:8px;"></div>
+    <div id="returnsPartialSummary" class="mono" style="margin:10px 0 0;font-size:13px;"></div>
+    <div class="modal-close-row" style="justify-content:flex-end;gap:10px;">
+      <button class="btn-ghost" onclick="closeModal('modalReturnsPartialCredit')">Cancel</button>
+      <button class="btn-amber" id="returnsPartialConfirmBtn" onclick="confirmReturnsPartialCredit()">Confirm</button>
     </div>
   </div>
 </div>
@@ -16762,6 +16781,7 @@ async function openReturnsListDetail(returnId){
   document.getElementById('returnsDetailTable').innerHTML = '';
   document.getElementById('returnsItemsReturnedBtn').style.display = 'none';
   document.getElementById('returnsCreditNoteBtn').style.display = 'none';
+  document.getElementById('returnsPartialCreditBtn').style.display = 'none';
   document.getElementById('returnsCloseListBtn').style.display = 'none';
   document.getElementById('returnsReopenListBtn').style.display = 'none';
   document.getElementById('returnsEditLockBtn').style.display = 'none';
@@ -16786,6 +16806,7 @@ async function openReturnsListDetail(returnId){
     document.getElementById('returnsReopenListBtn').style.display = currentReturnsList.status === 'CLOSED_LIST' ? 'inline-block' : 'none';
     document.getElementById('returnsItemsReturnedBtn').style.display = currentReturnsList.status === 'CLOSED_LIST' ? 'inline-block' : 'none';
     document.getElementById('returnsCreditNoteBtn').style.display = currentReturnsList.status === 'AWAITING_CREDIT' ? 'inline-block' : 'none';
+    document.getElementById('returnsPartialCreditBtn').style.display = (currentReturnsList.status === 'AWAITING_CREDIT' && currentReturnsItems.length > 1) ? 'inline-block' : 'none';
     updateReturnsEditLockBtn();
     renderReturnsDetailTable();
     renderReturnsSignoff();
@@ -17100,6 +17121,65 @@ async function showReturnsDamagePhotos(itemId){
 function hideReturnsDamagePanel(){
   document.getElementById('returnsDamagePanel').innerHTML = '';
   returnsDamageImages = [];
+}
+/* ---- Partial credit: tick the items the supplier credited; those move to Returned Goods, the rest stay awaiting ---- */
+function openReturnsPartialCredit(){
+  if(!currentReturnsList || currentReturnsList.status !== 'AWAITING_CREDIT') return;
+  const box = document.getElementById('returnsPartialList');
+  box.innerHTML = currentReturnsItems.map(it => `
+    <label class="rpc-row" data-id="${it.item_id}" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border,#e5e8ec);cursor:pointer;">
+      <input type="checkbox" class="rpc-chk" value="${it.item_id}" style="width:20px;height:20px;flex:none;" onchange="returnsPartialRefresh()">
+      <span style="flex:1;min-width:0;">${escapeHtml(it.item_name)}<br><small style="color:var(--text-dim,#667);">Qty ${it.quantity} · ${returnsMoney(returnsLineGross(it.cost_price, it.quantity, it.is_vat))}</small></span>
+      <span class="rpc-state mono" style="font-size:12px;white-space:nowrap;"></span>
+    </label>`).join('');
+  returnsPartialRefresh();
+  openModal('modalReturnsPartialCredit');
+}
+function returnsPartialSetAll(on){
+  document.querySelectorAll('#returnsPartialList .rpc-chk').forEach(c => { c.checked = on; });
+  returnsPartialRefresh();
+}
+function returnsPartialRefresh(){
+  let got = 0, gotValue = 0, wait = 0, waitValue = 0;
+  document.querySelectorAll('#returnsPartialList .rpc-row').forEach(row => {
+    const chk = row.querySelector('.rpc-chk');
+    const it = currentReturnsItems.find(x => String(x.item_id) === String(chk.value));
+    const val = it ? returnsLineGross(it.cost_price, it.quantity, it.is_vat) : 0;
+    const st = row.querySelector('.rpc-state');
+    if(chk.checked){ got++; gotValue += val; st.textContent = '✓ Credit received'; st.style.color = 'var(--success,#15803d)'; row.style.background = 'rgba(22,163,74,.08)'; }
+    else { wait++; waitValue += val; st.textContent = 'Not received'; st.style.color = 'var(--danger,#b91c1c)'; row.style.background = ''; }
+  });
+  document.getElementById('returnsPartialSummary').innerHTML =
+    'Credit received: <b>' + got + '</b> item' + (got===1?'':'s') + ' (' + returnsMoney(gotValue) + ')<br>' +
+    'Still awaiting: <b>' + wait + '</b> item' + (wait===1?'':'s') + ' (' + returnsMoney(waitValue) + ')';
+  document.getElementById('returnsPartialConfirmBtn').disabled = got === 0;
+}
+async function confirmReturnsPartialCredit(){
+  if(!currentReturnsList) return;
+  const ids = Array.from(document.querySelectorAll('#returnsPartialList .rpc-chk:checked')).map(c => Number(c.value));
+  if(!ids.length){ toast('Tick at least one item'); return; }
+  const left = currentReturnsItems.length - ids.length;
+  const msg = left > 0
+    ? ids.length + ' item(s) move to Returned Goods. The other ' + left + ' stay in Awaiting Credit Note. Continue?'
+    : 'Every item is ticked, so the whole list moves to Returned Goods. Continue?';
+  if(!confirm(msg)) return;
+  const btn = document.getElementById('returnsPartialConfirmBtn');
+  btn.disabled = true;
+  try{
+    const r = await apiPost('returns/lists/' + currentReturnsList.return_id + '/partial-credit-received/', { received_item_ids: ids });
+    closeModal('modalReturnsPartialCredit');
+    if(r && r.remaining > 0){
+      toast(r.received + ' moved to Returned Goods · ' + r.remaining + ' still awaiting credit');
+      await openReturnsListDetail(currentReturnsList.return_id);   // stay on this list, now only the uncredited items
+    } else {
+      toast('Moved to Returned Goods');
+      backToReturnsSupplierDetail();
+    }
+  }catch(e){
+    toast('Could not save: ' + ((e && e.body && e.body.error) || (e && e.message) || 'unknown error'));
+    console.error(e);
+    btn.disabled = false;
+  }
 }
 async function markReturnsCreditNoteReceived(){
   if(!currentReturnsList) return;
