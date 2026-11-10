@@ -4484,6 +4484,10 @@
       <div id="scannerNameSearchResults" class="searchresults"></div>
     </div>
     <div id="scanFeedback"></div>
+    <div id="scannerLabelPick" style="display:none;margin:8px 0 4px;font-size:13px;">
+      <label for="scannerLabelSel" style="display:block;margin-bottom:4px;color:var(--muted,#667);">Label to use for “Add to label queue”</label>
+      <select id="scannerLabelSel" onchange="scannerLabelRemember()" style="width:100%;"></select>
+    </div>
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeScanner()">Done adding</button>
     </div>
@@ -20104,6 +20108,7 @@ function openScanner(target){
   } else {
     sub.textContent = 'Scan now — it looks up automatically';
   }
+  scannerLabelPrepare();
   openModal('modalScanner');
   // The scanner is a keyboard-emulating hardware device — it types the
   // barcode into whatever field has focus, then sends Enter. Focusing
@@ -20162,7 +20167,7 @@ function onScannerNameSearch(){
       items.forEach(it => {
         const div = document.createElement('div');
         div.className = 'searchresult';
-        div.innerHTML = `<div class="sname">${escapeHtml(it.name)}</div><div class="sstock">${it.quantity} in stock</div>`;
+        div.innerHTML = `<div class="sname">${escapeHtml(it.name)}</div><div class="sstock">${scanPriceText(it.retail_price)} · ${it.quantity} in stock</div>`;
         div.onclick = () => {
           document.getElementById('scanFeedback').prepend(renderScanResultCard(it, null));
         };
@@ -20205,6 +20210,56 @@ async function handleScannedCode(code){
     input.focus();
   }
 }
+const SCAN_LABEL_PICK_KEY = 'hallan_scan_label_pick';
+function scanPriceText(v){
+  const n = (v === null || v === undefined || v === '') ? NaN : Number(v);
+  return isFinite(n) ? '£' + n.toFixed(2) : 'not set';
+}
+// Fills the "label to use" drop-down (standard + saved labels) and shows it everywhere except when scanning for the label editor itself.
+async function scannerLabelPrepare(){
+  const wrap = document.getElementById('scannerLabelPick');
+  if(!wrap) return;
+  wrap.style.display = scannerTarget === 'label' ? 'none' : '';
+  if(scannerTarget === 'label') return;
+  try{
+    if(!lblStandards.length) await lblLoadStandards();
+    if(!lblSaved.length) await lblLoadSaved();
+  }catch(e){ console.error(e); }
+  const sel = document.getElementById('scannerLabelSel');
+  let html = '';
+  if(lblStandards.length) html += '<optgroup label="Standard labels">' + lblStandards.map(x => '<option value="s:' + x.standard_id + '">' + escapeHtml(x.name) + ' (' + x.width_mm + ' × ' + x.height_mm + ' mm)</option>').join('') + '</optgroup>';
+  if(lblSaved.length) html += '<optgroup label="Saved labels">' + lblSaved.map(x => '<option value="l:' + x.label_id + '">' + escapeHtml(x.name) + ' (' + x.width_mm + ' × ' + x.height_mm + ' mm)</option>').join('') + '</optgroup>';
+  sel.innerHTML = html || '<option value="">No labels set up yet</option>';
+  let keep = '';
+  try{ keep = localStorage.getItem(SCAN_LABEL_PICK_KEY) || ''; }catch(e){}
+  if(keep && Array.from(sel.options).some(o => o.value === keep)) sel.value = keep;
+}
+function scannerLabelRemember(){
+  try{ localStorage.setItem(SCAN_LABEL_PICK_KEY, document.getElementById('scannerLabelSel').value); }catch(e){}
+}
+// Puts the scanned product straight onto the shared label print queue (1 copy; change copies on the queue page).
+async function scannerAddToLabelQueue(stock, btn){
+  const val = document.getElementById('scannerLabelSel').value;
+  if(!val){ toast('Set up a standard label first (Labels page)'); return; }
+  const id = Number(val.slice(2));
+  const src = val[0] === 's' ? lblStandards.find(x => x.standard_id === id) : lblSaved.find(x => x.label_id === id);
+  if(!src){ toast('Could not find that label'); return; }
+  btn.disabled = true;
+  try{
+    const els = lblCloneEls(src.elements);
+    els.forEach(e => { if(e.type === 'text' && e.fit && Number(e.h) > 0) lblFitText(e); });
+    const p = await lblFetchProductInfo(stock);
+    lblFillSlots(els, p.name, p.price, p.barcode);
+    const errs = lblValidateElements(els);
+    if(errs.length){ toast(errs[0]); btn.disabled = false; return; }
+    await lblQueuePush(src.name, src.width_mm, src.height_mm, els, 1);
+    toast('Added to label queue: ' + p.name + (isFinite(p.priceNum) ? '' : ' (no price set)'));
+    btn.textContent = '✓ In label queue';
+  }catch(e){
+    lblQueueErr(e, 'Could not add to the label queue');
+    btn.disabled = false;
+  }
+}
 function renderScanResultCard(stock, scannedCode){
   const card = document.createElement('div');
   card.className = 'scanresult-card';
@@ -20215,6 +20270,7 @@ function renderScanResultCard(stock, scannedCode){
     <div class="srname">${escapeHtml(stock.name)}</div>
     <div class="srbarcode">Barcode: ${escapeHtml(barcodeText)}</div>
     <div class="srstock">In stock: <span class="val ${stockClass(stock.quantity)}">${stock.quantity ?? '—'}</span></div>
+    <div class="srstock">Price: <span class="val">${scanPriceText(stock.retail_price)}</span></div>
     <div class="srrow">
       ${showStepper ? `
       <div class="stepper">
@@ -20225,7 +20281,10 @@ function renderScanResultCard(stock, scannedCode){
       <button class="btn-ghost srskip">Skip</button>
       <button class="btn-amber">${scannerTarget === 'location' ? 'Add to row' : (scannerTarget === 'label' ? 'Use on label' : 'Add to list')}</button>
     </div>
+    ${scannerTarget === 'label' ? '' : '<div class="srrow" style="margin-top:6px;"><button class="btn-ghost srqueue" type="button" style="width:100%;">🧾 Add to label queue</button></div>'}
   `;
+  const qBtn = card.querySelector('.srqueue');
+  if(qBtn) qBtn.onclick = () => scannerAddToLabelQueue(stock, qBtn);
   if(showStepper){
     const qtyEl = card.querySelector('.qty');
     card.querySelector('.ibminus').onclick = () => { qty = Math.max(1, qty-1); qtyEl.textContent = qty; };
