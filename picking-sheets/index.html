@@ -9977,7 +9977,7 @@ async function regenerateShopifyContent(part){
    The server does the work in the background (see SHOPIFY AUTOMATION in server.js); this page only starts / pauses it
    and shows the batches. Each batch lists every product with its pictures, Shopify + website links and status.
    "Complete" uses the same Completed tick as the normal Shopify list. */
-const shAuto = { run:null, batches:[], totals:null, open:new Set(), details:{}, timer:null, counts:null, loading:false, firstOpen:true, supplier:null };
+const shAuto = { run:null, batches:[], totals:null, open:new Set(), details:{}, sel:{}, timer:null, counts:null, loading:false, firstOpen:true, supplier:null };
 const SH_AUTO_LIST_LABEL = { yes:'Preferred List', no:'Non-Preferred List', both:'Both lists' };
 const SH_AUTO_STATUS = { running:'Running', paused:'Paused', finished:'Finished', stopped:'Stopped' };
 
@@ -10009,7 +10009,7 @@ async function loadShopifyAutoCardCount(){
 }
 
 async function openShopifyAuto(){
-  shAuto.run = null; shAuto.batches = []; shAuto.totals = null; shAuto.open = new Set(); shAuto.details = {}; shAuto.firstOpen = true;
+  shAuto.run = null; shAuto.batches = []; shAuto.totals = null; shAuto.open = new Set(); shAuto.details = {}; shAuto.sel = {}; shAuto.firstOpen = true;
   if(shAuto.supplier !== shopifyData.suppid){ shAuto.counts = null; shAuto.supplier = shopifyData.suppid; }
   document.getElementById('shopifyCrumbs-auto').innerHTML =
     '<button onclick="goHome()">Home</button><span class="sep">/</span>'
@@ -10126,7 +10126,8 @@ async function shAutoLoadBatch(n){
     shAutoRenderBatchBody(n);
   }catch(e){ console.error(e); const el = document.getElementById('shBatchBody-' + n); if(el && !shAuto.details[n]) el.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load this batch.</div>' + errDetailHtml(e); }
 }
-function shAutoRow(it, d, idx){
+const SH_AUTO_RETRYABLE = { failed:1, held:1, done:1 };
+function shAutoRow(it, d, idx, n){
   const id = Number(it.stockid);
   const badge = d.shopify_ok
     ? (it.shopify_url && it.shopify_status !== 'not_found'
@@ -10150,7 +10151,11 @@ function shAutoRow(it, d, idx){
   const comp = it.sh_completed
     ? `<button class="btn-ghost shsmall" type="button" onclick="shAutoComplete(${id}, false)">Undo</button>`
     : `<button class="btn-amber shsmall" type="button" ${canComplete ? '' : 'disabled'} onclick="shAutoComplete(${id}, true)">Complete</button>`;
+  const canSel = !it.sh_completed && SH_AUTO_RETRYABLE[it.state];
+  const isSel = !!(shAuto.sel[n] && shAuto.sel[n].has(id));
+  const box = canSel ? `<input type="checkbox" ${isSel ? 'checked' : ''} onchange="shAutoSelToggle(${n}, ${id}, this.checked)" title="Select to retry">` : '';
   return `<tr>
+    <td class="shc">${box}</td>
     <td class="shc shn">${idx}</td>
     <td class="shc">${thumb}</td>
     <td><div class="odname">${escapeHtml(it.name)}${badge}${wp}</div>${it.sku ? `<div class="odbarcode">SKU ${escapeHtml(it.sku)}</div>` : ''}${msg}</td>
@@ -10168,9 +10173,51 @@ function shAutoRenderBatchBody(n){
   if(!d){ el.innerHTML = '<div class="loading">Loading…</div>'; return; }
   const items = d.items || [];
   const todo = items.filter(x => !x.sh_completed), done = items.filter(x => x.sh_completed);
-  const head = '<table class="finaltable odtable shtable"><thead><tr><th class="shc">#</th><th class="shc">Picture</th><th>Product</th><th class="shnum">Price (inc. VAT)</th><th class="shc">Status</th><th class="shc">Photos</th><th class="shc">Content</th><th class="shc">Complete</th></tr></thead><tbody>';
-  const sect = (title, arr) => arr.length ? '<h5>' + title + ' (' + arr.length + ')</h5>' + head + arr.map(x => shAutoRow(x, d, x.pos)).join('') + '</tbody></table>' : '';
-  el.innerHTML = (sect('Still to complete', todo) + sect('Completed', done)) || '<div class="empty-hint">No products in this batch.</div>';
+  const sel = shAuto.sel[n] || new Set();
+  const selCount = items.filter(x => !x.sh_completed && SH_AUTO_RETRYABLE[x.state] && sel.has(Number(x.stockid))).length;
+  const nProblems = todo.filter(x => x.state === 'failed' || x.state === 'held').length;
+  const tools = todo.length ? `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0 4px;">`
+    + `<button class="btn-ghost shsmall" type="button" onclick="shAutoSelProblems(${n})">Select failed / needs checking (${nProblems})</button>`
+    + `<button class="btn-ghost shsmall" type="button" onclick="shAutoSelAll(${n}, true)">Select all</button>`
+    + `<button class="btn-ghost shsmall" type="button" onclick="shAutoSelAll(${n}, false)">Clear</button>`
+    + `<button class="btn-amber shsmall" type="button" ${selCount ? '' : 'disabled'} onclick="shAutoRetrySelected(${n})">&#8635; Retry selected (${selCount})</button></div>` : '';
+  const head = '<table class="finaltable odtable shtable"><thead><tr><th class="shc"></th><th class="shc">#</th><th class="shc">Picture</th><th>Product</th><th class="shnum">Price (inc. VAT)</th><th class="shc">Status</th><th class="shc">Photos</th><th class="shc">Content</th><th class="shc">Complete</th></tr></thead><tbody>';
+  const sect = (title, arr) => arr.length ? '<h5>' + title + ' (' + arr.length + ')</h5>' + head + arr.map(x => shAutoRow(x, d, x.pos, n)).join('') + '</tbody></table>' : '';
+  el.innerHTML = (tools + sect('Still to complete', todo) + sect('Completed', done)) || '<div class="empty-hint">No products in this batch.</div>';
+}
+function shAutoSelToggle(n, id, on){
+  if(!shAuto.sel[n]) shAuto.sel[n] = new Set();
+  if(on) shAuto.sel[n].add(id); else shAuto.sel[n].delete(id);
+  shAutoRenderBatchBody(n);
+}
+function shAutoSelAll(n, on){
+  const d = shAuto.details[n]; if(!d) return;
+  shAuto.sel[n] = new Set();
+  if(on) (d.items || []).forEach(x => { if(!x.sh_completed && SH_AUTO_RETRYABLE[x.state]) shAuto.sel[n].add(Number(x.stockid)); });
+  shAutoRenderBatchBody(n);
+}
+function shAutoSelProblems(n){
+  const d = shAuto.details[n]; if(!d) return;
+  shAuto.sel[n] = new Set();
+  (d.items || []).forEach(x => { if(!x.sh_completed && (x.state === 'failed' || x.state === 'held')) shAuto.sel[n].add(Number(x.stockid)); });
+  shAutoRenderBatchBody(n);
+}
+async function shAutoRetrySelected(n){
+  const d = shAuto.details[n]; if(!d || !shAuto.run) return;
+  const sel = shAuto.sel[n] || new Set();
+  const items = (d.items || []).filter(x => !x.sh_completed && SH_AUTO_RETRYABLE[x.state] && sel.has(Number(x.stockid)));
+  if(!items.length){ toast('Tick the products you want to retry'); return; }
+  const again = items.filter(x => x.state !== 'failed').length, failed = items.length - again;
+  if(!confirm('Retry ' + items.length + ' product' + (items.length === 1 ? '' : 's') + ' in Batch ' + n + '?\n\n'
+    + (again ? again + ' will get a NEW picture from Gemini (the text stays). That uses Gemini credit: up to about $0.70 each, about $0.20 when the first try is good.\n' : '')
+    + (failed ? failed + ' failed one' + (failed === 1 ? '' : 's') + ' will be tried again from where they stopped.\n' : '')
+    + '\nProducts you already marked Completed are never touched.')) return;
+  try{
+    const r = await apiPost('stock/shopify/auto/retry/', { run: shAuto.run.id, stockids: items.map(x => Number(x.stockid)), redo: true });
+    toast(r.paused ? r.changed + ' queued — press Resume to run them' : r.changed + ' queued — they run next');
+    shAuto.sel[n] = new Set();
+    await shAutoRefresh();
+  }catch(e){ console.error(e); toast(e.message); }
 }
 async function shAutoStart(){
   const list = document.getElementById('shAutoList').value;
