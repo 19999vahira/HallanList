@@ -704,6 +704,33 @@
   .shmsg.err{color:var(--danger);}
   .shmsg.ok{color:var(--green);}
   .shmsg.warn{color:var(--accent-dim);}
+  .shstarthead{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);margin:4px 0 8px;font-family:'JetBrains Mono',monospace;}
+  .shautocard{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:16px;margin:0 0 16px;}
+  .shautocard .shrow{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;}
+  .shautocard label{display:block;font-size:12px;color:var(--text-dim);margin:0 0 4px;}
+  .shautocard select,.shautocard input[type=number]{padding:8px 10px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--text);font-size:14px;}
+  .shautohow{font-size:12.5px;color:var(--text-dim);line-height:1.5;margin:12px 0 0;}
+  .shbar2{height:8px;background:var(--line);border-radius:5px;overflow:hidden;margin:8px 0 0;}
+  .shbar2 > i{display:block;height:100%;background:var(--green);}
+  .shbar2 > i.p{background:var(--accent);}
+  .shbatch{border:1px solid var(--line);border-radius:10px;margin:0 0 12px;background:var(--panel);overflow:hidden;}
+  .shbatchhead{display:flex;gap:14px;align-items:center;padding:12px 16px;cursor:pointer;flex-wrap:wrap;}
+  .shbatchhead:hover{background:var(--panel2);}
+  .shbatchhead .t{font-weight:700;font-size:15px;min-width:90px;}
+  .shbatchhead .big{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:17px;}
+  .shbatchhead .sm{font-size:12px;color:var(--text-dim);}
+  .shbatchhead .grow{flex:1;min-width:120px;}
+  .shbatch.full .big{color:var(--green);}
+  .shbatchbody{padding:0 12px 14px;overflow-x:auto;}
+  .shbatchbody h5{margin:14px 0 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);}
+  .shthumb{width:56px;height:56px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:6px;display:block;margin:auto;}
+  .shthumb.none{display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:11px;}
+  .shchip{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:var(--line);color:var(--text-dim);}
+  .shchip.working{background:var(--accent);color:#fff;}
+  .shchip.done{background:var(--green);color:#fff;}
+  .shchip.held{background:var(--accent-dim);color:#fff;}
+  .shchip.failed{background:var(--danger);color:#fff;}
+  .shautonote{font-size:13px;margin:8px 0 0;}
   .shtabs{display:flex;gap:8px;margin:0 0 12px;}
   .shtab{background:var(--panel2);border:1px solid var(--line);color:var(--text-dim);padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;}
   .shtab.on{background:var(--accent);border-color:var(--accent);color:#fff;}
@@ -2296,6 +2323,7 @@
       <p>Pick a supplier, then send its products to the Shopify store and see which ones are already there.</p>
     </div>
     <div id="shopifyConnNote" class="odcount" style="margin:0 0 12px;"></div>
+    <div id="shopifyStartedBox" style="margin:0 0 16px;"></div>
     <div class="actionbar">
       <input type="text" id="shopifySupplierSearchInput" class="historysearch" style="max-width:420px;"
              placeholder="Search supplier name…" oninput="onShopifySupplierSearch()" autocomplete="off">
@@ -2322,6 +2350,10 @@
       <div class="bincard" onclick="openShopifyList('no')">
         <h4>📋 Non-Preferred List</h4>
         <div class="count" id="shopifyCountNonPreferred">Loading…</div>
+      </div>
+      <div class="bincard" onclick="openShopifyAuto()">
+        <h4>🤖 Automate</h4>
+        <div class="count" id="shopifyCountAuto">Loading…</div>
       </div>
     </div>
   </div>
@@ -2365,6 +2397,27 @@
     </div>
     <div id="shopifyListNote" class="odcount" style="margin:-8px 0 12px;"></div>
     <div id="shopifyListBox"><div class="loading">Loading…</div></div>
+  </div>
+
+  <!-- STOCK INFO: SHOPIFY > SUPPLIER > Automate (batches) -->
+  <div id="view-shopify-auto" class="view">
+    <div class="crumbrow" id="shopifyCrumbs-auto"></div>
+    <div class="hero">
+      <div class="eyebrow">Shopify</div>
+      <h2 id="shopifyAutoTitle">Automate</h2>
+      <p>Choose how many products go in each batch. The portal then does every step for you, one product after another: pulls the website pictures, writes the text, tidies the picture, sends it to Shopify, and deletes the website pictures once the tidied one is saved. When a batch is full the next batch starts straight away, until the whole supplier is finished.</p>
+    </div>
+    <div class="shautocard" id="shAutoSetup" style="display:none;">
+      <div class="shrow">
+        <div><label for="shAutoList">Which products</label><select id="shAutoList"></select></div>
+        <div><label for="shAutoSize">Products per batch</label><input type="number" id="shAutoSize" min="1" max="500" value="50" style="width:110px;"></div>
+        <div><label for="shAutoSend" style="display:flex;gap:6px;align-items:center;margin:0;padding-bottom:9px;"><input type="checkbox" id="shAutoSend" checked> Also send each product to Shopify</label></div>
+        <button class="btn-amber" type="button" id="shAutoStartBtn" onclick="shAutoStart()">Start automation</button>
+      </div>
+      <div class="shautohow">Uses Gemini credit for every product (about 1–3 minutes each). New products are created on Shopify as draft. Products already marked Completed are left alone. You can Pause or Stop at any time, and it pauses by itself if several products fail in a row.</div>
+    </div>
+    <div id="shAutoRunBox"></div>
+    <div id="shAutoBatches"></div>
   </div>
 
   <!-- RESTAURANT ORDERS: PASSCODE -->
@@ -9121,6 +9174,7 @@ function openShopify(){
   input.value = '';
   document.getElementById('shopifySupplierResults').innerHTML = '<div class="empty-hint">Start typing a supplier name.</div>';
   loadShopifyConnection();
+  loadShopifyStarted();
   setTimeout(() => input.focus(), 80);
 }
 async function loadShopifyConnection(){
@@ -9182,6 +9236,7 @@ async function openShopifySupplierHome(){
   document.getElementById('shopifyCountPreferred').textContent = 'Loading…';
   document.getElementById('shopifyCountNonPreferred').textContent = 'Loading…';
   showView('view-shopify-pref');
+  loadShopifyAutoCardCount();
   const set = (id, c) => {
     document.getElementById(id).textContent = c ? ((c.incomplete + c.complete) + ' products') : 'Could not load counts';
   };
@@ -9916,6 +9971,249 @@ async function regenerateShopifyContent(part){
     toast('Regenerate failed: ' + e.message);
   }
   await openShopifyContent(id);
+}
+
+/* ============ STOCK INFO > SHOPIFY > AUTOMATE ============
+   The server does the work in the background (see SHOPIFY AUTOMATION in server.js); this page only starts / pauses it
+   and shows the batches. Each batch lists every product with its pictures, Shopify + website links and status.
+   "Complete" uses the same Completed tick as the normal Shopify list. */
+const shAuto = { run:null, batches:[], totals:null, open:new Set(), details:{}, timer:null, counts:null, loading:false, firstOpen:true, supplier:null };
+const SH_AUTO_LIST_LABEL = { yes:'Preferred List', no:'Non-Preferred List', both:'Both lists' };
+const SH_AUTO_STATUS = { running:'Running', paused:'Paused', finished:'Finished', stopped:'Stopped' };
+
+/* Suppliers already started — shown on the Shopify page so they do not have to be searched for again */
+async function loadShopifyStarted(){
+  const box = document.getElementById('shopifyStartedBox');
+  if(!box) return;
+  try{
+    const d = await apiGet('stock/shopify/auto/suppliers/');
+    const items = d.items || [];
+    if(!items.length){ box.innerHTML = ''; return; }
+    box.innerHTML = '<div class="shstarthead">Suppliers you have started</div><div class="catgrid">' + items.map(s =>
+      `<div class="bincard" onclick="chooseShopifySupplier(${Number(s.suppid)}, ${jsArg(s.name)})">
+         <h4>${escapeHtml(s.name)}</h4>
+         <div class="count">${Number(s.started)} started · ${Number(s.completed)} completed</div>
+         <div class="count">${Number(s.total)} products${s.auto_status ? ' · 🤖 ' + escapeHtml(SH_AUTO_STATUS[s.auto_status] || s.auto_status) : ''}</div>
+       </div>`).join('') + '</div>';
+  }catch(e){ console.error(e); box.innerHTML = ''; }
+}
+async function loadShopifyAutoCardCount(){
+  const el = document.getElementById('shopifyCountAuto');
+  if(!el) return;
+  el.textContent = 'Loading…';
+  try{
+    const d = await apiGet('stock/shopify/auto/latest/?suppid=' + encodeURIComponent(shopifyData.suppid));
+    if(!d.run){ el.textContent = 'Not started'; return; }
+    el.textContent = (SH_AUTO_STATUS[d.run.status] || d.run.status) + ' · ' + d.totals.completed + '/' + d.totals.total + ' completed';
+  }catch(e){ el.textContent = 'Open'; console.error(e); }
+}
+
+async function openShopifyAuto(){
+  shAuto.run = null; shAuto.batches = []; shAuto.totals = null; shAuto.open = new Set(); shAuto.details = {}; shAuto.firstOpen = true;
+  if(shAuto.supplier !== shopifyData.suppid){ shAuto.counts = null; shAuto.supplier = shopifyData.suppid; }
+  document.getElementById('shopifyCrumbs-auto').innerHTML =
+    '<button onclick="goHome()">Home</button><span class="sep">/</span>'
+    + '<button onclick="showView(\'view-stock-info\')">Stock Info</button><span class="sep">/</span>'
+    + '<button onclick="openShopify()">Shopify</button><span class="sep">/</span>'
+    + '<button onclick="openShopifySupplierHome()">' + escapeHtml(shopifyData.suppName) + '</button><span class="sep">/</span>'
+    + '<span class="current">Automate</span>';
+  document.getElementById('shopifyAutoTitle').textContent = shopifyData.suppName + ' — Automate';
+  document.getElementById('shAutoSetup').style.display = 'none';
+  document.getElementById('shAutoRunBox').innerHTML = '<div class="loading">Loading…</div>';
+  document.getElementById('shAutoBatches').innerHTML = '';
+  showView('view-shopify-auto');
+  await shAutoRefresh();
+  clearInterval(shAuto.timer);
+  shAuto.timer = setInterval(() => {
+    const v = document.getElementById('view-shopify-auto');
+    if(!v || !v.classList.contains('active')){ clearInterval(shAuto.timer); return; }
+    if(!document.hidden) shAutoRefresh();
+  }, 7000);
+}
+function shAutoActive(){ return !!(shAuto.run && (shAuto.run.status === 'running' || shAuto.run.status === 'paused')); }
+
+async function shAutoRefresh(){
+  if(shAuto.loading) return;
+  shAuto.loading = true;
+  try{
+    const d = await apiGet('stock/shopify/auto/latest/?suppid=' + encodeURIComponent(shopifyData.suppid));
+    shAuto.run = d.run || null; shAuto.batches = d.batches || []; shAuto.totals = d.totals || null;
+    if(!shAuto.counts){
+      try{ shAuto.counts = await apiGet('stock/online-data/summary/?suppid=' + encodeURIComponent(shopifyData.suppid)); }
+      catch(e){ shAuto.counts = {}; }
+    }
+    if(shAuto.firstOpen && shAuto.run){
+      const b = shAuto.batches.find(x => x.total > x.completed) || shAuto.batches[0];
+      if(b) shAuto.open.add(b.batch_no);
+    }
+    shAuto.firstOpen = false;
+    shAutoRender();
+    await Promise.all([...shAuto.open].map(n => shAutoLoadBatch(n)));
+  }catch(e){
+    console.error(e);
+    document.getElementById('shAutoRunBox').innerHTML = '<div class="loading" style="color:var(--danger)">Could not load the automation.</div>' + errDetailHtml(e);
+  }finally{ shAuto.loading = false; }
+}
+function shAutoCount(k){
+  const c = shAuto.counts && shAuto.counts[k];
+  return c ? (Number(c.incomplete || 0) + Number(c.complete || 0)) : null;
+}
+function shAutoFillSetup(){
+  const sel = document.getElementById('shAutoList');
+  if(sel.options.length) return;     // keep what was chosen
+  const p = shAutoCount('preferred'), n = shAutoCount('non_preferred');
+  const lab = (t, c) => t + (c !== null ? ' (' + c + ')' : '');
+  sel.innerHTML = '<option value="yes">' + lab('Preferred List', p) + '</option>'
+    + '<option value="no">' + lab('Non-Preferred List', n) + '</option>'
+    + '<option value="both">' + lab('Both lists', (p !== null && n !== null) ? p + n : null) + '</option>';
+}
+function shAutoRender(){
+  const run = shAuto.run;
+  const setup = document.getElementById('shAutoSetup');
+  if(shAutoActive()){ setup.style.display = 'none'; }
+  else{ shAutoFillSetup(); setup.style.display = ''; }
+  const box = document.getElementById('shAutoRunBox');
+  const bt = document.getElementById('shAutoBatches');
+  if(!run){ box.innerHTML = ''; bt.innerHTML = ''; return; }
+  const t = shAuto.totals || { total:0, completed:0, processed:0 };
+  const pct = x => t.total ? Math.round(100 * x / t.total) : 0;
+  let btns = '';
+  if(run.status === 'running') btns = '<button class="btn-ghost" type="button" onclick="shAutoControl(\'pause\')">&#9208; Pause</button> <button class="btn-ghost" type="button" onclick="shAutoControl(\'stop\')">Stop</button>';
+  else if(run.status === 'paused') btns = '<button class="btn-amber" type="button" onclick="shAutoControl(\'resume\')">&#9654; Resume</button> <button class="btn-ghost" type="button" onclick="shAutoControl(\'stop\')">Stop</button>';
+  const working = shAuto.batches.reduce((a, b) => a + b.working, 0);
+  const noteCls = run.status === 'paused' && run.note ? 'shmsg warn' : 'odcount';
+  box.innerHTML = '<div class="shautocard">'
+    + '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between;">'
+    +   '<div><strong>' + escapeHtml(SH_AUTO_LIST_LABEL[run.list] || '') + ' · ' + run.batch_size + ' per batch · ' + escapeHtml(SH_AUTO_STATUS[run.status] || run.status) + (run.status === 'running' && working ? ' …' : '') + '</strong>'
+    +   '<div class="odcount" style="margin:4px 0 0;">' + t.processed + ' of ' + t.total + ' processed · ' + t.completed + ' of ' + t.total + ' completed by you' + (run.send_shopify ? ' · sending to Shopify' : ' · not sending to Shopify') + '</div></div>'
+    +   '<div>' + btns + '</div></div>'
+    + '<div class="shbar2" title="Processed (orange) / completed (green)"><i class="p" style="width:' + pct(t.processed) + '%"></i></div>'
+    + '<div class="shbar2"><i style="width:' + pct(t.completed) + '%"></i></div>'
+    + (run.note ? '<div class="' + noteCls + ' shautonote">' + escapeHtml(run.note) + '</div>' : '')
+    + (run.status === 'finished' ? '<div class="odcount shautonote">All products of this list have been processed. Use Complete on each product after you have checked it.</div>' : '')
+    + '</div>';
+  bt.innerHTML = shAuto.batches.map(b => {
+    const processed = b.done + b.held + b.failed;
+    const open = shAuto.open.has(b.batch_no);
+    const full = b.total > 0 && b.completed === b.total;
+    const extra = [b.working ? 'working…' : '', b.failed ? b.failed + ' failed' : '', b.held ? b.held + ' need checking' : '', b.waiting ? b.waiting + ' waiting' : ''].filter(Boolean).join(' · ');
+    return `<div class="shbatch${full ? ' full' : ''}" id="shBatch-${b.batch_no}">
+      <div class="shbatchhead" onclick="shAutoToggle(${b.batch_no})">
+        <span class="t">${open ? '&#9662;' : '&#9656;'} Batch ${b.batch_no}</span>
+        <span class="big" title="Completed / total">${b.completed}/${b.total}</span><span class="sm">completed</span>
+        <span class="sm grow">${processed}/${b.total} processed${extra ? ' · ' + escapeHtml(extra) : ''}</span>
+      </div>
+      <div class="shbatchbody" id="shBatchBody-${b.batch_no}" style="display:${open ? '' : 'none'};"></div>
+    </div>`;
+  }).join('');
+  shAuto.open.forEach(n => shAutoRenderBatchBody(n));
+}
+function shAutoToggle(n){
+  if(shAuto.open.has(n)) shAuto.open.delete(n); else shAuto.open.add(n);
+  shAutoRender();
+  if(shAuto.open.has(n)) shAutoLoadBatch(n);
+}
+async function shAutoLoadBatch(n){
+  try{
+    const d = await apiGet('stock/shopify/auto/batch/?run=' + shAuto.run.id + '&batch=' + n);
+    shAuto.details[n] = d;
+    // so the Photos / Content windows (shared with the normal list) can find the product's name
+    (d.items || []).forEach(it => {
+      const i = shopifyData.items.findIndex(x => x.stockid === it.stockid);
+      const stub = { stockid: it.stockid, name: it.name, photo_count: it.photo_count, content_ready: it.content_ready, content_review: it.content_review, sh_completed: it.sh_completed, msg: null };
+      if(i >= 0) shopifyData.items[i] = { ...shopifyData.items[i], ...stub }; else shopifyData.items.push(stub);
+    });
+    shAutoRenderBatchBody(n);
+  }catch(e){ console.error(e); const el = document.getElementById('shBatchBody-' + n); if(el && !shAuto.details[n]) el.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load this batch.</div>' + errDetailHtml(e); }
+}
+function shAutoRow(it, d, idx){
+  const id = Number(it.stockid);
+  const badge = d.shopify_ok
+    ? (it.shopify_url && it.shopify_status !== 'not_found'
+        ? `<a class="odweb ${escapeHtml(it.shopify_status)}" href="${escapeHtml(it.shopify_url)}" target="_blank" rel="noopener" title="Open in Shopify">Shopify: ${escapeHtml(shopifyLabel(it.shopify_status))}</a>`
+        : `<span class="odweb ${escapeHtml(it.shopify_status)}">Shopify: ${escapeHtml(shopifyLabel(it.shopify_status))}</span>`)
+    : '';
+  const wp = d.website_ok ? wordpressBadge(it) + (it.web_url && it.web_status === 'publish' ? ` <a class="odweb publish" href="${escapeHtml(it.web_url)}" target="_blank" rel="noopener" title="Open the product page on the website">&#127760; Site</a>` : '') : '';
+  const chipLabel = { waiting:'Waiting', working:'Working…', done:'Done', held:'Needs checking', failed:'Failed' }[it.state] || it.state;
+  const msgType = it.msg_type === 'err' || it.state === 'failed' ? 'err' : it.msg_type === 'warn' || it.state === 'held' ? 'warn' : 'ok';
+  const text = it.state === 'working' ? it.step : it.message;
+  const msg = text ? `<div class="shmsg ${it.state === 'working' ? '' : msgType}">${escapeHtml(text)}</div>` : '';
+  const thumb = it.thumb ? `<img class="shthumb" src="${escapeHtml(it.thumb)}" alt="" onclick="openShopifyContent(${id})" style="cursor:pointer;">` : '<div class="shthumb none">—</div>';
+  const content = it.content_ready
+    ? `<button class="btn-ghost shsmall" type="button" onclick="openShopifyContent(${id})" title="View, edit or regenerate the generated content">${it.content_review ? '<span class="shreview">&#9888; Check</span>' : '<span class="shready">&#10003; View</span>'}</button>`
+    : '—';
+  const photos = `<button class="btn-ghost shsmall" type="button" onclick="openShopifyPhotos(${id})" title="Photos of this product">&#128247; ${Number(it.photo_count) || 0}</button>`;
+  let act = '';
+  if(it.state === 'failed') act = `<button class="btn-ghost shsmall" type="button" onclick="shAutoRetry(${id})">Retry</button> `;
+  if(it.state === 'held') act = `<button class="btn-ghost shsmall" type="button" onclick="shAutoRetry(${id})" title="Use after you have checked the picture">Send now</button> `;
+  const canComplete = it.state === 'done' || it.state === 'held';
+  const comp = it.sh_completed
+    ? `<button class="btn-ghost shsmall" type="button" onclick="shAutoComplete(${id}, false)">Undo</button>`
+    : `<button class="btn-amber shsmall" type="button" ${canComplete ? '' : 'disabled'} onclick="shAutoComplete(${id}, true)">Complete</button>`;
+  return `<tr>
+    <td class="shc shn">${idx}</td>
+    <td class="shc">${thumb}</td>
+    <td><div class="odname">${escapeHtml(it.name)}${badge}${wp}</div>${it.sku ? `<div class="odbarcode">SKU ${escapeHtml(it.sku)}</div>` : ''}${msg}</td>
+    <td class="shnum">${it.price ? '£' + escapeHtml(it.price) : '—'}</td>
+    <td class="shc"><span class="shchip ${escapeHtml(it.state)}">${escapeHtml(chipLabel)}</span><div style="margin-top:6px;">${act}</div></td>
+    <td class="shc">${photos}</td>
+    <td class="shc">${content}</td>
+    <td class="shc">${comp}</td>
+  </tr>`;
+}
+function shAutoRenderBatchBody(n){
+  const el = document.getElementById('shBatchBody-' + n);
+  if(!el) return;
+  const d = shAuto.details[n];
+  if(!d){ el.innerHTML = '<div class="loading">Loading…</div>'; return; }
+  const items = d.items || [];
+  const todo = items.filter(x => !x.sh_completed), done = items.filter(x => x.sh_completed);
+  const head = '<table class="finaltable odtable shtable"><thead><tr><th class="shc">#</th><th class="shc">Picture</th><th>Product</th><th class="shnum">Price (inc. VAT)</th><th class="shc">Status</th><th class="shc">Photos</th><th class="shc">Content</th><th class="shc">Complete</th></tr></thead><tbody>';
+  const sect = (title, arr) => arr.length ? '<h5>' + title + ' (' + arr.length + ')</h5>' + head + arr.map(x => shAutoRow(x, d, x.pos)).join('') + '</tbody></table>' : '';
+  el.innerHTML = (sect('Still to complete', todo) + sect('Completed', done)) || '<div class="empty-hint">No products in this batch.</div>';
+}
+async function shAutoStart(){
+  const list = document.getElementById('shAutoList').value;
+  const size = parseInt(document.getElementById('shAutoSize').value, 10);
+  const send = document.getElementById('shAutoSend').checked;
+  if(!size || size < 1 || size > 500){ toast('Type how many products per batch (1 to 500)'); return; }
+  if(!confirm('Start the automation for ' + shopifyData.suppName + '?\n\n'
+    + SH_AUTO_LIST_LABEL[list] + ', ' + size + ' products per batch. Batch 2 starts as soon as batch 1 is done, and so on until every product is finished.\n\n'
+    + 'For each product: pull the website pictures → Gemini writes the text and tidies the picture (uses Gemini credit, about 1–3 minutes each) → '
+    + (send ? 'send to Shopify (new products as draft) → ' : '')
+    + 'delete the website pictures once the tidied picture is saved.\n\nYou can Pause or Stop at any time.')) return;
+  const btn = document.getElementById('shAutoStartBtn');
+  btn.disabled = true;
+  try{
+    const r = await apiPost('stock/shopify/auto/start/', { suppid: shopifyData.suppid, list, batch_size: size, send });
+    toast('Started: ' + r.total + ' products in ' + r.batches + ' batch' + (r.batches === 1 ? '' : 'es'));
+    shAuto.firstOpen = true; shAuto.details = {}; shAuto.open = new Set();
+    await shAutoRefresh();
+  }catch(e){ console.error(e); toast(e.message); }
+  finally{ btn.disabled = false; }
+}
+async function shAutoControl(action){
+  if(!shAuto.run) return;
+  if(action === 'stop' && !confirm('Stop this automation?\n\nProducts already done stay as they are. The ones still waiting are removed from the batches (you can start a new automation for them).')) return;
+  try{
+    await apiPost('stock/shopify/auto/run/' + shAuto.run.id + '/' + action + '/', {});
+    toast(action === 'pause' ? 'Pausing — the product being worked on finishes first' : action === 'resume' ? 'Resumed' : 'Stopped');
+    await shAutoRefresh();
+  }catch(e){ console.error(e); toast(e.message); }
+}
+async function shAutoRetry(stockid){
+  try{
+    const r = await apiPost('stock/shopify/auto/retry/', { run: shAuto.run.id, stockid });
+    toast(r.paused ? 'It will be done as soon as you press Resume' : 'Queued — it is done next');
+    await shAutoRefresh();
+  }catch(e){ console.error(e); toast(e.message); }
+}
+async function shAutoComplete(stockid, checked){
+  try{
+    await apiPost('stock/shopify/completed/', { stockid, completed: !!checked });
+    toast(checked ? 'Moved to Completed' : 'Moved back');
+    await shAutoRefresh();
+  }catch(e){ console.error(e); toast('Could not save: ' + e.message); }
 }
 
 /* ============ RESTAURANT ORDERS ============ */
