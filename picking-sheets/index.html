@@ -2414,7 +2414,7 @@
         <div><label for="shAutoSend" style="display:flex;gap:6px;align-items:center;margin:0;padding-bottom:9px;"><input type="checkbox" id="shAutoSend" checked> Also send each product to Shopify</label></div>
         <button class="btn-amber" type="button" id="shAutoStartBtn" onclick="shAutoStart()">Start automation</button>
       </div>
-      <div class="shautohow">Uses Gemini credit for every product (about 1–3 minutes each). New products are created on Shopify as draft. Products already marked Completed are left alone. You can Pause or Stop at any time, and it pauses by itself if several products fail in a row.</div>
+      <div class="shautohow">Only products that are on the website go into the batches (the rest are left out). Products enabled on the website later are added automatically as a new batch at the end. Uses Gemini credit for every product (about 1–3 minutes each). New products are created on Shopify as draft. Products already marked Completed are left alone. You can Pause or Stop at any time, and it pauses by itself if several products fail in a row.</div>
     </div>
     <div id="shAutoRunBox"></div>
     <div id="shAutoBatches"></div>
@@ -10080,12 +10080,13 @@ function shAutoRender(){
   let btns = '';
   if(run.status === 'running') btns = '<button class="btn-ghost" type="button" onclick="shAutoControl(\'pause\')">&#9208; Pause</button> <button class="btn-ghost" type="button" onclick="shAutoControl(\'stop\')">Stop</button>';
   else if(run.status === 'paused') btns = '<button class="btn-amber" type="button" onclick="shAutoControl(\'resume\')">&#9654; Resume</button> <button class="btn-ghost" type="button" onclick="shAutoControl(\'stop\')">Stop</button>';
+  if(run.status !== 'stopped') btns += (btns ? ' ' : '') + '<button class="btn-ghost" type="button" onclick="shAutoSync()" title="Compare the batches with the website now">&#8635; Check website now</button>';
   const working = shAuto.batches.reduce((a, b) => a + b.working, 0);
   const noteCls = run.status === 'paused' && run.note ? 'shmsg warn' : 'odcount';
   box.innerHTML = '<div class="shautocard">'
     + '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between;">'
     +   '<div><strong>' + escapeHtml(SH_AUTO_LIST_LABEL[run.list] || '') + ' · ' + run.batch_size + ' per batch · ' + escapeHtml(SH_AUTO_STATUS[run.status] || run.status) + (run.status === 'running' && working ? ' …' : '') + '</strong>'
-    +   '<div class="odcount" style="margin:4px 0 0;">' + t.processed + ' of ' + t.total + ' processed · ' + t.completed + ' of ' + t.total + ' completed by you' + (run.send_shopify ? ' · sending to Shopify' : ' · not sending to Shopify') + '</div></div>'
+    +   '<div class="odcount" style="margin:4px 0 0;">' + t.processed + ' of ' + t.total + ' processed · ' + t.completed + ' of ' + t.total + ' completed by you' + (run.send_shopify ? ' · sending to Shopify' : ' · not sending to Shopify') + ' · only products on the website</div></div>'
     +   '<div>' + btns + '</div></div>'
     + '<div class="shbar2" title="Processed (orange) / completed (green)"><i class="p" style="width:' + pct(t.processed) + '%"></i></div>'
     + '<div class="shbar2"><i style="width:' + pct(t.completed) + '%"></i></div>'
@@ -10099,7 +10100,7 @@ function shAutoRender(){
     const extra = [b.working ? 'working…' : '', b.failed ? b.failed + ' failed' : '', b.held ? b.held + ' need checking' : '', b.waiting ? b.waiting + ' waiting' : ''].filter(Boolean).join(' · ');
     return `<div class="shbatch${full ? ' full' : ''}" id="shBatch-${b.batch_no}">
       <div class="shbatchhead" onclick="shAutoToggle(${b.batch_no})">
-        <span class="t">${open ? '&#9662;' : '&#9656;'} Batch ${b.batch_no}</span>
+        <span class="t">${open ? '&#9662;' : '&#9656;'} Batch ${b.batch_no}${b.is_new ? ' <span class="shchip working" title="Products that were enabled on the website after the automation started">NEW</span>' : ''}</span>
         <span class="big" title="Completed / total">${b.completed}/${b.total}</span><span class="sm">completed</span>
         <span class="sm grow">${processed}/${b.total} processed${extra ? ' · ' + escapeHtml(extra) : ''}</span>
       </div>
@@ -10228,16 +10229,25 @@ async function shAutoStart(){
     + SH_AUTO_LIST_LABEL[list] + ', ' + size + ' products per batch. Batch 2 starts as soon as batch 1 is done, and so on until every product is finished.\n\n'
     + 'For each product: pull the website pictures → Gemini writes the text and tidies the picture (uses Gemini credit, about 1–3 minutes each) → '
     + (send ? 'send to Shopify (new products as draft) → ' : '')
-    + 'delete the website pictures once the tidied picture is saved.\n\nYou can Pause or Stop at any time.')) return;
+    + 'delete the website pictures once the tidied picture is saved.\n\nOnly products that are on the website are included. Products enabled on the website later are added automatically as a NEW batch at the end.\n\nYou can Pause or Stop at any time.')) return;
   const btn = document.getElementById('shAutoStartBtn');
   btn.disabled = true;
   try{
     const r = await apiPost('stock/shopify/auto/start/', { suppid: shopifyData.suppid, list, batch_size: size, send });
-    toast('Started: ' + r.total + ' products in ' + r.batches + ' batch' + (r.batches === 1 ? '' : 'es'));
+    toast('Started: ' + r.total + ' website products in ' + r.batches + ' batch' + (r.batches === 1 ? '' : 'es') + (r.skipped_not_on_website ? ' (' + r.skipped_not_on_website + ' not on the website were left out)' : ''));
     shAuto.firstOpen = true; shAuto.details = {}; shAuto.open = new Set();
     await shAutoRefresh();
   }catch(e){ console.error(e); toast(e.message); }
   finally{ btn.disabled = false; }
+}
+async function shAutoSync(){
+  if(!shAuto.run) return;
+  try{
+    const r = await apiPost('stock/shopify/auto/run/' + shAuto.run.id + '/sync/', {});
+    toast('Website checked: ' + r.removed + ' not on the website removed, ' + r.added + ' new product' + (r.added === 1 ? '' : 's') + ' added' + (r.moved ? ', batches re-packed' : ''));
+    shAuto.details = {};
+    await shAutoRefresh();
+  }catch(e){ console.error(e); toast(e.message); }
 }
 async function shAutoControl(action){
   if(!shAuto.run) return;
