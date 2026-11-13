@@ -147,3 +147,115 @@ The public department list is not a finding. `docs/00-security.md` already says 
 - The static repository does not contain a database dump, a staff spreadsheet, or a list of real employees. Searched the tree for committed secrets and did not find a personal-data file. The large flyer HTML files are product pages, not staff lists. They were not read line by line.
 - Login forms do not write the password into `localStorage`. They post it and then store the token.
 - No Sentry or other error reporter was found, so there is no error pipeline leaking emails. There is also no server log to review in this repo.
+
+## Accessibility
+
+High findings in this section are WCAG 2.2 AA failures. They are not commercial-secrecy or data-isolation blockers. Fix them after SEC-1 to SEC-4 unless Hallan has promised AA at a particular date.
+
+### A11Y-1 — Sign-in fields have no labels
+
+- **Severity:** High
+- **Location:** `picking-sheets/index.html` inputs `loginName` and `loginPass`. `management/index.html` inputs `loginName` and `loginPassword`.
+- **Evidence:** Both screens use a `placeholder` and no `<label>`, no `aria-label`, and no wrapping label. Placeholder text disappears once the field has a value. The staff portal and the rota login do associate `<label for>` with each input.
+- **Suggested fix:** Add a visible label for each field, matching the staff portal. Keep the placeholder only as an example.
+
+### A11Y-2 — Dialogs do not trap focus
+
+- **Severity:** Medium
+- **Location:** `staff-portal/index.html`, `#hrPartialModal` and `#hrHistoryModal`.
+- **Evidence:** Both are `<div>` overlays toggled with a class. The history modal closes on a backdrop click. Neither uses the `dialog` element, and the script has no focus trap and no Escape handler. Keyboard users can tab into the page behind the overlay.
+- **Suggested fix:** Use `<dialog>`, move focus into it on open, restore focus on close, and close on Escape.
+
+### A11Y-3 — Several pages have no main landmark or skip link
+
+- **Severity:** Low
+- **Location:** `home.html` (header, sections, footer, no `<main>`). `staff-portal/index.html` and `management/index.html` (no `<main>`). No page has a skip link.
+- **Evidence:** The rota login and the mock timesheet do use `<main>`. The home page's logo image has `alt="Hallan"`. Viewports set `width=device-width` and do not set `user-scalable=no`.
+- **Suggested fix:** Wrap the primary content in `<main>` and add a skip link on pages whose header has more than a couple of controls.
+
+### Checks passed — accessibility
+
+- The rota login fields have real labels, and focus is shown with a blue border plus a shadow after `outline: none`.
+- The home page has one `h1` in the header. The rota login has one `h1` per form, and inactive forms are `display: none`.
+- Colour contrast, touch-target size, and screen-reader behaviour were not measured. They are not recorded as passes.
+- The generated flyer HTML was not walked control by control. `wholesale-flyer.html` and `veg-flyer.html` are published artwork.
+
+## Data structures
+
+Database types, foreign keys, and migrations are not in this repository. That absence is a limit of the review, not a finding that the API has no migrations.
+
+### DATA-1 — Holiday days are whatever the browser sends
+
+- **Severity:** Medium
+- **Location:** `staff-portal/index.html`, `submitHolidayRequest`.
+- **Evidence:** The form has start date, end date, and a free-text "Days requested" field. The post sends `daysRequested` as typed, or `null`. Nothing in the page checks that the number matches the date range, or that it is a number. A partial approval later sends `partialDays` the same way.
+- **Suggested fix:** On the API, derive the day count from the dates and the employee's working pattern, and reject a client number that does not match. Keep the text field as a hint if HR still wants one.
+
+### DATA-2 — A holiday upload can create employees by default
+
+- **Severity:** Medium
+- **Location:** `staff-portal/index.html`, the upload checkbox `optCreateMissing`.
+- **Evidence:** "Create employees that don't exist yet" is checked by default. The post sends `createMissing: true` unless someone unticks it. A spreadsheet with a new staff ID therefore asks the API to insert a person, including email and holiday figures.
+- **Suggested fix:** Default the checkbox off. On the API, allow creates only for an HR token, and ignore the flag for everyone else.
+
+### DATA-3 — Selling prices are snapshotted from the screen
+
+- **Severity:** Medium
+- **Location:** `picking-sheets/index.html`, `toggleWholesalePriceBlock`.
+- **Evidence:** Block sends `{ stock_name, price, margin, changed }` taken from `wholesaleAdjust`, which the page has been editing. Invariant 11 says the API's stored decimal is the price of record. The client treats the on-screen number as the snapshot to freeze. Cost is deliberately left out of that snapshot.
+- **Suggested fix:** Have the API recompute the locked price from its own row, or reject a client price that does not match the last value it issued. Do not accept an arbitrary number because the button was labelled Block.
+
+### Checks passed — data
+
+- The rota save sends `expectedUpdatedAt` and reloads on `409`, so two browsers do not silently overwrite each other. Client ids from `uid()` are still not database keys.
+- `rota/schedule.html` builds dates from local year, month, and day after an earlier UTC bug. The clock does not. That bug is BUG-1.
+- No second writable copy of the wholesale price was found in this repo besides the lock payload and the published flyer.
+
+## Bugs
+
+### BUG-1 — The clock still uses a UTC date
+
+- **Severity:** Medium
+- **Location:** `rota/clockin.html`, `toDateStr`.
+- **Evidence:** It returns `d.toISOString().slice(0, 10)`. `rota/schedule.html` documents that this shifts the calendar day back by one during British Summer Time, and that file has already stopped doing it. A punch just after midnight UK time, or late in the evening while BST is in force, can be stored against the previous UTC date. The timesheet tab on the schedule will then disagree with the clock.
+- **Suggested fix:** Use the same local year-month-day function as the schedule.
+
+### BUG-2 — The front door describes the wrong page
+
+- **Severity:** Low
+- **Location:** `index.html`.
+- **Evidence:** The meta refresh and script send people to `home.html`, which is the portal. The visible sentence says "Redirecting to the Wholesale Vegetable Flyer". A second link points at `/home/`, and there is no `home/` directory.
+- **Suggested fix:** Point the sentence at the portal, and remove or retarget the `/home/` link.
+
+### BUG-3 — The timesheet page is a mock that looks live
+
+- **Severity:** Medium
+- **Location:** `timesheet/index.html`.
+- **Evidence:** The script comment says "Front-end mock" and names endpoints that are not called. Clock in only toggles a class. The week table is filled with fixed sample hours (`8:58 AM`, `5:02 PM`, and a total of `28h 08m`). The nav highlights Time Clock. Someone can believe a punch was recorded.
+- **Suggested fix:** Remove the page from any linked nav, or replace the sample rows with the real `timesheet-state` API and label it until that exists. The home page does not link this file. The rota's own timesheet tab is the live one.
+
+### BUG-4 — The PDF snippet reads a token key nothing sets
+
+- **Severity:** Medium
+- **Location:** `pdf-library-admin-snippet.html`, `authHeader`.
+- **Evidence:** It reads `localStorage.getItem('portal_token')`. The picking app stores the session under `hallan_portal_session`. Dropping the snippet onto a page that is already logged in still sends no bearer token, so upload and list fail or, if the API is loose, run unauthenticated. See also SEC-8.
+- **Suggested fix:** Read `hallan_portal_session` and send `token` from that object. Do not ship the snippet until that matches.
+
+### BUG-5 — The staff role dropdown does nothing
+
+- **Severity:** Low
+- **Location:** `staff-portal/index.html`, `#staffRole`.
+- **Evidence:** The select offers Staff, Manager, and HR. `submitLogin` never reads it. The API returns the role. A person who picks HR and signs in with a staff password still lands on the staff holiday page, after the API says so. The control implies they can choose.
+- **Suggested fix:** Remove the dropdown. The security model already requires that the browser does not choose the role.
+
+### BUG-6 — Restaurant orders are marked coming soon on the home page
+
+- **Severity:** Low
+- **Location:** `home.html`, the Restaurant Orders card. `picking-sheets/index.html`, the `restaurant` tile.
+- **Evidence:** The home card is a non-link with status "Coming soon". The picking app has a live restaurant module, passcode login, and order submit. Staff who only look at the home page will think the feature does not exist.
+- **Suggested fix:** Either link the home card to the real flow, or change the picking tile so it is not offered until the home page says it is live.
+
+### Checks passed — bugs
+
+- The rota schedule's date helper is the fixed local-date version, with a comment that names the old UTC bug. BUG-1 is the clock not sharing that fix.
+- No `TODO` or `FIXME` comments were found in the HTML.
