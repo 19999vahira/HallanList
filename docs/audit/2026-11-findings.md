@@ -259,3 +259,96 @@ Database types, foreign keys, and migrations are not in this repository. That ab
 
 - The rota schedule's date helper is the fixed local-date version, with a comment that names the old UTC bug. BUG-1 is the clock not sharing that fix.
 - No `TODO` or `FIXME` comments were found in the HTML.
+
+## Performance
+
+### PERF-1 — The wholesale flyer is a 4.4 MB HTML file
+
+- **Severity:** Medium
+- **Location:** `wholesale-flyer.html` (4,438,231 bytes). `veg-flyer.html` is 618,128 bytes.
+- **Evidence:** Both are single documents. The cover JPEGs next to them are about 110 KB each, so the bulk is inside the HTML. GitHub Pages cached the tiny `index.html` for ten minutes (`cache-control: max-age=600`). A 4 MB document on that cache still has to be downloaded by each new browser.
+- **Suggested fix:** Publish the flyer as a PDF or as HTML that references compressed images, instead of embedding the artwork in the document.
+
+### PERF-2 — The picking app is one 1.3 MB file, and login loads it all
+
+- **Severity:** Medium
+- **Location:** `picking-sheets/index.html` (1,321,456 bytes).
+- **Evidence:** Every module, style, and script is in that file. jsPDF, AutoTable, SheetJS, and JsBarcode are loaded from cdnjs on every visit. They use `defer`, so they do not block the first paint, but they still download for someone who only came to sign in.
+- **Suggested fix:** Split later, if the file is ever built rather than edited by hand. Until then, load the PDF and spreadsheet libraries on the first action that needs them, as the Facebook SDK already is.
+
+### PERF-3 — The staff portal downloads SheetJS before anyone uploads a file
+
+- **Severity:** Low
+- **Location:** `staff-portal/index.html`, the SheetJS script tag. `rota/schedule.html` loads jsPDF and pdf.js on every schedule view.
+- **Evidence:** The staff script tag is not `defer` and is not behind the Upload tab. The schedule page loads three PDF scripts for everyone who opens the rota, including people who never export.
+- **Suggested fix:** Load each library on the click that needs it.
+
+### Checks passed — performance
+
+- There is no server query loop in this repository to grade. N+1 and indexes belong to the API.
+- The home page logo is a 33 KB PNG. The flyer covers are about 110 KB. Those are not the large payloads.
+- Picking's comment records that the four CDN scripts were given `defer` so the page can paint first. That part is done.
+
+## Configuration
+
+### CONF-1 — There is no staging API
+
+- **Severity:** High
+- **Location:** The `API_BASE` line repeated in `picking-sheets/index.html`, `staff-portal/index.html`, `management/index.html`, `rota/index.html`, `rota/schedule.html`, `rota/clockin.html`, and `pdf-library-admin-snippet.html`.
+- **Evidence:** Only `localhost` and `127.0.0.1` leave the live Render host. Any other name, including a Herd `*.test` host or a file opened from disk, calls `https://hallan-picking-backend.onrender.com`. There is no preview database and no second signing secret in this repo. A price lock or a password reset tried from a laptop hits production.
+- **Suggested fix:** Point every non-production hostname at a non-production API, or refuse to call the live host unless the hostname is `portal.hallans.co.uk`.
+
+### CONF-2 — Admin screens are on the public site, and nothing tracks errors
+
+- **Severity:** Medium
+- **Location:** Repository root. No `.github/workflows`, no `.gitignore`, no error-tracking script.
+- **Evidence:** GitHub Pages publishes every HTML file. Security depends entirely on the API. There is no Sentry-style reporter, no health check in this repo, and no documented backup. Those last two items live with the API and were not verified. Zone delete and location delete do ask for confirmation and name the history that will go with them.
+- **Suggested fix:** Keep the API as the gate. Add an error reporter that does not send passwords or tokens. Document the API backup window in the API repo, not by guessing it here.
+
+### Checks passed — configuration
+
+- No `.env` file is committed. No `.env.example` with real values exists, because there is no env file at all.
+- `assets/hallan-logo.png`, `veg-flyer-cover.jpg`, and `wholesale-flyer-cover.jpg` are present and referenced.
+- `CNAME` contains `portal.hallans.co.uk`, and the live GET returned that site from GitHub Pages.
+
+## Dependencies
+
+### DEP-1 — Libraries are script tags with no lockfile and no integrity check
+
+- **Severity:** Medium
+- **Location:** cdnjs script tags in `picking-sheets/index.html`, `staff-portal/index.html`, and `rota/schedule.html`. Facebook SDK URL in the picking page.
+- **Evidence:** Versions are pinned in the URL (SheetJS 0.18.5, jsPDF 2.5.1, JsBarcode 3.11.6, pdf.js 3.11.174) but there is no `package-lock.json` and no `integrity` attribute. A change on the CDN path, or a compromised CDN, runs in the page that holds the tokens. SheetJS 0.18.5 is the copy still served publicly after later security reports against that release line. This review did not re-run an exploit. `npm audit` cannot be run: there is no manifest.
+- **Suggested fix:** Vendor the files in the repo, or add subresource integrity. Prefer a maintained spreadsheet library over SheetJS 0.18.5 for the holiday upload. Keep loading the Facebook SDK only from the WhatsApp button.
+
+### Checks passed — dependencies
+
+- Google Fonts and the Facebook SDK are loaded as styles or on demand. The app id is not a secret (invariant 17).
+- No abandoned package was installed through a package manager, because none is used.
+
+## Testing
+
+### TEST-1 — Nothing checks that login, a role, or a punch still works
+
+- **Severity:** Medium
+- **Location:** Repository root. No test directory, no workflow, no manifest.
+- **Evidence:** There is no automated test for the staff login body, for `portalCan`, for the clock's PIN comparison, or for the wholesale price payload. A regression would ship on the next git push to GitHub Pages. This audit does not add a harness. The gap is the finding.
+- **Suggested fix:** When the API repo is next changed, add tests there for token scope, PIN verification, and price locking. A front-end test is useful later for BUG-1 and BUG-4. It is not a substitute for those API tests.
+
+### Checks passed — testing
+
+- None. There is no suite to judge for skipped tests or flaky tests.
+
+## Code quality
+
+### QUAL-1 — Three apps are single files far past a size one person can review safely
+
+- **Severity:** Low
+- **Location:** `picking-sheets/index.html` (about 1.3 MB), `rota/schedule.html` (about 184 KB), `staff-portal/index.html` (about 67 KB).
+- **Evidence:** Each file mixes layout, copy, and every API call. The API base URL and the bearer-token helper are copied into each page rather than shared. `timesheet/index.html` is an unwired mock (BUG-3). `pdf-library-admin-snippet.html` is not included by any page and uses the wrong token key (BUG-4).
+- **Suggested fix:** Do not split the files as a drive-by. When a module is next changed, move that module's requests into a shared script so the token key cannot drift again.
+
+### Checks passed — code quality
+
+- No `TODO` or `FIXME` comments were found.
+- There is no linter config, so "the linter passes" is not a claim. Naming inside each file is consistent enough to follow. The duplicated API host is the drift that matters, and it is CONF-1.
+
