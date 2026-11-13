@@ -352,3 +352,37 @@ Database types, foreign keys, and migrations are not in this repository. That ab
 - No `TODO` or `FIXME` comments were found.
 - There is no linter config, so "the linter passes" is not a claim. Naming inside each file is consistent enough to follow. The duplicated API host is the drift that matters, and it is CONF-1.
 
+## Adversarial pass
+
+This pass did not walk the checklists again. It traced prices, object ids, and operational footguns.
+
+### ADV-1 — A restaurant order posts the price the browser is holding
+
+- **Severity:** High
+- **Location:** `picking-sheets/index.html`, `submitRestaurantOrder` and `addCustomRestaurantItem`.
+- **Evidence:** Submit sends `{ items }` where each item is the cart object. Catalogue lines carry `trade_price` from the earlier search response. A custom line is inserted with `trade_price: null` and `stockid: null`, and the review screen shows a dash instead of a price. Nothing in the page recomputes a total before the post. A caller who already has `hallan_restaurant_token` can send a different `trade_price`, including zero, or a named line with a null price. Whether the API ignores that field was not verified. Invariant 11 says the API's figure is the one that counts.
+- **Suggested fix:** Price every stock id on the server at submit time. Reject a client `trade_price`. Accept custom names only as unpriced requests that cannot be confirmed at zero.
+
+### ADV-2 — Holiday history is loaded by an employee id the browser chooses
+
+- **Severity:** Medium
+- **Location:** `staff-portal/index.html`, `openHistoryModal` and `loadMyHistory`.
+- **Evidence:** The HR screen calls `GET /api/staff/holiday-history?employeeId=`. The employee's own screen calls the same path with no id. Both use the staff bearer token. A staff token that the API fails to scope can request another person's history by adding the query. The rota document is a separate hole (SEC-4). This one is a single employee row.
+- **Suggested fix:** Return another employee's history only when the token's role is HR. Ignore `employeeId` for everyone else.
+
+### ADV-3 — Invoice lines are saved from the edited grid
+
+- **Severity:** Medium
+- **Location:** `picking-sheets/index.html`, `PUT invoices/created/:id/items/`.
+- **Evidence:** After OCR, the page puts the current item grid back, including quantities and prices the operator can change. That is a normal data-entry screen for staff. It is also a client-supplied commercial figure, same family as DATA-3. The route sits behind a portal token. SEC-5 already says the wholesale tile is not the control. This route needs the same module check, or a staff token for a different module can write invoice prices if the API only checks that some portal token is present.
+- **Suggested fix:** Re-check cost and sell prices against the stock row when the invoice is completed. Require the invoices module on the token for every invoice route.
+
+### What this pass did not promote
+
+- The public department list stays accepted. `docs/00-security.md` calls it a lookup key.
+- Public flyer PDFs are an intentional publish step (invariant 15). The broken token key is BUG-4, not a second finding.
+- The mock timesheet is BUG-3.
+- Deleting a shelf-check zone asks for confirmation and names the history that will be removed. That is an operator footgun, recorded in the report's operations appendix, not as a new defect.
+- No committed password or API secret turned up in the working tree. The full git history of the multi-megabyte flyer files was not diffed line by line.
+
+
