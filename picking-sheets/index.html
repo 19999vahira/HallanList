@@ -778,6 +778,18 @@
   .shtab.on{background:var(--accent);border-color:var(--accent);color:#fff;}
   .shrange{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--text-dim);flex-wrap:wrap;}
   .shrange input{width:70px;padding:7px 9px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:13px;}
+  .shlisttools{display:flex;flex-direction:column;gap:12px;margin-bottom:14px;}
+  .shlisttools .shlistrow{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;}
+  .shlisttools .shfilters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;flex:1;min-width:280px;}
+  .shlisttools .shfilters .historysearch{max-width:280px;min-width:160px;}
+  .shlisttools .shfilters select.historysearch{min-width:168px;max-width:220px;}
+  .shlisttools .shbatchnav{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+  .shlisttools .shbatchnav select.historysearch{min-width:88px;width:auto;}
+  .shlisttools .shbatchlbl{font-size:13px;color:var(--text-dim);white-space:nowrap;}
+  .shlisttools .shactions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end;}
+  .shlisttools .shmeta{font-size:12px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;}
+  .shpicsrc{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--green);margin-top:3px;text-align:center;}
+  .shpicsrc.orig{color:var(--text-dim);}
   table.shtable td.shn{color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:12px;}
   .shsmall{padding:4px 10px;font-size:12px;}
   .shreview{color:var(--accent-dim);font-weight:700;}
@@ -2409,32 +2421,48 @@
       <p id="shopifyListSub"></p>
     </div>
     <div class="shtabs" id="shopifyTabs"></div>
-    <div class="actionbar">
-      <div class="shbar">
-        <input type="text" id="shopifyListFilter" class="historysearch" style="max-width:300px;"
-               placeholder="Filter by name or barcode…" oninput="renderShopifyList()" autocomplete="off">
-        <select id="shopifyStatusFilter" class="historysearch" onchange="onShopifyFilterChange()" title="Filter by whether the product is on Shopify">
-          <option value="all">Shopify: All</option>
-        </select>
-        <select id="shopifyWebFilter" class="historysearch" onchange="onShopifyFilterChange()" title="Filter by the product's status on the WordPress website">
-          <option value="all">WordPress: All</option>
-        </select>
-        <select id="shopifyOnlineFilter" class="historysearch" onchange="onShopifyFilterChange()" title="Filter by Online Data progress (images, description, other details)">
-          <option value="all">Online Data: All</option>
-          <option value="complete">Online Data: Complete</option>
-          <option value="incomplete">Online Data: Incomplete</option>
-        </select>
-        <button class="btn-ghost" type="button" id="shopifyRefreshBtn" onclick="refreshShopifyStatus()" title="Re-read product statuses from Shopify and from the WordPress website">&#8635; Refresh Shopify &amp; website status</button>
+    <div class="shlisttools">
+      <div class="shlistrow">
+        <div class="shfilters">
+          <input type="text" id="shopifyListFilter" class="historysearch"
+                 placeholder="Filter by name or barcode…" oninput="onShopifySearchInput()" autocomplete="off">
+          <select id="shopifyStatusFilter" class="historysearch" onchange="onShopifyFilterChange()" title="Filter by whether the product is on Shopify">
+            <option value="all">Shopify: All</option>
+          </select>
+          <select id="shopifyWebFilter" class="historysearch" onchange="onShopifyFilterChange()" title="Filter by the product's status on the WordPress website">
+            <option value="all">WordPress: All</option>
+          </select>
+          <select id="shopifyOnlineFilter" class="historysearch" onchange="onShopifyFilterChange()" title="Filter by Online Data progress">
+            <option value="all">Online Data: All</option>
+            <option value="complete">Online Data: Complete</option>
+            <option value="incomplete">Online Data: Incomplete</option>
+          </select>
+          <select id="shopifyBatchSize" class="historysearch" onchange="onShopifyBatchChange()" title="Split the filtered list into batches of this size">
+            <option value="0">Batch: show all</option>
+            <option value="25">Batch: 25 each</option>
+            <option value="50">Batch: 50 each</option>
+            <option value="100">Batch: 100 each</option>
+          </select>
+        </div>
+        <div class="shmeta" id="shopifyListCount"></div>
       </div>
-      <div class="shbar">
-        <span class="odcount" id="shopifyListCount"></span>
-        <span class="shrange" title="Rows are numbered in the first column of the list you are looking at">
-          Rows <input type="number" id="shopifyRangeFrom" min="1" placeholder="from"> to <input type="number" id="shopifyRangeTo" min="1" placeholder="to">
-          <button class="btn-ghost" type="button" onclick="selectShopifyRange()">Select range</button>
-        </span>
-        <button class="btn-ghost" type="button" id="shopifyGenSelBtn" onclick="generateShopifySelected()" disabled>Generate selected</button>
-        <button class="btn-amber" type="button" id="shopifySendSelBtn" onclick="sendShopifySelected()" disabled>Generate &amp; send selected</button>
-        <button class="btn-ghost" type="button" id="shopifyStopBtn" onclick="stopShopifyRun()" style="display:none;">Stop after this product</button>
+      <div class="shlistrow">
+        <div class="shbatchnav" id="shopifyBatchNav" style="display:none;">
+          <button class="btn-ghost" type="button" id="shopifyBatchPrev" onclick="shopifyBatchStep(-1)" title="Previous batch">&#9664; Prev</button>
+          <span class="shbatchlbl" id="shopifyBatchLabel">Batch 1 of 1</span>
+          <select id="shopifyBatchNo" class="historysearch" onchange="onShopifyBatchNoChange()" title="Jump to a batch"></select>
+          <button class="btn-ghost" type="button" id="shopifyBatchNext" onclick="shopifyBatchStep(1)" title="Next batch">Next &#9654;</button>
+        </div>
+        <div class="shactions">
+          <button class="btn-ghost" type="button" id="shopifyRefreshBtn" onclick="refreshShopifyStatus()" title="Re-read product statuses from Shopify and from the WordPress website">&#8635; Refresh status</button>
+          <span class="shrange" title="Rows are numbered in the # column of the list on screen (within the current batch)">
+            Rows <input type="number" id="shopifyRangeFrom" min="1" placeholder="from">–<input type="number" id="shopifyRangeTo" min="1" placeholder="to">
+            <button class="btn-ghost" type="button" onclick="selectShopifyRange()">Select</button>
+          </span>
+          <button class="btn-ghost" type="button" id="shopifyGenSelBtn" onclick="generateShopifySelected()" disabled>Generate selected</button>
+          <button class="btn-amber" type="button" id="shopifySendSelBtn" onclick="sendShopifySelected()" disabled>Generate &amp; send selected</button>
+          <button class="btn-ghost" type="button" id="shopifyStopBtn" onclick="stopShopifyRun()" style="display:none;">Stop after this product</button>
+        </div>
       </div>
     </div>
     <div id="shopifyListNote" class="odcount" style="margin:-8px 0 12px;"></div>
@@ -9168,6 +9196,11 @@ const shopifyData = {
   statusFilter: 'all',
   webFilter: 'all',
   onlineFilter: 'all',
+  batchSize: 0,         // 0 = all rows; else slice filtered list
+  batchNo: 1,
+  thumbs: new Map(),    // stockid -> data URL
+  thumbGen: 0,
+  tab: 'todo',
   busy: false,
   supplierDebounce: null
 };
@@ -9311,6 +9344,10 @@ async function openShopifyList(pref){
   shopifyData.onlineFilter = 'all';
   shopifyData.tab = 'todo';
   shopifyData.stop = false;
+  shopifyData.batchSize = 0;
+  shopifyData.batchNo = 1;
+  shopifyData.thumbs = new Map();
+  shopifyData.thumbGen = 0;
   renderShopifyCrumbs('shopifyCrumbs-list', 2);
   document.getElementById('shopifyListTitle').textContent = shopifyData.suppName + ' — ' + shopifyPrefLabel();
   document.getElementById('shopifyListSub').textContent =
@@ -9320,6 +9357,8 @@ async function openShopifyList(pref){
   document.getElementById('shopifyRangeTo').value = '';
   document.getElementById('shopifyOnlineFilter').value = 'all';
   document.getElementById('shopifyWebFilter').value = 'all';
+  const bsz = document.getElementById('shopifyBatchSize');
+  if(bsz) bsz.value = '0';
   document.getElementById('shopifyListCount').textContent = '';
   document.getElementById('shopifyListNote').textContent = '';
   document.getElementById('shopifyListBox').innerHTML = '<div class="loading">Loading…</div>';
@@ -9341,7 +9380,7 @@ async function loadShopifyItems(forceShopify){
     console.error(e);
   }
 }
-function shopifyVisibleItems(){
+function shopifyFilteredItems(){
   const q = document.getElementById('shopifyListFilter').value.trim().toLowerCase();
   const sf = shopifyData.statusFilter, of = shopifyData.onlineFilter, wf = shopifyData.webFilter;
   const wantDone = shopifyData.tab === 'done';
@@ -9351,6 +9390,117 @@ function shopifyVisibleItems(){
     (sf === 'all' || it.shopify_status === sf) &&
     (wf === 'all' || it.web_status === wf) &&
     (of === 'all' || (of === 'complete' ? it.online_complete : !it.online_complete)));
+}
+function shopifyBatchTotal(){
+  const bs = Number(shopifyData.batchSize) || 0;
+  const n = shopifyFilteredItems().length;
+  if(!bs || bs < 1) return 1;
+  return Math.max(1, Math.ceil(n / bs));
+}
+function shopifyVisibleItems(){
+  const all = shopifyFilteredItems();
+  const bs = Number(shopifyData.batchSize) || 0;
+  if(!bs || bs < 1) return all;
+  let bn = Number(shopifyData.batchNo) || 1;
+  const total = shopifyBatchTotal();
+  if(bn < 1) bn = 1;
+  if(bn > total) bn = total;
+  shopifyData.batchNo = bn;
+  return all.slice((bn - 1) * bs, bn * bs);
+}
+function shopifyRowNo(idx){   // # column: position in filtered list, not only within batch
+  const bs = Number(shopifyData.batchSize) || 0;
+  if(!bs || bs < 1) return idx + 1;
+  return (shopifyData.batchNo - 1) * bs + idx + 1;
+}
+function shopifyThumbCell(it){
+  const id = Number(it.stockid);
+  const src = (it.image_source || '').toLowerCase();
+  const thumb = shopifyData.thumbs.get(id);
+  const pic = thumb
+    ? `<img class="shthumb" src="${escapeHtml(thumb)}" alt="" onclick="openShopifyContent(${id})" style="cursor:pointer;" title="Open generated content">`
+    : (it.content_ready ? '<div class="shthumb none" title="Loading picture…">…</div>' : '<div class="shthumb none">—</div>');
+  const lbl = src === 'edited' ? '<div class="shpicsrc">Edited</div>'
+    : src === 'original' ? '<div class="shpicsrc orig">Original</div>' : '';
+  return pic + lbl;
+}
+async function ensureShopifyThumbs(ids){
+  const need = [...new Set(ids.map(Number).filter(id => id > 0 && !shopifyData.thumbs.has(id)))];
+  if(!need.length) return;
+  for(let i = 0; i < need.length; i += 80){
+    const chunk = need.slice(i, i + 80);
+    try{
+      const d = await apiGet('stock/shopify/thumbs/?ids=' + chunk.join(','));
+      Object.entries(d.thumbs || {}).forEach(([k, v]) => shopifyData.thumbs.set(Number(k), v));
+    }catch(e){ console.error(e); }
+  }
+}
+function queueShopifyThumbs(ids){
+  const gen = ++shopifyData.thumbGen;
+  ensureShopifyThumbs(ids).then(() => {
+    if(gen !== shopifyData.thumbGen) return;
+    const box = document.getElementById('shopifyListBox');
+    if(box && box.querySelector('table.shtable')) renderShopifyList();
+  });
+}
+function shopifyPictureUpdated(stockid, imageSource){
+  shopifyData.thumbs.delete(Number(stockid));
+  const it = shopifyData.items.find(x => Number(x.stockid) === Number(stockid));
+  if(it){
+    it.content_ready = true;
+    if(imageSource) it.image_source = imageSource;
+    else if(!it.image_source) it.image_source = 'edited';
+  }
+}
+function updateShopifyBatchUi(){
+  const nav = document.getElementById('shopifyBatchNav');
+  const bsz = document.getElementById('shopifyBatchSize');
+  if(!nav) return;
+  const bs = Number(shopifyData.batchSize) || 0;
+  const total = shopifyBatchTotal();
+  const filtered = shopifyFilteredItems().length;
+  if(bsz) bsz.value = String(bs);
+  if(!bs || bs < 1){
+    nav.style.display = 'none';
+    return;
+  }
+  let bn = Number(shopifyData.batchNo) || 1;
+  if(bn < 1) bn = 1;
+  if(bn > total) bn = total;
+  shopifyData.batchNo = bn;
+  nav.style.display = '';
+  document.getElementById('shopifyBatchLabel').textContent = 'Batch ' + bn + ' of ' + total + ' (' + bs + ' per batch · ' + filtered + ' filtered)';
+  const prev = document.getElementById('shopifyBatchPrev');
+  const next = document.getElementById('shopifyBatchNext');
+  if(prev) prev.disabled = bn <= 1;
+  if(next) next.disabled = bn >= total;
+  const sel = document.getElementById('shopifyBatchNo');
+  if(sel){
+    let html = '';
+    for(let i = 1; i <= total; i++) html += '<option value="' + i + '">Batch ' + i + '</option>';
+    sel.innerHTML = html;
+    sel.value = String(bn);
+  }
+}
+function onShopifyBatchChange(){
+  shopifyData.batchSize = Math.max(0, parseInt(document.getElementById('shopifyBatchSize').value, 10) || 0);
+  shopifyData.batchNo = 1;
+  shopifyData.selected = new Set();
+  renderShopifyList();
+}
+function onShopifyBatchNoChange(){
+  shopifyData.batchNo = Math.max(1, parseInt(document.getElementById('shopifyBatchNo').value, 10) || 1);
+  shopifyData.selected = new Set();
+  renderShopifyList();
+}
+function shopifyBatchStep(d){
+  shopifyData.batchNo = Math.max(1, Math.min(shopifyBatchTotal(), (Number(shopifyData.batchNo) || 1) + d));
+  shopifyData.selected = new Set();
+  renderShopifyList();
+}
+function onShopifySearchInput(){
+  shopifyData.batchNo = 1;
+  renderShopifyList();
 }
 function renderShopifyTabs(){
   const box = document.getElementById('shopifyTabs');
@@ -9364,6 +9514,7 @@ function renderShopifyTabs(){
 function setShopifyTab(t){
   if(shopifyData.tab === t) return;
   shopifyData.tab = t;
+  shopifyData.batchNo = 1;
   shopifyData.selected = new Set();   // never carry a hidden selection into the other list
   renderShopifyList();
 }
@@ -9372,11 +9523,17 @@ function renderShopifyList(){
   const all = shopifyData.items;
   updateShopifyControls(all);
   renderShopifyTabs();
+  updateShopifyBatchUi();
+  const filteredAll = shopifyFilteredItems();
   const items = shopifyVisibleItems();
   const inTab = all.filter(it => !!it.sh_completed === (shopifyData.tab === 'done')).length;
-  const filtered = items.length !== inTab;
-  document.getElementById('shopifyListCount').textContent = filtered ? (items.length + ' of ' + inTab + ' products') : (inTab + ' products');
+  const narrowed = filteredAll.length !== inTab;
+  const batched = (Number(shopifyData.batchSize) || 0) > 0;
+  let countTxt = (narrowed ? filteredAll.length + ' of ' + inTab : inTab) + ' products';
+  if(batched) countTxt = 'Showing ' + items.length + ' in this batch · ' + countTxt;
+  document.getElementById('shopifyListCount').textContent = countTxt;
   updateShopifySendButton();
+  queueShopifyThumbs(items.filter(it => it.content_ready).map(it => it.stockid));
   if(all.length === 0){ box.innerHTML = '<div class="empty-hint">No products for this supplier.</div>'; return; }
   if(items.length === 0){
     box.innerHTML = '<div class="empty-hint">' + (inTab === 0
@@ -9407,8 +9564,9 @@ function renderShopifyList(){
     const genBtn = it.content_ready ? '' : `<button class="btn-ghost" type="button" onclick="generateShopifyOne(${id})">Generate</button> `;
     return `<tr data-stockid="${id}">
       <td class="shc"><input type="checkbox" class="odcheck" ${shopifyData.selected.has(it.stockid) ? 'checked' : ''} onchange="onShopifySelect(${id}, this.checked)"></td>
-      <td class="shc shn">${idx + 1}</td>
-      <td><div class="odname">${escapeHtml(it.name)}${badge}${wpBadge}</div>${sub ? `<div class="odbarcode">${escapeHtml(sub)}</div>` : ''}${msg}</td>
+      <td class="shc shn">${shopifyRowNo(idx)}</td>
+      <td class="shc">${shopifyThumbCell(it)}</td>
+      <td class="shprod"><div class="odname">${escapeHtml(it.name)}${badge}${wpBadge}</div>${sub ? `<div class="odbarcode">${escapeHtml(sub)}</div>` : ''}${msg}</td>
       <td class="shnum">${price}</td>
       <td class="shnum">${Number(it.qty) || 0}</td>
       <td class="shc">${it.online_complete ? '<span class="odtick">&#10003;</span>' : '—'}</td>
@@ -9419,7 +9577,7 @@ function renderShopifyList(){
   }).join('');
   box.innerHTML = '<table class="finaltable odtable shtable"><thead><tr>'
     + `<th class="shc"><input type="checkbox" class="odcheck" ${allShownSelected ? 'checked' : ''} onchange="onShopifySelectAll(this.checked)" title="Select everything shown"></th>`
-    + '<th class="shc">#</th><th>Product</th><th class="shnum">Price (inc. VAT)</th><th class="shnum">Stock</th><th class="shc">Online Data</th><th class="shc">Content</th><th class="shc">Shopify</th><th class="shc">Completed</th>'
+    + '<th class="shc">#</th><th class="shc" title="Tidied product picture">Pic</th><th>Product</th><th class="shnum">Price (inc. VAT)</th><th class="shnum">Stock</th><th class="shc">Online Data</th><th class="shc">Content</th><th class="shc">Shopify</th><th class="shc">Completed</th>'
     + '</tr></thead><tbody>' + rows + '</tbody></table>';
 }
 function updateShopifyWebControls(all){
@@ -9489,6 +9647,8 @@ function onShopifyFilterChange(){
   shopifyData.statusFilter = document.getElementById('shopifyStatusFilter').value;
   shopifyData.webFilter = document.getElementById('shopifyWebFilter').value;
   shopifyData.onlineFilter = document.getElementById('shopifyOnlineFilter').value;
+  shopifyData.batchNo = 1;
+  shopifyData.selected = new Set();
   renderShopifyList();
 }
 async function refreshShopifyStatus(){
@@ -9618,7 +9778,7 @@ async function shopifyRun(ids, send){
         try{
           note.textContent = (send ? 'Generating & sending ' : 'Generating ') + (i + 1) + ' of ' + ids.length + ': ' + it.name + ' — writing the text…';
           const r = await shGenerateTwoStep(id, () => { note.textContent = (send ? 'Generating & sending ' : 'Generating ') + (i + 1) + ' of ' + ids.length + ': ' + it.name + ' — tidying and checking the picture (about 1–2 minutes)…'; });
-          it.content_ready = true;
+          shopifyPictureUpdated(id, 'edited');
           it.content_review = !!r.needs_review;
           it.genNote = r.note || '';
           it.held = !!r.held;
@@ -10013,7 +10173,12 @@ async function regenerateShopifyContent(part){
     const r = (g.results || [])[0] || {};
     if(!r.ok) throw new Error(r.error || 'Failed');
     const it = shopifyData.items.find(x => x.stockid === id);
-    if(it){ it.content_ready = true; it.content_review = !!r.needs_review; if(part === 'image') it.held = !!r.held; }
+    if(it){
+      it.content_review = !!r.needs_review;
+      if(part === 'image' || part === 'all') shopifyPictureUpdated(id, 'edited');
+      else it.content_ready = true;
+      if(part === 'image' || part === 'all') it.held = !!r.held;
+    }
     renderShopifyList();
     if(r.note) toast(r.note);
   }catch(e){
