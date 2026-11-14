@@ -709,7 +709,28 @@
   .shautocard .shrow{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;}
   .shautocard label{display:block;font-size:12px;color:var(--text-dim);margin:0 0 4px;}
   .shautocard select,.shautocard input[type=number]{padding:8px 10px;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--text);font-size:14px;}
-  .shautohow{font-size:12.5px;color:var(--text-dim);line-height:1.5;margin:12px 0 0;}
+  .shhow{margin-top:12px;}
+  .shhow > summary{
+    list-style:none;cursor:pointer;display:inline-block;background:var(--panel);border:1px solid var(--line);
+    color:var(--text);padding:6px 12px;border-radius:6px;font-size:12px;font-weight:600;font-family:'Inter',sans-serif;
+  }
+  .shhow > summary::-webkit-details-marker{display:none;}
+  .shhow > summary::marker{content:'';}
+  .shhow[open] > summary{border-color:var(--accent);color:var(--accent-dim);}
+  .shautohow{font-size:12.5px;color:var(--text-dim);line-height:1.5;margin:10px 0 0;max-width:720px;}
+  .shrunhead{display:flex;gap:16px;flex-wrap:wrap;align-items:center;justify-content:space-between;}
+  .shruntitle{display:flex;gap:10px;flex-wrap:wrap;align-items:center;min-width:0;}
+  .shruntitle strong{font-size:15px;}
+  .shrunmeta{font-size:13px;color:var(--text-dim);}
+  .shrunacts{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .shstats{display:flex;gap:22px;flex-wrap:wrap;align-items:center;margin-top:14px;}
+  .shstat{display:flex;flex-direction:column;gap:2px;min-width:108px;}
+  .shstat .n{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:18px;line-height:1.1;color:var(--text);}
+  .shstat .l{font-size:12px;color:var(--text-dim);}
+  .shsend{font-size:12px;font-weight:700;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 12px;}
+  .shbars{display:flex;flex-direction:column;gap:8px;margin-top:14px;}
+  .shbarrow{display:grid;grid-template-columns:92px minmax(80px,1fr) 42px;gap:10px;align-items:center;font-size:12px;color:var(--text-dim);}
+  .shbarrow .shbar2{margin:0;}
   .shbar2{height:8px;background:var(--line);border-radius:5px;overflow:hidden;margin:8px 0 0;}
   .shbar2 > i{display:block;height:100%;background:var(--green);}
   .shbar2 > i.p{background:var(--accent);}
@@ -718,19 +739,40 @@
   .shbatchhead:hover{background:var(--panel2);}
   .shbatchhead .t{font-weight:700;font-size:15px;min-width:90px;}
   .shbatchhead .big{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:17px;}
-  .shbatchhead .sm{font-size:12px;color:var(--text-dim);}
+  .shbatchhead .sm{font-size:12px;color:var(--text-dim);white-space:nowrap;}
   .shbatchhead .grow{flex:1;min-width:120px;}
+  .shbatchchips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
   .shbatch.full .big{color:var(--green);}
   .shbatchbody{padding:0 12px 14px;overflow-x:auto;}
   .shbatchbody h5{margin:14px 0 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);}
   .shthumb{width:56px;height:56px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:6px;display:block;margin:auto;}
   .shthumb.none{display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:11px;}
   .shchip{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:var(--line);color:var(--text-dim);}
-  .shchip.working{background:var(--accent);color:#fff;}
-  .shchip.done{background:var(--green);color:#fff;}
+  .shchip.working,.shchip.running{background:var(--accent);color:#fff;}
+  .shchip.done,.shchip.finished{background:var(--green);color:#fff;}
   .shchip.held{background:var(--accent-dim);color:#fff;}
+  .shchip.paused{background:#fff4dc;color:#a15c00;border:1px solid #f1d9a3;}
   .shchip.failed{background:var(--danger);color:#fff;}
-  .shautonote{font-size:13px;margin:8px 0 0;}
+  .shchip.stopped{background:#eef0f3;color:#667085;}
+  .shautonote{font-size:13px;line-height:1.45;margin:12px 0 0;color:var(--text-dim);}
+  .shautonote.warn{color:var(--accent-dim);}
+  table.shtable tr.shautorow > td{vertical-align:top;padding-top:10px;}
+  table.shtable td.shprod{max-width:460px;}
+  .shstep{font-size:12px;margin-top:4px;color:var(--text-dim);}
+  .shnotebtn{
+    margin-top:6px;padding:3px 10px;font-size:11px;font-weight:700;border-radius:999px;cursor:pointer;
+    background:transparent;font-family:'Inter',sans-serif;line-height:1.4;
+  }
+  .shnotebtn.ok{color:var(--green);border:1px solid #b7e3c6;background:#f3faf6;}
+  .shnotebtn.warn{color:#a15c00;border:1px solid #f1d9a3;background:#fffaf0;}
+  .shnotebtn.err{color:var(--danger);border:1px solid #f5bcbc;background:#fdf4f4;}
+  .shnotebtn.on.ok{background:var(--green);border-color:var(--green);color:#fff;}
+  .shnotebtn.on.warn{background:#a15c00;border-color:#a15c00;color:#fff;}
+  .shnotebtn.on.err{background:var(--danger);border-color:var(--danger);color:#fff;}
+  .shmsgpanel{margin-top:6px;padding:8px 10px;border-radius:6px;font-size:12px;line-height:1.45;word-break:break-word;max-width:440px;}
+  .shmsgpanel.ok{color:#146c36;background:#f3faf6;border:1px solid #b7e3c6;}
+  .shmsgpanel.warn{color:#8a5a00;background:#fffaf0;border:1px solid #f1d9a3;}
+  .shmsgpanel.err{color:#9f1c1c;background:#fdf4f4;border:1px solid #f5bcbc;}
   .shtabs{display:flex;gap:8px;margin:0 0 12px;}
   .shtab{background:var(--panel2);border:1px solid var(--line);color:var(--text-dim);padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;}
   .shtab.on{background:var(--accent);border-color:var(--accent);color:#fff;}
@@ -2405,7 +2447,11 @@
     <div class="hero">
       <div class="eyebrow">Shopify</div>
       <h2 id="shopifyAutoTitle">Automate</h2>
-      <p>Choose how many products go in each batch. The portal then does every step for you, one product after another: pulls the website pictures, writes the text, tidies the picture, sends it to Shopify, and deletes the website pictures once the tidied one is saved. When a batch is full the next batch starts straight away, until the whole supplier is finished.</p>
+      <p>Runs each website product in batches: pictures, text, tidy, then Shopify.</p>
+      <details class="shhow">
+        <summary>How this works</summary>
+        <div class="shautohow">Choose how many products go in each batch. The portal then does every step for you, one product after another: pulls the website pictures, writes the text, tidies the picture, sends it to Shopify, and deletes the website pictures once the tidied one is saved. When a batch is full the next batch starts straight away, until the whole supplier is finished.</div>
+      </details>
     </div>
     <div class="shautocard" id="shAutoSetup" style="display:none;">
       <div class="shrow">
@@ -2414,7 +2460,10 @@
         <div><label for="shAutoSend" style="display:flex;gap:6px;align-items:center;margin:0;padding-bottom:9px;"><input type="checkbox" id="shAutoSend" checked> Also send each product to Shopify</label></div>
         <button class="btn-amber" type="button" id="shAutoStartBtn" onclick="shAutoStart()">Start automation</button>
       </div>
-      <div class="shautohow">Only products that are on the website go into the batches (the rest are left out). Products enabled on the website later are added automatically as a new batch at the end. Uses Gemini credit for every product (about 1–3 minutes each). New products are created on Shopify as draft. Products already marked Completed are left alone. You can Pause or Stop at any time, and it pauses by itself if several products fail in a row.</div>
+      <details class="shhow">
+        <summary>How this works</summary>
+        <div class="shautohow">Only products that are on the website go into the batches (the rest are left out). Products enabled on the website later are added automatically as a new batch at the end. Uses Gemini credit for every product (about 1–3 minutes each). New products are created on Shopify as draft. Products already marked Completed are left alone. You can Pause or Stop at any time, and it pauses by itself if several products fail in a row.</div>
+      </details>
     </div>
     <div id="shAutoRunBox"></div>
     <div id="shAutoBatches"></div>
@@ -9978,7 +10027,7 @@ async function regenerateShopifyContent(part){
    The server does the work in the background (see SHOPIFY AUTOMATION in server.js); this page only starts / pauses it
    and shows the batches. Each batch lists every product with its pictures, Shopify + website links and status.
    "Complete" uses the same Completed tick as the normal Shopify list. */
-const shAuto = { run:null, batches:[], totals:null, open:new Set(), details:{}, sel:{}, timer:null, counts:null, loading:false, firstOpen:true, supplier:null };
+const shAuto = { run:null, batches:[], totals:null, open:new Set(), details:{}, sel:{}, notes:new Set(), timer:null, counts:null, loading:false, firstOpen:true, supplier:null };
 const SH_AUTO_LIST_LABEL = { yes:'Preferred List', no:'Non-Preferred List', both:'Both lists' };
 const SH_AUTO_STATUS = { running:'Running', paused:'Paused', finished:'Finished', stopped:'Stopped' };
 
@@ -10078,32 +10127,46 @@ function shAutoRender(){
   if(!run){ box.innerHTML = ''; bt.innerHTML = ''; return; }
   const t = shAuto.totals || { total:0, completed:0, processed:0 };
   const pct = x => t.total ? Math.round(100 * x / t.total) : 0;
+  const status = escapeHtml(SH_AUTO_STATUS[run.status] || run.status);
   let btns = '';
-  if(run.status === 'running') btns = '<button class="btn-ghost" type="button" onclick="shAutoControl(\'pause\')">&#9208; Pause</button> <button class="btn-ghost" type="button" onclick="shAutoControl(\'stop\')">Stop</button>';
-  else if(run.status === 'paused') btns = '<button class="btn-amber" type="button" onclick="shAutoControl(\'resume\')">&#9654; Resume</button> <button class="btn-ghost" type="button" onclick="shAutoControl(\'stop\')">Stop</button>';
-  if(run.status !== 'stopped') btns += (btns ? ' ' : '') + '<button class="btn-ghost" type="button" onclick="shAutoSync()" title="Compare the batches with the website now">&#8635; Check website now</button>';
-  const working = shAuto.batches.reduce((a, b) => a + b.working, 0);
-  const noteCls = run.status === 'paused' && run.note ? 'shmsg warn' : 'odcount';
+  if(run.status === 'running') btns = '<button class="btn-ghost" type="button" onclick="shAutoControl(\'pause\')">&#9208; Pause</button><button class="btn-ghost" type="button" onclick="shAutoControl(\'stop\')">Stop</button>';
+  else if(run.status === 'paused') btns = '<button class="btn-amber" type="button" onclick="shAutoControl(\'resume\')">&#9654; Resume</button><button class="btn-ghost" type="button" onclick="shAutoControl(\'stop\')">Stop</button>';
+  if(run.status !== 'stopped') btns += '<button class="btn-ghost" type="button" onclick="shAutoSync()" title="Compare the batches with the website now">&#8635; Check website now</button>';
+  const noteCls = run.status === 'paused' && run.note ? 'shautonote warn' : 'shautonote';
+  const sendLabel = Number(run.send_shopify) === 1 ? 'Sending to Shopify' : 'Not sending to Shopify';
   box.innerHTML = '<div class="shautocard">'
-    + '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between;">'
-    +   '<div><strong>' + escapeHtml(SH_AUTO_LIST_LABEL[run.list] || '') + ' · ' + run.batch_size + ' per batch · ' + escapeHtml(SH_AUTO_STATUS[run.status] || run.status) + (run.status === 'running' && working ? ' …' : '') + '</strong>'
-    +   '<div class="odcount" style="margin:4px 0 0;">' + t.processed + ' of ' + t.total + ' processed · ' + t.completed + ' of ' + t.total + ' completed by you' + (run.send_shopify ? ' · sending to Shopify' : ' · not sending to Shopify') + ' · only products on the website</div></div>'
-    +   '<div>' + btns + '</div></div>'
-    + '<div class="shbar2" title="Processed (orange) / completed (green)"><i class="p" style="width:' + pct(t.processed) + '%"></i></div>'
-    + '<div class="shbar2"><i style="width:' + pct(t.completed) + '%"></i></div>'
-    + (run.note ? '<div class="' + noteCls + ' shautonote">' + escapeHtml(run.note) + '</div>' : '')
-    + (run.status === 'finished' ? '<div class="odcount shautonote">All products of this list have been processed. Use Complete on each product after you have checked it.</div>' : '')
+    + '<div class="shrunhead">'
+    +   '<div class="shruntitle"><strong>' + escapeHtml(SH_AUTO_LIST_LABEL[run.list] || 'Automation') + '</strong>'
+    +   '<span class="shrunmeta">' + run.batch_size + ' per batch</span>'
+    +   '<span class="shchip ' + escapeHtml(run.status) + '">' + status + '</span></div>'
+    +   '<div class="shrunacts">' + btns + '</div></div>'
+    + (run.note ? '<div class="' + noteCls + '">' + escapeHtml(run.note) + '</div>' : '')
+    + '<div class="shstats">'
+    +   '<div class="shstat"><span class="n">' + t.processed + '/' + t.total + '</span><span class="l">Processed</span></div>'
+    +   '<div class="shstat"><span class="n">' + t.completed + '/' + t.total + '</span><span class="l">Completed by you</span></div>'
+    +   '<span class="shsend">' + sendLabel + '</span></div>'
+    + '<div class="shbars">'
+    +   '<div class="shbarrow"><span>Processed</span><div class="shbar2"><i class="p" style="width:' + pct(t.processed) + '%"></i></div><span>' + pct(t.processed) + '%</span></div>'
+    +   '<div class="shbarrow"><span>Completed</span><div class="shbar2"><i style="width:' + pct(t.completed) + '%"></i></div><span>' + pct(t.completed) + '%</span></div>'
+    + '</div>'
+    + (run.status === 'finished' ? '<div class="shautonote">All products of this list have been processed. Use Complete on each product after you have checked it.</div>' : '')
     + '</div>';
   bt.innerHTML = shAuto.batches.map(b => {
     const processed = b.done + b.held + b.failed;
     const open = shAuto.open.has(b.batch_no);
     const full = b.total > 0 && b.completed === b.total;
-    const extra = [b.working ? 'working…' : '', b.failed ? b.failed + ' failed' : '', b.held ? b.held + ' need checking' : '', b.waiting ? b.waiting + ' waiting' : ''].filter(Boolean).join(' · ');
+    const chips = [
+      b.working ? '<span class="shchip working">working…</span>' : '',
+      b.failed ? '<span class="shchip failed">' + b.failed + ' failed</span>' : '',
+      b.held ? '<span class="shchip held">' + b.held + ' need checking</span>' : '',
+      b.waiting ? '<span class="shchip">' + b.waiting + ' waiting</span>' : ''
+    ].filter(Boolean).join('');
     return `<div class="shbatch${full ? ' full' : ''}" id="shBatch-${b.batch_no}">
       <div class="shbatchhead" onclick="shAutoToggle(${b.batch_no})">
         <span class="t">${open ? '&#9662;' : '&#9656;'} Batch ${b.batch_no}${b.is_new ? ' <span class="shchip working" title="Products that were enabled on the website after the automation started">NEW</span>' : ''}</span>
         <span class="big" title="Completed / total">${b.completed}/${b.total}</span><span class="sm">completed</span>
-        <span class="sm grow">${processed}/${b.total} processed${extra ? ' · ' + escapeHtml(extra) : ''}</span>
+        <span class="sm">${processed}/${b.total} processed</span>
+        <span class="shbatchchips grow">${chips}</span>
       </div>
       <div class="shbatchbody" id="shBatchBody-${b.batch_no}" style="display:${open ? '' : 'none'};"></div>
     </div>`;
@@ -10129,6 +10192,21 @@ async function shAutoLoadBatch(n){
   }catch(e){ console.error(e); const el = document.getElementById('shBatchBody-' + n); if(el && !shAuto.details[n]) el.innerHTML = '<div class="loading" style="color:var(--danger)">Could not load this batch.</div>' + errDetailHtml(e); }
 }
 const SH_AUTO_RETRYABLE = { failed:1, held:1, done:1 };
+function shAutoNoteHtml(it){
+  if(it.state === 'working') return it.step ? `<div class="shstep">${escapeHtml(it.step)}</div>` : '';
+  const text = it.message;
+  if(!text) return '';
+  const msgType = it.msg_type === 'err' || it.state === 'failed' ? 'err' : it.msg_type === 'warn' || it.state === 'held' ? 'warn' : 'ok';
+  const id = Number(it.stockid);
+  const open = shAuto.notes.has(id);
+  return `<div><button type="button" class="shnotebtn ${msgType}${open ? ' on' : ''}" onclick="shAutoToggleNote(${id})">Note</button>`
+    + (open ? `<div class="shmsgpanel ${msgType}">${escapeHtml(text)}</div>` : '') + '</div>';
+}
+function shAutoToggleNote(id){
+  id = Number(id);
+  if(shAuto.notes.has(id)) shAuto.notes.delete(id); else shAuto.notes.add(id);
+  shAuto.open.forEach(n => { if(shAuto.details[n]) shAutoRenderBatchBody(n); });
+}
 function shAutoRow(it, d, idx, n){
   const id = Number(it.stockid);
   const badge = d.shopify_ok
@@ -10138,9 +10216,7 @@ function shAutoRow(it, d, idx, n){
     : '';
   const wp = d.website_ok ? wordpressBadge(it) + (it.web_url && it.web_status === 'publish' ? ` <a class="odweb publish" href="${escapeHtml(it.web_url)}" target="_blank" rel="noopener" title="Open the product page on the website">&#127760; Site</a>` : '') : '';
   const chipLabel = { waiting:'Waiting', working:'Working…', done:'Done', held:'Needs checking', failed:'Failed' }[it.state] || it.state;
-  const msgType = it.msg_type === 'err' || it.state === 'failed' ? 'err' : it.msg_type === 'warn' || it.state === 'held' ? 'warn' : 'ok';
-  const text = it.state === 'working' ? it.step : it.message;
-  const msg = text ? `<div class="shmsg ${it.state === 'working' ? '' : msgType}">${escapeHtml(text)}</div>` : '';
+  const msg = shAutoNoteHtml(it);
   const thumb = it.thumb ? `<img class="shthumb" src="${escapeHtml(it.thumb)}" alt="" onclick="openShopifyContent(${id})" style="cursor:pointer;">` : '<div class="shthumb none">—</div>';
   const content = it.content_ready
     ? `<button class="btn-ghost shsmall" type="button" onclick="openShopifyContent(${id})" title="View, edit or regenerate the generated content">${it.content_review ? '<span class="shreview">&#9888; Check</span>' : '<span class="shready">&#10003; View</span>'}</button>`
@@ -10156,11 +10232,11 @@ function shAutoRow(it, d, idx, n){
   const canSel = !it.sh_completed && SH_AUTO_RETRYABLE[it.state];
   const isSel = !!(shAuto.sel[n] && shAuto.sel[n].has(id));
   const box = canSel ? `<input type="checkbox" ${isSel ? 'checked' : ''} onchange="shAutoSelToggle(${n}, ${id}, this.checked)" title="Select to retry">` : '';
-  return `<tr>
+  return `<tr class="shautorow">
     <td class="shc">${box}</td>
     <td class="shc shn">${idx}</td>
     <td class="shc">${thumb}</td>
-    <td><div class="odname">${escapeHtml(it.name)}${badge}${wp}</div>${it.sku ? `<div class="odbarcode">SKU ${escapeHtml(it.sku)}</div>` : ''}${msg}</td>
+    <td class="shprod"><div class="odname">${escapeHtml(it.name)}${badge}${wp}</div>${it.sku ? `<div class="odbarcode">SKU ${escapeHtml(it.sku)}</div>` : ''}${msg}</td>
     <td class="shnum">${it.price ? '£' + escapeHtml(it.price) : '—'}</td>
     <td class="shc"><span class="shchip ${escapeHtml(it.state)}">${escapeHtml(chipLabel)}</span><div style="margin-top:6px;">${act}</div></td>
     <td class="shc">${photos}</td>
