@@ -38,6 +38,8 @@
   .toolbar .spacer{flex:1;}
   .btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:9px 14px;font-size:13.5px;color:var(--ink);white-space:nowrap;}
   .btn:hover{border-color:#c7cfd6;}
+  .btn:disabled{opacity:.45;cursor:default;}
+  .btn:disabled:hover{border-color:var(--line);}
   .btn-primary{background:var(--nav-blue);color:#fff;border:none;font-weight:600;}
   .btn-primary:hover{background:var(--nav-blue-dark);}
   /* Week off / Annual off switch at the top of the time-off modal */
@@ -276,6 +278,7 @@
       <button class="navbtn" id="next-week">&rsaquo;</button>
     </div>
     <button class="btn" id="today-btn">Today</button>
+    <button class="btn" id="undo-btn" disabled title="Undo the last rota change">Undo</button>
     <input type="date" class="jumpdate" id="jump-date" title="Jump to week">
 
     <div class="filterwrap">
@@ -901,43 +904,15 @@
     el.style.display = 'block';
   }
 
-  // ONE-TIME FIX: before toDateStr() was corrected to return the
-  // browser's own local calendar date instead of converting through UTC,
-  // every shift added by clicking a day cell was saved under the UTC
-  // date — one day EARLIER than the cell actually clicked, in any
-  // timezone ahead of UTC (the UK's BST, currently in effect, included).
-  // The bug was invisible while it was live because the grid always read
-  // shifts back using that same wrong date, so a shift reliably
-  // reappeared under the cell it was clicked on. Now that the grid
-  // reads/writes the correct calendar date instead, shifts saved under
-  // the old wrong date show up one day too early. This runs once
-  // (guarded by state._shiftDateFixApplied, saved back to the server, so
-  // it can never double-apply even if two devices load at the same
-  // moment) and moves every existing shift forward a day to land back on
-  // the day it was actually scheduled for. Time off is untouched — it's
-  // always typed straight from a plain date field, never passed through
-  // toDateStr(), so it was never affected by this bug in the first place.
+  // The UTC-day correction already ran once, and is kept by
+  // state._shiftDateFixApplied. A later API change dropped that flag from
+  // the saved document, so this used to move every shift forward a day
+  // on every login. Dates are not moved any more — if the flag is
+  // missing, restore it only, so a future load cannot shuffle the grid.
   function applyShiftDateFix(){
     if (state._shiftDateFixApplied) return;
-    let moved = 0;
-    const fixed = {};
-    Object.keys(state.shifts || {}).forEach(empId => {
-      fixed[empId] = {};
-      const byDate = state.shifts[empId] || {};
-      Object.keys(byDate).forEach(dateStr => {
-        const list = byDate[dateStr];
-        if (!list || !list.length) return;
-        const nextDate = toDateStr(addDays(fromDateStr(dateStr), 1));
-        // Merge rather than overwrite in the unlikely case two source
-        // dates both land on the same corrected date — a shift never
-        // silently disappears if that happens.
-        fixed[empId][nextDate] = (fixed[empId][nextDate] || []).concat(list);
-        moved += list.length;
-      });
-    });
-    state.shifts = fixed;
     state._shiftDateFixApplied = true;
-    if (moved > 0) saveState();
+    saveState({ skipUndo: true });
   }
 
   // Fetches the current shared state from the server. Returns true on
@@ -954,16 +929,55 @@
     lastKnownUpdatedAt = payload.updatedAt;
     applyLoadedScope();
     applyShiftDateFix();
+    captureCommittedSnapshot();
+    updateUndoBtn();
     return true;
   }
 
   // Debounced so rapid successive edits (bulk paste of many shifts, fast
   // clicking) collapse into one PUT instead of one per edit.
   let syncTimer = null;
-  function saveState(){
+  const UNDO_LIMIT = 40;
+  let undoStack = [];
+  let snapshotForUndo = null;
+  let applyingUndo = false;
+  function updateUndoBtn(){
+    const btn = document.getElementById('undo-btn');
+    if (!btn) return;
+    btn.disabled = undoStack.length === 0;
+  }
+  function captureCommittedSnapshot(){
+    snapshotForUndo = JSON.stringify(state);
+  }
+  function pushUndoFromSnapshot(){
+    if (applyingUndo || snapshotForUndo == null) return;
+    const next = JSON.stringify(state);
+    if (next === snapshotForUndo) return;
+    undoStack.push(snapshotForUndo);
+    if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+    snapshotForUndo = next;
+    updateUndoBtn();
+  }
+  function saveState(opts = {}){
+    if (!opts.skipUndo) pushUndoFromSnapshot();
+    else snapshotForUndo = JSON.stringify(state);
     setSyncStatus('syncing', 'Saving…');
     clearTimeout(syncTimer);
     syncTimer = setTimeout(triggerSync, 700);
+  }
+  function undoLastChange(){
+    if (!undoStack.length) return;
+    applyingUndo = true;
+    try {
+      state = JSON.parse(undoStack.pop());
+      snapshotForUndo = JSON.stringify(state);
+      updateUndoBtn();
+      saveState({ skipUndo: true });
+      const active = document.querySelector('nav a[data-tab].active');
+      activateTab(active ? active.dataset.tab : 'schedule');
+    } finally {
+      applyingUndo = false;
+    }
   }
 
   // Guards against a real bug that LOOKED like another person editing at
@@ -1604,6 +1618,7 @@
   document.getElementById('prev-week').addEventListener('click', () => { currentWeekStart = addDays(currentWeekStart, -7); renderSchedule(); });
   document.getElementById('next-week').addEventListener('click', () => { currentWeekStart = addDays(currentWeekStart, 7); renderSchedule(); });
   document.getElementById('today-btn').addEventListener('click', () => { currentWeekStart = getMonday(new Date()); renderSchedule(); });
+  document.getElementById('undo-btn').addEventListener('click', undoLastChange);
   document.getElementById('jump-date').addEventListener('change', (e) => {
     if (!e.target.value) return;
     currentWeekStart = getMonday(fromDateStr(e.target.value));
