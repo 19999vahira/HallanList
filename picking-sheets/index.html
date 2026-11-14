@@ -9199,6 +9199,7 @@ const shopifyData = {
   batchSize: 0,         // 0 = all rows; else slice filtered list
   batchNo: 1,
   thumbs: new Map(),    // stockid -> data URL
+  thumbMiss: new Set(), // stock ids we already asked for and got no picture (stops a redraw loop)
   thumbGen: 0,
   tab: 'todo',
   busy: false,
@@ -9347,6 +9348,7 @@ async function openShopifyList(pref){
   shopifyData.batchSize = 0;
   shopifyData.batchNo = 1;
   shopifyData.thumbs = new Map();
+  shopifyData.thumbMiss = new Set();
   shopifyData.thumbGen = 0;
   renderShopifyCrumbs('shopifyCrumbs-list', 2);
   document.getElementById('shopifyListTitle').textContent = shopifyData.suppName + ' — ' + shopifyPrefLabel();
@@ -9380,12 +9382,16 @@ async function loadShopifyItems(forceShopify){
     console.error(e);
   }
 }
+function shopifyInTab(it){
+  if(shopifyData.tab === 'done') return !!it.sh_completed;
+  if(shopifyData.tab === 'later') return !it.sh_completed && !!it.sh_later;
+  return !it.sh_completed && !it.sh_later;
+}
 function shopifyFilteredItems(){
   const q = document.getElementById('shopifyListFilter').value.trim().toLowerCase();
   const sf = shopifyData.statusFilter, of = shopifyData.onlineFilter, wf = shopifyData.webFilter;
-  const wantDone = shopifyData.tab === 'done';
   return shopifyData.items.filter(it =>
-    (!!it.sh_completed === wantDone) &&
+    shopifyInTab(it) &&
     (!q || (it.name || '').toLowerCase().includes(q) || (it.barcodes || '').toLowerCase().includes(q) || (it.sku || '').toLowerCase().includes(q)) &&
     (sf === 'all' || it.shopify_status === sf) &&
     (wf === 'all' || it.web_status === wf) &&
@@ -9424,27 +9430,40 @@ function shopifyThumbCell(it){
     : src === 'original' ? '<div class="shpicsrc orig">Original</div>' : '';
   return pic + lbl;
 }
-async function ensureShopifyThumbs(ids){
-  const need = [...new Set(ids.map(Number).filter(id => id > 0 && !shopifyData.thumbs.has(id)))];
-  if(!need.length) return;
+async function ensureShopifyThumbs(need){
+  let added = 0;
   for(let i = 0; i < need.length; i += 80){
     const chunk = need.slice(i, i + 80);
     try{
       const d = await apiGet('stock/shopify/thumbs/?ids=' + chunk.join(','));
-      Object.entries(d.thumbs || {}).forEach(([k, v]) => shopifyData.thumbs.set(Number(k), v));
-    }catch(e){ console.error(e); }
+      const got = d.thumbs || {};
+      chunk.forEach(id => {
+        const url = got[id] || got[String(id)];
+        if(url){ shopifyData.thumbs.set(id, url); shopifyData.thumbMiss.delete(id); added++; }
+        else shopifyData.thumbMiss.add(id);
+      });
+    }catch(e){
+      chunk.forEach(id => shopifyData.thumbMiss.add(id));
+      console.error(e);
+    }
   }
+  return added;
 }
 function queueShopifyThumbs(ids){
+  if(!shopifyData.thumbMiss) shopifyData.thumbMiss = new Set();
+  const need = [...new Set(ids.map(Number).filter(id => id > 0 && !shopifyData.thumbs.has(id) && !shopifyData.thumbMiss.has(id)))];
+  if(!need.length) return;
   const gen = ++shopifyData.thumbGen;
-  ensureShopifyThumbs(ids).then(() => {
-    if(gen !== shopifyData.thumbGen) return;
-    const box = document.getElementById('shopifyListBox');
-    if(box && box.querySelector('table.shtable')) renderShopifyList();
+  ensureShopifyThumbs(need).then(added => {
+    if(!added || gen !== shopifyData.thumbGen) return;
+    const view = document.getElementById('view-shopify-list');
+    if(!view || !view.classList.contains('active')) return;
+    renderShopifyList();
   });
 }
 function shopifyPictureUpdated(stockid, imageSource){
   shopifyData.thumbs.delete(Number(stockid));
+  if(shopifyData.thumbMiss) shopifyData.thumbMiss.delete(Number(stockid));
   const it = shopifyData.items.find(x => Number(x.stockid) === Number(stockid));
   if(it){
     it.content_ready = true;
@@ -9506,9 +9525,11 @@ function renderShopifyTabs(){
   const box = document.getElementById('shopifyTabs');
   if(!box) return;
   const done = shopifyData.items.filter(it => it.sh_completed).length;
-  const todo = shopifyData.items.length - done;
+  const later = shopifyData.items.filter(it => !it.sh_completed && it.sh_later).length;
+  const todo = shopifyData.items.length - done - later;
   const t = shopifyData.tab;
   box.innerHTML = '<button type="button" class="shtab' + (t === 'todo' ? ' on' : '') + '" onclick="setShopifyTab(\'todo\')">To do (' + todo + ')</button>'
+    + '<button type="button" class="shtab' + (t === 'later' ? ' on' : '') + '" onclick="setShopifyTab(\'later\')">Do later (' + later + ')</button>'
     + '<button type="button" class="shtab' + (t === 'done' ? ' on' : '') + '" onclick="setShopifyTab(\'done\')">Completed (' + done + ')</button>';
 }
 function setShopifyTab(t){
@@ -9526,7 +9547,7 @@ function renderShopifyList(){
   updateShopifyBatchUi();
   const filteredAll = shopifyFilteredItems();
   const items = shopifyVisibleItems();
-  const inTab = all.filter(it => !!it.sh_completed === (shopifyData.tab === 'done')).length;
+  const inTab = all.filter(shopifyInTab).length;
   const narrowed = filteredAll.length !== inTab;
   const batched = (Number(shopifyData.batchSize) || 0) > 0;
   let countTxt = (narrowed ? filteredAll.length + ' of ' + inTab : inTab) + ' products';
@@ -9536,9 +9557,10 @@ function renderShopifyList(){
   queueShopifyThumbs(items.filter(it => it.content_ready).map(it => it.stockid));
   if(all.length === 0){ box.innerHTML = '<div class="empty-hint">No products for this supplier.</div>'; return; }
   if(items.length === 0){
-    box.innerHTML = '<div class="empty-hint">' + (inTab === 0
-      ? (shopifyData.tab === 'done' ? 'Nothing has been marked Completed yet.' : 'Everything here is marked Completed.')
-      : 'No products match that filter.') + '</div>';
+    const emptyTab = shopifyData.tab === 'done' ? 'Nothing has been marked Completed yet.'
+      : shopifyData.tab === 'later' ? 'Nothing is marked Do later yet.'
+      : 'Nothing left in To do — everything is in Do later or Completed.';
+    box.innerHTML = '<div class="empty-hint">' + (inTab === 0 ? emptyTab : 'No products match that filter.') + '</div>';
     return;
   }
   const web = shopifyData.shopify;
@@ -9572,12 +9594,13 @@ function renderShopifyList(){
       <td class="shc">${it.online_complete ? '<span class="odtick">&#10003;</span>' : '—'}</td>
       <td class="shc">${contentCell}</td>
       <td class="shc">${genBtn}<button class="btn-ghost" type="button" onclick="sendShopifyOne(${id})" title="${it.content_ready ? 'Content is already generated, so it is sent straight away' : 'Generates the content first, then sends it'}">${onShopify ? 'Generate &amp; Update' : 'Generate &amp; Send to Shopify'}</button></td>
+      <td class="shc"><input type="checkbox" class="odcheck" ${it.sh_later ? 'checked' : ''} onchange="toggleShopifyLater(${id}, this.checked)" title="Tick to park this product in Do later"></td>
       <td class="shc"><input type="checkbox" class="odcheck" ${it.sh_completed ? 'checked' : ''} onchange="toggleShopifyCompleted(${id}, this.checked)" title="Tick when this product is finished — it moves to the Completed list"></td>
     </tr>`;
   }).join('');
   box.innerHTML = '<table class="finaltable odtable shtable"><thead><tr>'
     + `<th class="shc"><input type="checkbox" class="odcheck" ${allShownSelected ? 'checked' : ''} onchange="onShopifySelectAll(this.checked)" title="Select everything shown"></th>`
-    + '<th class="shc">#</th><th class="shc" title="Tidied product picture">Pic</th><th>Product</th><th class="shnum">Price (inc. VAT)</th><th class="shnum">Stock</th><th class="shc">Online Data</th><th class="shc">Content</th><th class="shc">Shopify</th><th class="shc">Completed</th>'
+    + '<th class="shc">#</th><th class="shc" title="Tidied product picture">Pic</th><th>Product</th><th class="shnum">Price (inc. VAT)</th><th class="shnum">Stock</th><th class="shc">Online Data</th><th class="shc">Content</th><th class="shc">Shopify</th><th class="shc">Do later</th><th class="shc">Completed</th>'
     + '</tr></thead><tbody>' + rows + '</tbody></table>';
 }
 function updateShopifyWebControls(all){
@@ -9704,8 +9727,24 @@ async function toggleShopifyCompleted(stockid, checked){
   try{
     await apiPost('stock/shopify/completed/', { stockid, completed: !!checked });
     it.sh_completed = !!checked;
+    if(checked) it.sh_later = false;
     shopifyData.selected.delete(stockid);
     toast(checked ? 'Moved to Completed' : 'Moved back to To do');
+  }catch(e){
+    console.error(e);
+    toast('Could not save: ' + e.message);
+  }
+  renderShopifyList();
+}
+async function toggleShopifyLater(stockid, checked){
+  const it = shopifyData.items.find(x => x.stockid === stockid);
+  if(!it) return;
+  try{
+    await apiPost('stock/shopify/later/', { stockid, later: !!checked });
+    it.sh_later = !!checked;
+    if(checked) it.sh_completed = false;
+    shopifyData.selected.delete(stockid);
+    toast(checked ? 'Moved to Do later' : 'Moved back to To do');
   }catch(e){
     console.error(e);
     toast('Could not save: ' + e.message);
