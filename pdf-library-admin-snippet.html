@@ -48,8 +48,20 @@
   // names things differently.
   const API_BASE = window.PORTAL_API_BASE || '';
   function authHeader() {
-    const token = localStorage.getItem('portal_token'); // adjust key name if different
+    let token = '';
+    try {
+      const session = JSON.parse(localStorage.getItem('hallan_portal_session') || 'null');
+      token = session && session.token ? session.token : '';
+    } catch (e) { token = ''; }
     return token ? { Authorization: 'Bearer ' + token } : {};
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 
   const nameInput = document.getElementById('pdf-name-input');
@@ -84,12 +96,12 @@
       }
       listBody.innerHTML = data.files.map(f => `
         <tr style="border-bottom:1px solid #eee;">
-          <td style="padding:6px;">${f.filename}</td>
-          <td style="padding:6px;"><a href="${f.url}" target="_blank" rel="noopener">${f.url}</a>
-            <button type="button" data-copy="${f.url}" style="margin-left:6px;">Copy</button>
+          <td style="padding:6px;">${escapeHtml(f.filename)}</td>
+          <td style="padding:6px;"><a href="${escapeHtml(f.url)}" target="_blank" rel="noopener">${escapeHtml(f.url)}</a>
+            <button type="button" data-copy="${escapeHtml(f.url)}" style="margin-left:6px;">Copy</button>
           </td>
-          <td style="padding:6px;">${new Date(f.updated_at).toLocaleString()}</td>
-          <td style="padding:6px;"><button type="button" data-delete="${f.filename}">Delete</button></td>
+          <td style="padding:6px;">${escapeHtml(new Date(f.updated_at).toLocaleString())}</td>
+          <td style="padding:6px;"><button type="button" data-delete="${escapeHtml(f.filename)}">Delete</button></td>
         </tr>
       `).join('');
     } catch (e) {

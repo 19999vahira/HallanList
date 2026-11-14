@@ -125,7 +125,7 @@
         <button type="button" id="go-login-from-forgot">Log in instead</button>
       </div>
       <div class="err" id="forgot-err"></div>
-      <div class="ok" id="forgot-ok">Password updated — logging you in…</div>
+      <div class="ok" id="forgot-ok">We've emailed a code. Your new password is saved only after you enter that code.</div>
       <form id="forgot-form">
         <label class="field-label" for="fp-employeeId">Employee ID</label>
         <input class="field" id="fp-employeeId" name="employeeId" type="text" placeholder="e.g. 94" autocomplete="username" required>
@@ -153,7 +153,7 @@
         <button type="button" id="go-login">Log in instead</button>
       </div>
       <div class="err" id="signup-err"></div>
-      <div class="ok" id="signup-ok">Account created — logging you in…</div>
+      <div class="ok" id="signup-ok">We've emailed a code. Your password is saved only after you enter that code.</div>
       <form id="signup-form">
         <label class="field-label" for="su-employeeId">Employee ID</label>
         <input class="field" id="su-employeeId" name="employeeId" type="text" placeholder="e.g. 94 — the ID HR gave you" autocomplete="username" required>
@@ -436,7 +436,8 @@
      Posts to /api/staff/forgot-password: { employeeId, department, password }.
      Same trust model as signup: the typed department has to match what
      HR has on file for that Employee ID, since there's no old password
-     to prove who's asking. On success the backend logs them straight in.
+     to prove who's asking. The new password is saved only after the
+     emailed code is accepted.
   ---- */
   const forgotForm = document.getElementById('forgot-form');
   const forgotErr = document.getElementById('forgot-err');

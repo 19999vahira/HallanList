@@ -246,6 +246,8 @@
     <a href="#" data-tab="analytics" id="nav-analytics" class="nav-hidden">Analytics</a>
     <a href="#" data-tab="access" id="nav-access" class="nav-hidden">Access</a>
     <a href="clockin.html" id="nav-clockin">Time Clock</a>
+    <a href="#" id="nav-kiosk-pair" class="nav-hidden">Pair this till</a>
+    <a href="#" id="nav-kiosk-unpair" class="nav-hidden">Unpair tills</a>
   </nav>
   <div class="right">
     <span id="user-name">Hallan Cash &amp; Carry</span>
@@ -502,8 +504,8 @@
         <input type="text" id="emp-login" placeholder="e.g. 2001">
       </div>
       <div>
-        <label for="emp-pin">Time clock PIN</label>
-        <input type="text" id="emp-pin" placeholder="4 digits" maxlength="4">
+        <label for="emp-pin">New time clock PIN</label>
+        <input type="password" id="emp-pin" placeholder="Leave blank to keep the current PIN" maxlength="8" autocomplete="new-password">
       </div>
     </div>
     <div class="modal-actions">
@@ -749,19 +751,19 @@
      AUTH GUARD — reuses the Staff Portal login (see rota/index.html).
      ================================================================= */
   const API_BASE = ((location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? 'http://localhost:3000' : 'https://hallan-picking-backend.onrender.com');
+  function escapeHtml(s){
+    const d = document.createElement('div');
+    d.textContent = s == null ? '' : String(s);
+    return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
   const token = localStorage.getItem('rota_token');
   if (!token) window.location.href = 'index.html';
   document.getElementById('user-name').textContent = localStorage.getItem('rota_name') || 'Hallan Cash & Carry';
   const initialsFromName = (localStorage.getItem('rota_name') || 'HC').split(' ').map(p=>p[0]).slice(0,2).join('').toUpperCase();
   document.getElementById('avatar-pill').textContent = initialsFromName;
-  /* currentRole: 'hr' | 'manager' | 'staff'. There's no separate
-     'rota_editor' role anymore — the backend only ever sends the
-     employee's real HR department reduced to hr/manager/staff. Anyone
-     who isn't manager or hr is scoped purely by whatever the Access tab
-     has granted their Login ID (see scopedDepartments below); with no
-     grant, that's zero departments, not everything. */
+  /* currentRole is a copy of what the API returned at login, used only to
+     decide which tabs to show. Department scope is applied by the API. */
   const currentRole = localStorage.getItem('rota_role') || 'staff';
-  const currentLoginId = localStorage.getItem('rota_login_id') || '';
   document.getElementById('pm-name').textContent = localStorage.getItem('rota_name') || 'Hallan Cash & Carry';
   document.getElementById('pm-role').textContent = currentRole.replace('_', ' ');
   if (currentRole === 'hr') document.getElementById('pm-access-btn').style.display = 'flex';
@@ -770,6 +772,13 @@
     localStorage.removeItem('rota_token'); localStorage.removeItem('rota_name'); localStorage.removeItem('rota_role'); localStorage.removeItem('rota_login_id');
     window.location.href = 'index.html';
   });
+  function sessionLost(){
+    localStorage.removeItem('rota_token');
+    localStorage.removeItem('rota_name');
+    localStorage.removeItem('rota_role');
+    localStorage.removeItem('rota_login_id');
+    window.location.href = 'index.html';
+  }
 
   /* ---- profile dropdown ---- */
   const profileMenu = document.getElementById('profile-menu');
@@ -935,6 +944,7 @@
   // success (state/lastKnownUpdatedAt are updated), false on failure.
   async function loadStateFromServer(){
     const res = await fetch(`${API_BASE}/api/staff/rota-state`, { headers: { Authorization: `Bearer ${token}` } });
+    if (res.status === 401) { sessionLost(); return false; }
     if (!res.ok) throw new Error('load failed');
     const payload = await res.json();
     if (!payload.ok) throw new Error(payload.error || 'load failed');
@@ -942,6 +952,7 @@
     merged.shifts = migrateShiftsToArrays(merged.shifts);
     state = merged;
     lastKnownUpdatedAt = payload.updatedAt;
+    applyLoadedScope();
     applyShiftDateFix();
     return true;
   }
@@ -981,6 +992,7 @@
       });
       const payload = await res.json();
 
+      if (res.status === 401) { sessionLost(); return; }
       if (res.status === 409) {
         // A genuine conflict: the server's updatedAt really doesn't match
         // what we last loaded, meaning some OTHER save (a different
@@ -1098,27 +1110,17 @@
   }
 
   /* =================================================================
-     ACCESS SCOPE — resolves the current person's department restriction
-     from the grants created on the Access tab (matched by Login ID).
-     scopedDepartments === null  -> no restriction (HR / staff)
-     scopedDepartments === []    -> restricted role but no grant found yet
-     scopedDepartments === [...] -> restricted to just these departments
+     ACCESS SCOPE — display only. The API has already limited this
+     document to the caller's departments and removed every PIN.
+     scopedDepartments === null  -> HR, the response was not filtered
+     scopedDepartments === [...] -> the departments present in that response
      ================================================================= */
-  function findAccessGrant(list){
-    return (list || []).find(g => currentLoginId && g.loginId === currentLoginId) || null;
-  }
   let scopedDepartments = null;
-  if (currentRole === 'manager') {
-    const g = findAccessGrant(state.accessGrants.managers);
-    scopedDepartments = g ? g.departments : [];
-  } else if (currentRole !== 'hr') {
-    // Everyone who isn't HR or a manager (i.e. every ordinary 'staff'
-    // login, which is also what a department-scoped rota editor logs in
-    // as now) is restricted to whatever departments the Access tab has
-    // granted their Login ID. No grant found = no departments = they see
-    // nothing, rather than the old bug where they silently saw it all.
-    const g = findAccessGrant(state.accessGrants.editors);
-    scopedDepartments = g ? g.departments : [];
+  // The API already removed other departments and every PIN. This only
+  // decides what the page shows from that response. It is not the grant.
+  function applyLoadedScope(){
+    if (currentRole === 'hr') { scopedDepartments = null; return; }
+    scopedDepartments = [...new Set(state.employees.map(e => e.department || ''))];
   }
   function inScope(department){
     if (scopedDepartments === null) return true;
@@ -1134,7 +1136,7 @@
     // clockin.html kiosk page, and the kiosk itself logs in as its own
     // dedicated Time Clock account, so ordinary staff/manager logins
     // never need this link and it's hidden for them below.
-    [nav('nav-timesheet'), nav('nav-analytics'), nav('nav-access'), nav('nav-clockin')].forEach(n => n.classList.add('nav-hidden'));
+    [nav('nav-timesheet'), nav('nav-analytics'), nav('nav-access'), nav('nav-clockin'), nav('nav-kiosk-pair'), nav('nav-kiosk-unpair')].forEach(n => n.classList.add('nav-hidden'));
     [nav('nav-schedule'), nav('nav-employees'), nav('nav-shifts')].forEach(n => n.classList.remove('nav-hidden'));
 
     if (currentRole === 'hr') {
@@ -1142,6 +1144,8 @@
       nav('nav-analytics').classList.remove('nav-hidden');
       nav('nav-access').classList.remove('nav-hidden');
       nav('nav-clockin').classList.remove('nav-hidden');
+      nav('nav-kiosk-pair').classList.remove('nav-hidden');
+      nav('nav-kiosk-unpair').classList.remove('nav-hidden');
     } else if (currentRole === 'manager') {
       nav('nav-schedule').classList.add('nav-hidden');
       nav('nav-employees').classList.add('nav-hidden');
@@ -1156,6 +1160,49 @@
     }
   }
   applyRoleNav();
+
+  document.getElementById('nav-kiosk-pair').addEventListener('click', async (e) => {
+    e.preventDefault();
+    if (!confirm('Pair THIS browser as the shop-floor clock? Your personal rota login will be removed from this device.')) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/staff/kiosk/pair`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok || !data.token) {
+        alert(data.error || 'Could not pair this till.');
+        return;
+      }
+      localStorage.setItem('hallan_kiosk_token', data.token);
+      localStorage.removeItem('rota_token');
+      localStorage.removeItem('rota_role');
+      localStorage.removeItem('rota_login_id');
+      localStorage.removeItem('rota_name');
+      window.location.href = 'clockin.html';
+    } catch (err) {
+      alert('Could not reach the server. This till was not paired.');
+    }
+  });
+
+  document.getElementById('nav-kiosk-unpair').addEventListener('click', async (e) => {
+    e.preventDefault();
+    if (!confirm('Unpair every till? Each clock will stop until an HR user pairs it again.')) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/staff/kiosk/revoke`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        alert(data.error || 'Could not unpair the tills.');
+        return;
+      }
+      alert('The tills are unpaired. Pair each one again from that device.');
+    } catch (err) {
+      alert('Could not reach the server. The tills were not unpaired.');
+    }
+  });
 
   /* =================================================================
      TAB SWITCHING — activateTab() is the single entry point so buttons
@@ -1209,7 +1256,7 @@
     panel.innerHTML = `<button class="clear" id="clear-shift-filter">Uncheck all</button>` +
       state.shiftTypes.map(st => `
         <label><input type="checkbox" data-filter-shift="${st.id}" ${hiddenShiftTypeIds.has(st.id) ? '' : 'checked'}>
-          <span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${st.bg};"></span> ${st.name}
+          <span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${escapeHtml(st.bg)};"></span> ${escapeHtml(st.name)}
         </label>`).join('');
     panel.querySelectorAll('[data-filter-shift]').forEach(cb => {
       cb.addEventListener('change', () => {
@@ -1230,7 +1277,7 @@
     const emps = state.employees.filter(emp => !emp.hidden);
     panel.innerHTML = `<button class="clear" id="clear-emp-filter">Uncheck all</button>` +
       emps.map(emp => `
-        <label><input type="checkbox" data-filter-emp="${emp.id}" ${hiddenEmployeeIds.has(emp.id) ? '' : 'checked'}> ${emp.name}</label>
+        <label><input type="checkbox" data-filter-emp="${emp.id}" ${hiddenEmployeeIds.has(emp.id) ? '' : 'checked'}> ${escapeHtml(emp.name)}</label>
       `).join('') || '<div style="font-size:12.5px;color:var(--slate);padding:6px 4px;">No employees yet</div>';
     panel.querySelectorAll('[data-filter-emp]').forEach(cb => {
       cb.addEventListener('change', () => {
@@ -1299,7 +1346,7 @@
 
         const offChipsHtml = offs.map(off => `
           <div class="chip timeoff-chip" data-timeoff-id="${off.id}" style="background:${offTypeOf(off) === 'annual' ? 'var(--annual-bg)' : 'var(--timeoff-bg)'};color:${offTypeOf(off) === 'annual' ? 'var(--annual-fg)' : 'var(--timeoff-fg)'};">
-            <div class="t">${offLabel(off)}</div><div class="l">${off.reason || ''}</div>
+            <div class="t">${offLabel(off)}</div><div class="l">${escapeHtml(off.reason || '')}</div>
           </div>`).join('');
 
         const shiftChipsHtml = shifts.map(s => {
@@ -1310,7 +1357,7 @@
           const hrsNote = ` · ${fmtWorkHrs(mins)}`;
           const breakNote = s.breakMins ? ` · break ${s.breakMins}min` : '';
           return `<div class="chip shift-chip" draggable="true" data-shift-id="${s.id}" data-emp="${emp.id}" data-date="${dateStr}" style="background:${cc.bg};color:${cc.fg};">
-            <div class="t">${fmtTime12(s.start)}–${fmtTime12(s.end)}</div><div class="l">${st.name}${hrsNote}${breakNote}</div>
+            <div class="t">${fmtTime12(s.start)}–${fmtTime12(s.end)}</div><div class="l">${escapeHtml(st.name)}${hrsNote}${breakNote}</div>
           </div>`;
         }).join('');
 
@@ -1329,8 +1376,8 @@
       tr.innerHTML = `
         <td class="namecol">
           <div class="employee">
-            <div class="initials">${initials(emp.name)}</div>
-            <div class="meta"><div class="n">${emp.name}</div><div class="h">${fmtMins(totalMins)} scheduled</div></div>
+            <div class="initials">${escapeHtml(initials(emp.name))}</div>
+            <div class="meta"><div class="n">${escapeHtml(emp.name)}</div><div class="h">${fmtMins(totalMins)} scheduled</div></div>
           </div>
         </td>
         ${cellsHtml}`;
@@ -1613,16 +1660,16 @@
         if (it.kind === 'timeoff') {
           return `<label style="display:flex;align-items:center;gap:9px;padding:8px 4px;font-size:13px;border-bottom:1px solid var(--line);">
             <input type="checkbox" class="bulkcopy-item" data-idx="${idx}" checked>
-            <span style="flex:1;">${it.empName} — ${DAY_NAMES[it.dayOffset]}
-              <span style="color:var(--slate);">Week off${it.timeOffData.reason ? ' · ' + it.timeOffData.reason : ''}</span>
+            <span style="flex:1;">${escapeHtml(it.empName)} — ${DAY_NAMES[it.dayOffset]}
+              <span style="color:var(--slate);">Week off${it.timeOffData.reason ? ' · ' + escapeHtml(it.timeOffData.reason) : ''}</span>
             </span>
           </label>`;
         }
         const st = shiftTypeById(it.shiftData.shiftTypeId) || { name: 'Unassigned' };
         return `<label style="display:flex;align-items:center;gap:9px;padding:8px 4px;font-size:13px;border-bottom:1px solid var(--line);">
           <input type="checkbox" class="bulkcopy-item" data-idx="${idx}" checked>
-          <span style="flex:1;">${it.empName} — ${DAY_NAMES[it.dayOffset]}
-            <span style="color:var(--slate);">${fmtTime12(it.shiftData.start)}–${fmtTime12(it.shiftData.end)} · ${st.name}</span>
+          <span style="flex:1;">${escapeHtml(it.empName)} — ${DAY_NAMES[it.dayOffset]}
+            <span style="color:var(--slate);">${fmtTime12(it.shiftData.start)}–${fmtTime12(it.shiftData.end)} · ${escapeHtml(st.name)}</span>
           </span>
         </label>`;
       }).join('');
@@ -1689,7 +1736,7 @@
   let editingEmpId = null, editingDate = null, editingShiftId = null;
 
   function populateShiftTypeSelect(select){
-    select.innerHTML = state.shiftTypes.map(st => `<option value="${st.id}">${st.name}</option>`).join('');
+    select.innerHTML = state.shiftTypes.map(st => `<option value="${escapeHtml(st.id)}">${escapeHtml(st.name)}</option>`).join('');
   }
 
   // shiftId: pass an existing shift's id to edit it, or null/undefined to
@@ -1792,7 +1839,7 @@
   function openTimeOffModal(timeOffId, prefill){
     editingTimeOffId = timeOffId || null;
     const sel = document.getElementById('to-employee');
-    sel.innerHTML = state.employees.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
+    sel.innerHTML = state.employees.map(e => `<option value="${escapeHtml(e.id)}">${escapeHtml(e.name)}</option>`).join('');
 
     if (timeOffId) {
       const t = state.timeOff.find(x => x.id === timeOffId);
@@ -2101,15 +2148,15 @@
     const body = document.getElementById('employees-body');
     body.innerHTML = state.employees.map(emp => `
       <tr>
-        <td>${emp.name}${emp.hidden ? ' <span class="badge" style="background:#E7ECF0;color:var(--slate);">Hidden</span>' : ''}</td>
-        <td>${emp.department || '—'}</td>
-        <td>${emp.personnelNumber || '—'}</td>
-        <td>${emp.email || '—'}</td>
+        <td>${escapeHtml(emp.name)}${emp.hidden ? ' <span class="badge" style="background:#E7ECF0;color:var(--slate);">Hidden</span>' : ''}</td>
+        <td>${escapeHtml(emp.department || '—')}</td>
+        <td>${escapeHtml(emp.personnelNumber || '—')}</td>
+        <td>${escapeHtml(emp.email || '—')}</td>
         <td>${emp.shiftTypeIds.map(id => {
           const st = shiftTypeById(id);
-          return st ? `<span class="badge" style="background:${st.bg};color:${st.fg};">${st.name}</span>` : '';
+          return st ? `<span class="badge" style="background:${escapeHtml(st.bg)};color:${escapeHtml(st.fg)};">${escapeHtml(st.name)}</span>` : '';
         }).join('') || '—'}</td>
-        <td>${emp.loginId || '—'}</td>
+        <td>${escapeHtml(emp.loginId || '—')}</td>
         <td class="rowactions">
           <button class="edit" data-edit-emp="${emp.id}">Edit</button>
           <button class="del" data-del-emp="${emp.id}">Delete</button>
@@ -2138,7 +2185,7 @@
     const select = document.getElementById('emp-dept');
     const newInput = document.getElementById('emp-dept-new');
     const depts = allDepartments();
-    const options = depts.map(d => `<option value="${d}">${d}</option>`);
+    const options = depts.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`);
     options.push(`<option value="__new__">+ Add new department…</option>`);
     select.innerHTML = options.join('');
 
@@ -2150,7 +2197,7 @@
       // Existing employee's department isn't in the current list for some
       // reason (e.g. renamed elsewhere) — keep it selectable rather than
       // silently losing it.
-      select.insertAdjacentHTML('afterbegin', `<option value="${currentValue}">${currentValue}</option>`);
+      select.insertAdjacentHTML('afterbegin', `<option value="${escapeHtml(currentValue)}">${escapeHtml(currentValue)}</option>`);
       select.value = currentValue;
       newInput.style.display = 'none';
       newInput.value = '';
@@ -2179,12 +2226,12 @@
     document.getElementById('emp-personnel').value = emp ? (emp.personnelNumber || '') : '';
     document.getElementById('emp-email').value = emp ? (emp.email || '') : '';
     document.getElementById('emp-login').value = emp ? emp.loginId : '';
-    document.getElementById('emp-pin').value = emp ? emp.pin : '';
+    document.getElementById('emp-pin').value = '';
     document.getElementById('emp-hidden').checked = !!(emp && emp.hidden);
 
     const grid = document.getElementById('emp-shifts-checkgrid');
     grid.innerHTML = state.shiftTypes.map(st => `
-      <label><input type="checkbox" value="${st.id}" ${emp && emp.shiftTypeIds.includes(st.id) ? 'checked' : ''}> ${st.name}</label>
+      <label><input type="checkbox" value="${escapeHtml(st.id)}" ${emp && emp.shiftTypeIds.includes(st.id) ? 'checked' : ''}> ${escapeHtml(st.name)}</label>
     `).join('');
 
     document.getElementById('emp-delete').style.display = emp ? 'inline' : 'none';
@@ -2768,8 +2815,8 @@
     const list = document.getElementById('shifttypes-list');
     list.innerHTML = state.shiftTypes.map(st => `
       <div class="shifttype-row" data-shifttype="${st.id}">
-        <input type="color" value="${st.bg}" data-field="bg">
-        <input type="text" value="${st.name}" data-field="name">
+        <input type="color" value="${escapeHtml(st.bg)}" data-field="bg">
+        <input type="text" value="${escapeHtml(st.name)}" data-field="name">
         <button class="del" data-shifttype-delete="${st.id}">✕</button>
       </div>
     `).join('');
@@ -3075,8 +3122,8 @@
       }
 
       return `<tr>
-        <td>${emp.name}</td>
-        <td>${emp.department || '—'}</td>
+        <td>${escapeHtml(emp.name)}</td>
+        <td>${escapeHtml(emp.department || '—')}</td>
         <td style="font-weight:700;">${mins ? fmtMins(mins) : '0h'}</td>
         <td>${issueBadge}</td>
         <td class="rowactions"><button class="edit" data-ts-open="${emp.id}">View / edit days</button></td>
@@ -3125,8 +3172,8 @@
 
     abody.innerHTML = rows.map(({ emp, s, avgLate }) => `
       <tr>
-        <td>${emp.name}</td>
-        <td>${emp.department || '—'}</td>
+        <td>${escapeHtml(emp.name)}</td>
+        <td>${escapeHtml(emp.department || '—')}</td>
         <td>${s.late ? `<button class="issue-link" data-issue="late" data-emp="${emp.id}">${s.late}</button>` : '—'}</td>
         <td>${s.late ? `<button class="issue-link" data-issue="late" data-emp="${emp.id}">${avgLate}m</button>` : '—'}</td>
         <td>${s.earlyLeave ? `<button class="issue-link" data-issue="earlyLeave" data-emp="${emp.id}">${s.earlyLeave}</button>` : '—'}</td>
@@ -3196,8 +3243,8 @@
     const deptSel = document.getElementById('tsd-dept-filter');
     const userSel = document.getElementById('tsd-user-filter');
     const prevDept = deptSel.value, prevUser = userSel.value;
-    deptSel.innerHTML = '<option value="">All</option>' + depts.map(d => `<option value="${d}">${d}</option>`).join('');
-    userSel.innerHTML = '<option value="">All</option>' + emps.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
+    deptSel.innerHTML = '<option value="">All</option>' + depts.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
+    userSel.innerHTML = '<option value="">All</option>' + emps.map(e => `<option value="${escapeHtml(e.id)}">${escapeHtml(e.name)}</option>`).join('');
 
     // The first time this screen renders after a page load, restore
     // whichever department/name filter this browser last had selected
@@ -3257,8 +3304,8 @@
 
         rowsHtml.push(`<tr data-tsd-row="${emp.id}|${dateStr}">
           <td><span class="ts-flag-dot ${dotClass}"></span></td>
-          <td>${emp.name}</td>
-          <td>${emp.personnelNumber || '—'}</td>
+          <td>${escapeHtml(emp.name)}</td>
+          <td>${escapeHtml(emp.personnelNumber || '—')}</td>
           <td>${dateLabel}</td>
           <td><input type="time" class="tsd-in" value="${rec.in || ''}"></td>
           <td><input type="time" class="tsd-out" value="${rec.out || ''}"></td>
@@ -3270,7 +3317,7 @@
           <td style="font-weight:700;">${fmtHM(mins)}</td>
           <td>${off ? fmtHM(schedMins) : '0:00'}</td>
           <td>${balance ? fmtHM(balance) : '0:00'}</td>
-          <td>${off ? (off.reason || (offTypeOf(off) === 'annual' ? 'Annual off' : 'Absence')) : '—'}</td>
+          <td>${off ? escapeHtml(off.reason || (offTypeOf(off) === 'annual' ? 'Annual off' : 'Absence')) : '—'}</td>
           <td><input type="text" class="tsd-comment" value="${commentValue.replace(/"/g,'&quot;')}" placeholder="Remarks"></td>
           <td><button class="btn" data-tsd-save="${emp.id}|${dateStr}">Save</button></td>
         </tr>`);
@@ -3441,10 +3488,10 @@
     const editorsBody = document.getElementById('access-editors-body');
     editorsBody.innerHTML = state.accessGrants.editors.map(g => `
       <tr>
-        <td>${g.name}</td>
-        <td>${g.loginId || '—'}</td>
-        <td>${g.departments.map(d => `<span class="dept-chip">${d}</span>`).join('') || '—'}</td>
-        <td class="rowactions"><button class="edit" data-edit-editor="${g.id}">Edit</button></td>
+        <td>${escapeHtml(g.name)}</td>
+        <td>${escapeHtml(g.loginId || '—')}</td>
+        <td>${(g.departments || []).map(d => `<span class="dept-chip">${escapeHtml(d)}</span>`).join('') || '—'}</td>
+        <td class="rowactions"><button class="edit" data-edit-editor="${escapeHtml(g.id)}">Edit</button></td>
       </tr>
     `).join('') || `<tr><td colspan="4" style="color:var(--slate);">No rota editors added yet.</td></tr>`;
     editorsBody.querySelectorAll('[data-edit-editor]').forEach(btn => btn.addEventListener('click', () => openAccessEditorModal(btn.dataset.editEditor)));
@@ -3452,10 +3499,10 @@
     const managersBody = document.getElementById('access-managers-body');
     managersBody.innerHTML = state.accessGrants.managers.map(g => `
       <tr>
-        <td>${g.name}</td>
-        <td>${g.loginId || '—'}</td>
-        <td>${g.departments.map(d => `<span class="dept-chip">${d}</span>`).join('') || '—'}</td>
-        <td class="rowactions"><button class="edit" data-edit-manager="${g.id}">Edit</button></td>
+        <td>${escapeHtml(g.name)}</td>
+        <td>${escapeHtml(g.loginId || '—')}</td>
+        <td>${(g.departments || []).map(d => `<span class="dept-chip">${escapeHtml(d)}</span>`).join('') || '—'}</td>
+        <td class="rowactions"><button class="edit" data-edit-manager="${escapeHtml(g.id)}">Edit</button></td>
       </tr>
     `).join('') || `<tr><td colspan="4" style="color:var(--slate);">No managers added yet.</td></tr>`;
     managersBody.querySelectorAll('[data-edit-manager]').forEach(btn => btn.addEventListener('click', () => openAccessManagerModal(btn.dataset.editManager)));

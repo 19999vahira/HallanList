@@ -2513,7 +2513,7 @@
       <div class="restaurant-admin-form-grid">
         <input type="number" id="raCustId" placeholder="Customer ID">
         <input type="text" id="raCustName" placeholder="Restaurant name">
-        <input type="text" id="raCustPasscode" placeholder="Passcode">
+        <input type="text" id="raCustPasscode" placeholder="Leave blank to keep the current passcode" autocomplete="new-password">
       </div>
       <button class="btn-amber" style="margin-top:10px;" onclick="saveRestaurantCustomer()">Save</button>
     </div>
@@ -5766,10 +5766,11 @@ async function openWholesalePricing(){
   if(pw === null) return; // cancelled — stay where we are
   try{
     const data = await apiPost('wholesale/auth/verify', { password: pw });
-    if(!data.ok){
+    if(!data.ok || !data.grant){
       toast('Incorrect password');
       return;
     }
+    wholesaleGrant = data.grant;
   }catch(e){
     toast('Could not check password');
     console.error(e);
@@ -5796,7 +5797,7 @@ async function submitWholesalePasswordChange(){
   const showErr = (msg) => { err.textContent = msg; err.style.display = 'block'; err.style.color = 'var(--danger)'; };
   if(!oldPw || !newPw){ showErr('Enter the current password and a new password.'); return; }
   if(newPw !== newPw2){ showErr('New password and confirmation do not match.'); return; }
-  if(newPw.length < 4){ showErr('New password should be at least 4 characters.'); return; }
+  if(newPw.length < 8){ showErr('New password must be at least 8 characters.'); return; }
   try{
     await apiPost('wholesale/auth/change', { old_password: oldPw, new_password: newPw });
     toast('Password updated');
@@ -11532,9 +11533,10 @@ async function submitRestaurantOrder(mode){
   if(items.length === 0){ toast('Add at least one item first'); return; }
   try{
     const stored = JSON.parse(localStorage.getItem('hallan_restaurant_customer') || '{}');
-    await restaurantApiPost('restaurant/order/submit', { items });
-    if(mode === 'share') shareRestaurantOrderPDF(items, stored.name || 'Customer');
-    else downloadRestaurantOrderPDF(items, stored.name || 'Customer');
+    const data = await restaurantApiPost('restaurant/order/submit', { items });
+    const priced = (data && data.items && data.items.length) ? data.items : items;
+    if(mode === 'share') shareRestaurantOrderPDF(priced, stored.name || 'Customer');
+    else downloadRestaurantOrderPDF(priced, stored.name || 'Customer');
     toast('Order submitted — thank you!');
     restaurantCart = new Map();
     restaurantStepData = { 1: null, 2: null, 3: null };
@@ -11542,7 +11544,7 @@ async function submitRestaurantOrder(mode){
     showView('view-restaurant-passcode');
   }catch(e){
     if(e.message !== 'Session expired'){
-      toast('Could not submit order — try again');
+      toast(e.message && e.message !== 'Session expired' ? e.message : 'Could not submit order — try again');
       console.error(e);
     }
   }
@@ -11602,7 +11604,8 @@ async function openRestaurantAdminGate(){
   if(pw === null) return;
   try{
     const data = await apiPost('restaurant/admin/auth/verify', { password: pw });
-    if(!data.ok){ toast('Incorrect password'); return; }
+    if(!data.ok || !data.grant){ toast('Incorrect password'); return; }
+    restaurantAdminGrant = data.grant;
   }catch(e){
     toast('Could not check password');
     console.error(e);
@@ -11629,9 +11632,9 @@ async function loadRestaurantAdminCustomers(){
     restaurantAdminCustomers.forEach(c => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td>${c.customer_id}</td>
+        <td>${escapeHtml(c.customer_id)}</td>
         <td>${escapeHtml(c.customer_name)}</td>
-        <td>${escapeHtml(c.passcode)}</td>
+        <td>Saved</td>
         <td>${c.active ? 'Yes' : 'No'}</td>
         <td>
           <button class="btn-ghost" onclick="editRestaurantCustomer(${c.customer_id})">Edit</button>
@@ -11656,14 +11659,18 @@ function editRestaurantCustomer(id){
   if(!c) return;
   document.getElementById('raCustId').value = c.customer_id;
   document.getElementById('raCustName').value = c.customer_name;
-  document.getElementById('raCustPasscode').value = c.passcode;
+  document.getElementById('raCustPasscode').value = '';
   window.scrollTo(0,0);
 }
 async function saveRestaurantCustomer(){
   const customer_id = document.getElementById('raCustId').value;
   const customer_name = document.getElementById('raCustName').value.trim();
   const passcode = document.getElementById('raCustPasscode').value.trim();
-  if(!customer_id || !customer_name || !passcode){ toast('Fill in all three fields'); return; }
+  const existing = restaurantAdminCustomers.find(x => String(x.customer_id) === String(customer_id));
+  if(!customer_id || !customer_name || (!passcode && !existing)){
+    toast('Enter the customer id, name, and a passcode. Leave the passcode blank only when editing.');
+    return;
+  }
   try{
     await apiPost('restaurant/admin/customers', { customer_id: Number(customer_id), customer_name, passcode });
     toast('Saved');
@@ -11699,7 +11706,12 @@ async function submitRestaurantAdminPasswordChange(){
   const newPw = document.getElementById('raNewPassword').value;
   const newPw2 = document.getElementById('raNewPassword2').value;
   const err = document.getElementById('raPasswordErr');
-  if(!newPw || newPw !== newPw2){
+  if(!newPw || newPw.length < 8){
+    err.textContent = 'New password must be at least 8 characters';
+    err.style.display = 'block';
+    return;
+  }
+  if(newPw !== newPw2){
     err.textContent = 'New passwords do not match';
     err.style.display = 'block';
     return;
@@ -19940,8 +19952,13 @@ async function apiErrorText(res, verb, path, body){
   if(body && body.error) detail = body.error;
   return verb + ' ' + path + ' failed: ' + res.status + (detail ? ' — ' + detail : '');
 }
+let wholesaleGrant = '';
+let restaurantAdminGrant = '';
 function apiAuthHeaders(){
-  return portalSession && portalSession.token ? { 'Authorization': 'Bearer ' + portalSession.token } : {};
+  const headers = portalSession && portalSession.token ? { 'Authorization': 'Bearer ' + portalSession.token } : {};
+  if (wholesaleGrant) headers['X-Wholesale-Grant'] = wholesaleGrant;
+  if (restaurantAdminGrant) headers['X-Restaurant-Admin-Grant'] = restaurantAdminGrant;
+  return headers;
 }
 // Every 401 here means the passcode session is gone/expired; every 403 with
 // ipNotAllowed means the network changed since login (e.g. moved off wifi
@@ -19954,6 +19971,12 @@ async function apiThrow(res, verb, path){
   if(res.status === 401 && body && body.portalAuthRequired){
     portalSignOut();
     throw Object.assign(new Error('Your session expired — please sign in again.'), { status: res.status, body, silent: true });
+  }
+  if(res.status === 403 && body && body.grantRequired){
+    wholesaleGrant = '';
+    restaurantAdminGrant = '';
+    toast(body.error || 'Enter the password again.');
+    throw Object.assign(new Error(body.error || 'Enter the password again.'), { status: res.status, body, silent: true });
   }
   if(res.status === 403 && body && body.ipNotAllowed){
     if(portalSession && portalSession.role === 'admin'){ showIpSetup(body.yourIp); }

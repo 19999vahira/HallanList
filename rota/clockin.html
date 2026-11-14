@@ -86,7 +86,7 @@
   <!-- STEP 0: this device hasn't been signed in yet -->
   <div class="step" id="step-setup">
     <div class="err" style="display:block;">
-      This device hasn't been set up yet. Ask a manager to open <strong>index.html</strong> on this device and log in once — after that, staff can clock in and out here with just their Login ID and PIN.
+      This till hasn't been paired. On this device, an HR user opens the rota, signs in, and chooses <strong>Pair this till</strong>. That removes their personal login from this browser. Staff then clock in here with a Login ID and PIN.
     </div>
     <button class="btn-primary" id="setup-retry-btn">I've logged in — Retry</button>
   </div>
@@ -119,68 +119,20 @@
 </div>
 
 <script>
-  /* ---------------------------------------------------------------
-     This file must be served from the SAME origin/folder as the Rota
-     app (schedule.html and index.html).
-
-     It used to read employees from a 'hallan_rota_v2' localStorage key
-     and write punches to 'hallan_timesheet_v1' — both purely local to
-     whichever device the kiosk ran on, so punches made here never
-     reached the Timesheet tab on any OTHER device. Both now go through
-     the same shared backend schedule.html uses.
-
-     This is still a shared/kiosk screen for IDENTIFYING who's punching
-     — anyone standing at the device types their own Login ID + PIN per
-     punch, same as before. But calling the backend at all needs a
-     valid login token, and this page deliberately never asks anyone
-     for their staff password. So instead the DEVICE itself needs to be
-     signed in once: a manager opens index.html on this device and logs
-     in normally, which drops a 'rota_token' into this browser's
-     localStorage (the same key schedule.html already uses) — after
-     that, this page reuses that token for its own API calls, while
-     each individual punch is still tied to whoever's Login ID + PIN
-     was typed in, not to whoever originally signed the device in.
-     Note that token expires after 12 hours, so on an always-on kiosk
-     someone will need to log in again periodically — a longer-lived,
-     device-specific token would be a worthwhile follow-up if that
-     turns out to be a hassle.
-     --------------------------------------------------------------- */
+  /* The till holds a device credential (hallan_kiosk_token), not a person's
+     rota session. Pairing is done from the rota by an HR user, on this
+     device, and that personal login is removed from this browser. */
   const API_BASE = ((location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? 'http://localhost:3000' : 'https://hallan-picking-backend.onrender.com');
-  const token = localStorage.getItem('rota_token');
+  localStorage.removeItem('rota_token');
+  localStorage.removeItem('rota_role');
+  localStorage.removeItem('rota_login_id');
+  localStorage.removeItem('rota_name');
+  const kioskToken = localStorage.getItem('hallan_kiosk_token');
 
-  async function fetchEmployees(){
-    const res = await fetch(`${API_BASE}/api/staff/rota-state`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) throw new Error('load failed');
-    const payload = await res.json();
-    if (!payload.ok) throw new Error(payload.error || 'load failed');
-    return (payload.data && payload.data.employees) || [];
-  }
-  async function fetchTodayRecord(employeeId, dateStr){
-    const res = await fetch(`${API_BASE}/api/staff/timesheet-state`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) throw new Error('load failed');
-    const payload = await res.json();
-    if (!payload.ok) throw new Error(payload.error || 'load failed');
-    return ((payload.days || {})[employeeId] || {})[dateStr] || {};
-  }
-  async function saveTimesheetEntry(employeeId, dateStr, rec){
-    const res = await fetch(`${API_BASE}/api/staff/timesheet-entry`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        employeeId: employeeId,
-        date: dateStr,
-        in: rec.in || null,
-        breakStart: rec.breakStart || null,
-        breakEnd: rec.breakEnd || null,
-        out: rec.out || null,
-        comment: rec.comment || null
-      })
-    });
-    const payload = await res.json();
-    if (!res.ok || !payload.ok) throw new Error(payload.error || 'save failed');
+  function kioskHeaders(){
+    return { 'Content-Type': 'application/json', Authorization: `Bearer ${kioskToken}` };
   }
 
-  function toDateStr(d){ return d.toISOString().slice(0,10); }
   function nowHHMM(){
     const d = new Date();
     return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
@@ -192,7 +144,6 @@
     return `${h12}:${String(m).padStart(2,'0')} ${ampm}`;
   }
 
-  /* ---- live clock ---- */
   function tick(){
     const now = new Date();
     document.getElementById('clock').textContent = now.toLocaleTimeString('en-GB');
@@ -213,7 +164,7 @@
   document.getElementById('setup-retry-btn').addEventListener('click', () => window.location.reload());
 
   function resetToLogin(){
-    if (!token) { showStep(stepSetup); return; }
+    if (!kioskToken) { showStep(stepSetup); return; }
     document.getElementById('login-id').value = '';
     document.getElementById('login-pin').value = '';
     document.getElementById('login-err').style.display = 'none';
@@ -238,20 +189,25 @@
     btn.disabled = true;
     btn.textContent = 'Checking…';
     try {
-      const employees = await fetchEmployees();
-      const emp = employees.find(e =>
-        (e.loginId || '').trim() === loginId && (e.pin || '').trim() === pin
-      );
-
-      if (!emp) {
-        errBox.textContent = 'Login ID or PIN not recognised. Check with your manager if this keeps happening.';
+      const res = await fetch(`${API_BASE}/api/staff/kiosk/verify`, {
+        method: 'POST',
+        headers: kioskHeaders(),
+        body: JSON.stringify({ loginId, pin })
+      });
+      const data = await res.json();
+      if (res.status === 401) {
+        localStorage.removeItem('hallan_kiosk_token');
+        showStep(stepSetup);
+        return;
+      }
+      if (!res.ok || !data.ok) {
+        errBox.textContent = data.error || 'Login ID or PIN not recognised. Check with your manager if this keeps happening.';
         errBox.style.display = 'block';
         return;
       }
-
       errBox.style.display = 'none';
-      currentEmployee = emp;
-      await showStatusStep();
+      currentEmployee = { ...data.employee, today: data.today || {}, punchToken: data.punchToken };
+      showStatusStep();
     } catch (err) {
       errBox.textContent = "Could not reach the server. Check the connection and try again.";
       errBox.style.display = 'block';
@@ -267,20 +223,10 @@
 
   document.getElementById('status-back-btn').addEventListener('click', resetToLogin);
 
-  async function showStatusStep(){
+  function showStatusStep(){
     document.getElementById('status-name').textContent = currentEmployee.name;
     document.getElementById('status-dept').textContent = currentEmployee.department || '';
-
-    const dateStr = toDateStr(new Date());
-    let rec;
-    try {
-      rec = await fetchTodayRecord(currentEmployee.id, dateStr);
-    } catch (err) {
-      document.getElementById('login-err').textContent = "Could not reach the server. Check the connection and try again.";
-      document.getElementById('login-err').style.display = 'block';
-      showStep(stepLogin);
-      return;
-    }
+    const rec = currentEmployee.today || {};
     const pill = document.getElementById('status-pill');
     const pillText = document.getElementById('status-pill-text');
     const actions = document.getElementById('status-actions');
@@ -318,7 +264,6 @@
   }
 
   async function recordPunch(action, rec){
-    const dateStr = toDateStr(new Date());
     const time = nowHHMM();
     let confirmText = '', confirmSub = '';
 
@@ -329,7 +274,20 @@
 
     document.querySelectorAll('[data-action]').forEach(b => b.disabled = true);
     try {
-      await saveTimesheetEntry(currentEmployee.id, dateStr, rec);
+      const res = await fetch(`${API_BASE}/api/staff/kiosk/punch`, {
+        method: 'PUT',
+        headers: kioskHeaders(),
+        body: JSON.stringify({
+          punchToken: currentEmployee.punchToken,
+          in: rec.in || null,
+          breakStart: rec.breakStart || null,
+          breakEnd: rec.breakEnd || null,
+          out: rec.out || null,
+          comment: rec.comment || null
+        })
+      });
+      const payload = await res.json();
+      if (!res.ok || !payload.ok) throw new Error(payload.error || 'save failed');
     } catch (err) {
       alert("Could not save that — check the connection and try again.");
       document.querySelectorAll('[data-action]').forEach(b => b.disabled = false);
@@ -339,8 +297,6 @@
     document.getElementById('confirm-text').textContent = confirmText;
     document.getElementById('confirm-sub').textContent = confirmSub;
     showStep(stepConfirm);
-
-    // Kiosk-style auto-reset so the next person can use the screen.
     setTimeout(resetToLogin, 2500);
   }
 

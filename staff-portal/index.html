@@ -762,11 +762,10 @@ async function submitForgotPassword(){
       errBox.style.display = 'block';
       return;
     }
-    // Same as login: only { ok, requiresOtp, employeeId } comes back here —
-    // the new password is already saved, but a code still has to be
-    // confirmed before a token is issued.
+    // Only { ok, requiresOtp, employeeId } comes back here. The new
+    // password stays pending until the emailed code is accepted.
     pendingEmployeeId = data.employeeId || employeeId;
-    openOtpScreen('Your password has been updated. We\'ve emailed a 6-digit code to confirm it\'s you — enter it below to sign in.');
+    openOtpScreen('We\'ve emailed a 6-digit code. Your new password is saved only after you enter that code.');
   }catch(e){
     errBox.textContent = 'Could not reach the server — check your connection and try again.';
     errBox.style.display = 'block';
