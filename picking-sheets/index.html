@@ -72,6 +72,7 @@
      the flex/center rule, so #view-login-otp and #view-ip-blocked fell back
      to a plain block div and rendered pinned to the top-left corner. */
   #view-login,#view-login-otp,#view-ip-blocked{display:flex;min-height:80vh;align-items:center;justify-content:center;}
+  #view-login-remember.view.active{display:flex;min-height:80vh;align-items:center;justify-content:center;}
   .login-card{
     background:var(--panel);border:1px solid var(--line);border-radius:10px;
     padding:40px 36px;width:340px;max-width:88vw;text-align:center;
@@ -1226,6 +1227,18 @@
     <button class="btn-primary" id="loginOtpBtn" onclick="doLoginVerify()">Verify</button>
     <div class="login-err" id="loginOtpErr"></div>
     <a href="#" onclick="event.preventDefault(); cancelLoginOtp();" style="display:block;text-align:center;margin-top:14px;font-size:13px;color:var(--text-dim);">Back to sign in</a>
+  </div>
+</div>
+
+<!-- LOGIN: REMEMBER THIS BROWSER -->
+<div id="view-login-remember" class="view">
+  <div class="login-card">
+    <img src="../assets/hallan-logo.png" alt="Hallan Cash & Carry" style="width:120px;max-width:60%;margin:0 auto 14px;display:block;">
+    <h2>Skip this step and remember this device?</h2>
+    <p>This browser will not ask for the email code again for this account. You still sign in with your username and passcode after you sign out.</p>
+    <button class="btn-primary" id="rememberDeviceBtn" onclick="confirmRememberDevice()">OK</button>
+    <button class="btn-ghost" onclick="skipRememberDevice()" style="width:100%;margin-top:8px;">Not now</button>
+    <div class="login-err" id="rememberDeviceErr"></div>
   </div>
 </div>
 
@@ -4997,13 +5010,53 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('beforeunload', () => { if(activeTimer.phase) flushActiveTimer(true); });
 
 /* ============ AUTH ============ */
-// Login is now two steps against server.js:
-//   1. POST /api/portal/login        { name, passcode } -> { requiresOtp: true, userId }
-//      (also emails a 6-digit code to that user's address on file)
-//   2. POST /api/portal/login/verify { userId, code }    -> { token, name, role, modules, ipAllowed, yourIp }
+// Login against server.js:
+//   1. POST /api/portal/login        { name, passcode, deviceId?, deviceSecret? }
+//      -> { requiresOtp: true, userId }  or, on a remembered browser, the session
+//   2. POST /api/portal/login/verify { userId, code } -> { token, name, role, modules, ipAllowed, yourIp }
+//   3. After the code, OK calls POST /api/portal/devices/remember
 // Nothing about who's allowed in, or which sections they can see, is
 // decided in this file — this just relays what the server says.
 let pendingLoginUserId = null; // set after step 1, needed for step 2
+let pendingPortalEntry = null; // ip / role held while the remember card is up
+let loginDeviceRejected = false; // sent a stored secret and the server still asked for a code
+
+function loadPortalDevice(){
+  try{ return JSON.parse(localStorage.getItem('hallan_portal_device') || 'null'); }catch(e){ return null; }
+}
+function savePortalDevice(device){
+  localStorage.setItem('hallan_portal_device', JSON.stringify(device));
+}
+function deviceForLoginName(name){
+  const device = loadPortalDevice();
+  if(!device || !device.deviceId || !device.deviceSecret || !device.name) return null;
+  if(String(device.name).trim().toUpperCase() !== String(name || '').trim().toUpperCase()) return null;
+  return device;
+}
+function queuePortalEntry(data){
+  savePortalSession({ token: data.token, name: data.name, role: data.role, modules: data.modules || [] });
+  pendingPortalEntry = { ipAllowed: data.ipAllowed, yourIp: data.yourIp, role: data.role, name: data.name };
+}
+function enterPendingPortal(){
+  const data = pendingPortalEntry || {};
+  pendingPortalEntry = null;
+  pendingLoginUserId = null;
+  loginDeviceRejected = false;
+  const otpEl = document.getElementById('loginOtpCode');
+  if(otpEl) otpEl.value = '';
+  if(!data.ipAllowed){
+    if(data.role === 'admin'){ showIpSetup(data.yourIp); } else { showIpBlocked(data.yourIp); }
+    return;
+  }
+  showApp();
+}
+function shouldAskRemember(){
+  const device = loadPortalDevice();
+  const sessionName = (pendingPortalEntry && pendingPortalEntry.name) || '';
+  if(!device || !device.deviceSecret) return true;
+  if(String(device.name || '').trim().toUpperCase() !== String(sessionName).trim().toUpperCase()) return true;
+  return loginDeviceRejected;
+}
 
 async function doLogin(){
   const name = document.getElementById('loginName').value.trim();
@@ -5013,18 +5066,32 @@ async function doLogin(){
   errEl.textContent = '';
   if(!name || !pass){ errEl.textContent = 'Enter your username and passcode.'; return; }
   btn.disabled = true; btn.textContent = 'Checking…';
+  loginDeviceRejected = false;
   try{
+    const body = { name: name, passcode: pass };
+    const device = deviceForLoginName(name);
+    if(device){
+      body.deviceId = device.deviceId;
+      body.deviceSecret = device.deviceSecret;
+    }
     const res = await fetch(API_BASE + 'portal/login', {
-      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name: name, passcode: pass })
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
     });
     const data = await res.json().catch(()=>({}));
     if(!res.ok){
       errEl.textContent = data.error || 'Incorrect username or passcode, try again.';
       return;
     }
-    // Step 1 never returns a token any more — it only means "code sent".
-    pendingLoginUserId = data.userId;
     document.getElementById('loginPass').value = '';
+    if(data.token){
+      queuePortalEntry(data);
+      enterPendingPortal();
+      return;
+    }
+    // No token yet — the server emailed a code. A stored secret that was
+    // sent and still not accepted is stale, so offer remember again after the code.
+    loginDeviceRejected = !!device;
+    pendingLoginUserId = data.userId;
     document.getElementById('loginOtpCode').value = '';
     document.getElementById('loginOtpErr').textContent = '';
     switchAuthView('view-login-otp');
@@ -5052,19 +5119,44 @@ async function doLoginVerify(){
       errEl.textContent = data.error || 'Incorrect code, try again.';
       return;
     }
-    savePortalSession({ token: data.token, name: data.name, role: data.role, modules: data.modules || [] });
-    pendingLoginUserId = null;
+    queuePortalEntry(data);
     document.getElementById('loginOtpCode').value = '';
-    if(!data.ipAllowed){
-      if(data.role === 'admin'){ showIpSetup(data.yourIp); } else { showIpBlocked(data.yourIp); }
+    if(shouldAskRemember()){
+      document.getElementById('rememberDeviceErr').textContent = '';
+      switchAuthView('view-login-remember');
       return;
     }
-    showApp();
+    enterPendingPortal();
   } catch(e){
     errEl.textContent = 'Could not reach the server — check your connection and try again.';
   } finally {
     btn.disabled = false; btn.textContent = 'Verify';
   }
+}
+async function confirmRememberDevice(){
+  const btn = document.getElementById('rememberDeviceBtn');
+  const errEl = document.getElementById('rememberDeviceErr');
+  errEl.textContent = '';
+  btn.disabled = true;
+  try{
+    const data = await apiPost('portal/devices/remember', {});
+    savePortalDevice({
+      userId: pendingLoginUserId,
+      name: (pendingPortalEntry && pendingPortalEntry.name) || '',
+      deviceId: data.deviceId,
+      deviceSecret: data.deviceSecret
+    });
+    enterPendingPortal();
+  } catch(e){
+    if(e.silent && !portalSession) return;
+    if(!e.silent) toast(e.message || 'Could not remember this device. The email code will be asked next time.');
+    enterPendingPortal();
+  } finally {
+    btn.disabled = false;
+  }
+}
+function skipRememberDevice(){
+  enterPendingPortal();
 }
 function cancelLoginOtp(){
   pendingLoginUserId = null;
@@ -5074,7 +5166,7 @@ function cancelLoginOtp(){
   switchAuthView('view-login');
 }
 function switchAuthView(id){
-  ['view-login','view-login-otp','view-ip-blocked','view-ip-setup','app'].forEach(v => {
+  ['view-login','view-login-otp','view-login-remember','view-ip-blocked','view-ip-setup','app'].forEach(v => {
     const el = document.getElementById(v);
     if(!el) return;
     if(v === id){ el.style.display = v === 'app' ? 'block' : 'flex'; el.classList.add('active'); }
@@ -5299,6 +5391,7 @@ async function portalAddMyIp(){
   }
 }
 function portalSignOut(){
+  // Session only. hallan_portal_device stays so this browser still skips the email code.
   localStorage.removeItem('hallan_portal_session');
   portalSession = null;
   switchAuthView('view-login');

@@ -11,7 +11,7 @@ This portal holds Hallan Cash & Carry staff records, holiday balances, rotas, cl
 | Surface | Trust level |
 | --- | --- |
 | Anonymous visitor | May open the public home page, the printed flyers, and any PDF the portal has published on purpose. May not read staff, price, order, or punch data. |
-| Portal staff | A named picking-sheets user after passcode and emailed code. May use only the modules the API granted. The browser list is a hint, not a grant. |
+| Portal staff | A named picking-sheets user after passcode and emailed code, or after passcode plus a device secret that was issued only after an earlier emailed code on that browser. May use only the modules the API granted. The browser list is a hint, not a grant. |
 | Portal admin | Same login, with the admin role returned by the API, and only from an IP the API has allowed. May manage portal users and allowed IPs. |
 | Employee | A `staff_employees` person after Staff ID, password, and emailed code. Sees their own holiday data. Does not choose the role. |
 | Manager | An employee whose API role is `manager`. Department scope comes from the API, not from a value stored in the browser. |
@@ -28,14 +28,14 @@ This portal holds Hallan Cash & Carry staff records, holiday balances, rotas, cl
 4. A manager or ordinary employee sees only the departments the API scopes to them. An access grant matched in the browser against `rota_login_id` is not the control.
 5. Passwords and PINs are checked on the server. The client minimum length (six characters on the staff forms, four on the wholesale shared password) is not the control.
 6. Passwords are stored only as a slow hash (bcrypt or Argon2). This repository must never contain a password, PIN, hash, or API secret.
-7. Login issues a bearer token only after the emailed code is accepted. The first step (`staff/login`, `portal/login`, signup, forgot-password) returns no token.
+7. Login issues a bearer token only after the emailed code is accepted. The first step (`staff/login`, signup, forgot-password, and `portal/login` on a browser that is not remembered) returns no token. Picking-sheets exception: after that code is accepted, the person may choose OK on “Skip this step and remember this device”. The API stores only a hash of a device secret and returns the secret once. A later `portal/login` for that same user may return a portal token without a new email when the passcode matches and the browser presents that secret. The secret alone is not a session. A new browser, or Not now, still needs the emailed code. Staff login has no remembered-device exception.
 8. A forgotten-password or signup request does not store the new password until that emailed code is accepted. Knowing an employee ID and a department name is not authentication. The department list is not a secret.
 9. `GET /api/staff/rota-state` does not include any employee's PIN. The clock compares a PIN by sending it to the API, which answers yes or no for that person only.
 10. The clock runs on a dedicated device credential that can verify a PIN and write that person's punch. It does not reuse a person's `rota_token`.
 11. A wholesale price, margin, lock, or restaurant order total that the business will honour is computed or re-checked on the server. A figure typed in the browser is input, not the price of record.
 12. The shared wholesale-pricing password and the shared Manage-Customers password, if they remain, are checked by the API on every sensitive read and write. A successful `prompt()` in the page is not a session for those records.
-13. Deactivating a person, or changing their password, revokes every token family: `hallan_portal_session`, `hallanStaffToken`, `rota_token`, `hallan_mgmt_token`, and `hallan_restaurant_token`.
-14. Tokens expire on the server. Closing the browser is not the expiry mechanism, and a comment in the page cannot extend a token.
+13. Deactivating a person, or changing their password, revokes every token family: `hallan_portal_session`, `hallanStaffToken`, `rota_token`, `hallan_mgmt_token`, and `hallan_restaurant_token`, and revokes remembered picking-sheets device secrets for that portal user.
+14. Tokens expire on the server. Closing the browser is not the expiry mechanism, and a comment in the page cannot extend a token. A picking-sheets portal token expires after 10 years (`3650d`). Staff, management, and restaurant tokens expire after 12 hours. Changing the passcode or deactivating the user revokes the portal token and every remembered device for that user immediately, via `TOKEN_VERSION`, without waiting for expiry.
 15. Public flyer HTML and public PDF links contain product and price information Hallan has chosen to publish. They contain no staff data, no customer personal data, and no internal notes.
 16. Strings from the API that are placed into HTML are escaped. A filename, a URL, a name, or a note is text, not markup.
 17. This git repository stays free of secrets, `.env` files, and production credentials. The WhatsApp App ID and configuration ID in the picking page are public client identifiers. `WHATSAPP_APP_SECRET` stays on the server.
@@ -58,13 +58,15 @@ The API stores personal data: employee names, staff IDs, departments, email addr
 
 A person must be able to ask Hallan for a copy or deletion of their data. This repository has no privacy notice and no self-service export. Until a runbook exists, HR handles the request against the API's database, not by editing HTML. Deletion of an employee must also revoke the token families in invariant 13.
 
-Browser `localStorage` holds session tokens and display names on the device that signed in. Signing out must remove that device's token. It does not delete the employment record.
+Browser `localStorage` holds session tokens and display names on the device that signed in. Signing out must remove that device's session token (`hallan_portal_session`). It does not delete the employment record. A remembered portal device secret (`hallan_portal_device`) is not a session token. Signing out leaves it in place when the person chose OK, so the email code is not asked again on this browser. Clearing site data removes it.
 
 ## Part 2 — Rationale
 
 Recorded 13 November 2026, from the pages in this repository. The API source was not available, so these rules describe what must stay true, including where today's pages do not yet match.
 
 The portal is several logins because the people are different. Warehouse staff share the picking app and are granted modules. Shop employees use Staff ID for holidays and the rota. Shelf-check managers are a smaller list. Restaurant buyers are customers, not staff. Putting them on one screen would not make them one role. Each login has its own token on purpose: signing out of the rota must not be the only way to end a picking session, and a password change must end all of them (invariant 13).
+
+Picking sheets keeps its portal JWT for 10 years so closing the browser does not sign the person out. Staff, management, and restaurant tokens stay at 12 hours. After the emailed code, OK on “remember this device” stores a device secret in that browser only. The next sign-in on that browser still needs the passcode and skips the email. Staff login stays Staff ID, password, and emailed code, with no remembered-device exception (invariants 7 and 14).
 
 The staff role dropdown is on the sign-in form and is not sent. That is correct. The API derives `staff`, `manager`, or `hr` from the employee record. The rota then copies that role into `rota_role` and the typed ID into `rota_login_id`, and hides tabs from those values. Those copies exist so the page can render. They are not a second authority. Anyone can edit them in the browser, so the API must scope `rota-state` and timesheet writes itself.
 
