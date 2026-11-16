@@ -9383,9 +9383,10 @@ async function loadShopifyItems(forceShopify){
   }
 }
 function shopifyInTab(it){
-  if(shopifyData.tab === 'done') return !!it.sh_completed;
-  if(shopifyData.tab === 'later') return !it.sh_completed && !!it.sh_later;
-  return !it.sh_completed && !it.sh_later;
+  if(shopifyData.tab === 'finished') return !!it.sh_finished;
+  if(shopifyData.tab === 'done') return !!it.sh_completed && !it.sh_finished;
+  if(shopifyData.tab === 'later') return !it.sh_completed && !it.sh_finished && !!it.sh_later;
+  return !it.sh_completed && !it.sh_later && !it.sh_finished;
 }
 function shopifyFilteredItems(){
   const q = document.getElementById('shopifyListFilter').value.trim().toLowerCase();
@@ -9524,13 +9525,15 @@ function onShopifySearchInput(){
 function renderShopifyTabs(){
   const box = document.getElementById('shopifyTabs');
   if(!box) return;
-  const done = shopifyData.items.filter(it => it.sh_completed).length;
-  const later = shopifyData.items.filter(it => !it.sh_completed && it.sh_later).length;
-  const todo = shopifyData.items.length - done - later;
+  const finished = shopifyData.items.filter(it => it.sh_finished).length;
+  const done = shopifyData.items.filter(it => it.sh_completed && !it.sh_finished).length;
+  const later = shopifyData.items.filter(it => !it.sh_completed && !it.sh_finished && it.sh_later).length;
+  const todo = shopifyData.items.length - done - later - finished;
   const t = shopifyData.tab;
   box.innerHTML = '<button type="button" class="shtab' + (t === 'todo' ? ' on' : '') + '" onclick="setShopifyTab(\'todo\')">To do (' + todo + ')</button>'
     + '<button type="button" class="shtab' + (t === 'later' ? ' on' : '') + '" onclick="setShopifyTab(\'later\')">Do later (' + later + ')</button>'
-    + '<button type="button" class="shtab' + (t === 'done' ? ' on' : '') + '" onclick="setShopifyTab(\'done\')">Completed (' + done + ')</button>';
+    + '<button type="button" class="shtab' + (t === 'done' ? ' on' : '') + '" onclick="setShopifyTab(\'done\')">Completed (' + done + ')</button>'
+    + '<button type="button" class="shtab' + (t === 'finished' ? ' on' : '') + '" onclick="setShopifyTab(\'finished\')">Finished (' + finished + ')</button>';
 }
 function setShopifyTab(t){
   if(shopifyData.tab === t) return;
@@ -9557,9 +9560,10 @@ function renderShopifyList(){
   queueShopifyThumbs(items.filter(it => it.content_ready).map(it => it.stockid));
   if(all.length === 0){ box.innerHTML = '<div class="empty-hint">No products for this supplier.</div>'; return; }
   if(items.length === 0){
-    const emptyTab = shopifyData.tab === 'done' ? 'Nothing has been marked Completed yet.'
+    const emptyTab = shopifyData.tab === 'finished' ? 'Nothing has been marked Finished yet.'
+      : shopifyData.tab === 'done' ? 'Nothing has been marked Completed yet.'
       : shopifyData.tab === 'later' ? 'Nothing is marked Do later yet.'
-      : 'Nothing left in To do — everything is in Do later or Completed.';
+      : 'Nothing left in To do — everything is in Do later, Completed or Finished.';
     box.innerHTML = '<div class="empty-hint">' + (inTab === 0 ? emptyTab : 'No products match that filter.') + '</div>';
     return;
   }
@@ -9584,6 +9588,8 @@ function renderShopifyList(){
       ? ` <button class="btn-ghost shsmall" type="button" onclick="openShopifyContent(${id})" title="View, edit or regenerate the generated content">${it.content_review ? '<span class="shreview">&#9888; Check</span>' : '<span class="shready">&#10003; View</span>'}</button>`
       : '');
     const genBtn = it.content_ready ? '' : `<button class="btn-ghost" type="button" onclick="generateShopifyOne(${id})">Generate</button> `;
+    const canFinish = shopifyData.tab === 'done' || shopifyData.tab === 'finished';
+    const finishBox = `<input type="checkbox" class="odcheck" ${it.sh_finished ? 'checked' : ''} ${canFinish ? '' : 'disabled'} onchange="toggleShopifyFinished(${id}, this.checked)" title="${canFinish ? 'Tick to move this product to Finished' : 'Available on the Completed list'}">`;
     return `<tr data-stockid="${id}">
       <td class="shc"><input type="checkbox" class="odcheck" ${shopifyData.selected.has(it.stockid) ? 'checked' : ''} onchange="onShopifySelect(${id}, this.checked)"></td>
       <td class="shc shn">${shopifyRowNo(idx)}</td>
@@ -9595,12 +9601,13 @@ function renderShopifyList(){
       <td class="shc">${contentCell}</td>
       <td class="shc">${genBtn}<button class="btn-ghost" type="button" onclick="sendShopifyOne(${id})" title="${it.content_ready ? 'Content is already generated, so it is sent straight away' : 'Generates the content first, then sends it'}">${onShopify ? 'Generate &amp; Update' : 'Generate &amp; Send to Shopify'}</button></td>
       <td class="shc"><input type="checkbox" class="odcheck" ${it.sh_later ? 'checked' : ''} onchange="toggleShopifyLater(${id}, this.checked)" title="Tick to park this product in Do later"></td>
-      <td class="shc"><input type="checkbox" class="odcheck" ${it.sh_completed ? 'checked' : ''} onchange="toggleShopifyCompleted(${id}, this.checked)" title="Tick when this product is finished — it moves to the Completed list"></td>
+      <td class="shc"><input type="checkbox" class="odcheck" ${it.sh_completed ? 'checked' : ''} onchange="toggleShopifyCompleted(${id}, this.checked)" title="Tick when this product is done — it moves to the Completed list"></td>
+      <td class="shc">${finishBox}</td>
     </tr>`;
   }).join('');
   box.innerHTML = '<table class="finaltable odtable shtable"><thead><tr>'
     + `<th class="shc"><input type="checkbox" class="odcheck" ${allShownSelected ? 'checked' : ''} onchange="onShopifySelectAll(this.checked)" title="Select everything shown"></th>`
-    + '<th class="shc">#</th><th class="shc" title="Tidied product picture">Pic</th><th>Product</th><th class="shnum">Price (inc. VAT)</th><th class="shnum">Stock</th><th class="shc">Online Data</th><th class="shc">Content</th><th class="shc">Shopify</th><th class="shc">Do later</th><th class="shc">Completed</th>'
+    + '<th class="shc">#</th><th class="shc" title="Tidied product picture">Pic</th><th>Product</th><th class="shnum">Price (inc. VAT)</th><th class="shnum">Stock</th><th class="shc">Online Data</th><th class="shc">Content</th><th class="shc">Shopify</th><th class="shc">Do later</th><th class="shc">Completed</th><th class="shc">Finished</th>'
     + '</tr></thead><tbody>' + rows + '</tbody></table>';
 }
 function updateShopifyWebControls(all){
@@ -9728,6 +9735,7 @@ async function toggleShopifyCompleted(stockid, checked){
     await apiPost('stock/shopify/completed/', { stockid, completed: !!checked });
     it.sh_completed = !!checked;
     if(checked) it.sh_later = false;
+    else it.sh_finished = false;
     shopifyData.selected.delete(stockid);
     toast(checked ? 'Moved to Completed' : 'Moved back to To do');
   }catch(e){
@@ -9742,9 +9750,24 @@ async function toggleShopifyLater(stockid, checked){
   try{
     await apiPost('stock/shopify/later/', { stockid, later: !!checked });
     it.sh_later = !!checked;
-    if(checked) it.sh_completed = false;
+    if(checked){ it.sh_completed = false; it.sh_finished = false; }
     shopifyData.selected.delete(stockid);
     toast(checked ? 'Moved to Do later' : 'Moved back to To do');
+  }catch(e){
+    console.error(e);
+    toast('Could not save: ' + e.message);
+  }
+  renderShopifyList();
+}
+async function toggleShopifyFinished(stockid, checked){
+  const it = shopifyData.items.find(x => x.stockid === stockid);
+  if(!it) return;
+  try{
+    await apiPost('stock/shopify/finished/', { stockid, finished: !!checked });
+    it.sh_finished = !!checked;
+    if(checked){ it.sh_completed = true; it.sh_later = false; }
+    shopifyData.selected.delete(stockid);
+    toast(checked ? 'Moved to Finished' : 'Moved back to Completed');
   }catch(e){
     console.error(e);
     toast('Could not save: ' + e.message);
