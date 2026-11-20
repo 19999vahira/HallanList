@@ -424,18 +424,32 @@
     border-radius:6px;cursor:pointer;font-size:13px;font-family:'Inter',sans-serif;
   }
   .btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
-  .ws-scheduler{position:relative;display:inline-block;}
-  .ws-scheduler-menu{
-    display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:30;min-width:280px;
-    background:var(--panel);border:1px solid var(--line);border-radius:8px;
-    box-shadow:0 8px 24px rgba(14,30,51,.12);padding:6px;
+  .ws-hub{width:980px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column;}
+  .ws-hub-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;}
+  .ws-hub-head h3{margin:0;}
+  .ws-hub-body{display:flex;gap:16px;min-height:0;align-items:stretch;}
+  .ws-hub-side{width:250px;flex:none;display:flex;flex-direction:column;gap:8px;}
+  .ws-hub-opt{
+    text-align:left;border:1px solid var(--line);background:#fff;border-radius:8px;
+    padding:12px;cursor:pointer;font-size:13px;font-family:'Inter',sans-serif;color:var(--text);
+    display:flex;gap:10px;align-items:flex-start;
   }
-  .ws-scheduler-menu.open{display:flex;flex-direction:column;gap:4px;}
-  .ws-scheduler-menu button{
-    text-align:left;background:transparent;border:none;border-radius:6px;cursor:pointer;
-    padding:10px 12px;font-size:13px;font-family:'Inter',sans-serif;color:var(--text);
+  .ws-hub-opt.active{border-color:var(--accent);background:#fff7e0;}
+  .ws-hub-tick{
+    width:18px;height:18px;border:1.5px solid var(--line);border-radius:4px;flex:none;
+    display:flex;align-items:center;justify-content:center;font-size:12px;line-height:1;color:#fff;
   }
-  .ws-scheduler-menu button:hover{background:var(--panel2);color:var(--accent);}
+  .ws-hub-opt.done .ws-hub-tick{background:#1f7a3a;border-color:#1f7a3a;}
+  .ws-hub-opt.done .ws-hub-tick::after{content:'✓';}
+  .ws-hub-main{flex:1;min-width:0;overflow:auto;max-height:68vh;padding-right:4px;}
+  .ws-hub-pane{display:none;}
+  .ws-hub-pane.active{display:block;}
+  .ws-hub-tools{display:flex;gap:8px;margin:0 0 14px;}
+  @media(max-width:760px){
+    .ws-hub-body{flex-direction:column;}
+    .ws-hub-side{width:auto;flex-direction:row;overflow:auto;}
+    .ws-hub-opt{min-width:190px;}
+  }
   .btn-amber{
     background:var(--accent);border:none;color:#0e1e33;padding:10px 16px;font-weight:600;
     border-radius:6px;cursor:pointer;font-size:13px;font-family:'Inter',sans-serif;
@@ -1785,14 +1799,7 @@
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <button class="btn-ghost" onclick="downloadWholesaleCSV()">Download CSV</button>
         <button class="btn-ghost" onclick="openWholesaleExcelModal()">Download Excel</button>
-        <div class="ws-scheduler">
-          <button class="btn-ghost" id="wsSchedulerBtn" type="button" onclick="toggleWholesaleSchedulerMenu(event)" title="Schedule a CSV, a WhatsApp flyer, or publish the flyer webpage for the Flyer Whole or Flyer Veg list you have selected">Scheduler</button>
-          <div id="wsSchedulerMenu" class="ws-scheduler-menu" role="menu">
-            <button type="button" role="menuitem" onclick="pickWholesaleScheduler('schedule')">Schedule</button>
-            <button type="button" role="menuitem" onclick="pickWholesaleScheduler('whatsapp')">💬 WhatsApp Schedule</button>
-            <button type="button" role="menuitem" id="wsSchedulerFlyerBtn" onclick="pickWholesaleScheduler('flyer')">Update Wholesale Flyer Webpage</button>
-          </div>
-        </div>
+        <button class="btn-ghost" type="button" onclick="openWholesaleHub()" title="Schedule a CSV, a WhatsApp flyer, or publish the flyer webpage">Scheduler</button>
         <button class="btn-amber" onclick="openPriceChangesModal()" title="Every price/margin you've changed on this list, with the barcode and the original synced price alongside it — for whoever updates Vector">Price Changes Sheet</button>
         <button class="btn-amber" onclick="openFlyerDownloadModal()">Download Colour Flyer</button>
       </div>
@@ -4718,107 +4725,138 @@
   </div>
 </div>
 
-<!-- WHOLESALE SCHEDULE: schedule a Download CSV / Test Download CSV run, emails the result -->
-<div class="modal-backdrop" id="modalWholesaleSchedule">
-  <div class="modal" style="width:480px;">
-    <h3>Schedule Price Update CSV</h3>
-    <p class="modal-sub">Runs "Download CSV" automatically at the date/time below and queues it for the till, same as clicking it yourself. Since nobody's watching the screen, the outcome is emailed instead.</p>
-
-    <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;">Date &amp; time</label>
-    <input type="datetime-local" id="wsSchedRunAt" onchange="this.blur()">
-    <p style="font-size:11px;color:var(--text-dim);margin:4px 0 0;">Times are in your device's local time zone.</p>
-
-    <label style="display:block;font-size:12px;color:var(--text-dim);margin:12px 0 4px;">Repeat</label>
-    <select id="wsSchedRecurrence">
-      <option value="ONCE">Once</option>
-      <option value="DAILY">Every day</option>
-      <option value="WEEKLY">Every week</option>
-    </select>
-
-    <label style="display:flex;align-items:center;gap:8px;margin:14px 0 4px;font-size:14px;">
-      <input type="checkbox" id="wsSchedTestOnly"> Test Download CSV (1 row) instead of the full list
-    </label>
-
-    <label style="display:block;font-size:12px;color:var(--text-dim);margin:14px 0 4px;">Flyer</label>
-    <select id="wsSchedFlyerMode">
-      <option value="whole">Flyer Whole — every department except Wholesale Vegetable</option>
-      <option value="veg">Flyer Veg — Wholesale Vegetable only</option>
-    </select>
-
-    <label style="display:block;font-size:12px;color:var(--text-dim);margin:14px 0 4px;">Send result to</label>
-    <div id="wsSchedEmailList" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
-    <div style="display:flex;gap:8px;">
-      <input type="email" id="wsSchedNewEmail" placeholder="Add an email address…" style="flex:1;">
-      <button class="btn-ghost" onclick="addWholesaleScheduleEmail()">Save</button>
-    </div>
-    <p style="font-size:11px;color:var(--text-dim);margin:4px 0 0;">Saved emails stay here for next time — tick who this run should notify, or delete one with the × to remove it from the list entirely.</p>
-
-    <div class="errdetail" id="wsSchedErr" style="display:none;"></div>
-    <div class="modal-close-row">
-      <button class="btn-ghost" onclick="closeModal('modalWholesaleSchedule')">Cancel</button>
-      <button class="btn-amber" onclick="submitWholesaleSchedule()">Schedule</button>
-    </div>
-
-    <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);">
-      <h4 style="margin:0 0 8px;font-size:14px;">Scheduled &amp; recent runs</h4>
-      <div id="wsSchedList" style="max-height:220px;overflow:auto;"><div class="loading">Loading…</div></div>
-    </div>
-  </div>
-</div>
-
-<!-- WHOLESALE WHATSAPP SCHEDULE: pick a flyer image, message, contact groups and a time; the server sends it automatically -->
-<div class="modal-backdrop" id="modalWholesaleWaSchedule">
-  <div class="modal" style="width:600px;max-height:84vh;overflow-y:auto;">
-    <h3>Schedule WhatsApp Flyer</h3>
-    <p class="modal-sub">Sends a flyer image with your message to the contact groups you tick, automatically, at the date/time below — through the same approved WhatsApp templates as the WhatsApp Broadcast page. Each message is billed by Meta per recipient.</p>
-
-    <label class="wa-label" style="display:block;">1 · Flyer image</label>
-    <div class="wa-flyer-grid" id="wsWaFlyerGrid"><div class="loading">Loading…</div></div>
-    <input type="file" id="wsWaImageInput" accept="image/jpeg,image/png" style="display:none;" onchange="onWsWaImageSelected(event)">
-    <p class="wa-hint">Tap a flyer to select it. It sends that flyer's saved default image (looked up when the schedule runs, so any newer default is picked up) unless you use "Choose image" to attach a different one for this schedule only. JPG or PNG, up to 5MB.</p>
-
-    <label class="wa-label" style="display:block;margin-top:14px;">2 · Message</label>
-    <textarea id="wsWaMessage" class="wa-textarea" rows="4" maxlength="1024" placeholder="Type the message that goes with the flyer…" oninput="updateWsWaMessageCount()"></textarea>
-    <div style="display:flex;justify-content:space-between;gap:8px;">
-      <p class="wa-hint" style="margin:4px 0 0;">Required — it fills the template's text.</p>
-      <p class="wa-hint mono" id="wsWaMessageCount" style="margin:4px 0 0;">0 / 1024</p>
-    </div>
-
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;">
-      <label class="wa-label">3 · Send to groups</label>
-      <span style="font-size:11px;">
-        <a href="#" onclick="wsWaSelectAllLists(true);return false;" style="color:var(--accent);">Select all</a>
-        <span style="color:var(--text-dim);"> · </span>
-        <a href="#" onclick="wsWaSelectAllLists(false);return false;" style="color:var(--accent);">Clear</a>
-      </span>
-    </div>
-    <div class="wa-send-lists" id="wsWaLists"><div class="loading">Loading…</div></div>
-    <p class="wa-hint mono" id="wsWaCount" style="margin:6px 0 0;"></p>
-    <p class="wa-hint" style="margin:2px 0 0;">Contacts are looked up when it sends, so numbers added to or removed from a group later are picked up automatically. The same number in two ticked groups is only messaged once.</p>
-
-    <label class="wa-label" style="display:block;margin-top:14px;">4 · Date &amp; time</label>
-    <input type="datetime-local" id="wsWaRunAt" onchange="this.blur()" style="margin-top:6px;">
-    <p style="font-size:11px;color:var(--text-dim);margin:0;">UK time (GMT/BST), whatever your device's time zone is set to.</p>
-
-    <label style="display:block;font-size:12px;color:var(--text-dim);margin:12px 0 4px;">Repeat</label>
-    <select id="wsWaRecurrence" style="width:100%;padding:10px 12px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:14px;font-family:'Inter',sans-serif;">
-      <option value="ONCE">Once</option>
-      <option value="DAILY">Every day</option>
-      <option value="WEEKLY">Every week</option>
-    </select>
-
-    <div class="errdetail" id="wsWaErr" style="display:none;color:var(--danger);"></div>
-    <div class="modal-close-row">
-      <button class="btn-ghost" onclick="closeModal('modalWholesaleWaSchedule')">Close</button>
-      <button class="btn-amber" id="wsWaSubmitBtn" onclick="submitWholesaleWaSchedule()">Schedule</button>
-    </div>
-
-    <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <h4 style="margin:0;font-size:14px;">Scheduled &amp; recent sends</h4>
-        <button class="btn-ghost" style="padding:3px 8px;font-size:11px;" onclick="loadWholesaleWaSchedules()">↻ Refresh</button>
+<!-- WHOLESALE SCHEDULER: one screen, three jobs on the left, the form on the right -->
+<div class="modal-backdrop" id="modalWholesaleHub">
+  <div class="modal ws-hub">
+    <div class="ws-hub-head">
+      <div>
+        <h3>Scheduler</h3>
+        <p class="modal-sub" style="margin:4px 0 0;">Pick a job on the left. Fill it in on the right. A tick means that job is saved. You can edit it or start another.</p>
       </div>
-      <div id="wsWaSchedList" style="max-height:240px;overflow:auto;"><div class="loading">Loading…</div></div>
+      <button class="btn-ghost" type="button" onclick="closeModal('modalWholesaleHub')">Close</button>
+    </div>
+    <div class="ws-hub-body">
+      <div class="ws-hub-side">
+        <button type="button" class="ws-hub-opt active" data-pane="schedule" onclick="showWholesaleHubPane('schedule')">
+          <span class="ws-hub-tick"></span>
+          <span><strong>Schedule</strong><br><span style="color:var(--text-dim);font-size:12px;">Price update CSV</span></span>
+        </button>
+        <button type="button" class="ws-hub-opt" data-pane="whatsapp" onclick="showWholesaleHubPane('whatsapp')">
+          <span class="ws-hub-tick"></span>
+          <span><strong>💬 WhatsApp Schedule</strong><br><span style="color:var(--text-dim);font-size:12px;">Flyer message to groups</span></span>
+        </button>
+        <button type="button" class="ws-hub-opt" data-pane="flyer" id="wsSchedulerFlyerBtn" onclick="showWholesaleHubPane('flyer')">
+          <span class="ws-hub-tick"></span>
+          <span><strong id="wsHubFlyerLabel">Update Wholesale Flyer Webpage</strong><br><span style="color:var(--text-dim);font-size:12px;">Follows Flyer Whole or Flyer Veg</span></span>
+        </button>
+      </div>
+      <div class="ws-hub-main">
+        <div class="ws-hub-pane active" data-pane="schedule" id="wsHubPaneSchedule">
+          <div class="ws-hub-tools">
+            <button class="btn-ghost" type="button" onclick="wholesaleHubCreateNew('schedule')">Create new</button>
+            <button class="btn-ghost" type="button" onclick="wholesaleHubEdit('schedule')">Edit</button>
+          </div>
+          <h3>Schedule Price Update CSV</h3>
+          <p class="modal-sub">Runs "Download CSV" automatically at the date/time below and queues it for the till, same as clicking it yourself. Since nobody's watching the screen, the outcome is emailed instead.</p>
+          <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;">Date &amp; time</label>
+          <input type="datetime-local" id="wsSchedRunAt" onchange="this.blur()">
+          <p style="font-size:11px;color:var(--text-dim);margin:4px 0 0;">Times are in your device's local time zone.</p>
+          <label style="display:block;font-size:12px;color:var(--text-dim);margin:12px 0 4px;">Repeat</label>
+          <select id="wsSchedRecurrence">
+            <option value="ONCE">Once</option>
+            <option value="DAILY">Every day</option>
+            <option value="WEEKLY">Every week</option>
+          </select>
+          <label style="display:flex;align-items:center;gap:8px;margin:14px 0 4px;font-size:14px;">
+            <input type="checkbox" id="wsSchedTestOnly"> Test Download CSV (1 row) instead of the full list
+          </label>
+          <label style="display:block;font-size:12px;color:var(--text-dim);margin:14px 0 4px;">Flyer</label>
+          <select id="wsSchedFlyerMode">
+            <option value="whole">Flyer Whole — every department except Wholesale Vegetable</option>
+            <option value="veg">Flyer Veg — Wholesale Vegetable only</option>
+          </select>
+          <label style="display:block;font-size:12px;color:var(--text-dim);margin:14px 0 4px;">Send result to</label>
+          <div id="wsSchedEmailList" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
+          <div style="display:flex;gap:8px;">
+            <input type="email" id="wsSchedNewEmail" placeholder="Add an email address…" style="flex:1;">
+            <button class="btn-ghost" onclick="addWholesaleScheduleEmail()">Save</button>
+          </div>
+          <p style="font-size:11px;color:var(--text-dim);margin:4px 0 0;">Saved emails stay here for next time — tick who this run should notify, or delete one with the × to remove it from the list entirely.</p>
+          <div class="errdetail" id="wsSchedErr" style="display:none;"></div>
+          <div class="modal-close-row">
+            <button class="btn-amber" id="wsSchedSubmitBtn" onclick="submitWholesaleSchedule()">Schedule</button>
+          </div>
+          <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);">
+            <h4 style="margin:0 0 8px;font-size:14px;">Scheduled &amp; recent runs</h4>
+            <div id="wsSchedList" style="max-height:220px;overflow:auto;"><div class="loading">Loading…</div></div>
+          </div>
+        </div>
+        <div class="ws-hub-pane" data-pane="whatsapp" id="wsHubPaneWhatsapp">
+          <div class="ws-hub-tools">
+            <button class="btn-ghost" type="button" onclick="wholesaleHubCreateNew('whatsapp')">Create new</button>
+            <button class="btn-ghost" type="button" onclick="wholesaleHubEdit('whatsapp')">Edit</button>
+          </div>
+          <h3>Schedule WhatsApp Flyer</h3>
+          <p class="modal-sub">Sends a flyer image with your message to the contact groups you tick, automatically, at the date/time below — through the same approved WhatsApp templates as the WhatsApp Broadcast page. Each message is billed by Meta per recipient.</p>
+          <label class="wa-label" style="display:block;">1 · Flyer image</label>
+          <div class="wa-flyer-grid" id="wsWaFlyerGrid"><div class="loading">Loading…</div></div>
+          <input type="file" id="wsWaImageInput" accept="image/jpeg,image/png" style="display:none;" onchange="onWsWaImageSelected(event)">
+          <p class="wa-hint">Tap a flyer to select it. It sends that flyer's saved default image (looked up when the schedule runs, so any newer default is picked up) unless you use "Choose image" to attach a different one for this schedule only. JPG or PNG, up to 5MB.</p>
+          <label class="wa-label" style="display:block;margin-top:14px;">2 · Message</label>
+          <textarea id="wsWaMessage" class="wa-textarea" rows="4" maxlength="1024" placeholder="Type the message that goes with the flyer…" oninput="updateWsWaMessageCount()"></textarea>
+          <div style="display:flex;justify-content:space-between;gap:8px;">
+            <p class="wa-hint" style="margin:4px 0 0;">Required — it fills the template's text.</p>
+            <p class="wa-hint mono" id="wsWaMessageCount" style="margin:4px 0 0;">0 / 1024</p>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;">
+            <label class="wa-label">3 · Send to groups</label>
+            <span style="font-size:11px;">
+              <a href="#" onclick="wsWaSelectAllLists(true);return false;" style="color:var(--accent);">Select all</a>
+              <span style="color:var(--text-dim);"> · </span>
+              <a href="#" onclick="wsWaSelectAllLists(false);return false;" style="color:var(--accent);">Clear</a>
+            </span>
+          </div>
+          <div class="wa-send-lists" id="wsWaLists"><div class="loading">Loading…</div></div>
+          <p class="wa-hint mono" id="wsWaCount" style="margin:6px 0 0;"></p>
+          <p class="wa-hint" style="margin:2px 0 0;">Contacts are looked up when it sends, so numbers added to or removed from a group later are picked up automatically. The same number in two ticked groups is only messaged once.</p>
+          <label class="wa-label" style="display:block;margin-top:14px;">4 · Date &amp; time</label>
+          <input type="datetime-local" id="wsWaRunAt" onchange="this.blur()" style="margin-top:6px;">
+          <p style="font-size:11px;color:var(--text-dim);margin:0;">UK time (GMT/BST), whatever your device's time zone is set to.</p>
+          <label style="display:block;font-size:12px;color:var(--text-dim);margin:12px 0 4px;">Repeat</label>
+          <select id="wsWaRecurrence" style="width:100%;padding:10px 12px;border-radius:6px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:14px;font-family:'Inter',sans-serif;">
+            <option value="ONCE">Once</option>
+            <option value="DAILY">Every day</option>
+            <option value="WEEKLY">Every week</option>
+          </select>
+          <div class="errdetail" id="wsWaErr" style="display:none;color:var(--danger);"></div>
+          <div class="modal-close-row">
+            <button class="btn-amber" id="wsWaSubmitBtn" onclick="submitWholesaleWaSchedule()">Schedule</button>
+          </div>
+          <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <h4 style="margin:0;font-size:14px;">Scheduled &amp; recent sends</h4>
+              <button class="btn-ghost" style="padding:3px 8px;font-size:11px;" onclick="loadWholesaleWaSchedules()">↻ Refresh</button>
+            </div>
+            <div id="wsWaSchedList" style="max-height:240px;overflow:auto;"><div class="loading">Loading…</div></div>
+          </div>
+        </div>
+        <div class="ws-hub-pane" data-pane="flyer" id="wsHubPaneFlyer">
+          <div class="ws-hub-tools">
+            <button class="btn-ghost" type="button" onclick="wholesaleHubCreateNew('flyer')">Create new</button>
+            <button class="btn-ghost" type="button" onclick="wholesaleHubEdit('flyer')">Edit</button>
+          </div>
+          <h3 id="flyerWebpageTitle">Update Wholesale Flyer Webpage</h3>
+          <p class="modal-sub">These dates print on the webpage the same way they print on the colour flyer's cover page. This publishes a standalone webpage (not portal.hallans.co.uk) that WhatsApp can link to directly.</p>
+          <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;">Valid from</label>
+          <input type="date" id="flyerWebFromDate">
+          <label style="display:block;font-size:12px;color:var(--text-dim);margin:12px 0 4px;">Valid to</label>
+          <input type="date" id="flyerWebToDate">
+          <div class="errdetail" id="flyerWebpageErr" style="display:none;"></div>
+          <div class="modal-close-row">
+            <button class="btn-amber" id="flyerWebpageBtn" onclick="publishFlyerWebpage()">Publish</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -4892,22 +4930,7 @@
   </div>
 </div>
 
-<!-- WHOLESALE FLYER WEBPAGE: PUBLISH TO GITHUB PAGES -->
-<div class="modal-backdrop" id="modalFlyerWebpage">
-  <div class="modal" style="width:380px;">
-    <h3 id="flyerWebpageTitle">Update Flyer Webpage</h3>
-    <p class="modal-sub">These dates print on the webpage the same way they print on the colour flyer's cover page. This publishes a standalone webpage (not portal.hallans.co.uk) that WhatsApp can link to directly.</p>
-    <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;">Valid from</label>
-    <input type="date" id="flyerWebFromDate">
-    <label style="display:block;font-size:12px;color:var(--text-dim);margin:12px 0 4px;">Valid to</label>
-    <input type="date" id="flyerWebToDate">
-    <div class="errdetail" id="flyerWebpageErr" style="display:none;"></div>
-    <div class="modal-close-row">
-      <button class="btn-ghost" onclick="closeModal('modalFlyerWebpage')">Cancel</button>
-      <button class="btn-amber" id="flyerWebpageBtn" onclick="publishFlyerWebpage()">Publish</button>
-    </div>
-  </div>
-</div>
+<!-- Flyer webpage dates now live inside the Scheduler screen. -->
 
 <script>
 /* ============ CONFIG ============ */
@@ -6172,33 +6195,133 @@ function setWholesaleFlyerMode(mode){
   renderWholesaleTable();
 }
 function syncWholesaleSchedulerFlyerLabel(){
-  const flyerBtn = document.getElementById('wsSchedulerFlyerBtn');
-  if(!flyerBtn) return;
   const veg = wholesaleFlyerMode === 'veg';
-  flyerBtn.textContent = veg ? 'Update Veg Flyer Website' : 'Update Wholesale Flyer Webpage';
-  flyerBtn.title = veg
-    ? 'Publishes Flyer Veg (Wholesale Vegetable) as a public webpage on GitHub Pages'
-    : 'Publishes Flyer Whole as a public webpage on GitHub Pages — a link WhatsApp can preview and open, instead of a PDF';
+  const label = veg ? 'Update Veg Flyer Website' : 'Update Wholesale Flyer Webpage';
+  const flyerLabel = document.getElementById('wsHubFlyerLabel');
+  const title = document.getElementById('flyerWebpageTitle');
+  if(flyerLabel) flyerLabel.textContent = label;
+  if(title) title.textContent = label;
 }
-function toggleWholesaleSchedulerMenu(event){
-  if(event) event.stopPropagation();
-  const menu = document.getElementById('wsSchedulerMenu');
-  if(!menu) return;
-  syncWholesaleSchedulerFlyerLabel();
-  const open = menu.classList.toggle('open');
-  if(open && !menu.dataset.bound){
-    menu.dataset.bound = '1';
-    document.addEventListener('click', (e) => {
-      if(!e.target.closest('.ws-scheduler')) menu.classList.remove('open');
-    });
+let wholesaleHubPane = 'schedule';
+let wholesaleHubEdit = { schedule: null, whatsapp: null };
+let wholesaleHubSchedules = [];
+let wholesaleHubWaSchedules = [];
+let wholesaleHubFlyerDraft = { from: '', to: '' };
+const wholesaleHubDone = { schedule: false, whatsapp: false, flyer: false };
+function setWholesaleHubDone(key, done){
+  wholesaleHubDone[key] = !!done;
+  const opt = document.querySelector('.ws-hub-opt[data-pane="' + key + '"]');
+  if(opt) opt.classList.toggle('done', !!done);
+}
+function showWholesaleHubPane(key){
+  wholesaleHubPane = key;
+  document.querySelectorAll('.ws-hub-pane').forEach(pane => pane.classList.toggle('active', pane.dataset.pane === key));
+  document.querySelectorAll('.ws-hub-opt').forEach(opt => opt.classList.toggle('active', opt.dataset.pane === key));
+  if(key === 'schedule'){
+    wsSchedHideErr();
+    loadWholesaleScheduleEmails();
+    loadWholesaleSchedules();
+  }else if(key === 'whatsapp'){
+    wsWaHideErr();
+    loadWsWaOptions();
+    loadWholesaleWaSchedules();
+  }else{
+    prepareWholesaleHubFlyer();
   }
 }
-function pickWholesaleScheduler(action){
-  const menu = document.getElementById('wsSchedulerMenu');
-  if(menu) menu.classList.remove('open');
-  if(action === 'schedule') openWholesaleScheduleModal();
-  else if(action === 'whatsapp') openWholesaleWaScheduleModal();
-  else openFlyerWebpageModal(wholesaleFlyerMode === 'veg' ? 'veg' : 'whole');
+function openWholesaleHub(pane){
+  syncWholesaleSchedulerFlyerLabel();
+  openModal('modalWholesaleHub');
+  showWholesaleHubPane(pane || wholesaleHubPane || 'schedule');
+}
+function wholesaleHubLocalInput(date){
+  const pad = n => String(n).padStart(2, '0');
+  return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) + 'T' + pad(date.getHours()) + ':' + pad(date.getMinutes());
+}
+function wholesaleHubCreateNew(kind){
+  wholesaleHubEdit[kind] = null;
+  if(kind === 'schedule'){
+    document.getElementById('wsSchedRunAt').value = '';
+    document.getElementById('wsSchedRecurrence').value = 'ONCE';
+    document.getElementById('wsSchedTestOnly').checked = false;
+    document.getElementById('wsSchedFlyerMode').value = wholesaleFlyerMode === 'veg' ? 'veg' : 'whole';
+    wholesaleScheduleSelectedEmails = new Set();
+    renderWholesaleScheduleEmailChips();
+    wsSchedHideErr();
+    document.getElementById('wsSchedSubmitBtn').textContent = 'Schedule';
+  }else if(kind === 'whatsapp'){
+    document.getElementById('wsWaRunAt').value = '';
+    document.getElementById('wsWaRecurrence').value = 'ONCE';
+    document.getElementById('wsWaMessage').value = '';
+    updateWsWaMessageCount();
+    wsWaCustom = {};
+    wsWaSelectedListIds = new Set();
+    wsWaSelectedFlyer = wholesaleFlyerMode === 'veg' ? 'veg' : 'colour';
+    renderWsWaFlyerGrid();
+    renderWsWaLists();
+    wsWaHideErr();
+    document.getElementById('wsWaSubmitBtn').textContent = 'Schedule';
+  }else{
+    wholesaleHubFlyerDraft = { from: '', to: '' };
+    document.getElementById('flyerWebFromDate').value = '';
+    document.getElementById('flyerWebToDate').value = '';
+    const err = document.getElementById('flyerWebpageErr');
+    err.style.display = 'none'; err.textContent = '';
+  }
+}
+function wholesaleHubEdit(kind){
+  if(kind === 'schedule'){
+    const pending = wholesaleHubSchedules.find(s => s.status === 'PENDING');
+    if(!pending){ toast('No saved CSV schedule to edit. Use Create new.'); return; }
+    wholesaleHubEdit.schedule = pending.schedule_id;
+    document.getElementById('wsSchedRunAt').value = wholesaleHubLocalInput(new Date(pending.run_at));
+    document.getElementById('wsSchedRecurrence').value = pending.recurrence || 'ONCE';
+    document.getElementById('wsSchedTestOnly').checked = Number(pending.test_only) === 1 || pending.test_only === true;
+    document.getElementById('wsSchedFlyerMode').value = String(pending.flyer_mode || 'WHOLE').toUpperCase() === 'VEG' ? 'veg' : 'whole';
+    wholesaleScheduleSelectedEmails = new Set(String(pending.emails || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean));
+    renderWholesaleScheduleEmailChips();
+    document.getElementById('wsSchedSubmitBtn').textContent = 'Save changes';
+    wsSchedHideErr();
+  }else if(kind === 'whatsapp'){
+    const pending = wholesaleHubWaSchedules.find(s => s.status === 'PENDING');
+    if(!pending){ toast('No saved WhatsApp schedule to edit. Use Create new.'); return; }
+    wholesaleHubEdit.whatsapp = pending.schedule_id;
+    document.getElementById('wsWaRunAt').value = ukInputValueFromDate(new Date(pending.run_at));
+    document.getElementById('wsWaRecurrence').value = pending.recurrence || 'ONCE';
+    document.getElementById('wsWaMessage').value = pending.message || '';
+    updateWsWaMessageCount();
+    wsWaSelectedFlyer = pending.flyer_key || 'colour';
+    wsWaCustom = {};
+    wsWaSelectedListIds = new Set(String(pending.list_ids || '').split(',').map(s => Number(s.trim())).filter(n => n > 0));
+    renderWsWaFlyerGrid();
+    renderWsWaLists();
+    document.getElementById('wsWaSubmitBtn').textContent = 'Save changes';
+    if(Number(pending.has_custom_image) === 1) toast('Choose the image again if this send used a one-off picture.');
+    wsWaHideErr();
+  }else{
+    if(!wholesaleHubFlyerDraft.from && !wholesaleHubFlyerDraft.to && !wholesaleHubDone.flyer){
+      toast('Nothing published to edit yet. Fill the dates and publish.');
+      return;
+    }
+    document.getElementById('flyerWebFromDate').value = wholesaleHubFlyerDraft.from || '';
+    document.getElementById('flyerWebToDate').value = wholesaleHubFlyerDraft.to || '';
+  }
+}
+async function prepareWholesaleHubFlyer(){
+  flyerWebpageTarget = wholesaleFlyerMode === 'veg' ? 'veg' : 'whole';
+  syncWholesaleSchedulerFlyerLabel();
+  const err = document.getElementById('flyerWebpageErr');
+  const btn = document.getElementById('flyerWebpageBtn');
+  btn.disabled = true;
+  try{
+    await loadFlyerImages();
+  }catch(e){
+    console.error('Could not load flyer images before publishing', e);
+    err.textContent = 'Could not load the uploaded flyer images — the page may publish without photos. ' + (e.message || '');
+    err.style.display = 'block';
+  }finally{
+    btn.disabled = false;
+  }
 }
 // Feature 4: Stock button. Shows/hides a live "Stock" column (VESTOCK.QUANTITY,
 // matched by name server-side — see STOCK_QUANTITY in WHOLESALE_PRICING_SQL)
@@ -6728,14 +6851,7 @@ function wsSchedHideErr(){
   el.style.display = 'none'; el.textContent = '';
 }
 async function openWholesaleScheduleModal(){
-  wsSchedHideErr();
-  document.getElementById('wsSchedRunAt').value = '';
-  document.getElementById('wsSchedRecurrence').value = 'ONCE';
-  document.getElementById('wsSchedTestOnly').checked = false;
-  document.getElementById('wsSchedFlyerMode').value = wholesaleFlyerMode; // default to whatever's selected on the page right now
-  wholesaleScheduleSelectedEmails = new Set();
-  openModal('modalWholesaleSchedule');
-  await Promise.all([loadWholesaleScheduleEmails(), loadWholesaleSchedules()]);
+  openWholesaleHub('schedule');
 }
 async function loadWholesaleScheduleEmails(){
   const wrap = document.getElementById('wsSchedEmailList');
@@ -6816,6 +6932,12 @@ async function submitWholesaleSchedule(){
       emails
     });
     toast('Scheduled — you\'ll get an email once it runs');
+    const replaced = wholesaleHubEdit.schedule;
+    wholesaleHubEdit.schedule = null;
+    document.getElementById('wsSchedSubmitBtn').textContent = 'Schedule';
+    if(replaced){
+      try{ await apiDelete('wholesale/schedule/' + replaced); }catch(e){ console.error('Could not retire the schedule this edit replaced', e); }
+    }
     document.getElementById('wsSchedRunAt').value = '';
     wholesaleScheduleSelectedEmails = new Set();
     renderWholesaleScheduleEmailChips();
@@ -6839,6 +6961,8 @@ async function loadWholesaleSchedules(){
   }
 }
 function renderWholesaleSchedules(schedules){
+  wholesaleHubSchedules = schedules || [];
+  setWholesaleHubDone('schedule', wholesaleHubSchedules.some(s => s.status === 'PENDING' || s.status === 'DONE' || s.status === 'RUNNING'));
   const list = document.getElementById('wsSchedList');
   if(schedules.length === 0){ list.innerHTML = '<div class="empty-hint">No schedules yet.</div>'; return; }
   list.innerHTML = schedules.map(s => {
@@ -6917,19 +7041,7 @@ function wsWaErrMessage(e, fallback){
 }
 
 async function openWholesaleWaScheduleModal(){
-  wsWaHideErr();
-  document.getElementById('wsWaRunAt').value = '';
-  document.getElementById('wsWaRecurrence').value = 'ONCE';
-  document.getElementById('wsWaMessage').value = '';
-  updateWsWaMessageCount();
-  wsWaCustom = {};
-  wsWaSelectedListIds = new Set();
-  // Default to whichever flyer is showing on the pricing page right now.
-  wsWaSelectedFlyer = (typeof wholesaleFlyerMode !== 'undefined' && wholesaleFlyerMode === 'veg') ? 'veg' : 'colour';
-  document.getElementById('wsWaFlyerGrid').innerHTML = '<div class="loading">Loading…</div>';
-  document.getElementById('wsWaLists').innerHTML = '<div class="loading">Loading…</div>';
-  openModal('modalWholesaleWaSchedule');
-  await Promise.all([loadWsWaOptions(), loadWholesaleWaSchedules()]);
+  openWholesaleHub('whatsapp');
 }
 
 async function loadWsWaOptions(){
@@ -7105,6 +7217,11 @@ async function submitWholesaleWaSchedule(){
       image: custom ? { data: custom.data, filename: custom.filename } : undefined
     });
     toast('Scheduled — it will send automatically at ' + ukDateTimeString(runAtDate) + ' (UK time)');
+    const replaced = wholesaleHubEdit.whatsapp;
+    wholesaleHubEdit.whatsapp = null;
+    if(replaced){
+      try{ await apiDelete('wholesale/whatsapp-schedule/' + replaced); }catch(e){ console.error('Could not retire the WhatsApp schedule this edit replaced', e); }
+    }
     // Reset the form so it's obvious it went through (it shows in the list
     // below) and a stray second click can't create a duplicate.
     document.getElementById('wsWaRunAt').value = '';
@@ -7137,6 +7254,8 @@ async function loadWholesaleWaSchedules(){
   }
 }
 function renderWholesaleWaSchedules(schedules){
+  wholesaleHubWaSchedules = schedules || [];
+  setWholesaleHubDone('whatsapp', wholesaleHubWaSchedules.some(s => s.status === 'PENDING' || s.status === 'DONE' || s.status === 'RUNNING'));
   const list = document.getElementById('wsWaSchedList');
   if(schedules.length === 0){ list.innerHTML = '<div class="empty-hint">No WhatsApp schedules yet.</div>'; return; }
   list.innerHTML = schedules.map(s => {
@@ -8271,27 +8390,9 @@ let flyerWebpageTarget = 'whole';
 // session. This button can't assume that, so it loads them itself here,
 // the same way openFlyerImagesModal does, before the person even gets to
 // Publish — see buildFlyerWebpageHTML, which reads flyerImages directly.
-async function openFlyerWebpageModal(mode){
+async function openFlyerWebpageModal(){
   if(wholesaleRows.length === 0){ toast('Nothing to include yet'); return; }
-  flyerWebpageTarget = mode;
-  document.getElementById('flyerWebpageTitle').textContent =
-    mode === 'veg' ? 'Update Veg Flyer Website' : 'Update Wholesale Flyer Webpage';
-  document.getElementById('flyerWebFromDate').value = '';
-  document.getElementById('flyerWebToDate').value = '';
-  const err = document.getElementById('flyerWebpageErr');
-  err.style.display = 'none'; err.textContent = '';
-  openModal('modalFlyerWebpage');
-  const btn = document.getElementById('flyerWebpageBtn');
-  btn.disabled = true;
-  try{
-    await loadFlyerImages();
-  }catch(e){
-    console.error('Could not load flyer images before publishing', e);
-    err.textContent = 'Could not load the uploaded flyer images — the page may publish without photos. ' + (e.message || '');
-    err.style.display = 'block';
-  }finally{
-    btn.disabled = false;
-  }
+  openWholesaleHub('flyer');
 }
 // The flyer's colour constants (FLYER_COLOR_BLUE etc.) are RGB arrays for
 // jsPDF — converted to CSS hex here once rather than keeping a second set
@@ -8525,6 +8626,7 @@ function buildFlyerWebpageHTML(mode, fromVal, toVal){
 </html>`;
 }
 async function publishFlyerWebpage(){
+  flyerWebpageTarget = wholesaleFlyerMode === 'veg' ? 'veg' : 'whole';
   const fromVal = document.getElementById('flyerWebFromDate').value;
   const toVal = document.getElementById('flyerWebToDate').value;
   const err = document.getElementById('flyerWebpageErr');
@@ -8544,7 +8646,8 @@ async function publishFlyerWebpage(){
       mode, html, cover_image_base64: flyerImages.first || null
     });
     if(data.ok){
-      closeModal('modalFlyerWebpage');
+      wholesaleHubFlyerDraft = { from: fromVal, to: toVal };
+      setWholesaleHubDone('flyer', true);
       toast('Published: ' + data.url);
     } else {
       // Not configured server-side yet (no GITHUB_TOKEN/OWNER/REPO) — fall
@@ -8558,7 +8661,8 @@ async function publishFlyerWebpage(){
       document.body.appendChild(a);
       a.click();
       a.remove();
-      closeModal('modalFlyerWebpage');
+      wholesaleHubFlyerDraft = { from: fromVal, to: toVal };
+      setWholesaleHubDone('flyer', true);
       toast(data.message || 'Downloaded — GitHub Pages publishing isn\'t set up on the server yet');
     }
   }catch(e){
