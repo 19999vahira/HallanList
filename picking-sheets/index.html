@@ -4682,7 +4682,7 @@
 <div class="modal-backdrop" id="modalWholesaleExcel">
   <div class="modal" style="width:440px;">
     <h3>Download Excel</h3>
-    <p class="modal-sub">Customer order sheet. Choose Combined, Whole, or Veg only. The file has the product, the Trade 3 price, and a box to tick.</p>
+    <p class="modal-sub">Customer order sheet. Choose Combined, Whole, or Veg only. The file has the product, the Trade 3 price, and a blank Req Quantity column.</p>
     <label style="display:flex;align-items:flex-start;gap:10px;margin:12px 0;font-size:14px;cursor:pointer;">
       <input type="radio" name="wsExcelScope" value="combined" checked style="margin-top:3px;">
       <span><strong>Combined</strong> — every department (whole list and wholesale vegetable)</span>
@@ -6417,107 +6417,112 @@ function wholesaleExcelPriceText(r){
   const text = '£' + price.toFixed(2);
   return r.vatid === 1 ? text + ' +VAT' : text;
 }
-function wholesaleExcelBorder(){
-  const side = { style: 'thin', color: { rgb: 'D9D3C5' } };
+function wholesaleExcelThinBorder(){
+  const side = { style: 'thin', color: { argb: 'FFD9D3C5' } };
   return { top: side, bottom: side, left: side, right: side };
 }
-function buildWholesaleExcelSheet(X, mode){
+async function wholesaleExcelQrBase64(){
+  const res = await fetch(new URL('../assets/hallan-account-form-qr.png', window.location.href));
+  if(!res.ok) throw new Error('Account QR image missing');
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  let binary = '';
+  for(let i = 0; i < bytes.length; i += 0x8000){
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
+function buildWholesaleExcelWorkbook(ExcelJS, mode, qrBase64){
   const scopeRows = wholesaleRowsForExcelScope(mode);
   if(scopeRows.length === 0) return null;
-  const navy = '162E4E';
-  const gold = 'C79D11';
-  const aoa = [['Hallan Cash & Carry', '', ''], ['Product', 'Price', 'Order']];
-  const merges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 2 } }];
-  const deptRows = [];
-  const productRows = [];
+  const wb = new ExcelJS.Workbook();
+  const sheetName = mode === 'veg' ? 'Veg' : mode === 'whole' ? 'Whole' : 'Combined';
+  const ws = wb.addWorksheet(sheetName);
+  ws.columns = [{ width: 46 }, { width: 16 }, { width: 16 }];
+  ws.pageSetup = { orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9 };
+  const border = wholesaleExcelThinBorder();
+  ws.mergeCells('A1:C1');
+  const title = ws.getCell('A1');
+  title.value = 'Hallan Cash & Carry';
+  title.font = { name: 'Calibri', size: 22, bold: true, color: { argb: 'FF162E4E' } };
+  title.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(1).height = 32;
+  const headers = ['Product', 'Price', 'Req Quantity'];
+  headers.forEach((label, i) => {
+    const cell = ws.getRow(2).getCell(i + 1);
+    cell.value = label;
+    cell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF162E4E' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    cell.border = border;
+  });
+  ws.getRow(2).height = 20;
+  let rowNum = 3;
   groupRowsByDepartment(scopeRows).forEach(g => {
-    deptRows.push(aoa.length);
-    aoa.push([flyerDeptDisplayName(g.department), '', '']);
-    merges.push({ s: { r: aoa.length - 1, c: 0 }, e: { r: aoa.length - 1, c: 2 } });
+    ws.mergeCells(rowNum, 1, rowNum, 3);
+    const dept = ws.getCell(rowNum, 1);
+    dept.value = flyerDeptDisplayName(g.department);
+    dept.font = { name: 'Calibri', size: 16, bold: true, color: { argb: 'FF162E4E' } };
+    dept.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8F1D8' } };
+    dept.alignment = { horizontal: 'left', vertical: 'middle' };
+    dept.border = { bottom: { style: 'medium', color: { argb: 'FFC79D11' } } };
+    ws.getRow(rowNum).height = 26;
+    rowNum++;
     g.items.forEach(r => {
-      productRows.push(aoa.length);
-      aoa.push([String(r.stock_name || '').replace(/\s+/g, ' ').trim(), wholesaleExcelPriceText(r), '☐']);
+      const row = ws.getRow(rowNum);
+      const product = row.getCell(1);
+      const price = row.getCell(2);
+      const qty = row.getCell(3);
+      product.value = String(r.stock_name || '').replace(/\s+/g, ' ').trim();
+      price.value = wholesaleExcelPriceText(r);
+      qty.value = '';
+      product.font = { name: 'Calibri', size: 11, color: { argb: 'FF1A1A1A' } };
+      price.font = { name: 'Calibri', size: 11, color: { argb: 'FF1A1A1A' } };
+      qty.font = { name: 'Calibri', size: 11, color: { argb: 'FF1A1A1A' } };
+      product.alignment = { vertical: 'middle' };
+      price.alignment = { horizontal: 'right', vertical: 'middle' };
+      qty.alignment = { horizontal: 'center', vertical: 'middle' };
+      product.border = border;
+      price.border = border;
+      qty.border = border;
+      rowNum++;
     });
   });
-  const ws = X.utils.aoa_to_sheet(aoa);
-  ws['!merges'] = merges;
-  ws['!cols'] = [{ wch: 46 }, { wch: 16 }, { wch: 12 }];
-  ws['!rows'] = [];
-  ws['!rows'][0] = { hpt: 32 };
-  const border = wholesaleExcelBorder();
-  const title = X.utils.encode_cell({ r: 0, c: 0 });
-  if(ws[title]){
-    ws[title].s = {
-      font: { name: 'Calibri', sz: 22, bold: true, color: { rgb: navy } },
-      alignment: { horizontal: 'center', vertical: 'center' }
-    };
-  }
-  for(let c = 0; c < 3; c++){
-    const ref = X.utils.encode_cell({ r: 1, c });
-    if(!ws[ref]) continue;
-    ws[ref].s = {
-      font: { name: 'Calibri', sz: 12, bold: true, color: { rgb: 'FFFFFF' } },
-      fill: { patternType: 'solid', fgColor: { rgb: navy } },
-      alignment: { horizontal: 'center', vertical: 'center' },
-      border
-    };
-  }
-  ws['!rows'][1] = { hpt: 20 };
-  deptRows.forEach(r => {
-    ws['!rows'][r] = { hpt: 26 };
-    const ref = X.utils.encode_cell({ r, c: 0 });
-    if(!ws[ref]) return;
-    ws[ref].s = {
-      font: { name: 'Calibri', sz: 16, bold: true, color: { rgb: navy } },
-      fill: { patternType: 'solid', fgColor: { rgb: 'F8F1D8' } },
-      alignment: { horizontal: 'left', vertical: 'center' },
-      border: { bottom: { style: 'medium', color: { rgb: gold } } }
-    };
+  const imageId = wb.addImage({ base64: qrBase64, extension: 'png' });
+  ws.addImage(imageId, {
+    tl: { col: 0, row: rowNum + 1 },
+    ext: { width: 180, height: 180 }
   });
-  productRows.forEach(r => {
-    const product = X.utils.encode_cell({ r, c: 0 });
-    const price = X.utils.encode_cell({ r, c: 1 });
-    const tick = X.utils.encode_cell({ r, c: 2 });
-    if(ws[product]) ws[product].s = { font: { name: 'Calibri', sz: 11, color: { rgb: '1A1A1A' } }, alignment: { vertical: 'center' }, border };
-    if(ws[price]) ws[price].s = { font: { name: 'Calibri', sz: 11, color: { rgb: '1A1A1A' } }, alignment: { horizontal: 'right', vertical: 'center' }, border };
-    if(ws[tick]) ws[tick].s = { font: { name: 'Calibri', sz: 14, color: { rgb: navy } }, alignment: { horizontal: 'center', vertical: 'center' }, border };
-  });
-  ws['!pageSetup'] = { orientation: 'portrait', fitToWidth: 1, fitToHeight: 0, paperSize: 9 };
-  ws['!sheetFormat'] = { defaultRowHeight: 18 };
-  return ws;
+  return wb;
 }
-// Style-capable workbook writer. Community SheetJS drops font size and bold,
-// which is why the first Excel came out plain. This script is loaded beside
-// the shared XLSX global and the shared global is put back immediately.
+// ExcelJS can place the account QR in the sheet. It loads on its own global
+// and does not replace the SheetJS used by invoices and supplier checks.
 function loadWholesaleExcelLib(){
-  if(window.__hallanXlsxStyle) return Promise.resolve(window.__hallanXlsxStyle);
+  if(window.ExcelJS) return Promise.resolve(window.ExcelJS);
   return new Promise((resolve, reject) => {
-    const prev = window.XLSX;
     const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.min.js';
-    s.onload = () => {
-      window.__hallanXlsxStyle = window.XLSX;
-      window.XLSX = prev;
-      resolve(window.__hallanXlsxStyle);
-    };
-    s.onerror = () => {
-      window.XLSX = prev;
-      reject(new Error('Excel style library failed to load'));
-    };
+    s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+    s.onload = () => window.ExcelJS ? resolve(window.ExcelJS) : reject(new Error('Excel library failed to load'));
+    s.onerror = () => reject(new Error('Excel library failed to load'));
     document.head.appendChild(s);
   });
 }
 async function downloadWholesaleExcel(mode){
   if(wholesaleRows.length === 0){ toast('Nothing to export yet'); return; }
   try{
-    const X = await loadWholesaleExcelLib();
-    const ws = buildWholesaleExcelSheet(X, mode);
-    if(!ws){ toast('Nothing to export for that choice'); return; }
-    const wb = X.utils.book_new();
-    const sheetName = mode === 'veg' ? 'Veg' : mode === 'whole' ? 'Whole' : 'Combined';
-    X.utils.book_append_sheet(wb, ws, sheetName);
+    const ExcelJS = await loadWholesaleExcelLib();
+    const qrBase64 = await wholesaleExcelQrBase64();
+    const wb = buildWholesaleExcelWorkbook(ExcelJS, mode, qrBase64);
+    if(!wb){ toast('Nothing to export for that choice'); return; }
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const suffix = mode === 'combined' ? 'combined' : mode === 'whole' ? 'whole' : 'veg';
-    X.writeFile(wb, 'hallan-wholesale-pricing-' + suffix + '-' + new Date().toISOString().slice(0, 10) + '.xlsx');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'hallan-wholesale-pricing-' + suffix + '-' + new Date().toISOString().slice(0, 10) + '.xlsx';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
     toast('Excel downloaded');
   }catch(e){
     toast('Could not generate Excel');
