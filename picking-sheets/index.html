@@ -1772,6 +1772,7 @@
            openWholesaleExportModal / confirmWholesaleExport / downloadWholesalePDF. -->
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <button class="btn-ghost" onclick="downloadWholesaleCSV()">Download CSV</button>
+        <button class="btn-ghost" onclick="openWholesaleExcelModal()">Download Excel</button>
         <button class="btn-ghost" onclick="openWholesaleScheduleModal()" title="Schedule a Download CSV / Test Download CSV run for a future date and time, with the result emailed to you">Schedule</button>
         <button class="btn-ghost" onclick="openWholesaleWaScheduleModal()" title="Schedule a WhatsApp flyer image + message to go out automatically to the contact groups you choose, at a set date and time">💬 WhatsApp Schedule</button>
         <button class="btn-amber" onclick="openPriceChangesModal()" title="Every price/margin you've changed on this list, with the barcode and the original synced price alongside it — for whoever updates Vector">Price Changes Sheet</button>
@@ -4677,6 +4678,30 @@
      uses buildWholesalePDFDoc() directly with every column, so that
      function stays.) -->
 
+<!-- WHOLESALE EXCEL: choose Combined / Whole / Veg before download -->
+<div class="modal-backdrop" id="modalWholesaleExcel">
+  <div class="modal" style="width:440px;">
+    <h3>Download Excel</h3>
+    <p class="modal-sub">Choose which part of the pricing list to put in the spreadsheet. Department names appear as bold section headings; prices reflect what you see on screen (including any edits).</p>
+    <label style="display:flex;align-items:flex-start;gap:10px;margin:12px 0;font-size:14px;cursor:pointer;">
+      <input type="radio" name="wsExcelScope" value="combined" checked style="margin-top:3px;">
+      <span><strong>Combined</strong> — every department (whole list and wholesale vegetable)</span>
+    </label>
+    <label style="display:flex;align-items:flex-start;gap:10px;margin:12px 0;font-size:14px;cursor:pointer;">
+      <input type="radio" name="wsExcelScope" value="whole" style="margin-top:3px;">
+      <span><strong>Whole</strong> — every department except Wholesale Vegetable</span>
+    </label>
+    <label style="display:flex;align-items:flex-start;gap:10px;margin:12px 0;font-size:14px;cursor:pointer;">
+      <input type="radio" name="wsExcelScope" value="veg" style="margin-top:3px;">
+      <span><strong>Veg only</strong> — Wholesale Vegetable department only</span>
+    </label>
+    <div class="modal-close-row">
+      <button class="btn-ghost" onclick="closeModal('modalWholesaleExcel')">Cancel</button>
+      <button class="btn-amber" onclick="confirmWholesaleExcelDownload()">Download Excel</button>
+    </div>
+  </div>
+</div>
+
 <!-- WHOLESALE SCHEDULE: schedule a Download CSV / Test Download CSV run, emails the result -->
 <div class="modal-backdrop" id="modalWholesaleSchedule">
   <div class="modal" style="width:480px;">
@@ -6178,8 +6203,8 @@ function renderWholesaleTable(){
   const groups = groupRowsByDepartment(filtered);
   groups.forEach(g => {
     const heading = document.createElement('div');
-    heading.style.cssText = 'font-weight:700;font-size:14px;margin:16px 0 6px;padding-bottom:5px;border-bottom:2px solid var(--line);';
-    heading.textContent = g.department;
+    heading.style.cssText = 'font-weight:800;font-size:17px;margin:20px 0 8px;padding-bottom:6px;border-bottom:2px solid var(--line);letter-spacing:.02em;color:var(--text);';
+    heading.textContent = flyerDeptDisplayName(g.department);
     content.appendChild(heading);
     content.appendChild(buildWholesaleItemsTable(g.items));
   });
@@ -6346,20 +6371,128 @@ function wholesalePriceCellText(r){
   // whoever reads the exported list can see it wasn't just copied from Vector.
   return r.tradePrice.toFixed(2) + (r.isVat ? ' +VAT' : '') + (r.changed ? ' C' : '');
 }
+// Rows for Excel (and similar) when scope is chosen explicitly — not tied to
+// Flyer Whole/Veg toggle or the search box (full list for that scope).
+function wholesaleRowsForExcelScope(mode){
+  if(mode === 'veg') return wholesaleRows.filter(isWholesaleVegRow);
+  if(mode === 'whole') return wholesaleRows.filter(r => !isWholesaleVegRow(r));
+  return wholesaleRows.slice();
+}
+function wholesaleExcelScopeSubtitle(mode){
+  if(mode === 'veg') return 'Wholesale Vegetable only';
+  if(mode === 'whole') return 'Whole list (excluding Wholesale Vegetable)';
+  return 'Combined — all departments';
+}
+function openWholesaleExcelModal(){
+  if(wholesaleRows.length === 0){ toast('Nothing to export yet'); return; }
+  const combined = document.querySelector('#modalWholesaleExcel input[name="wsExcelScope"][value="combined"]');
+  if(combined) combined.checked = true;
+  openModal('modalWholesaleExcel');
+}
+function confirmWholesaleExcelDownload(){
+  const picked = document.querySelector('#modalWholesaleExcel input[name="wsExcelScope"]:checked');
+  const mode = picked ? picked.value : 'combined';
+  closeModal('modalWholesaleExcel');
+  downloadWholesaleExcel(mode);
+}
+function wholesaleExcelRowLine(r){
+  const adj = wholesaleAdjust[r.stock_name] || {};
+  const priceVal = adj.price !== undefined && adj.price !== '' ? Number(adj.price) : null;
+  const marginVal = adj.margin !== undefined && adj.margin !== '' ? Number(adj.margin) : null;
+  const ex = {
+    item: r.stock_name,
+    suppCost: r.suppcost_net === null || r.suppcost_net === undefined ? null : Number(r.suppcost_net),
+    tradePrice: priceVal,
+    isVat: r.vatid === 1,
+    margin: marginVal,
+    changed: !!adj.changed,
+    barcode: r.barcode || ''
+  };
+  return [
+    ex.item,
+    ex.suppCost === null ? '—' : ex.suppCost.toFixed(2),
+    ex.margin === null ? '—' : ex.margin.toFixed(1) + '%',
+    wholesalePriceCellText(ex),
+    ex.tradePrice === null ? '—' : wholesaleIncVatDisplayText(ex.tradePrice, ex.isVat),
+    ex.barcode || '—'
+  ];
+}
+function buildWholesaleExcelSheet(mode){
+  const scopeRows = wholesaleRowsForExcelScope(mode);
+  if(scopeRows.length === 0) return null;
+  const headers = ['Item', 'Supplier Cost', 'Margin', 'Trade 3 Price', 'Selling Price Inc. VAT', 'Barcode'];
+  const colCount = headers.length;
+  const aoa = [];
+  const merges = [];
+  const deptHeadingRows = [];
+  const titleRows = [0, 1, 2];
+  aoa.push(['Hallan Cash & Carry']);
+  aoa.push(['Wholesale Pricing List — Trade 3']);
+  aoa.push([wholesaleExcelScopeSubtitle(mode) + ' · Generated ' + ukDateTimeString(new Date()) + ' (UK time) — CONFIDENTIAL']);
+  aoa.push([]);
+  merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } });
+  merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: colCount - 1 } });
+  merges.push({ s: { r: 2, c: 0 }, e: { r: 2, c: colCount - 1 } });
+  const groups = groupRowsByDepartment(scopeRows);
+  groups.forEach(g => {
+    const deptRow = aoa.length;
+    deptHeadingRows.push(deptRow);
+    aoa.push([flyerDeptDisplayName(g.department)]);
+    merges.push({ s: { r: deptRow, c: 0 }, e: { r: deptRow, c: colCount - 1 } });
+    aoa.push(headers.slice());
+    g.items.forEach(r => aoa.push(wholesaleExcelRowLine(r)));
+    aoa.push([]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!merges'] = merges;
+  ws['!cols'] = [{ wch: 32 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, { wch: 22 }, { wch: 18 }];
+  titleRows.forEach(r => {
+    const ref = XLSX.utils.encode_cell({ r, c: 0 });
+    if(ws[ref]) ws[ref].s = { font: { bold: true, sz: r === 0 ? 16 : 12 } };
+  });
+  deptHeadingRows.forEach(r => {
+    const ref = XLSX.utils.encode_cell({ r, c: 0 });
+    if(ws[ref]){
+      ws[ref].s = { font: { bold: true, sz: 14 } };
+      if(!ws['!rows']) ws['!rows'] = [];
+      ws['!rows'][r] = { hpt: 22 };
+    }
+  });
+  return ws;
+}
+function downloadWholesaleExcel(mode){
+  if(wholesaleRows.length === 0){ toast('Nothing to export yet'); return; }
+  if(typeof XLSX === 'undefined'){ toast('Excel library not loaded yet — try again in a moment'); return; }
+  try{
+    const ws = buildWholesaleExcelSheet(mode);
+    if(!ws){ toast('Nothing to export for that choice'); return; }
+    const wb = XLSX.utils.book_new();
+    const sheetName = mode === 'veg' ? 'Veg' : mode === 'whole' ? 'Whole' : 'Combined';
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    const suffix = mode === 'combined' ? 'combined' : mode === 'whole' ? 'whole' : 'veg';
+    XLSX.writeFile(wb, 'hallan-wholesale-pricing-' + suffix + '-' + new Date().toISOString().slice(0, 10) + '.xlsx', { cellStyles: true });
+    toast('Excel downloaded');
+  }catch(e){
+    toast('Could not generate Excel');
+    console.error(e);
+  }
+}
 function buildWholesalePDFDoc(columns){
   if(wholesaleRows.length === 0) return null;
   const rows = wholesaleExportRows();
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
-  doc.setFontSize(16);
-  doc.text('Wholesale Pricing List — Trade 3', 14, 18);
+  doc.setFontSize(15);
+  doc.text('Hallan Cash & Carry', 14, 16);
+  doc.setFontSize(12);
+  doc.text('Wholesale Pricing List — Trade 3', 14, 22);
   doc.setFontSize(9);
   doc.setTextColor(120);
   const anyChanged = rows.some(r => r.changed);
   doc.text(
     'Generated ' + ukDateTimeString(new Date()) + ' (UK time) — CONFIDENTIAL' +
     (anyChanged ? '   |   C = price manually changed from the synced value' : ''),
-    14, 24
+    14, 28
   );
 
   const head = ['Item'];
@@ -6379,7 +6512,7 @@ function buildWholesalePDFDoc(columns){
     return line;
   });
   doc.autoTable({
-    startY: 30,
+    startY: 34,
     head: [head],
     body,
     theme: 'grid',
