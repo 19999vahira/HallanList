@@ -424,6 +424,18 @@
     border-radius:6px;cursor:pointer;font-size:13px;font-family:'Inter',sans-serif;
   }
   .btn-ghost:hover{border-color:var(--accent);color:var(--accent);}
+  .ws-scheduler{position:relative;display:inline-block;}
+  .ws-scheduler-menu{
+    display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:30;min-width:280px;
+    background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    box-shadow:0 8px 24px rgba(14,30,51,.12);padding:6px;
+  }
+  .ws-scheduler-menu.open{display:flex;flex-direction:column;gap:4px;}
+  .ws-scheduler-menu button{
+    text-align:left;background:transparent;border:none;border-radius:6px;cursor:pointer;
+    padding:10px 12px;font-size:13px;font-family:'Inter',sans-serif;color:var(--text);
+  }
+  .ws-scheduler-menu button:hover{background:var(--panel2);color:var(--accent);}
   .btn-amber{
     background:var(--accent);border:none;color:#0e1e33;padding:10px 16px;font-weight:600;
     border-radius:6px;cursor:pointer;font-size:13px;font-family:'Inter',sans-serif;
@@ -1773,11 +1785,15 @@
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <button class="btn-ghost" onclick="downloadWholesaleCSV()">Download CSV</button>
         <button class="btn-ghost" onclick="openWholesaleExcelModal()">Download Excel</button>
-        <button class="btn-ghost" onclick="openWholesaleScheduleModal()" title="Schedule a Download CSV / Test Download CSV run for a future date and time, with the result emailed to you">Schedule</button>
-        <button class="btn-ghost" onclick="openWholesaleWaScheduleModal()" title="Schedule a WhatsApp flyer image + message to go out automatically to the contact groups you choose, at a set date and time">💬 WhatsApp Schedule</button>
+        <div class="ws-scheduler">
+          <button class="btn-ghost" id="wsSchedulerBtn" type="button" onclick="toggleWholesaleSchedulerMenu(event)" title="Schedule a CSV, a WhatsApp flyer, or publish the flyer webpage for the Flyer Whole or Flyer Veg list you have selected">Scheduler</button>
+          <div id="wsSchedulerMenu" class="ws-scheduler-menu" role="menu">
+            <button type="button" role="menuitem" onclick="pickWholesaleScheduler('schedule')">Schedule</button>
+            <button type="button" role="menuitem" onclick="pickWholesaleScheduler('whatsapp')">💬 WhatsApp Schedule</button>
+            <button type="button" role="menuitem" id="wsSchedulerFlyerBtn" onclick="pickWholesaleScheduler('flyer')">Update Wholesale Flyer Webpage</button>
+          </div>
+        </div>
         <button class="btn-amber" onclick="openPriceChangesModal()" title="Every price/margin you've changed on this list, with the barcode and the original synced price alongside it — for whoever updates Vector">Price Changes Sheet</button>
-        <button class="btn-amber" onclick="openFlyerWebpageModal('whole')" title="Publishes Flyer Whole as a public webpage on GitHub Pages — a link WhatsApp can preview and open, instead of a PDF">Update Wholesale Flyer Webpage</button>
-        <button class="btn-amber" onclick="openFlyerWebpageModal('veg')" title="Publishes Flyer Veg (Wholesale Vegetable) as a public webpage on GitHub Pages">Update Veg Flyer Website</button>
         <button class="btn-amber" onclick="openFlyerDownloadModal()">Download Colour Flyer</button>
       </div>
       <!-- Row 2: everything else. -->
@@ -6152,7 +6168,37 @@ function setWholesaleFlyerMode(mode){
   const vegBtn = document.getElementById('wsFlyerVegBtn');
   if(wholeBtn){ wholeBtn.classList.toggle('btn-amber', mode === 'whole'); wholeBtn.classList.toggle('btn-ghost', mode !== 'whole'); }
   if(vegBtn){ vegBtn.classList.toggle('btn-amber', mode === 'veg'); vegBtn.classList.toggle('btn-ghost', mode !== 'veg'); }
+  syncWholesaleSchedulerFlyerLabel();
   renderWholesaleTable();
+}
+function syncWholesaleSchedulerFlyerLabel(){
+  const flyerBtn = document.getElementById('wsSchedulerFlyerBtn');
+  if(!flyerBtn) return;
+  const veg = wholesaleFlyerMode === 'veg';
+  flyerBtn.textContent = veg ? 'Update Veg Flyer Website' : 'Update Wholesale Flyer Webpage';
+  flyerBtn.title = veg
+    ? 'Publishes Flyer Veg (Wholesale Vegetable) as a public webpage on GitHub Pages'
+    : 'Publishes Flyer Whole as a public webpage on GitHub Pages — a link WhatsApp can preview and open, instead of a PDF';
+}
+function toggleWholesaleSchedulerMenu(event){
+  if(event) event.stopPropagation();
+  const menu = document.getElementById('wsSchedulerMenu');
+  if(!menu) return;
+  syncWholesaleSchedulerFlyerLabel();
+  const open = menu.classList.toggle('open');
+  if(open && !menu.dataset.bound){
+    menu.dataset.bound = '1';
+    document.addEventListener('click', (e) => {
+      if(!e.target.closest('.ws-scheduler')) menu.classList.remove('open');
+    });
+  }
+}
+function pickWholesaleScheduler(action){
+  const menu = document.getElementById('wsSchedulerMenu');
+  if(menu) menu.classList.remove('open');
+  if(action === 'schedule') openWholesaleScheduleModal();
+  else if(action === 'whatsapp') openWholesaleWaScheduleModal();
+  else openFlyerWebpageModal(wholesaleFlyerMode === 'veg' ? 'veg' : 'whole');
 }
 // Feature 4: Stock button. Shows/hides a live "Stock" column (VESTOCK.QUANTITY,
 // matched by name server-side — see STOCK_QUANTITY in WHOLESALE_PRICING_SQL)
