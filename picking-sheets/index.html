@@ -6676,10 +6676,20 @@ function buildWholesaleExcelWorkbook(ExcelJS, mode, qrBase64){
     });
   });
   const imageId = wb.addImage({ base64: qrBase64, extension: 'png' });
+  const qrStart = rowNum + 2;
+  const qrSpan = 10;
+  for(let i = 0; i < qrSpan; i++) ws.getRow(qrStart + i).height = 18;
   ws.addImage(imageId, {
-    tl: { col: 0, row: rowNum + 1 },
+    tl: { col: 0, row: qrStart - 1 },
     ext: { width: 180, height: 180 }
   });
+  const captionRow = qrStart + qrSpan;
+  ws.mergeCells(captionRow, 1, captionRow, 3);
+  const caption = ws.getCell(captionRow, 1);
+  caption.value = 'Please scan this QR code to open an account with us.';
+  caption.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FF162E4E' } };
+  caption.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+  ws.getRow(captionRow).height = 22;
   return wb;
 }
 // ExcelJS can place the account QR in the sheet. It loads on its own global
