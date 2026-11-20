@@ -4754,7 +4754,7 @@
         <div class="ws-hub-pane active" data-pane="schedule" id="wsHubPaneSchedule">
           <div class="ws-hub-tools">
             <button class="btn-ghost" type="button" onclick="wholesaleHubCreateNew('schedule')">Create new</button>
-            <button class="btn-ghost" type="button" onclick="wholesaleHubEdit('schedule')">Edit</button>
+            <button class="btn-ghost" type="button" onclick="wholesaleHubFillEdit('schedule')">Edit</button>
           </div>
           <h3>Schedule Price Update CSV</h3>
           <p class="modal-sub">Runs "Download CSV" automatically at the date/time below and queues it for the till, same as clicking it yourself. Since nobody's watching the screen, the outcome is emailed instead.</p>
@@ -4794,7 +4794,7 @@
         <div class="ws-hub-pane" data-pane="whatsapp" id="wsHubPaneWhatsapp">
           <div class="ws-hub-tools">
             <button class="btn-ghost" type="button" onclick="wholesaleHubCreateNew('whatsapp')">Create new</button>
-            <button class="btn-ghost" type="button" onclick="wholesaleHubEdit('whatsapp')">Edit</button>
+            <button class="btn-ghost" type="button" onclick="wholesaleHubFillEdit('whatsapp')">Edit</button>
           </div>
           <h3>Schedule WhatsApp Flyer</h3>
           <p class="modal-sub">Sends a flyer image with your message to the contact groups you tick, automatically, at the date/time below — through the same approved WhatsApp templates as the WhatsApp Broadcast page. Each message is billed by Meta per recipient.</p>
@@ -4843,7 +4843,7 @@
         <div class="ws-hub-pane" data-pane="flyer" id="wsHubPaneFlyer">
           <div class="ws-hub-tools">
             <button class="btn-ghost" type="button" onclick="wholesaleHubCreateNew('flyer')">Create new</button>
-            <button class="btn-ghost" type="button" onclick="wholesaleHubEdit('flyer')">Edit</button>
+            <button class="btn-ghost" type="button" onclick="wholesaleHubFillEdit('flyer')">Edit</button>
           </div>
           <h3 id="flyerWebpageTitle">Update Wholesale Flyer Webpage</h3>
           <p class="modal-sub">These dates print on the webpage the same way they print on the colour flyer's cover page. This publishes a standalone webpage (not portal.hallans.co.uk) that WhatsApp can link to directly.</p>
@@ -6269,7 +6269,7 @@ function wholesaleHubCreateNew(kind){
     err.style.display = 'none'; err.textContent = '';
   }
 }
-function wholesaleHubEdit(kind){
+function wholesaleHubFillEdit(kind){
   if(kind === 'schedule'){
     const pending = wholesaleHubSchedules.find(s => s.status === 'PENDING');
     if(!pending){ toast('No saved CSV schedule to edit. Use Create new.'); return; }
