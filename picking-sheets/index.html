@@ -4682,7 +4682,7 @@
 <div class="modal-backdrop" id="modalWholesaleExcel">
   <div class="modal" style="width:440px;">
     <h3>Download Excel</h3>
-    <p class="modal-sub">Choose which part of the pricing list to put in the spreadsheet. Department names appear as bold section headings; prices reflect what you see on screen (including any edits).</p>
+    <p class="modal-sub">Customer order sheet. Choose Combined, Whole, or Veg only. The file has the product, the Trade 3 price, and a box to tick.</p>
     <label style="display:flex;align-items:flex-start;gap:10px;margin:12px 0;font-size:14px;cursor:pointer;">
       <input type="radio" name="wsExcelScope" value="combined" checked style="margin-top:3px;">
       <span><strong>Combined</strong> — every department (whole list and wholesale vegetable)</span>
@@ -6371,17 +6371,12 @@ function wholesalePriceCellText(r){
   // whoever reads the exported list can see it wasn't just copied from Vector.
   return r.tradePrice.toFixed(2) + (r.isVat ? ' +VAT' : '') + (r.changed ? ' C' : '');
 }
-// Rows for Excel (and similar) when scope is chosen explicitly — not tied to
-// Flyer Whole/Veg toggle or the search box (full list for that scope).
+// Rows for Excel when scope is chosen explicitly — not tied to Flyer Whole/Veg
+// or the search box, so Combined always includes vegetable rows.
 function wholesaleRowsForExcelScope(mode){
   if(mode === 'veg') return wholesaleRows.filter(isWholesaleVegRow);
   if(mode === 'whole') return wholesaleRows.filter(r => !isWholesaleVegRow(r));
   return wholesaleRows.slice();
-}
-function wholesaleExcelScopeSubtitle(mode){
-  if(mode === 'veg') return 'Wholesale Vegetable only';
-  if(mode === 'whole') return 'Whole list (excluding Wholesale Vegetable)';
-  return 'Combined — all departments';
 }
 function openWholesaleExcelModal(){
   if(wholesaleRows.length === 0){ toast('Nothing to export yet'); return; }
@@ -6395,82 +6390,134 @@ function confirmWholesaleExcelDownload(){
   closeModal('modalWholesaleExcel');
   downloadWholesaleExcel(mode);
 }
-function wholesaleExcelRowLine(r){
-  const adj = wholesaleAdjust[r.stock_name] || {};
-  const priceVal = adj.price !== undefined && adj.price !== '' ? Number(adj.price) : null;
-  const marginVal = adj.margin !== undefined && adj.margin !== '' ? Number(adj.margin) : null;
-  const ex = {
-    item: r.stock_name,
-    suppCost: r.suppcost_net === null || r.suppcost_net === undefined ? null : Number(r.suppcost_net),
-    tradePrice: priceVal,
-    isVat: r.vatid === 1,
-    margin: marginVal,
-    changed: !!adj.changed,
-    barcode: r.barcode || ''
-  };
-  return [
-    ex.item,
-    ex.suppCost === null ? '—' : ex.suppCost.toFixed(2),
-    ex.margin === null ? '—' : ex.margin.toFixed(1) + '%',
-    wholesalePriceCellText(ex),
-    ex.tradePrice === null ? '—' : wholesaleIncVatDisplayText(ex.tradePrice, ex.isVat),
-    ex.barcode || '—'
-  ];
+// Trade 3 price for the customer sheet. On-screen edits win. Otherwise use a
+// blocked lock, then the synced price. Vegetable rows are often off screen
+// (Flyer Whole), so they have no wholesaleAdjust entry — reading only that
+// map left their prices blank on Combined.
+function wholesaleExcelTradePrice(r){
+  const adj = wholesaleAdjust[r.stock_name];
+  if(adj && adj.price !== undefined && String(adj.price).trim() !== ''){
+    const n = Number(adj.price);
+    return Number.isNaN(n) ? null : n;
+  }
+  if(wholesaleBlocked){
+    const lock = wholesaleLockedPrices[r.stock_name];
+    if(lock && lock.price !== null && lock.price !== undefined && lock.price !== ''){
+      const n = Number(lock.price);
+      if(!Number.isNaN(n)) return n;
+    }
+  }
+  if(r.price_net === null || r.price_net === undefined || r.price_net === '') return null;
+  const n = Number(r.price_net);
+  return Number.isNaN(n) ? null : n;
 }
-function buildWholesaleExcelSheet(mode){
+function wholesaleExcelPriceText(r){
+  const price = wholesaleExcelTradePrice(r);
+  if(price === null) return '';
+  const text = '£' + price.toFixed(2);
+  return r.vatid === 1 ? text + ' +VAT' : text;
+}
+function wholesaleExcelBorder(){
+  const side = { style: 'thin', color: { rgb: 'D9D3C5' } };
+  return { top: side, bottom: side, left: side, right: side };
+}
+function buildWholesaleExcelSheet(X, mode){
   const scopeRows = wholesaleRowsForExcelScope(mode);
   if(scopeRows.length === 0) return null;
-  const headers = ['Item', 'Supplier Cost', 'Margin', 'Trade 3 Price', 'Selling Price Inc. VAT', 'Barcode'];
-  const colCount = headers.length;
-  const aoa = [];
-  const merges = [];
-  const deptHeadingRows = [];
-  const titleRows = [0, 1, 2];
-  aoa.push(['Hallan Cash & Carry']);
-  aoa.push(['Wholesale Pricing List — Trade 3']);
-  aoa.push([wholesaleExcelScopeSubtitle(mode) + ' · Generated ' + ukDateTimeString(new Date()) + ' (UK time) — CONFIDENTIAL']);
-  aoa.push([]);
-  merges.push({ s: { r: 0, c: 0 }, e: { r: 0, c: colCount - 1 } });
-  merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: colCount - 1 } });
-  merges.push({ s: { r: 2, c: 0 }, e: { r: 2, c: colCount - 1 } });
-  const groups = groupRowsByDepartment(scopeRows);
-  groups.forEach(g => {
-    const deptRow = aoa.length;
-    deptHeadingRows.push(deptRow);
-    aoa.push([flyerDeptDisplayName(g.department)]);
-    merges.push({ s: { r: deptRow, c: 0 }, e: { r: deptRow, c: colCount - 1 } });
-    aoa.push(headers.slice());
-    g.items.forEach(r => aoa.push(wholesaleExcelRowLine(r)));
-    aoa.push([]);
+  const navy = '162E4E';
+  const gold = 'C79D11';
+  const aoa = [['Hallan Cash & Carry', '', ''], ['Product', 'Price', 'Order']];
+  const merges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 2 } }];
+  const deptRows = [];
+  const productRows = [];
+  groupRowsByDepartment(scopeRows).forEach(g => {
+    deptRows.push(aoa.length);
+    aoa.push([flyerDeptDisplayName(g.department), '', '']);
+    merges.push({ s: { r: aoa.length - 1, c: 0 }, e: { r: aoa.length - 1, c: 2 } });
+    g.items.forEach(r => {
+      productRows.push(aoa.length);
+      aoa.push([String(r.stock_name || '').replace(/\s+/g, ' ').trim(), wholesaleExcelPriceText(r), '☐']);
+    });
   });
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const ws = X.utils.aoa_to_sheet(aoa);
   ws['!merges'] = merges;
-  ws['!cols'] = [{ wch: 32 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, { wch: 22 }, { wch: 18 }];
-  titleRows.forEach(r => {
-    const ref = XLSX.utils.encode_cell({ r, c: 0 });
-    if(ws[ref]) ws[ref].s = { font: { bold: true, sz: r === 0 ? 16 : 12 } };
+  ws['!cols'] = [{ wch: 46 }, { wch: 16 }, { wch: 12 }];
+  ws['!rows'] = [];
+  ws['!rows'][0] = { hpt: 32 };
+  const border = wholesaleExcelBorder();
+  const title = X.utils.encode_cell({ r: 0, c: 0 });
+  if(ws[title]){
+    ws[title].s = {
+      font: { name: 'Calibri', sz: 22, bold: true, color: { rgb: navy } },
+      alignment: { horizontal: 'center', vertical: 'center' }
+    };
+  }
+  for(let c = 0; c < 3; c++){
+    const ref = X.utils.encode_cell({ r: 1, c });
+    if(!ws[ref]) continue;
+    ws[ref].s = {
+      font: { name: 'Calibri', sz: 12, bold: true, color: { rgb: 'FFFFFF' } },
+      fill: { patternType: 'solid', fgColor: { rgb: navy } },
+      alignment: { horizontal: 'center', vertical: 'center' },
+      border
+    };
+  }
+  ws['!rows'][1] = { hpt: 20 };
+  deptRows.forEach(r => {
+    ws['!rows'][r] = { hpt: 26 };
+    const ref = X.utils.encode_cell({ r, c: 0 });
+    if(!ws[ref]) return;
+    ws[ref].s = {
+      font: { name: 'Calibri', sz: 16, bold: true, color: { rgb: navy } },
+      fill: { patternType: 'solid', fgColor: { rgb: 'F8F1D8' } },
+      alignment: { horizontal: 'left', vertical: 'center' },
+      border: { bottom: { style: 'medium', color: { rgb: gold } } }
+    };
   });
-  deptHeadingRows.forEach(r => {
-    const ref = XLSX.utils.encode_cell({ r, c: 0 });
-    if(ws[ref]){
-      ws[ref].s = { font: { bold: true, sz: 14 } };
-      if(!ws['!rows']) ws['!rows'] = [];
-      ws['!rows'][r] = { hpt: 22 };
-    }
+  productRows.forEach(r => {
+    const product = X.utils.encode_cell({ r, c: 0 });
+    const price = X.utils.encode_cell({ r, c: 1 });
+    const tick = X.utils.encode_cell({ r, c: 2 });
+    if(ws[product]) ws[product].s = { font: { name: 'Calibri', sz: 11, color: { rgb: '1A1A1A' } }, alignment: { vertical: 'center' }, border };
+    if(ws[price]) ws[price].s = { font: { name: 'Calibri', sz: 11, color: { rgb: '1A1A1A' } }, alignment: { horizontal: 'right', vertical: 'center' }, border };
+    if(ws[tick]) ws[tick].s = { font: { name: 'Calibri', sz: 14, color: { rgb: navy } }, alignment: { horizontal: 'center', vertical: 'center' }, border };
   });
+  ws['!pageSetup'] = { orientation: 'portrait', fitToWidth: 1, fitToHeight: 0, paperSize: 9 };
+  ws['!sheetFormat'] = { defaultRowHeight: 18 };
   return ws;
 }
-function downloadWholesaleExcel(mode){
+// Style-capable workbook writer. Community SheetJS drops font size and bold,
+// which is why the first Excel came out plain. This script is loaded beside
+// the shared XLSX global and the shared global is put back immediately.
+function loadWholesaleExcelLib(){
+  if(window.__hallanXlsxStyle) return Promise.resolve(window.__hallanXlsxStyle);
+  return new Promise((resolve, reject) => {
+    const prev = window.XLSX;
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.min.js';
+    s.onload = () => {
+      window.__hallanXlsxStyle = window.XLSX;
+      window.XLSX = prev;
+      resolve(window.__hallanXlsxStyle);
+    };
+    s.onerror = () => {
+      window.XLSX = prev;
+      reject(new Error('Excel style library failed to load'));
+    };
+    document.head.appendChild(s);
+  });
+}
+async function downloadWholesaleExcel(mode){
   if(wholesaleRows.length === 0){ toast('Nothing to export yet'); return; }
-  if(typeof XLSX === 'undefined'){ toast('Excel library not loaded yet — try again in a moment'); return; }
   try{
-    const ws = buildWholesaleExcelSheet(mode);
+    const X = await loadWholesaleExcelLib();
+    const ws = buildWholesaleExcelSheet(X, mode);
     if(!ws){ toast('Nothing to export for that choice'); return; }
-    const wb = XLSX.utils.book_new();
+    const wb = X.utils.book_new();
     const sheetName = mode === 'veg' ? 'Veg' : mode === 'whole' ? 'Whole' : 'Combined';
-    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    X.utils.book_append_sheet(wb, ws, sheetName);
     const suffix = mode === 'combined' ? 'combined' : mode === 'whole' ? 'whole' : 'veg';
-    XLSX.writeFile(wb, 'hallan-wholesale-pricing-' + suffix + '-' + new Date().toISOString().slice(0, 10) + '.xlsx', { cellStyles: true });
+    X.writeFile(wb, 'hallan-wholesale-pricing-' + suffix + '-' + new Date().toISOString().slice(0, 10) + '.xlsx');
     toast('Excel downloaded');
   }catch(e){
     toast('Could not generate Excel');
