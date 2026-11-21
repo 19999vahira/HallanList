@@ -468,6 +468,7 @@
     background:var(--panel2);color:var(--text);font-size:16px;font-family:'Inter',sans-serif;margin-bottom:10px;
   }
   .modal.ws-hub .errdetail{color:var(--danger);font-size:14px;font-family:'Inter',sans-serif;}
+  #wsWaFlyerGrid.wa-flyer-grid{grid-template-columns:minmax(280px,520px);}
   @media(max-width:900px){
     .ws-hub-body{flex-direction:column;}
     .ws-hub-side{width:auto;flex-direction:row;overflow:auto;}
@@ -4825,11 +4826,11 @@
           <label class="wa-label" style="display:block;">1 · Flyer image</label>
           <div class="wa-flyer-grid" id="wsWaFlyerGrid"><div class="loading">Loading…</div></div>
           <input type="file" id="wsWaImageInput" accept="image/jpeg,image/png" style="display:none;" onchange="onWsWaImageSelected(event)">
-          <p class="wa-hint">Tap a flyer to select it. It sends that flyer's saved default image (looked up when the schedule runs, so any newer default is picked up) unless you use "Choose image" to attach a different one for this schedule only. JPG or PNG, up to 5MB.</p>
+          <p class="wa-hint">Flyer Whole uses the colour flyer. Flyer Veg uses the veg flyer. The picture stays until you press Replace image. JPG or PNG, up to 5MB.</p>
           <label class="wa-label" style="display:block;margin-top:14px;">2 · Message</label>
-          <textarea id="wsWaMessage" class="wa-textarea" rows="4" maxlength="1024" placeholder="Type the message that goes with the flyer…" oninput="updateWsWaMessageCount()"></textarea>
+          <textarea id="wsWaMessage" class="wa-textarea" rows="4" maxlength="1024" placeholder="Type the message that goes with the flyer…" oninput="updateWsWaMessageCount()" onblur="saveWsWaFlyerMessage()"></textarea>
           <div style="display:flex;justify-content:space-between;gap:8px;">
-            <p class="wa-hint" style="margin:4px 0 0;">Required — it fills the template's text.</p>
+            <p class="wa-hint" style="margin:4px 0 0;">This message stays until you change it. Next time you only need a new date.</p>
             <p class="wa-hint mono" id="wsWaMessageCount" style="margin:4px 0 0;">0 / 1024</p>
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;">
@@ -6225,6 +6226,7 @@ function setWholesaleFlyerMode(mode){
   if(vegBtn){ vegBtn.classList.toggle('btn-amber', mode === 'veg'); vegBtn.classList.toggle('btn-ghost', mode !== 'veg'); }
   syncWholesaleSchedulerFlyerLabel();
   renderWholesaleTable();
+  applyWsWaSavedFlyer();
 }
 function syncWholesaleSchedulerFlyerLabel(){
   const veg = wholesaleFlyerMode === 'veg';
@@ -6289,13 +6291,7 @@ function wholesaleHubCreateNew(kind){
   }else if(kind === 'whatsapp'){
     document.getElementById('wsWaRunAt').value = '';
     document.getElementById('wsWaRecurrence').value = 'ONCE';
-    document.getElementById('wsWaMessage').value = '';
-    updateWsWaMessageCount();
-    wsWaCustom = {};
-    wsWaSelectedListIds = new Set();
-    wsWaSelectedFlyer = wholesaleFlyerMode === 'veg' ? 'veg' : 'colour';
-    renderWsWaFlyerGrid();
-    renderWsWaLists();
+    applyWsWaSavedFlyer();
     wsWaHideErr();
     document.getElementById('wsWaSubmitBtn').textContent = 'Schedule';
   }else{
@@ -6323,6 +6319,11 @@ function wholesaleHubFillEdit(kind){
   }else if(kind === 'whatsapp'){
     const pending = wholesaleHubWaSchedules.find(s => s.status === 'PENDING');
     if(!pending){ toast('No saved WhatsApp schedule to edit. Use Create new.'); return; }
+    const pendingKey = pending.flyer_key || 'colour';
+    if(pendingKey !== (wholesaleFlyerMode === 'veg' ? 'veg' : 'colour')){
+      toast(pendingKey === 'veg' ? 'Switch to Flyer Veg to edit that send.' : 'Switch to Flyer Whole to edit that send.');
+      return;
+    }
     wholesaleHubEdit.whatsapp = pending.schedule_id;
     document.getElementById('wsWaRunAt').value = ukInputValueFromDate(new Date(pending.run_at));
     document.getElementById('wsWaRecurrence').value = pending.recurrence || 'ONCE';
@@ -7095,7 +7096,8 @@ const WS_WA_MAX_IMAGE_BYTES = 5 * 1024 * 1024; // WhatsApp's own image limit
 let wsWaLists = [];                  // [{ list_id, name, contact_count }]
 let wsWaSelectedListIds = new Set(); // groups ticked for the schedule being created
 let wsWaFlyerDefaults = {};          // { colour: {data, filename}, veg: {...} } — saved defaults (server-side)
-let wsWaCustom = {};                 // { colour: {data, filename, mimeType} } — chosen for THIS schedule only
+let wsWaSavedMessages = {};          // { colour: '...', veg: '...' } — kept until replaced
+let wsWaCustom = {};                 // used only if saving the picture did not reach the server
 let wsWaSelectedFlyer = 'colour';
 let wsWaFlyerBeingChosen = null;     // which flyer the shared file input is currently choosing an image for
 
@@ -7122,6 +7124,7 @@ async function loadWsWaOptions(){
     const data = await apiGet('wholesale/whatsapp-schedule/options');
     wsWaLists = data.lists || [];
     wsWaFlyerDefaults = data.flyers || {};
+    wsWaSavedMessages = data.messages || {};
     if(data.configured === false){
       wsWaShowErr('WhatsApp isn\'t configured on the server yet (WHATSAPP_ACCESS_TOKEN / WHATSAPP_PHONE_NUMBER_ID) — schedules can\'t be created until it is.');
     }
@@ -7131,8 +7134,34 @@ async function loadWsWaOptions(){
     wsWaFlyerDefaults = {};
     wsWaShowErr('Could not load the contact groups and flyer images. ' + wsWaErrMessage(e, ''));
   }
-  renderWsWaFlyerGrid();
+  applyWsWaSavedFlyer();
   renderWsWaLists();
+}
+function wsWaFlyerKey(){
+  return wholesaleFlyerMode === 'veg' ? 'veg' : 'colour';
+}
+function applyWsWaSavedFlyer(){
+  wsWaSelectedFlyer = wsWaFlyerKey();
+  const box = document.getElementById('wsWaMessage');
+  if(box && document.activeElement !== box){
+    box.value = wsWaSavedMessages[wsWaSelectedFlyer] || '';
+    updateWsWaMessageCount();
+  }
+  renderWsWaFlyerGrid();
+}
+async function saveWsWaFlyerMessage(){
+  const key = wsWaFlyerKey();
+  const box = document.getElementById('wsWaMessage');
+  if(!box) return;
+  const message = box.value;
+  if((wsWaSavedMessages[key] || '') === message) return;
+  try{
+    await apiPost('wholesale/whatsapp-schedule/flyer', { flyer: key, message });
+    wsWaSavedMessages[key] = message;
+  }catch(e){
+    console.error(e);
+    wsWaShowErr(wsWaErrMessage(e, 'Could not save that message.'));
+  }
 }
 
 /* ---- 1 · flyer image ---- */
@@ -7145,48 +7174,35 @@ function renderWsWaFlyerGrid(){
   const grid = document.getElementById('wsWaFlyerGrid');
   if(!grid) return;
   grid.innerHTML = '';
-  WS_WA_FLYERS.forEach(f => {
-    const img = wsWaImageFor(f.key);
-    const custom = !!wsWaCustom[f.key];
-    const selected = wsWaSelectedFlyer === f.key;
-    const card = document.createElement('div');
-    card.className = 'wa-flyer-card' + (selected ? ' active' : '');
-    card.onclick = (ev) => {
-      if(ev.target.closest('button')) return;
-      wsWaSelectedFlyer = f.key;
-      renderWsWaFlyerGrid();
-    };
-    const thumbHtml = (img && img.data)
-      ? `<img class="wa-flyer-thumb" src="${escapeHtml(img.data)}" alt="${escapeHtml(f.label)}">`
-      : `<div class="wa-flyer-thumb-placeholder">No image saved yet — use Choose image below</div>`;
-    const noteHtml = custom
-      ? '<div class="wa-flyer-note">Custom image — this schedule only</div>'
-      : (img && img.data ? '<div class="wa-flyer-note" style="color:var(--text-dim);font-weight:400;">Using the saved default image</div>' : '');
-    card.innerHTML = `
-      <h4>${selected ? '✅' : '⬜'} ${escapeHtml(f.label)}</h4>
-      ${thumbHtml}
-      ${noteHtml}
-    `;
-    const actions = document.createElement('div');
-    actions.className = 'wa-flyer-actions';
-    const chooseBtn = document.createElement('button');
-    chooseBtn.className = 'btn-ghost';
-    chooseBtn.textContent = custom ? 'Change image' : 'Choose image';
-    chooseBtn.onclick = () => {
-      wsWaFlyerBeingChosen = f.key;
-      document.getElementById('wsWaImageInput').click();
-    };
-    actions.appendChild(chooseBtn);
-    if(custom){
-      const undoBtn = document.createElement('button');
-      undoBtn.className = 'btn-danger-ghost';
-      undoBtn.textContent = 'Use saved';
-      undoBtn.onclick = () => { delete wsWaCustom[f.key]; renderWsWaFlyerGrid(); };
-      actions.appendChild(undoBtn);
-    }
-    card.appendChild(actions);
-    grid.appendChild(card);
-  });
+  const flyer = WS_WA_FLYERS.find(f => f.key === wsWaFlyerKey()) || WS_WA_FLYERS[0];
+  const img = wsWaImageFor(flyer.key);
+  const card = document.createElement('div');
+  card.className = 'wa-flyer-card active';
+  const thumbHtml = (img && img.data)
+    ? `<img class="wa-flyer-thumb" src="${escapeHtml(img.data)}" alt="${escapeHtml(flyer.label)}">`
+    : `<div class="wa-flyer-thumb-placeholder">No image saved yet — use Choose image below</div>`;
+  const noteHtml = (img && img.data)
+    ? '<div class="wa-flyer-note" style="color:var(--text-dim);font-weight:400;">This picture stays until you press Replace image.</div>'
+    : '';
+  card.innerHTML = `
+    <h4>${escapeHtml(flyer.label)}</h4>
+    ${thumbHtml}
+    ${noteHtml}
+  `;
+  const actions = document.createElement('div');
+  actions.className = 'wa-flyer-actions';
+  const chooseBtn = document.createElement('button');
+  chooseBtn.className = 'btn-ghost';
+  chooseBtn.type = 'button';
+  chooseBtn.textContent = (img && img.data) ? 'Replace image' : 'Choose image';
+  chooseBtn.onclick = () => {
+    wsWaFlyerBeingChosen = flyer.key;
+    wsWaSelectedFlyer = flyer.key;
+    document.getElementById('wsWaImageInput').click();
+  };
+  actions.appendChild(chooseBtn);
+  card.appendChild(actions);
+  grid.appendChild(card);
 }
 function onWsWaImageSelected(event){
   const file = event.target.files && event.target.files[0];
@@ -7203,10 +7219,21 @@ function onWsWaImageSelected(event){
   wsWaHideErr();
   const key = wsWaFlyerBeingChosen;
   const reader = new FileReader();
-  reader.onload = () => {
-    wsWaCustom[key] = { data: reader.result, filename: file.name, mimeType: file.type };
-    wsWaSelectedFlyer = key; // choosing an image for a flyer also selects that flyer
+  reader.onload = async () => {
+    const image = { data: reader.result, filename: file.name, mimeType: file.type };
+    wsWaFlyerDefaults[key] = image;
+    delete wsWaCustom[key];
+    wsWaSelectedFlyer = key;
     renderWsWaFlyerGrid();
+    try{
+      await apiPost('wholesale/whatsapp-schedule/flyer', { flyer: key, image: { data: image.data, filename: image.filename } });
+      toast('Flyer picture saved');
+    }catch(e){
+      console.error(e);
+      wsWaCustom[key] = image;
+      wsWaShowErr(wsWaErrMessage(e, 'Could not save that picture.'));
+      renderWsWaFlyerGrid();
+    }
   };
   reader.onerror = () => wsWaShowErr('Could not read that image file.');
   reader.readAsDataURL(file);
@@ -7281,6 +7308,7 @@ async function submitWholesaleWaSchedule(){
   btn.disabled = true;
   btn.textContent = 'Scheduling…';
   try{
+    await saveWsWaFlyerMessage();
     await apiPost('wholesale/whatsapp-schedule', {
       run_at: runAtDate.toISOString(),
       recurrence: document.getElementById('wsWaRecurrence').value,
@@ -7298,13 +7326,7 @@ async function submitWholesaleWaSchedule(){
     // Reset the form so it's obvious it went through (it shows in the list
     // below) and a stray second click can't create a duplicate.
     document.getElementById('wsWaRunAt').value = '';
-    document.getElementById('wsWaRecurrence').value = 'ONCE';
-    document.getElementById('wsWaMessage').value = '';
-    updateWsWaMessageCount();
-    wsWaCustom = {};
-    wsWaSelectedListIds = new Set();
     renderWsWaFlyerGrid();
-    renderWsWaLists();
     loadWholesaleWaSchedules();
   }catch(e){
     console.error(e);
