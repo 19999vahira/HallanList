@@ -4866,27 +4866,15 @@
           </div>
         </div>
         <div class="ws-hub-pane" data-pane="flyer" id="wsHubPaneFlyer">
-          <div class="ws-hub-tools">
-            <button class="btn-ghost" type="button" onclick="wholesaleHubCreateNew('flyer')">Create new</button>
-            <button class="btn-ghost" type="button" onclick="wholesaleHubFillEdit('flyer')">Edit</button>
-          </div>
           <h3 id="flyerWebpageTitle">Update Wholesale Flyer Webpage</h3>
           <p class="modal-sub">These dates print on the webpage the same way they print on the colour flyer's cover page. This publishes a standalone webpage (not portal.hallans.co.uk) that WhatsApp can link to directly.</p>
           <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;">Valid from</label>
           <input type="date" id="flyerWebFromDate">
           <label style="display:block;font-size:12px;color:var(--text-dim);margin:12px 0 4px;">Valid to</label>
           <input type="date" id="flyerWebToDate">
-          <label style="display:block;font-size:12px;color:var(--text-dim);margin:12px 0 4px;">Publish at</label>
-          <input type="datetime-local" id="flyerWebRunAt">
-          <p style="font-size:11px;color:var(--text-dim);margin:4px 0 0;">Leave this empty and press Publish to update the webpage now. Fill it in and press Schedule to store a later publish. Times are in your device's local time zone.</p>
           <div class="errdetail" id="flyerWebpageErr" style="display:none;"></div>
-          <div class="modal-close-row" style="display:flex;gap:8px;">
+          <div class="modal-close-row">
             <button class="btn-amber" type="button" id="flyerWebpageBtn" onclick="publishFlyerWebpage()">Publish</button>
-            <button class="btn-ghost" type="button" id="flyerWebSchedBtn" onclick="scheduleFlyerWebpage()">Schedule</button>
-          </div>
-          <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);">
-            <h4 style="margin:0 0 8px;font-size:14px;">Scheduled &amp; recent publishes</h4>
-            <div id="flyerWebSchedList" style="max-height:220px;overflow:auto;"><div class="loading">Loading…</div></div>
           </div>
         </div>
       </div>
@@ -6271,7 +6259,6 @@ function openWholesaleHub(pane){
   showWholesaleHubPane(key);
   if(key !== 'schedule'){ loadWholesaleScheduleEmails(); loadWholesaleSchedules(); }
   if(key !== 'whatsapp') loadWholesaleWaSchedules();
-  if(key !== 'flyer') loadFlyerWebpageSchedules();
 }
 function wholesaleHubLocalInput(date){
   const pad = n => String(n).padStart(2, '0');
@@ -6298,7 +6285,6 @@ function wholesaleHubCreateNew(kind){
     wholesaleHubFlyerDraft = { from: '', to: '' };
     document.getElementById('flyerWebFromDate').value = '';
     document.getElementById('flyerWebToDate').value = '';
-    document.getElementById('flyerWebRunAt').value = '';
     const err = document.getElementById('flyerWebpageErr');
     err.style.display = 'none'; err.textContent = '';
   }
@@ -6344,8 +6330,6 @@ function wholesaleHubFillEdit(kind){
     }
     document.getElementById('flyerWebFromDate').value = wholesaleHubFlyerDraft.from || '';
     document.getElementById('flyerWebToDate').value = wholesaleHubFlyerDraft.to || '';
-    const pending = wholesaleHubFlyerSchedules.find(s => s.status === 'PENDING');
-    document.getElementById('flyerWebRunAt').value = pending ? wholesaleHubLocalInput(new Date(pending.run_at)) : '';
   }
 }
 async function prepareWholesaleHubFlyer(){
@@ -6363,7 +6347,6 @@ async function prepareWholesaleHubFlyer(){
   }finally{
     btn.disabled = false;
   }
-  loadFlyerWebpageSchedules();
 }
 // Feature 4: Stock button. Shows/hides a live "Stock" column (VESTOCK.QUANTITY,
 // matched by name server-side — see STOCK_QUANTITY in WHOLESALE_PRICING_SQL)
@@ -8769,6 +8752,7 @@ async function publishFlyerWebpage(){
   }
 }
 async function scheduleFlyerWebpage(){
+  if(!document.getElementById('flyerWebRunAt')) return;
   flyerWebpageTarget = wholesaleFlyerMode === 'veg' ? 'veg' : 'whole';
   const fromVal = document.getElementById('flyerWebFromDate').value;
   const toVal = document.getElementById('flyerWebToDate').value;
