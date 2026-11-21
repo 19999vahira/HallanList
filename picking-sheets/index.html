@@ -4795,11 +4795,7 @@
           <label style="display:flex;align-items:center;gap:8px;margin:14px 0 4px;font-size:14px;">
             <input type="checkbox" id="wsSchedTestOnly"> Test Download CSV (1 row) instead of the full list
           </label>
-          <label style="display:block;font-size:12px;color:var(--text-dim);margin:14px 0 4px;">Flyer</label>
-          <select id="wsSchedFlyerMode">
-            <option value="whole">Flyer Whole — every department except Wholesale Vegetable</option>
-            <option value="veg">Flyer Veg — Wholesale Vegetable only</option>
-          </select>
+          <p id="wsSchedFlyerNote" style="font-size:14px;margin:14px 0 0;">Flyer Whole — every department except Wholesale Vegetable</p>
           <label style="display:block;font-size:12px;color:var(--text-dim);margin:14px 0 4px;">Send result to</label>
           <div id="wsSchedEmailList" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
           <div style="display:flex;gap:8px;">
@@ -6215,6 +6211,7 @@ function setWholesaleFlyerMode(mode){
   syncWholesaleSchedulerFlyerLabel();
   renderWholesaleTable();
   applyWsWaSavedFlyer();
+  syncWsSchedFlyerNote();
 }
 function syncWholesaleSchedulerFlyerLabel(){
   const veg = wholesaleFlyerMode === 'veg';
@@ -6223,6 +6220,19 @@ function syncWholesaleSchedulerFlyerLabel(){
   const title = document.getElementById('flyerWebpageTitle');
   if(flyerLabel) flyerLabel.textContent = label;
   if(title) title.textContent = label;
+}
+function wsSchedFlyerKey(){
+  return wholesaleFlyerMode === 'veg' ? 'veg' : 'whole';
+}
+function syncWsSchedFlyerNote(){
+  const el = document.getElementById('wsSchedFlyerNote');
+  if(el){
+    el.textContent = wholesaleFlyerMode === 'veg'
+      ? 'Flyer Veg — Wholesale Vegetable only'
+      : 'Flyer Whole — every department except Wholesale Vegetable';
+  }
+  const list = document.getElementById('wsSchedList');
+  if(list && wholesaleHubSchedules.length) renderWholesaleSchedules(wholesaleHubSchedules);
 }
 let wholesaleHubPane = 'schedule';
 let wholesaleHubEdit = { schedule: null, whatsapp: null };
@@ -6242,6 +6252,7 @@ function showWholesaleHubPane(key){
   document.querySelectorAll('.ws-hub-opt').forEach(opt => opt.classList.toggle('active', opt.dataset.pane === key));
   if(key === 'schedule'){
     wsSchedHideErr();
+    syncWsSchedFlyerNote();
     loadWholesaleScheduleEmails();
     loadWholesaleSchedules();
   }else if(key === 'whatsapp'){
@@ -6270,7 +6281,7 @@ function wholesaleHubCreateNew(kind){
     document.getElementById('wsSchedRunAt').value = '';
     document.getElementById('wsSchedRecurrence').value = 'ONCE';
     document.getElementById('wsSchedTestOnly').checked = false;
-    document.getElementById('wsSchedFlyerMode').value = wholesaleFlyerMode === 'veg' ? 'veg' : 'whole';
+    syncWsSchedFlyerNote();
     wholesaleScheduleSelectedEmails = new Set();
     renderWholesaleScheduleEmailChips();
     wsSchedHideErr();
@@ -6291,13 +6302,13 @@ function wholesaleHubCreateNew(kind){
 }
 function wholesaleHubFillEdit(kind){
   if(kind === 'schedule'){
-    const pending = wholesaleHubSchedules.find(s => s.status === 'PENDING');
-    if(!pending){ toast('No saved CSV schedule to edit. Use Create new.'); return; }
+    const pending = wholesaleHubSchedules.find(s => s.status === 'PENDING' && (String(s.flyer_mode || 'WHOLE').toUpperCase() === 'VEG' ? 'veg' : 'whole') === wsSchedFlyerKey());
+    if(!pending){ toast('No saved CSV schedule to edit for this flyer. Use Create new.'); return; }
     wholesaleHubEdit.schedule = pending.schedule_id;
     document.getElementById('wsSchedRunAt').value = wholesaleHubLocalInput(new Date(pending.run_at));
     document.getElementById('wsSchedRecurrence').value = pending.recurrence || 'ONCE';
     document.getElementById('wsSchedTestOnly').checked = Number(pending.test_only) === 1 || pending.test_only === true;
-    document.getElementById('wsSchedFlyerMode').value = String(pending.flyer_mode || 'WHOLE').toUpperCase() === 'VEG' ? 'veg' : 'whole';
+    syncWsSchedFlyerNote();
     wholesaleScheduleSelectedEmails = new Set(String(pending.emails || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean));
     renderWholesaleScheduleEmailChips();
     document.getElementById('wsSchedSubmitBtn').textContent = 'Save changes';
@@ -6979,7 +6990,7 @@ async function submitWholesaleSchedule(){
   if(emails.length === 0){ wsSchedShowErr('Tick at least one email to send the result to.'); return; }
   const recurrence = document.getElementById('wsSchedRecurrence').value;
   const testOnly = document.getElementById('wsSchedTestOnly').checked;
-  const flyerMode = document.getElementById('wsSchedFlyerMode').value;
+  const flyerMode = wsSchedFlyerKey();
   try{
     await apiPost('wholesale/schedule', {
       run_at: runAtDate.toISOString(),
@@ -7019,10 +7030,12 @@ async function loadWholesaleSchedules(){
 }
 function renderWholesaleSchedules(schedules){
   wholesaleHubSchedules = schedules || [];
-  setWholesaleHubDone('schedule', wholesaleHubSchedules.some(s => s.status === 'PENDING' || s.status === 'DONE' || s.status === 'RUNNING'));
+  const mode = wsSchedFlyerKey() === 'veg' ? 'VEG' : 'WHOLE';
+  const shown = wholesaleHubSchedules.filter(s => String(s.flyer_mode || 'WHOLE').toUpperCase() === mode);
+  setWholesaleHubDone('schedule', shown.some(s => s.status === 'PENDING' || s.status === 'DONE' || s.status === 'RUNNING'));
   const list = document.getElementById('wsSchedList');
-  if(schedules.length === 0){ list.innerHTML = '<div class="empty-hint">No schedules yet.</div>'; return; }
-  list.innerHTML = schedules.map(s => {
+  if(shown.length === 0){ list.innerHTML = '<div class="empty-hint">No schedules yet.</div>'; return; }
+  list.innerHTML = shown.map(s => {
     const when = ukDateTimeString(new Date(s.run_at));
     const rec = s.recurrence === 'ONCE' ? '' : (s.recurrence === 'DAILY' ? ' · repeats daily' : ' · repeats weekly');
     const test = s.test_only ? ' · test (1 row)' : '';
