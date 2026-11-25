@@ -9226,6 +9226,7 @@ async function refreshSpecialOffers(){
   }catch(e){
     console.error(e);
     specialOfferShowErr(e.message || 'Could not load special offers');
+    if(wholesaleHubPane === 'offers') renderSpecialOfferForm();
   }
 }
 function renderSpecialOfferForm(){
