@@ -4770,7 +4770,7 @@
 <div class="modal-backdrop" id="modalWholesaleExcel">
   <div class="modal" style="width:440px;">
     <h3>Download Excel</h3>
-    <p class="modal-sub">Customer order sheet. Choose Combined, Whole, or Veg only. The file has the product, the Trade 3 price, and a blank Req Quantity column.</p>
+    <p class="modal-sub">Customer order sheet. Choose Combined, Whole, or Veg only. The offer dates print at the top of the file. The file has the product, the Trade 3 price, and a blank Req Quantity column.</p>
     <label style="display:flex;align-items:flex-start;gap:10px;margin:12px 0;font-size:14px;cursor:pointer;">
       <input type="radio" name="wsExcelScope" value="combined" checked style="margin-top:3px;">
       <span><strong>Combined</strong> — every department (whole list and wholesale vegetable)</span>
@@ -4783,6 +4783,11 @@
       <input type="radio" name="wsExcelScope" value="veg" style="margin-top:3px;">
       <span><strong>Veg only</strong> — Wholesale Vegetable department only</span>
     </label>
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin:14px 0 4px;">Offer valid from</label>
+    <input type="date" id="wsExcelFromDate">
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin:12px 0 4px;">Valid to</label>
+    <input type="date" id="wsExcelToDate">
+    <div class="errdetail" id="wsExcelDateErr" style="display:none;"></div>
     <div class="modal-close-row">
       <button class="btn-ghost" onclick="closeModal('modalWholesaleExcel')">Cancel</button>
       <button class="btn-amber" onclick="confirmWholesaleExcelDownload()">Download Excel</button>
@@ -6672,13 +6677,33 @@ function openWholesaleExcelModal(){
   if(wholesaleRows.length === 0){ toast('Nothing to export yet'); return; }
   const combined = document.querySelector('#modalWholesaleExcel input[name="wsExcelScope"][value="combined"]');
   if(combined) combined.checked = true;
+  const err = document.getElementById('wsExcelDateErr');
+  if(err){ err.style.display = 'none'; err.textContent = ''; }
   openModal('modalWholesaleExcel');
+}
+function wholesaleExcelValidityText(fromIso, toIso){
+  return 'Offers valid from ' + flyerDdmmyyyy(fromIso) + ' to ' + flyerDdmmyyyy(toIso);
 }
 function confirmWholesaleExcelDownload(){
   const picked = document.querySelector('#modalWholesaleExcel input[name="wsExcelScope"]:checked');
   const mode = picked ? picked.value : 'combined';
+  const fromVal = document.getElementById('wsExcelFromDate').value;
+  const toVal = document.getElementById('wsExcelToDate').value;
+  const err = document.getElementById('wsExcelDateErr');
+  if(!fromVal || !toVal){
+    err.textContent = 'Choose both an offer valid from date and a valid to date.';
+    err.style.display = 'block';
+    return;
+  }
+  if(toVal < fromVal){
+    err.textContent = 'Valid to must be on or after the offer valid from date.';
+    err.style.display = 'block';
+    return;
+  }
+  err.style.display = 'none';
+  err.textContent = '';
   closeModal('modalWholesaleExcel');
-  downloadWholesaleExcel(mode);
+  downloadWholesaleExcel(mode, fromVal, toVal);
 }
 // Trade 3 price for the customer sheet. On-screen edits win. Otherwise use a
 // blocked lock, then the synced price. Vegetable rows are often off screen
@@ -6721,7 +6746,7 @@ async function wholesaleExcelQrBase64(){
   }
   return btoa(binary);
 }
-function buildWholesaleExcelWorkbook(ExcelJS, mode, qrBase64){
+function buildWholesaleExcelWorkbook(ExcelJS, mode, qrBase64, fromIso, toIso){
   const scopeRows = wholesaleRowsForExcelScope(mode);
   if(scopeRows.length === 0) return null;
   const wb = new ExcelJS.Workbook();
@@ -6736,17 +6761,23 @@ function buildWholesaleExcelWorkbook(ExcelJS, mode, qrBase64){
   title.font = { name: 'Calibri', size: 22, bold: true, color: { argb: 'FF162E4E' } };
   title.alignment = { horizontal: 'center', vertical: 'middle' };
   ws.getRow(1).height = 32;
+  ws.mergeCells('A2:C2');
+  const validity = ws.getCell('A2');
+  validity.value = wholesaleExcelValidityText(fromIso, toIso);
+  validity.font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FFC79D11' } };
+  validity.alignment = { horizontal: 'center', vertical: 'middle' };
+  ws.getRow(2).height = 22;
   const headers = ['Product', 'Price', 'Req Quantity'];
   headers.forEach((label, i) => {
-    const cell = ws.getRow(2).getCell(i + 1);
+    const cell = ws.getRow(3).getCell(i + 1);
     cell.value = label;
     cell.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FFFFFFFF' } };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF162E4E' } };
     cell.alignment = { horizontal: 'center', vertical: 'middle' };
     cell.border = border;
   });
-  ws.getRow(2).height = 20;
-  let rowNum = 3;
+  ws.getRow(3).height = 20;
+  let rowNum = 4;
   groupRowsByDepartment(scopeRows).forEach(g => {
     ws.mergeCells(rowNum, 1, rowNum, 3);
     const dept = ws.getCell(rowNum, 1);
@@ -6806,12 +6837,13 @@ function loadWholesaleExcelLib(){
     document.head.appendChild(s);
   });
 }
-async function downloadWholesaleExcel(mode){
+async function downloadWholesaleExcel(mode, fromIso, toIso){
   if(wholesaleRows.length === 0){ toast('Nothing to export yet'); return; }
+  if(!fromIso || !toIso){ toast('Choose both an offer valid from date and a valid to date.'); return; }
   try{
     const ExcelJS = await loadWholesaleExcelLib();
     const qrBase64 = await wholesaleExcelQrBase64();
-    const wb = buildWholesaleExcelWorkbook(ExcelJS, mode, qrBase64);
+    const wb = buildWholesaleExcelWorkbook(ExcelJS, mode, qrBase64, fromIso, toIso);
     if(!wb){ toast('Nothing to export for that choice'); return; }
     const buf = await wb.xlsx.writeBuffer();
     const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
