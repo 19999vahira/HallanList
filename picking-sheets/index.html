@@ -455,6 +455,13 @@
   .ws-hub-main{flex:1;min-width:min(480px,100%);overflow:auto;padding-right:8px;}
   .ws-hub-pane{display:none;}
   .ws-hub-pane.active{display:block;}
+  .ws-offer-tools{display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap;}
+  .ws-offer-tools img{width:36px;height:36px;object-fit:contain;border:1px solid var(--line);border-radius:4px;background:#fff;}
+  .ws-offer-tools button{padding:4px 8px;font-size:12px;}
+  .ws-offer-saved{font-size:11px;color:#1f7a3a;}
+  .ws-offer-preview{width:270px;max-width:100%;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff6e8;margin:8px 0 12px;}
+  .ws-offer-preview canvas{width:100%;height:auto;display:block;}
+  .ws-offer-meta{font-size:14px;margin:2px 0 8px;color:var(--text);}
   .ws-hub-tools{display:flex;gap:10px;margin:0 0 16px;}
   .ws-hub-tools .btn-ghost,.modal.ws-hub .ws-hub-head .btn-ghost{font-size:15px;padding:12px 18px;}
   .modal.ws-hub .btn-amber{font-size:16px;padding:12px 22px;}
@@ -4774,6 +4781,10 @@
           <span class="ws-hub-tick"></span>
           <span><strong id="wsHubFlyerLabel">Update Wholesale Flyer Webpage</strong><br><span style="color:var(--text-dim);font-size:14px;">Follows Flyer Whole or Flyer Veg</span></span>
         </button>
+        <button type="button" class="ws-hub-opt" data-pane="offers" onclick="showWholesaleHubPane('offers')">
+          <span class="ws-hub-tick"></span>
+          <span><strong>Special Offers</strong><br><span style="color:var(--text-dim);font-size:14px;">Packet animation on the flyer</span></span>
+        </button>
       </div>
       <div class="ws-hub-main">
         <div class="ws-hub-pane active" data-pane="schedule" id="wsHubPaneSchedule">
@@ -4871,6 +4882,34 @@
           <div class="errdetail" id="flyerWebpageErr" style="display:none;"></div>
           <div class="modal-close-row">
             <button class="btn-amber" type="button" id="flyerWebpageBtn" onclick="publishFlyerWebpage()">Publish</button>
+          </div>
+        </div>
+        <div class="ws-hub-pane" data-pane="offers" id="wsHubPaneOffers">
+          <h3>Special Offers</h3>
+          <p class="modal-sub">Inserts an animation page into this flyer. The page number is where that page sits today. Choosing page 2 makes the animation page 2, and today's page 2 moves to page 3. Only products with an uploaded image are listed. The name and price fill in from the list.</p>
+          <label style="display:block;font-size:12px;color:var(--text-dim);margin-bottom:4px;">Animation</label>
+          <select id="wsOfferAnim" onchange="renderSpecialOfferSlots()">
+            <option value="single">Single packet drop</option>
+            <option value="multi">Multiple products</option>
+          </select>
+          <label style="display:block;font-size:12px;color:var(--text-dim);margin:8px 0 4px;">Insert at page</label>
+          <select id="wsOfferPage"></select>
+          <div id="wsOfferCountRow" style="display:none;">
+            <label style="display:block;font-size:12px;color:var(--text-dim);margin:8px 0 4px;">How many products</label>
+            <select id="wsOfferCount" onchange="renderSpecialOfferSlots()">
+              <option>2</option><option>3</option><option>4</option><option selected>5</option><option>6</option><option>7</option><option>8</option>
+            </select>
+          </div>
+          <div id="wsOfferSlots"></div>
+          <div class="ws-offer-preview"><canvas id="wsOfferPreview" width="540" height="720"></canvas></div>
+          <div class="errdetail" id="wsOfferErr" style="display:none;"></div>
+          <div class="modal-close-row">
+            <button class="btn-ghost" type="button" onclick="clearSpecialOfferForm()">Clear</button>
+            <button class="btn-amber" type="button" id="wsOfferSaveBtn" onclick="saveWholesaleSpecialOffer()">Save</button>
+          </div>
+          <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);">
+            <h4 style="margin:0 0 8px;font-size:14px;">Saved animation pages</h4>
+            <div id="wsOfferList"><div class="empty-hint">None saved for this flyer yet.</div></div>
           </div>
         </div>
       </div>
@@ -4984,6 +5023,12 @@ let scannerListEl = null;
 let scannerTarget = 'retail'; // 'retail' (Making List), 'warehouse' (Warehouse category), 'location' (Row products), or 'label' (Label Printer: Add product)
 let historyLists = [];
 let wholesaleRows = [];
+let wholesaleOfferNames = new Set();
+let wholesaleOfferThumbs = {};
+let wholesaleOfferFull = {};
+let wholesaleSpecialOffers = [];
+let wholesaleOfferEditIndex = null;
+let wholesaleOfferPickName = '';
 let wholesaleAdjust = {}; // keyed by stock_name -> { margin, price } — recomputed fresh from synced data on every load, UNLESS a row is locked (see below)
 let wholesaleBlocked = false; // Feature 1: when true, locked selling prices are preserved across refreshes; cost still always updates
 let wholesaleLockedPrices = {}; // keyed by stock_name -> { price, margin }, mirrors WHOLESALE_PRICE_LOCK server-side
@@ -6079,11 +6124,13 @@ async function loadWholesalePricing(){
     // current Block/Release lock state are independent and can load in
     // parallel — the lock state decides which rows get their selling price
     // seeded from wholesaleLockedPrices instead of the fresh synced value.
-    const [data, lockData] = await Promise.all([
+    const [data, lockData, offerData] = await Promise.all([
       apiGet('wholesale/pricing/'),
-      apiGet('wholesale/price-lock').catch(e => { console.error('Could not load price lock state', e); return null; })
+      apiGet('wholesale/price-lock').catch(e => { console.error('Could not load price lock state', e); return null; }),
+      apiGet('wholesale/offer-images').catch(e => { console.error('Could not load offer images', e); return { images: [] }; })
     ]);
     wholesaleRows = data.items || [];
+    wholesaleOfferNames = new Set((offerData.images || []).map(img => img.stock_name));
     if(lockData){
       wholesaleBlocked = !!lockData.blocked;
       wholesaleLockedPrices = lockData.prices || {};
@@ -6212,6 +6259,7 @@ function setWholesaleFlyerMode(mode){
   renderWholesaleTable();
   applyWsWaSavedFlyer();
   syncWsSchedFlyerNote();
+  if(wholesaleHubPane === 'offers') refreshSpecialOffers();
 }
 function syncWholesaleSchedulerFlyerLabel(){
   const veg = wholesaleFlyerMode === 'veg';
@@ -6240,7 +6288,7 @@ let wholesaleHubSchedules = [];
 let wholesaleHubWaSchedules = [];
 let wholesaleHubFlyerDraft = { from: '', to: '' };
 let wholesaleHubFlyerSchedules = [];
-const wholesaleHubDone = { schedule: false, whatsapp: false, flyer: false };
+const wholesaleHubDone = { schedule: false, whatsapp: false, flyer: false, offers: false };
 function setWholesaleHubDone(key, done){
   wholesaleHubDone[key] = !!done;
   const opt = document.querySelector('.ws-hub-opt[data-pane="' + key + '"]');
@@ -6259,6 +6307,8 @@ function showWholesaleHubPane(key){
     wsWaHideErr();
     loadWsWaOptions();
     loadWholesaleWaSchedules();
+  }else if(key === 'offers'){
+    refreshSpecialOffers();
   }else{
     prepareWholesaleHubFlyer();
   }
@@ -6268,6 +6318,7 @@ function openWholesaleHub(pane){
   openModal('modalWholesaleHub');
   const key = pane || wholesaleHubPane || 'schedule';
   showWholesaleHubPane(key);
+  refreshSpecialOffers();
   if(key !== 'schedule'){ loadWholesaleScheduleEmails(); loadWholesaleSchedules(); }
   if(key !== 'whatsapp') loadWholesaleWaSchedules();
 }
@@ -6485,7 +6536,7 @@ function buildWholesaleItemsTable(items){
     }
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${escapeHtml(r.stock_name)}</td>
+      <td></td>
       <td class="qtycell">${r.suppcost_net === null || r.suppcost_net === undefined ? '—' : Number(r.suppcost_net).toFixed(2)}</td>
       <td class="qtycell">
         <input type="number" step="0.1" class="margininput" value="${adj.margin}">
@@ -6502,6 +6553,7 @@ function buildWholesaleItemsTable(items){
       </td>
       ${wholesaleShowStock ? `<td class="qtycell">${r.stock_quantity === null || r.stock_quantity === undefined ? '—' : Number(r.stock_quantity)}</td>` : ''}
     `;
+    fillWholesaleOfferNameCell(tr.querySelector('td'), r.stock_name);
     const priceInput = tr.querySelector('.priceinput');
     const marginInput = tr.querySelector('.margininput');
     const pricePrint = tr.querySelector('.wsprintprice');
@@ -8540,12 +8592,876 @@ function flyerWebFeaturedHtml(prepared){
 // underlying mode filter, applied explicitly here by `mode` instead of
 // reading the on-screen toggle — these two buttons are unambiguous about
 // which flyer they mean regardless of what Flyer Whole/Veg currently shows).
-function buildFlyerWebpageHTML(mode, fromVal, toVal){
+function runPacketDrop(canvas, config){
+var mode = config && config.mode === 'multi' ? 'multi' : 'single';
+var products = config && Array.isArray(config.products) ? config.products : [];
+var alive = true;
+canvas._offerStop = function(){ alive = false; };
+var cv=canvas,ctx=cv.getContext('2d');
+var W=540,H=720,FLOOR=H-72,COLW=4,NCOL=Math.ceil(W/COLW)+2,G=1350,DROP_AT=2.0,SPAWN_END=1.9;
+var TEXT_DELAY=2.4,TEXT_FADE=0.9;  // gold text appears this many seconds after impact
+var COLORS={toor:['#e3ae35','#cf9522','#f2c658'],moong:['#93b33f','#739528','#adc956'],chana:['#cb8d3d','#aa7027','#dfaa5c'],masoor:['#e0662d','#bd4c1b','#f08549']};
+var BGS={warm:{a:'#fff6e8',b:'#f2d7ab',s1:'#cfa877',s2:'#9c7447'},clean:{a:'#ffffff',b:'#e9edf2',s1:'#dfe3e8',s2:'#c0c7d0'},dark:{a:'#2a2a35',b:'#121217',s1:'#3b3b48',s2:'#20202a'}};
+var cx=W/2,pw=0,ph=0,pkImg=null,pkSrc=null,sprites={},bgCanvas=document.createElement('canvas');
+bgCanvas.width=W;bgCanvas.height=H;
+var pile=document.createElement('canvas');pile.width=W;pile.height=H;var pctx=pile.getContext('2d');
+var t,last,spawnAcc,heights,grains,dust,pk,shake,slowLeft=0,SLOW_DUR=2.2;
+var grainImg=null,customSprites=null;
+
+/* ---------- built-in drawn dal (fallback only) ---------- */
+function buildSprites(){
+  for(var k in COLORS){sprites[k]=COLORS[k].map(function(col){
+    var s=document.createElement('canvas');s.width=32;s.height=24;var g=s.getContext('2d');
+    g.fillStyle=col;g.beginPath();g.ellipse(16,12,14,10,0,0,6.283);g.fill();
+    var r=g.createRadialGradient(11,8,1,16,12,15);
+    r.addColorStop(0,'rgba(255,255,255,.55)');r.addColorStop(.45,'rgba(255,255,255,0)');r.addColorStop(1,'rgba(0,0,0,.45)');
+    g.fillStyle=r;g.beginPath();g.ellipse(16,12,14,10,0,0,6.283);g.fill();
+    g.strokeStyle='rgba(50,28,5,.35)';g.lineWidth=1.2;g.beginPath();g.moveTo(5,12);g.quadraticCurveTo(16,15,27,12);g.stroke();
+    g.fillStyle='rgba(255,255,255,.75)';g.beginPath();g.ellipse(11,7.5,3.2,1.8,-0.5,0,6.283);g.fill();
+    g.strokeStyle='rgba(50,28,5,.7)';g.lineWidth=1.6;g.beginPath();g.ellipse(16,12,14,10,0,0,6.283);g.stroke();
+    return s;});}
+}
+
+/* ---------- helper: make one grain sprite from a rectangle of a source image ---------- */
+function patchSprite(img,sx,sy,sw,sh){
+  var s=document.createElement('canvas');s.width=64;s.height=48;var g=s.getContext('2d');
+  g.save();g.beginPath();g.ellipse(32,24,29,20,0,0,6.283);g.clip();
+  g.drawImage(img,sx,sy,sw,sh,0,0,64,48);
+  var r=g.createRadialGradient(24,17,3,32,24,34);
+  r.addColorStop(0,'rgba(255,255,255,.08)');r.addColorStop(.55,'rgba(0,0,0,0)');r.addColorStop(1,'rgba(30,15,0,.38)');
+  g.fillStyle=r;g.fillRect(0,0,64,48);
+  g.restore();
+  g.strokeStyle='rgba(40,22,5,.40)';g.lineWidth=1.5;g.beginPath();g.ellipse(32,24,29,20,0,0,6.283);g.stroke();
+  return s;
+}
+
+/* ---------- find real dal grains printed on the packet ---------- */
+function rgb2hsv(r,g,b){
+  var mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn,h=0;
+  if(d){if(mx===r)h=((g-b)/d)%6;else if(mx===g)h=(b-r)/d+2;else h=(r-g)/d+4;h*=60;if(h<0)h+=360;}
+  return [h,mx?d/mx:0,mx/255];
+}
+var RANGES=[
+  {name:'yellow-tan',test:function(h,s,v){return h>=34&&h<=58&&s>=0.2&&s<=0.66&&v>=0.62;},tex:0},   // chana, toor, wheat...
+  {name:'green',test:function(h,s,v){return h>=60&&h<=150&&s>=0.25&&v>=0.3;},tex:9},                // moong
+  {name:'red-orange',test:function(h,s,v){return (h<=28||h>=340)&&s>=0.4&&v>=0.35;},tex:9}          // masoor / rajma
+];
+function findPatches(src,range){
+  var w=src.width,h=src.height,d=src.getContext('2d').getImageData(0,0,w,h).data;
+  var ww=Math.max(10,Math.round(w*0.042)),wh=Math.max(8,Math.round(ww*0.75));
+  if(w<ww+4||h<wh+4)return [];
+  var out=[],tries=0,GX=5,GY=4;
+  while(out.length<28&&tries<6000){
+    tries++;
+    var x=Math.floor(Math.random()*(w-ww)),y=Math.floor(Math.random()*(h-wh));
+    var ok=0,n=0,lum=[],bad=false;
+    for(var j=0;j<GY&&!bad;j++)for(var i=0;i<GX;i++){
+      var u=((i+0.5)/GX-0.5)*1.5,v=((j+0.5)/GY-0.5)*1.5;
+      var px=Math.round(x+ww*(0.5+u*0.5*1.3)),py=Math.round(y+wh*(0.5+v*0.5*1.3));
+      px=Math.max(0,Math.min(w-1,px));py=Math.max(0,Math.min(h-1,py));
+      var o=(py*w+px)*4;
+      if(d[o+3]<200){bad=true;break;}
+      var hv=rgb2hsv(d[o],d[o+1],d[o+2]);
+      n++;if(range.test(hv[0],hv[1],hv[2]))ok++;
+      lum.push(0.3*d[o]+0.59*d[o+1]+0.11*d[o+2]);
+    }
+    if(bad||ok<n*0.8)continue;
+    if(range.tex){
+      var m=0,sd=0,k;for(k=0;k<lum.length;k++)m+=lum[k];m/=lum.length;
+      for(k=0;k<lum.length;k++)sd+=(lum[k]-m)*(lum[k]-m);sd=Math.sqrt(sd/lum.length);
+      if(sd<range.tex)continue;
+    }
+    out.push({x:x,y:y,w:ww,h:wh});
+  }
+  return out;
+}
+
+/* ---------- build the grain sprites for the chosen mode ---------- */
+function buildCustom(){
+  var mode='packet',out=[],i;
+  customSprites=null;
+  if(mode==='builtin')return;
+  if((mode==='photo'||mode==='single')&&!grainImg)mode='packet';   // nothing uploaded yet -> use the packet
+
+  if(mode==='photo'){
+    var iw=grainImg.width,ih=grainImg.height;
+    for(i=0;i<22;i++){
+      var sw=Math.min(iw,Math.max(6,Math.min(iw,ih)*(0.05+Math.random()*0.08)));
+      var sh=Math.min(ih,sw*0.75);
+      out.push(patchSprite(grainImg,Math.random()*(iw-sw),Math.random()*(ih-sh),sw,sh));
+    }
+  }else if(mode==='single'){
+    var iw2=grainImg.width,ih2=grainImg.height,m=Math.min(1,400/Math.max(iw2,ih2));
+    var t0=document.createElement('canvas');t0.width=Math.round(iw2*m);t0.height=Math.round(ih2*m);
+    t0.getContext('2d').drawImage(grainImg,0,0,t0.width,t0.height);
+    var one=cutout(t0),sc=Math.min(58/one.width,42/one.height),dw=one.width*sc,dh=one.height*sc;
+    for(i=0;i<4;i++){
+      var c=document.createElement('canvas');c.width=64;c.height=48;var q=c.getContext('2d');
+      q.translate(32,24);q.rotate((i-1.5)*0.12);q.drawImage(one,-dw/2,-dh/2,dw,dh);
+      q.globalCompositeOperation='source-atop';
+      q.fillStyle=(i%2)?'rgba(0,0,0,'+(0.04*i)+')':'rgba(255,255,255,'+(0.05*i)+')';
+      q.fillRect(-32,-24,64,48);
+      out.push(c);
+    }
+  }else if(pkSrc){               // 'packet' : real grains cut from the packet photo
+    var best=null,bi;
+    for(bi=0;bi<RANGES.length;bi++){
+      var found=findPatches(pkSrc,RANGES[bi]);
+      if(found.length>=10){best=found;break;}
+      if(!best||found.length>best.length)best=found;
+    }
+    if(best&&best.length>=4){
+      for(i=0;i<best.length;i++)out.push(patchSprite(pkSrc,best[i].x,best[i].y,best[i].w,best[i].h));
+    }
+  }
+  customSprites=out.length?out:null;   // null -> built-in dal
+}
+
+function paintBg(){
+  var b=BGS['warm'],g=bgCanvas.getContext('2d');
+  var lg=g.createLinearGradient(0,0,0,FLOOR);lg.addColorStop(0,b.a);lg.addColorStop(1,b.b);
+  g.fillStyle=lg;g.fillRect(0,0,W,H);
+  var gl=g.createRadialGradient(cx,H*0.42,10,cx,H*0.42,340);
+  gl.addColorStop(0,'rgba(255,255,255,'+('warm'==='dark'?.12:.55)+')');gl.addColorStop(1,'rgba(255,255,255,0)');
+  g.fillStyle=gl;g.fillRect(0,0,W,H);
+  if(mode!=='multi'){   // no floor in circle mode
+  var sf=g.createLinearGradient(0,FLOOR-8,0,H);sf.addColorStop(0,b.s1);sf.addColorStop(1,b.s2);
+  g.fillStyle=sf;g.fillRect(0,FLOOR-8,W,H-FLOOR+8);
+  g.fillStyle='rgba(255,255,255,.35)';g.fillRect(0,FLOOR-8,W,2);
+  g.fillStyle='rgba(0,0,0,.06)';for(var y=FLOOR+10;y<H;y+=14)g.fillRect(0,y,W,1);}
+  var v=g.createRadialGradient(cx,H/2,H*0.35,cx,H/2,H*0.8);v.addColorStop(0,'rgba(0,0,0,0)');v.addColorStop(1,'rgba(0,0,0,.18)');
+  g.fillStyle=v;g.fillRect(0,0,W,H);
+}
+function defaultPacket(){
+  var c=document.createElement('canvas');c.width=600;c.height=840;var g=c.getContext('2d');g.scale(2,2);
+  var gr=g.createLinearGradient(0,0,0,420);gr.addColorStop(0,'#d8402f');gr.addColorStop(1,'#a82a1e');
+  g.fillStyle=gr;g.beginPath();g.roundRect(0,0,300,420,14);g.fill();
+  g.fillStyle='rgba(0,0,0,.14)';for(var x=0;x<300;x+=6){g.fillRect(x,0,2,22);g.fillRect(x,398,2,22);}
+  g.fillStyle='#f6cf3f';g.fillRect(0,140,300,120);
+  g.fillStyle='#2a1a12';g.textAlign='center';g.font='bold 40px sans-serif';g.fillText('YOUR PACKET',150,212);
+  g.font='20px sans-serif';g.fillText('upload your image',150,240);
+  return c;
+}
+function cutout(t){
+  var w=t.width,h=t.height,g=t.getContext('2d'),im=g.getImageData(0,0,w,h),d=im.data;
+  var clear=d[3]<10&&d[(w-1)*4+3]<10&&d[(h-1)*w*4+3]<10&&d[((h-1)*w+w-1)*4+3]<10;
+  if(!clear){
+    var seen=new Uint8Array(w*h),st=new Int32Array(w*h),sp=0,x,y,p;
+    var near=function(p){var i=p*4,mn=Math.min(d[i],d[i+1],d[i+2]),mx=Math.max(d[i],d[i+1],d[i+2]);return mn>=225&&mx-mn<=28;};
+    var push=function(p){if(!seen[p]&&near(p)){seen[p]=1;st[sp++]=p;}};
+    for(x=0;x<w;x++){push(x);push((h-1)*w+x);}
+    for(y=0;y<h;y++){push(y*w);push(y*w+w-1);}
+    while(sp){p=st[--sp];x=p%w;y=(p/w)|0;d[p*4+3]=0;if(x>0)push(p-1);if(x<w-1)push(p+1);if(y>0)push(p-w);if(y<h-1)push(p+w);}
+    for(p=0;p<w*h;p++){
+      if(seen[p])continue;x=p%w;y=(p/w)|0;
+      if((x>0&&seen[p-1])||(x<w-1&&seen[p+1])||(y>0&&seen[p-w])||(y<h-1&&seen[p+w])){
+        var mn=Math.min(d[p*4],d[p*4+1],d[p*4+2]);
+        if(mn>190)d[p*4+3]=Math.max(40,Math.round(255*(255-mn)/65));
+      }
+    }
+    g.putImageData(im,0,0);
+  }
+  var x0=w,y0=h,x1=-1,y1=-1;
+  for(var j=0;j<h;j++)for(var k=0;k<w;k++){if(d[(j*w+k)*4+3]>20){if(k<x0)x0=k;if(k>x1)x1=k;if(j<y0)y0=j;if(j>y1)y1=j;}}
+  if(x1<0)return t;
+  var o=document.createElement('canvas');o.width=x1-x0+1;o.height=y1-y0+1;
+  o.getContext('2d').drawImage(t,x0,y0,o.width,o.height,0,0,o.width,o.height);
+  return o;
+}
+function setPacket(img){
+  var m=Math.min(1,1200/Math.max(img.width,img.height));
+  var t=document.createElement('canvas');t.width=Math.round(img.width*m);t.height=Math.round(img.height*m);
+  t.getContext('2d').drawImage(img,0,0,t.width,t.height);
+  var src=cutout(t);
+  pkSrc=src;
+  var s=Math.min(300/src.width,420/src.height);pw=Math.round(src.width*s);ph=Math.round(src.height*s);
+  var c=document.createElement('canvas');c.width=pw*2;c.height=ph*2;var g=c.getContext('2d');
+  g.drawImage(src,0,0,c.width,c.height);
+  g.globalCompositeOperation='source-atop';
+  var lg=g.createLinearGradient(0,0,c.width,0);
+  lg.addColorStop(0,'rgba(255,255,255,.30)');lg.addColorStop(.3,'rgba(255,255,255,0)');lg.addColorStop(.7,'rgba(0,0,0,0)');lg.addColorStop(1,'rgba(0,0,0,.22)');
+  g.fillStyle=lg;g.fillRect(0,0,c.width,c.height);
+  pkImg=c;
+  buildCustom();
+}
+function reset(){mt=0;mlast=null;
+  heights=new Array(NCOL).fill(0);grains=[];dust=[];t=0;last=null;spawnAcc=0;shake=0;slowLeft=0;
+  pk={on:false,hit:false,y:0,v:0,rest:0,settled:false,sq:0,ts:0,ra:0,sy:0,ey:0,tHit:-1};
+  pctx.clearRect(0,0,W,H);
+}
+function rnd(){return (Math.random()+Math.random()+Math.random())/3-0.5}
+function sprite(){
+  var a=customSprites||sprites['toor'];
+  return a[(Math.random()*a.length)|0];
+}
+function addGrain(x,y,vx,vy){
+  grains.push({x:x,y:y,vx:vx,vy:vy,r:4.0+Math.random()*1.6,rot:Math.random()*6.28,vr:(Math.random()-.5)*14,s:sprite()});
+}
+function drawGrain(c,x,y,r,rot,s){
+  var w=r*2.6;c.save();c.translate(x,y);c.rotate(rot);c.drawImage(s,-w/2,-w*0.375,w,w*0.75);c.restore();
+}
+function landGrain(g){
+  var col=Math.max(1,Math.min(NCOL-2,(g.x/COLW)|0));
+  for(var i=0;i<10;i++){
+    if(heights[col-1]<heights[col]-2)col--;
+    else if(heights[col+1]<heights[col]-2)col++;
+    else break;
+  }
+  drawGrain(pctx,col*COLW+(Math.random()-.5)*3,FLOOR-heights[col]-g.r*0.5,g.r,Math.random()*6.28,g.s);
+  if(g.ns)heights[col]+=g.r*0.12;else{heights[col]+=g.r*1.1;heights[col-1]+=g.r*0.5;heights[col+1]+=g.r*0.5;}
+}
+function impact(v){
+  var str=Math.min(1,v/1400);
+  pk.sq=0.14*str;pk.ts=0;pk.ra=0.07*str;pk.hit=true;shake=Math.max(shake,7*str);
+  if(pk.tHit<0)pk.tHit=t;
+  if(!pk.slowed){pk.slowed=true;slowLeft=SLOW_DUR;}
+  var n=10+Math.round(200*str*str);
+  for(var i=0;i<n;i++){
+    var x=30+Math.random()*(W-60),dx=x-cx,fall=1-Math.min(1,Math.abs(dx)/(W/2))*0.55;
+    var cl=Math.max(0,Math.min(NCOL-1,(x/COLW)|0));
+    addGrain(x,FLOOR-heights[cl]-10,(dx>0?1:-1)*Math.random()*320*str+rnd()*80,-(250+Math.random()*750)*str*fall-60);
+    grains[grains.length-1].ns=1;
+  }
+  for(var j=0;j<30;j++)dust.push({x:cx+rnd()*pw*1.2,y:pk.rest-4,vx:rnd()*260*str,vy:-Math.random()*70*str,life:.8,max:.8,size:10+Math.random()*14});
+}
+
+/* ---------- golden name + price ---------- */
+function goldFill(x0,x1,pos){
+  var g=ctx.createLinearGradient(x0,0,x1,0);
+  g.addColorStop(0,'#a87408');
+  g.addColorStop(Math.max(0.02,pos-0.14),'#e0b13a');
+  g.addColorStop(pos,'#fff4c2');
+  g.addColorStop(Math.min(0.98,pos+0.14),'#e0b13a');
+  g.addColorStop(1,'#a87408');
+  return g;
+}
+function fitText(txt,font,maxW,size){
+  var s=size;do{ctx.font=font.replace('{s}',s);if(ctx.measureText(txt).width<=maxW||s<14)break;s-=2;}while(true);
+  return s;
+}
+function drawGoldText(a,nameO,priceO,y1O){
+  var name=(nameO!==undefined?nameO:(products[0]&&products[0].name||'')).trim(),price=(priceO!==undefined?priceO:(products[0]&&products[0].price||'')).trim();
+  if(!name&&!price)return;
+  var pos=0.15+0.7*((t*0.45)%1);
+  ctx.save();
+  ctx.globalAlpha=a;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  var rise=(1-a)*16;
+  var y1=(y1O!==undefined)?y1O:Math.max(60,Math.min(95,FLOOR-ph-110));
+  if(name){
+    var fs=fitText(name,'bold {s}px Georgia,"Times New Roman",serif',W-70,50);
+    ctx.font='bold '+fs+'px Georgia,"Times New Roman",serif';
+    var tw=ctx.measureText(name).width;
+    ctx.shadowColor='rgba(0,0,0,.45)';ctx.shadowBlur=10;ctx.shadowOffsetY=3;
+    ctx.lineWidth=2.5;ctx.strokeStyle='rgba(88,52,0,.75)';ctx.lineJoin='round';
+    ctx.strokeText(name,cx,y1+rise);
+    ctx.shadowColor='transparent';
+    ctx.fillStyle=goldFill(cx-tw/2,cx+tw/2,pos);
+    ctx.fillText(name,cx,y1+rise);
+  }
+  // thin gold divider
+  var ly=y1+38+rise,lw=Math.min(210,W*0.4)*a;
+  var lg=ctx.createLinearGradient(cx-lw,0,cx+lw,0);
+  lg.addColorStop(0,'rgba(224,177,58,0)');lg.addColorStop(.5,'#f3cf62');lg.addColorStop(1,'rgba(224,177,58,0)');
+  ctx.fillStyle=lg;ctx.fillRect(cx-lw,ly,lw*2,2);
+  ctx.save();ctx.translate(cx,ly+1);ctx.rotate(Math.PI/4);ctx.fillStyle='#f6d36b';ctx.shadowColor='rgba(0,0,0,.4)';ctx.shadowBlur=4;ctx.fillRect(-4,-4,8,8);ctx.restore();
+  if(price){
+    var fs2=fitText(price,'bold {s}px Georgia,"Times New Roman",serif',W-100,40);
+    ctx.font='bold '+fs2+'px Georgia,"Times New Roman",serif';
+    var tw2=ctx.measureText(price).width,y2=ly+36+rise;
+    ctx.shadowColor='rgba(0,0,0,.45)';ctx.shadowBlur=8;ctx.shadowOffsetY=2;
+    ctx.lineWidth=2.2;ctx.strokeStyle='rgba(88,52,0,.75)';ctx.lineJoin='round';
+    ctx.strokeText(price,cx,y2);
+    ctx.shadowColor='transparent';
+    ctx.fillStyle=goldFill(cx-tw2/2,cx+tw2/2,1-pos);
+    ctx.fillText(price,cx,y2);
+  }
+  ctx.restore();
+}
+
+function frame(now){
+  if(!alive)return;
+  if(mode==='multi'){drawMulti(now);requestAnimationFrame(frame);return;}
+  if(last===null)last=now;
+  var rdt=Math.min(0.033,(now-last)/1000);last=now;t+=rdt;var i;
+  var dt=rdt;if(slowLeft>0){slowLeft=Math.max(0,slowLeft-rdt);var u0=1-slowLeft/SLOW_DUR;dt=rdt*(0.15+0.85*u0*u0);}
+
+  if(t<SPAWN_END){spawnAcc+=dt*230;while(spawnAcc>=1){spawnAcc--;addGrain(30+Math.random()*(W-60),-12,rnd()*30,150+Math.random()*120);}}
+  for(i=grains.length-1;i>=0;i--){
+    var g=grains[i];g.px=g.x;g.py=g.y;g.vy+=G*dt;g.x+=g.vx*dt;g.y+=g.vy*dt;g.rot+=g.vr*dt;
+    var col=Math.max(0,Math.min(NCOL-1,(g.x/COLW)|0));
+    if(g.y+g.r>=FLOOR-heights[col]){landGrain(g);grains.splice(i,1);}
+  }
+  if(t>=DROP_AT){
+    if(!pk.on){pk.on=true;pk.sy=-ph-30;pk.y=pk.sy;pk.v=0;pk.rest=FLOOR-heights[(cx/COLW)|0]*0.75;pk.ey=pk.rest-ph;}
+    if(!pk.settled){
+      pk.v+=G*dt;pk.y+=pk.v*dt;
+      if(pk.y+ph>=pk.rest){
+        pk.y=pk.ey;
+        if(pk.v>160){impact(pk.v);pk.v=-pk.v*0.28;}else{pk.v=0;pk.settled=true;}
+      }
+    }
+    pk.ts+=dt;
+  }
+  for(i=dust.length-1;i>=0;i--){var d=dust[i];d.life-=dt;if(d.life<=0){dust.splice(i,1);continue;}d.x+=d.vx*dt;d.y+=d.vy*dt;d.vx*=.96;d.vy*=.96;d.size+=40*dt;}
+  shake*=Math.exp(-12*dt);
+
+  ctx.clearRect(0,0,W,H);ctx.drawImage(bgCanvas,0,0);
+  ctx.save();
+  if(shake>0.2)ctx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);
+  ctx.fillStyle='rgba(0,0,0,.22)';ctx.beginPath();ctx.ellipse(cx,FLOOR+2,270,12,0,0,6.283);ctx.fill();
+  ctx.drawImage(pile,0,0);
+  if(pk.on){
+    var prox=Math.max(0,Math.min(1,1-(pk.rest-(pk.y+ph))/700));
+    ctx.fillStyle='rgba(0,0,0,'+(0.08+0.3*prox*prox)+')';
+    ctx.beginPath();ctx.ellipse(cx,pk.rest+2,pw*(0.32+0.2*prox),9+6*prox,0,0,6.283);ctx.fill();
+    var rot,sx,sy;
+    if(!pk.hit){
+      var pr=Math.max(0,Math.min(1,(pk.y-pk.sy)/(pk.ey-pk.sy)));
+      rot=0.24*(1-pr);sy=1+Math.min(0.05,pk.v/24000);sx=1/Math.sqrt(sy);
+    }else{
+      rot=pk.ra*Math.exp(-5*pk.ts)*Math.sin(16*pk.ts);
+      var sq=pk.sq*Math.exp(-9*pk.ts);sy=1-sq;sx=1+sq*0.5;
+    }
+    ctx.save();ctx.shadowColor='rgba(0,0,0,.35)';ctx.shadowBlur=18;ctx.shadowOffsetY=8;
+    ctx.translate(cx,pk.y+ph);ctx.scale(sx,sy);ctx.translate(0,-ph/2);ctx.rotate(rot);
+    ctx.drawImage(pkImg,-pw/2,-ph/2,pw,ph);ctx.restore();
+    ctx.save();ctx.beginPath();ctx.rect(0,pk.rest-10,W,H);ctx.clip();ctx.drawImage(pile,0,0);ctx.restore();
+  }
+  for(i=0;i<dust.length;i++){var u=dust[i];ctx.fillStyle='rgba(235,220,195,'+(u.life/u.max*0.35)+')';ctx.beginPath();ctx.arc(u.x,u.y,u.size,0,6.283);ctx.fill();}
+  for(i=0;i<grains.length;i++){
+    var q=grains[i];
+    if(q.py!==undefined){ctx.strokeStyle='rgba(120,90,40,.12)';ctx.lineWidth=q.r*0.9;ctx.beginPath();ctx.moveTo(q.px-q.vx*0.012,q.py-q.vy*0.012);ctx.lineTo(q.x,q.y);ctx.stroke();}
+    drawGrain(ctx,q.x,q.y,q.r,q.rot,q.s);
+  }
+  ctx.restore();
+
+  // golden name + price at the end (not affected by the camera shake)
+  if(pk.tHit>=0){
+    var a=Math.max(0,Math.min(1,(t-pk.tHit-TEXT_DELAY)/TEXT_FADE));
+    if(a>0){a=a*a*(3-2*a);drawGoldText(a);}
+  }
+  if(pk.tHit>=0 && t > pk.tHit + TEXT_DELAY + TEXT_FADE + 3.2) reset();
+  requestAnimationFrame(frame);
+}
+/* ================= MULTI-PRODUCT CIRCLE ANIMATION ================= */
+var HOLD=2.8,MOVE=1.1,CYC=HOLD+MOVE;        // seconds: one product stays in the middle (HOLD), the swap takes (MOVE)
+var RING_R=190,MCX=W/2,MCY=420;             // circle radius and the circle's centre point on the canvas
+var BIG_W=180,BIG_H=220,SM_W=80,SM_H=100;   // picture size boxes: middle (big) and circle (small)
+var NAMES=['Chana Dal','Toor Dal','Moong Dal','Masoor Dal','Basmati Rice','Sugar','Atta Flour','Tea'];
+var prods=[],mt=0,mlast=null;
+
+function mkPlaceholder(i){   // coloured stand-in until you upload a picture
+  var c=document.createElement('canvas');c.width=300;c.height=420;var g=c.getContext('2d');
+  g.fillStyle='hsl('+((i*47+8)%360)+',60%,42%)';g.beginPath();g.roundRect(0,0,300,420,14);g.fill();
+  g.fillStyle='rgba(255,255,255,.9)';g.textAlign='center';g.font='bold 120px sans-serif';g.fillText(String(i+1),150,240);
+  g.font='22px sans-serif';g.fillText('upload image',150,290);
+  return c;
+}
+function ensureProds(n){
+  while(prods.length<n){var i=prods.length;prods.push({name:NAMES[i]||('Product '+(i+1)),price:'£1.99 / 500g',img:mkPlaceholder(i)});}
+}
+function prepImg(img){       // shrink + remove white background, same as the packet image
+  var m=Math.min(1,800/Math.max(img.width,img.height));
+  var c=document.createElement('canvas');c.width=Math.round(img.width*m);c.height=Math.round(img.height*m);
+  c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+  return cutout(c);
+}
+function drawMulti(now){
+  if(mlast===null)mlast=now;
+  var dt=Math.min(0.033,(now-mlast)/1000);mlast=now;mt+=dt;t=mt;
+  var n=prods.length,i;if(!n)return;
+  // which product is "current" (c) and how far through its turn we are (u)
+  var c=Math.floor(mt/CYC),u=mt-c*CYC,a=c%n;
+  var mv=(c===0)?1:Math.min(1,u/MOVE);
+  var e=mv<0.5?4*mv*mv*mv:1-Math.pow(-2*mv+2,3)/2;     // smooth start and stop
+  var pos=(c===0)?0:(c-1)+e;                           // "which product is in the middle", as a moving number
+  var ga=Math.min(1,mt/0.6);                           // fade everything in at the start
+  // name + price fade in just before the picture settles, fade out before the next swap
+  var tin=Math.max(0,Math.min(1,(u-MOVE*0.75)/0.6)),tout=Math.max(0,Math.min(1,(u-(CYC-0.45))/0.45));
+  var ta=tin*(1-tout);ta=ta*ta*(3-2*ta);
+
+  ctx.clearRect(0,0,W,H);ctx.drawImage(bgCanvas,0,0);
+  var dark='warm'==='dark';
+  var gl=ctx.createRadialGradient(MCX,MCY,10,MCX,MCY,150);gl.addColorStop(0,'rgba(246,207,63,.38)');gl.addColorStop(1,'rgba(246,207,63,0)');
+  ctx.fillStyle=gl;ctx.fillRect(0,MCY-200,W,400);
+  ctx.save();ctx.setLineDash([3,12]);ctx.lineDashOffset=-mt*22;ctx.lineWidth=2.5;ctx.lineCap='round';
+  ctx.strokeStyle=dark?'rgba(255,255,255,.22)':'rgba(120,80,20,.35)';
+  ctx.beginPath();ctx.arc(MCX,MCY,RING_R,0,6.283);ctx.stroke();ctx.restore();
+
+  var list=[];
+  for(i=0;i<n;i++){
+    var d=i-pos;d=((d+n/2)%n+n)%n-n/2;                 // distance from the middle, in "product steps"
+    var ad=Math.min(1,Math.abs(d)),w=ad*ad*(3-2*ad);   // w: 0 = in the middle, 1 = out on the circle
+    var ang=-Math.PI/2+d*6.283185/n;                   // angle around the circle
+    list.push({p:prods[i],w:w,x:MCX+w*RING_R*Math.cos(ang),y:MCY+w*RING_R*Math.sin(ang)+Math.sin(mt*1.6+i)*3*w});
+  }
+  list.sort(function(p,q){return q.w-p.w;});           // small ones first, the big middle one on top
+  for(i=0;i<list.length;i++){
+    var o=list[i],im=o.p.img,bw=BIG_W+(SM_W-BIG_W)*o.w,bh=BIG_H+(SM_H-BIG_H)*o.w;
+    var s=Math.min(bw/im.width,bh/im.height)*(1+0.012*Math.sin(mt*2.4)*(1-o.w)),dw=im.width*s,dh=im.height*s;
+    ctx.save();ctx.globalAlpha=ga;
+    ctx.shadowColor='rgba(0,0,0,.35)';ctx.shadowBlur=8+14*(1-o.w);ctx.shadowOffsetY=4+6*(1-o.w);
+    ctx.drawImage(im,o.x-dw/2,o.y-dh/2,dw,dh);ctx.restore();
+  }
+  if(ta>0)drawGoldText(ta*ga,prods[a].name,prods[a].price,72);
+}
+
+var running=false;
+function begin(){
+  buildSprites();
+  paintBg();
+  if(mode==='multi'){
+    if(products.length<2) return;
+    var left=products.length;
+    products.forEach(function(p,i){
+      var im=new Image();
+      im.onload=function(){
+        prods[i]={name:p.name||'',price:p.price||'',img:prepImg(im)};
+        if(--left===0){ reset(); if(!running){ running=true; requestAnimationFrame(frame); } }
+      };
+      im.onerror=function(){ if(--left===0 && prods.filter(Boolean).length>=2){ reset(); if(!running){ running=true; requestAnimationFrame(frame); } } };
+      im.src=p.src||'';
+    });
+  }else{
+    var one=products[0];
+    if(!one||!one.src) return;
+    var im1=new Image();
+    im1.onload=function(){ setPacket(im1); reset(); if(!running){ running=true; requestAnimationFrame(frame);} };
+    im1.src=one.src;
+  }
+}
+begin();
+}
+function fillWholesaleOfferNameCell(td, stockName){
+  if(!td) return;
+  td.textContent = '';
+  const nameEl = document.createElement('div');
+  nameEl.textContent = stockName;
+  td.appendChild(nameEl);
+  const tools = document.createElement('div');
+  tools.className = 'ws-offer-tools';
+  tools.setAttribute('data-offer-name', stockName);
+  if(wholesaleOfferThumbs[stockName]){
+    const img = document.createElement('img');
+    img.alt = '';
+    img.src = wholesaleOfferThumbs[stockName];
+    tools.appendChild(img);
+  }else if(wholesaleOfferNames.has(stockName)){
+    const mark = document.createElement('span');
+    mark.className = 'ws-offer-saved';
+    mark.textContent = 'Image saved';
+    tools.appendChild(mark);
+  }
+  const upload = document.createElement('button');
+  upload.type = 'button';
+  upload.className = 'btn-ghost';
+  upload.textContent = wholesaleOfferNames.has(stockName) ? 'Replace image' : 'Upload image';
+  upload.title = 'JPG, PNG, or WebP. A PNG with a transparent background works best.';
+  upload.addEventListener('click', () => pickWholesaleOfferImage(stockName));
+  tools.appendChild(upload);
+  if(wholesaleOfferNames.has(stockName)){
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'btn-ghost';
+    remove.textContent = 'Remove';
+    remove.addEventListener('click', () => removeWholesaleOfferImage(stockName));
+    tools.appendChild(remove);
+  }
+  td.appendChild(tools);
+}
+function wholesaleOfferFileInput(){
+  let input = document.getElementById('wsOfferImageInput');
+  if(!input){
+    input = document.createElement('input');
+    input.type = 'file';
+    input.id = 'wsOfferImageInput';
+    input.accept = 'image/jpeg,image/png,image/webp';
+    input.style.display = 'none';
+    input.addEventListener('change', onWholesaleOfferImagePicked);
+    document.body.appendChild(input);
+  }
+  return input;
+}
+function pickWholesaleOfferImage(stockName){
+  wholesaleOfferPickName = stockName;
+  const input = wholesaleOfferFileInput();
+  input.value = '';
+  input.click();
+}
+function prepareOfferImageFile(file){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, 1200 / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const g = canvas.getContext('2d');
+      g.drawImage(img, 0, 0, w, h);
+      let mime = 'image/jpeg';
+      if(file.type === 'image/png' || file.type === 'image/webp'){
+        const data = g.getImageData(0, 0, w, h).data;
+        for(let i = 3; i < data.length; i += 16){
+          if(data[i] < 250){ mime = file.type; break; }
+        }
+      }
+      const dataUrl = mime === 'image/jpeg' ? canvas.toDataURL('image/jpeg', 0.9) : canvas.toDataURL(mime);
+      const thumbScale = Math.min(1, 160 / Math.max(w, h));
+      const thumb = document.createElement('canvas');
+      thumb.width = Math.max(1, Math.round(w * thumbScale));
+      thumb.height = Math.max(1, Math.round(h * thumbScale));
+      thumb.getContext('2d').drawImage(canvas, 0, 0, thumb.width, thumb.height);
+      resolve({ mime, data: dataUrl, thumb: thumb.toDataURL('image/jpeg', 0.8), thumb_mime: 'image/jpeg' });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('That picture could not be read')); };
+    img.src = url;
+  });
+}
+async function onWholesaleOfferImagePicked(event){
+  const file = event.target.files && event.target.files[0];
+  const stockName = wholesaleOfferPickName;
+  if(!file || !stockName) return;
+  try{
+    const prepared = await prepareOfferImageFile(file);
+    await apiPost('wholesale/offer-images', {
+      stock_name: stockName,
+      mime: prepared.mime,
+      data: prepared.data,
+      thumb: prepared.thumb,
+      thumb_mime: prepared.thumb_mime
+    });
+    wholesaleOfferNames.add(stockName);
+    wholesaleOfferThumbs[stockName] = prepared.thumb;
+    wholesaleOfferFull[stockName] = prepared.data;
+    renderWholesaleTable();
+    if(wholesaleHubPane === 'offers') renderSpecialOfferSlots();
+    toast('Image saved');
+  }catch(e){
+    toast(e.message || 'Could not save that image');
+    console.error(e);
+  }
+}
+async function removeWholesaleOfferImage(stockName){
+  if(!confirm('Remove the image for ' + stockName + '?')) return;
+  try{
+    await apiPost('wholesale/offer-images/delete', { stock_name: stockName });
+    wholesaleOfferNames.delete(stockName);
+    delete wholesaleOfferThumbs[stockName];
+    delete wholesaleOfferFull[stockName];
+    renderWholesaleTable();
+    if(wholesaleHubPane === 'offers') renderSpecialOfferSlots();
+    toast('Image removed');
+  }catch(e){
+    toast(e.message || 'Could not remove that image');
+    console.error(e);
+  }
+}
+function flyerOfferPriceParts(r){
+  const adj = wholesaleAdjust[r.stock_name] || {};
+  const priceVal = (adj.price !== undefined && adj.price !== '')
+    ? Number(adj.price)
+    : (r.price_net === null || r.price_net === undefined ? null : Number(r.price_net));
+  if(priceVal === null || Number.isNaN(priceVal)) return null;
+  return { price: priceVal, isVat: r.vatid === 1, text: '£' + priceVal.toFixed(2) + (r.vatid === 1 ? ' +VAT' : '') };
+}
+function flyerOfferPriceTextForName(name){
+  const row = wholesaleRows.find(r => r.stock_name === name);
+  if(!row) return null;
+  const parts = flyerOfferPriceParts(row);
+  return parts ? parts.text : null;
+}
+function flyerOfferProductChoices(){
+  const mode = wholesaleFlyerMode === 'veg' ? 'veg' : 'whole';
+  return wholesaleRows.filter(r => {
+    if(mode === 'veg' ? !isWholesaleVegRow(r) : isWholesaleVegRow(r)) return false;
+    if(!wholesaleOfferNames.has(r.stock_name)) return false;
+    return !!flyerOfferPriceParts(r);
+  }).map(r => r.stock_name).filter((name, index, all) => all.indexOf(name) === index).sort((a, b) => a.localeCompare(b));
+}
+function flyerWebPagePlan(mode){
+  const sourceRows = wholesaleRows.filter(r => mode === 'veg' ? isWholesaleVegRow(r) : !isWholesaleVegRow(r));
+  const groups = groupRowsByDepartment(sourceRows);
+  const pages = [{ label: 'Cover' }];
+  groups.forEach(g => {
+    const count = g.items.filter(r => flyerOfferPriceParts(r)).length;
+    if(!count) return;
+    const pageCount = Math.ceil(count / FLYER_WEB_MAX_ROWS_PER_PAGE);
+    const heading = flyerDeptDisplayName(g.department);
+    for(let i = 0; i < pageCount; i++){
+      pages.push({ label: pageCount > 1 ? (heading + ' (' + (i + 1) + ' of ' + pageCount + ')') : heading });
+    }
+  });
+  pages.push({ label: 'Notes' });
+  if(flyerImages.last) pages.push({ label: 'Last page' });
+  return pages;
+}
+function specialOfferShowErr(msg){
+  const el = document.getElementById('wsOfferErr');
+  if(!el) return;
+  el.textContent = msg || '';
+  el.style.display = msg ? 'block' : 'none';
+}
+function clearSpecialOfferForm(){
+  wholesaleOfferEditIndex = null;
+  const anim = document.getElementById('wsOfferAnim');
+  if(anim) anim.value = 'single';
+  const count = document.getElementById('wsOfferCount');
+  if(count) count.value = '5';
+  const btn = document.getElementById('wsOfferSaveBtn');
+  if(btn) btn.textContent = 'Save';
+  renderSpecialOfferSlots();
+}
+async function refreshSpecialOffers(){
+  try{
+    const data = await apiGet('wholesale/flyer/special-offers?mode=' + encodeURIComponent(wsSchedFlyerKey()));
+    wholesaleSpecialOffers = data.offers || [];
+    setWholesaleHubDone('offers', wholesaleSpecialOffers.length > 0);
+    renderSpecialOfferList();
+    if(wholesaleHubPane === 'offers') renderSpecialOfferForm();
+  }catch(e){
+    console.error(e);
+    specialOfferShowErr(e.message || 'Could not load special offers');
+  }
+}
+function renderSpecialOfferForm(){
+  const pageSel = document.getElementById('wsOfferPage');
+  if(!pageSel) return;
+  const pages = flyerWebPagePlan(wsSchedFlyerKey());
+  const current = pageSel.value;
+  pageSel.innerHTML = pages.map((page, index) => {
+    const n = index + 1;
+    return '<option value="' + n + '">' + n + ' — ' + escapeHtml(page.label) + '</option>';
+  }).join('');
+  if(current && pageSel.querySelector('option[value="' + current + '"]')) pageSel.value = current;
+  const editing = wholesaleOfferEditIndex !== null ? wholesaleSpecialOffers[wholesaleOfferEditIndex] : null;
+  if(editing){
+    document.getElementById('wsOfferAnim').value = editing.animation === 'multi' ? 'multi' : 'single';
+    if(pageSel.querySelector('option[value="' + editing.insert_at_page + '"]')) pageSel.value = String(editing.insert_at_page);
+    const count = document.getElementById('wsOfferCount');
+    if(editing.animation === 'multi' && count) count.value = String(Math.min(8, Math.max(2, editing.products.length)));
+  }
+  renderSpecialOfferSlots();
+}
+function renderSpecialOfferSlots(){
+  const host = document.getElementById('wsOfferSlots');
+  const animEl = document.getElementById('wsOfferAnim');
+  if(!host || !animEl) return;
+  const multi = animEl.value === 'multi';
+  const countRow = document.getElementById('wsOfferCountRow');
+  if(countRow) countRow.style.display = multi ? 'block' : 'none';
+  const previous = [...host.querySelectorAll('.ws-offer-product')].map(sel => sel.value);
+  const editing = wholesaleOfferEditIndex !== null ? wholesaleSpecialOffers[wholesaleOfferEditIndex] : null;
+  const count = multi ? Number(document.getElementById('wsOfferCount').value) : 1;
+  const names = flyerOfferProductChoices();
+  host.innerHTML = '';
+  if(!names.length){
+    host.innerHTML = '<p class="modal-sub">Upload an image on a product in this flyer first. Names without an image are not listed.</p>';
+    previewSpecialOffer();
+    return;
+  }
+  for(let i = 0; i < count; i++){
+    const chosen = previous[i] || (editing && editing.products[i]) || '';
+    const wrap = document.createElement('div');
+    const label = document.createElement('label');
+    label.style.cssText = 'display:block;font-size:12px;color:var(--text-dim);margin:8px 0 4px;';
+    label.textContent = multi ? ('Product ' + (i + 1)) : 'Product';
+    const sel = document.createElement('select');
+    sel.className = 'ws-offer-product';
+    const blank = document.createElement('option');
+    blank.value = '';
+    blank.textContent = 'Select a product';
+    sel.appendChild(blank);
+    names.forEach(name => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      if(name === chosen) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    const meta = document.createElement('div');
+    meta.className = 'ws-offer-meta';
+    const paint = () => {
+      const name = sel.value;
+      const price = name ? flyerOfferPriceTextForName(name) : '';
+      meta.textContent = name ? (name + (price ? ' — ' + price : '')) : '';
+      previewSpecialOffer();
+    };
+    sel.addEventListener('change', paint);
+    wrap.appendChild(label);
+    wrap.appendChild(sel);
+    wrap.appendChild(meta);
+    host.appendChild(wrap);
+    paint();
+  }
+}
+function selectedSpecialOfferProducts(){
+  return [...document.querySelectorAll('#wsOfferSlots .ws-offer-product')].map(sel => sel.value).filter(Boolean);
+}
+let specialOfferPreviewToken = 0;
+async function previewSpecialOffer(){
+  const token = ++specialOfferPreviewToken;
+  const canvas = document.getElementById('wsOfferPreview');
+  if(!canvas || typeof runPacketDrop !== 'function') return;
+  if(canvas._offerStop) canvas._offerStop();
+  const anim = document.getElementById('wsOfferAnim');
+  const names = selectedSpecialOfferProducts();
+  if(!names.length){
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
+  const products = [];
+  for(const name of names){
+    if(token !== specialOfferPreviewToken) return;
+    let src = wholesaleOfferFull[name] || '';
+    if(!src){
+      try{
+        const file = await apiGet('wholesale/offer-images/file?name=' + encodeURIComponent(name));
+        src = 'data:' + (file.mime || 'image/jpeg') + ';base64,' + file.data;
+        wholesaleOfferFull[name] = src;
+      }catch(e){
+        console.error(e);
+      }
+    }
+    if(!src) continue;
+    products.push({ name, price: flyerOfferPriceTextForName(name) || '', src });
+  }
+  if(token !== specialOfferPreviewToken) return;
+  const mode = anim && anim.value === 'multi' ? 'multi' : 'single';
+  if(mode === 'single' && products.length < 1) return;
+  if(mode === 'multi' && products.length < 2) return;
+  if(canvas._offerStop) canvas._offerStop();
+  runPacketDrop(canvas, { mode, products });
+}
+async function saveWholesaleSpecialOffer(){
+  specialOfferShowErr('');
+  const animEl = document.getElementById('wsOfferAnim');
+  const pageEl = document.getElementById('wsOfferPage');
+  const animation = animEl && animEl.value === 'multi' ? 'multi' : 'single';
+  const insertAt = Number(pageEl && pageEl.value);
+  const products = selectedSpecialOfferProducts();
+  if(!insertAt){ specialOfferShowErr('Choose a page.'); return; }
+  if(animation === 'single' && products.length !== 1){ specialOfferShowErr('Choose a product that has an image.'); return; }
+  if(animation === 'multi' && (products.length < 2 || products.length > 8)){ specialOfferShowErr('Choose 2 to 8 products that have an image.'); return; }
+  if(new Set(products).size !== products.length){ specialOfferShowErr('The same product cannot be picked twice on one animation.'); return; }
+  for(const name of products){
+    if(!flyerOfferPriceTextForName(name)){ specialOfferShowErr(name + ' has no price.'); return; }
+  }
+  const offer = { animation, insert_at_page: insertAt, products };
+  const next = wholesaleSpecialOffers.slice();
+  if(wholesaleOfferEditIndex === null) next.push(offer);
+  else next[wholesaleOfferEditIndex] = offer;
+  const btn = document.getElementById('wsOfferSaveBtn');
+  if(btn) btn.disabled = true;
+  try{
+    const data = await apiPost('wholesale/flyer/special-offers', { mode: wsSchedFlyerKey(), offers: next });
+    wholesaleSpecialOffers = data.offers || next;
+    setWholesaleHubDone('offers', wholesaleSpecialOffers.length > 0);
+    clearSpecialOfferForm();
+    renderSpecialOfferList();
+    toast('Special offer saved');
+  }catch(e){
+    specialOfferShowErr(e.message || 'Could not save that animation');
+    console.error(e);
+  }finally{
+    if(btn) btn.disabled = false;
+  }
+}
+function editWholesaleSpecialOffer(index){
+  wholesaleOfferEditIndex = index;
+  const btn = document.getElementById('wsOfferSaveBtn');
+  if(btn) btn.textContent = 'Update';
+  renderSpecialOfferForm();
+}
+async function removeWholesaleSpecialOffer(index){
+  const next = wholesaleSpecialOffers.filter((_, i) => i !== index);
+  try{
+    const data = await apiPost('wholesale/flyer/special-offers', { mode: wsSchedFlyerKey(), offers: next });
+    wholesaleSpecialOffers = data.offers || next;
+    if(wholesaleOfferEditIndex === index) clearSpecialOfferForm();
+    else if(wholesaleOfferEditIndex !== null && wholesaleOfferEditIndex > index) wholesaleOfferEditIndex -= 1;
+    setWholesaleHubDone('offers', wholesaleSpecialOffers.length > 0);
+    renderSpecialOfferList();
+  }catch(e){
+    specialOfferShowErr(e.message || 'Could not remove that animation');
+    console.error(e);
+  }
+}
+function renderSpecialOfferList(){
+  const list = document.getElementById('wsOfferList');
+  if(!list) return;
+  if(!wholesaleSpecialOffers.length){
+    list.innerHTML = '<div class="empty-hint">None saved for this flyer yet.</div>';
+    return;
+  }
+  const pages = flyerWebPagePlan(wsSchedFlyerKey());
+  list.innerHTML = wholesaleSpecialOffers.map((offer, index) => {
+    const page = pages[offer.insert_at_page - 1];
+    const where = 'Page ' + offer.insert_at_page + (page ? ' — ' + page.label : '');
+    const kind = offer.animation === 'multi' ? 'Multiple products' : 'Single packet drop';
+    return '<div style="padding:8px 0;border-bottom:1px solid var(--line);font-size:13px;">' +
+      '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;">' +
+      '<strong>' + escapeHtml(kind) + '</strong>' +
+      '<span><button class="btn-ghost" type="button" style="padding:3px 8px;font-size:11px;" onclick="editWholesaleSpecialOffer(' + index + ')">Edit</button> ' +
+      '<button class="btn-ghost" type="button" style="padding:3px 8px;font-size:11px;" onclick="removeWholesaleSpecialOffer(' + index + ')">Remove</button></span></div>' +
+      '<div style="color:var(--text-dim);">' + escapeHtml(where) + '</div>' +
+      '<div>' + offer.products.map(name => escapeHtml(name)).join(', ') + '</div></div>';
+  }).join('');
+}
+function flyerScriptJson(value){
+  return JSON.stringify(value).replace(/</g, '\\u003c');
+}
+function flyerSpliceOfferPages(pages, offers, imageMap){
+  const configs = [];
+  const sorted = (offers || []).map((offer, index) => Object.assign({ sort: index }, offer))
+    .sort((a, b) => a.insert_at_page - b.insert_at_page || a.sort - b.sort);
+  const result = pages.slice();
+  let shift = 0;
+  sorted.forEach(offer => {
+    const id = 'fwOffer' + configs.length;
+    const products = (offer.products || []).map(name => ({
+      name,
+      price: flyerOfferPriceTextForName(name) || '',
+      src: imageMap[name] || ''
+    }));
+    configs.push({ id, mode: offer.animation === 'multi' ? 'multi' : 'single', products });
+    const at = Math.min(result.length, Math.max(0, (Number(offer.insert_at_page) - 1) + shift));
+    result.splice(at, 0, '<section class="fw-page fw-offer"><canvas id="' + id + '" width="540" height="720"></canvas></section>');
+    shift++;
+  });
+  return { pages: result, configs };
+}
+async function buildFlyerWebpageHtmlWithOffers(mode, fromVal, toVal){
+  const data = await apiGet('wholesale/flyer/special-offers?mode=' + encodeURIComponent(mode));
+  const offers = data.offers || [];
+  const imageMap = {};
+  const names = [...new Set(offers.flatMap(offer => offer.products || []))];
+  for(const name of names){
+    if(!flyerOfferPriceTextForName(name)) throw new Error(name + ' has no price, so it cannot go on the flyer.');
+    try{
+      const file = await apiGet('wholesale/offer-images/file?name=' + encodeURIComponent(name));
+      if(!file || !file.data) throw new Error('No picture');
+      imageMap[name] = 'data:' + (file.mime || 'image/jpeg') + ';base64,' + file.data;
+    }catch(e){
+      throw new Error('Could not read the picture for ' + name + '. ' + (e.message || ''));
+    }
+  }
+  return buildFlyerWebpageHTML(mode, fromVal, toVal, offers, imageMap);
+}
+function buildFlyerWebpageHTML(mode, fromVal, toVal, offers, imageMap){
+  offers = Array.isArray(offers) ? offers : [];
+  imageMap = imageMap || {};
   const modeLabel = mode === 'veg' ? 'Wholesale Vegetable Flyer' : 'Wholesale Flyer';
   const sourceRows = wholesaleRows.filter(r => mode === 'veg' ? isWholesaleVegRow(r) : !isWholesaleVegRow(r));
   const groups = groupRowsByDepartment(sourceRows);
 
-  const deptSections = groups.map(g => {
+  const deptPageHtmls = [];
+  groups.forEach(g => {
     const items = g.items.map(r => {
       const adj = wholesaleAdjust[r.stock_name] || {};
       const priceVal = (adj.price !== undefined && adj.price !== '')
@@ -8553,7 +9469,7 @@ function buildFlyerWebpageHTML(mode, fromVal, toVal){
         : (r.price_net === null || r.price_net === undefined ? null : Number(r.price_net));
       return { name: r.stock_name, price: priceVal, isVat: r.vatid === 1 };
     }).filter(it => it.price !== null);
-    if(items.length === 0) return '';
+    if(items.length === 0) return;
 
     const deptHeading = flyerDeptDisplayName(g.department);
     const layoutBg = flyerImages.layout ? ` style="background-image:url('${flyerImages.layout}')"` : '';
@@ -8576,9 +9492,9 @@ function buildFlyerWebpageHTML(mode, fromVal, toVal){
     for(let i = 0; i < items.length; i += FLYER_WEB_MAX_ROWS_PER_PAGE){
       pages.push(items.slice(i, i + FLYER_WEB_MAX_ROWS_PER_PAGE));
     }
-    return pages.map((pageItems, pageIdx) => {
+    pages.forEach((pageItems, pageIdx) => {
       const rowsHtml = pageItems.map(it => flyerWebItemRowHtml(it.name, '£' + it.price.toFixed(2) + (it.isVat ? ' +VAT' : ''))).join('');
-      return `
+      deptPageHtmls.push(`
     <section class="fw-page fw-dept-page"${layoutBg}>
       ${middlePhoto ? `<div class="fw-watermark fw-watermark-middle" style="background-image:url('${middlePhoto}')"></div>` : ''}
       ${bottomPhoto ? `<div class="fw-watermark fw-watermark-bottom" style="background-image:url('${bottomPhoto}')"></div>` : ''}
@@ -8587,9 +9503,9 @@ function buildFlyerWebpageHTML(mode, fromVal, toVal){
         <h2 class="fw-dept-heading">${escapeHtml(deptHeading)}</h2>
         <div class="fw-item-list">${rowsHtml}</div>
       </div>
-    </section>`;
-    }).join('');
-  }).join('');
+    </section>`);
+    });
+  });
 
   const notesHtml = FLYER_NOTES.map(n => `<li>${escapeHtml(n)}</li>`).join('');
   const coverBg = flyerImages.first ? ` style="background-image:url('${flyerImages.first}')"` : '';
@@ -8701,18 +9617,24 @@ function buildFlyerWebpageHTML(mode, fromVal, toVal){
      fixed at. */
   .fw-notes-page h2{position:absolute;left:50px;right:50px;top:190px;margin:0;color:var(--fw-blue);font-size:${flyerPtPx(28)};}
   .fw-notes-page ul{position:absolute;left:50px;right:50px;top:242px;color:var(--fw-gold);font-family:'Dancing Script',cursive;font-size:${flyerPtPx(15)};line-height:1.6;padding-left:20px;margin:0;}
+  .fw-offer{display:flex;align-items:center;justify-content:center;background:#fff6e8;}
+  .fw-offer canvas{width:420px;height:560px;display:block;}
 </style>
 </head>
 <body>
-  <section class="fw-page fw-cover"${coverBg}>
-    <div class="fw-validity">Prices valid from <b>${flyerDdmmyyyy(fromVal)}</b> to <b>${flyerDdmmyyyy(toVal)}</b></div>
-  </section>
-  ${deptSections}
-  <section class="fw-page fw-notes-page">
-    <h2>Notes</h2>
-    <ul>${notesHtml}</ul>
-  </section>
-  ${flyerImages.last ? `<section class="fw-page fw-last-page"${lastBg}></section>` : ''}
+  ${(() => {
+    const basePages = [
+      `<section class="fw-page fw-cover"${coverBg}><div class="fw-validity">Prices valid from <b>${flyerDdmmyyyy(fromVal)}</b> to <b>${flyerDdmmyyyy(toVal)}</b></div></section>`,
+      ...deptPageHtmls,
+      `<section class="fw-page fw-notes-page"><h2>Notes</h2><ul>${notesHtml}</ul></section>`
+    ];
+    if(flyerImages.last) basePages.push(`<section class="fw-page fw-last-page"${lastBg}></section>`);
+    const spliced = flyerSpliceOfferPages(basePages, offers, imageMap);
+    const script = spliced.configs.length
+      ? '<script>\n' + runPacketDrop.toString() + '\n' + spliced.configs.map(cfg => 'runPacketDrop(document.getElementById(' + flyerScriptJson(cfg.id) + '),' + flyerScriptJson({ mode: cfg.mode, products: cfg.products }) + ');').join('\n') + '\n<' + '/script>'
+      : '';
+    return spliced.pages.join('\n') + script;
+  })()}
 </body>
 </html>`;
 }
@@ -8732,7 +9654,7 @@ async function publishFlyerWebpage(){
   btn.disabled = true; btn.textContent = 'Publishing…';
   try{
     const mode = flyerWebpageTarget;
-    const html = buildFlyerWebpageHTML(mode, fromVal, toVal);
+    const html = await buildFlyerWebpageHtmlWithOffers(mode, fromVal, toVal);
     const data = await apiPost('wholesale/flyer/publish-webpage', {
       mode, html, cover_image_base64: flyerImages.first || null
     });
@@ -8792,7 +9714,7 @@ async function scheduleFlyerWebpage(){
   btn.disabled = true;
   try{
     const mode = flyerWebpageTarget;
-    const html = buildFlyerWebpageHTML(mode, fromVal, toVal);
+    const html = await buildFlyerWebpageHtmlWithOffers(mode, fromVal, toVal);
     await apiPost('wholesale/flyer/publish-webpage/schedule', {
       mode, html, cover_image_base64: flyerImages.first || null, run_at: runAtDate.toISOString()
     });
