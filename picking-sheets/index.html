@@ -4770,7 +4770,7 @@
 <div class="modal-backdrop" id="modalWholesaleExcel">
   <div class="modal" style="width:440px;">
     <h3>Download Excel</h3>
-    <p class="modal-sub">Customer order sheet. Choose Combined, Whole, or Veg only. The offer dates print at the top of the file. The file has the product, the Trade 3 price, and a blank Req Quantity column.</p>
+    <p class="modal-sub">Customer order sheet. Choose Combined, Whole, or Veg only. Prices valid from and valid to print at the top of the file. The file has the product, the Trade 3 price, and a blank Req Quantity column.</p>
     <label style="display:flex;align-items:flex-start;gap:10px;margin:12px 0;font-size:14px;cursor:pointer;">
       <input type="radio" name="wsExcelScope" value="combined" checked style="margin-top:3px;">
       <span><strong>Combined</strong> — every department (whole list and wholesale vegetable)</span>
@@ -4783,7 +4783,7 @@
       <input type="radio" name="wsExcelScope" value="veg" style="margin-top:3px;">
       <span><strong>Veg only</strong> — Wholesale Vegetable department only</span>
     </label>
-    <label style="display:block;font-size:12px;color:var(--text-dim);margin:14px 0 4px;">Offer valid from</label>
+    <label style="display:block;font-size:12px;color:var(--text-dim);margin:14px 0 4px;">Prices valid from</label>
     <input type="date" id="wsExcelFromDate">
     <label style="display:block;font-size:12px;color:var(--text-dim);margin:12px 0 4px;">Valid to</label>
     <input type="date" id="wsExcelToDate">
@@ -6682,7 +6682,7 @@ function openWholesaleExcelModal(){
   openModal('modalWholesaleExcel');
 }
 function wholesaleExcelValidityText(fromIso, toIso){
-  return 'Offers valid from ' + flyerDdmmyyyy(fromIso) + ' to ' + flyerDdmmyyyy(toIso);
+  return 'Prices valid from ' + flyerDdmmyyyy(fromIso) + ' to ' + flyerDdmmyyyy(toIso);
 }
 function confirmWholesaleExcelDownload(){
   const picked = document.querySelector('#modalWholesaleExcel input[name="wsExcelScope"]:checked');
@@ -6691,12 +6691,12 @@ function confirmWholesaleExcelDownload(){
   const toVal = document.getElementById('wsExcelToDate').value;
   const err = document.getElementById('wsExcelDateErr');
   if(!fromVal || !toVal){
-    err.textContent = 'Choose both an offer valid from date and a valid to date.';
+    err.textContent = 'Choose both the Prices valid from date and the valid to date.';
     err.style.display = 'block';
     return;
   }
   if(toVal < fromVal){
-    err.textContent = 'Valid to must be on or after the offer valid from date.';
+    err.textContent = 'Valid to must be on or after the Prices valid from date.';
     err.style.display = 'block';
     return;
   }
@@ -6839,7 +6839,7 @@ function loadWholesaleExcelLib(){
 }
 async function downloadWholesaleExcel(mode, fromIso, toIso){
   if(wholesaleRows.length === 0){ toast('Nothing to export yet'); return; }
-  if(!fromIso || !toIso){ toast('Choose both an offer valid from date and a valid to date.'); return; }
+  if(!fromIso || !toIso){ toast('Choose both the Prices valid from date and the valid to date.'); return; }
   try{
     const ExcelJS = await loadWholesaleExcelLib();
     const qrBase64 = await wholesaleExcelQrBase64();
