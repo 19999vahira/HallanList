@@ -348,6 +348,12 @@
   .btn-danger-ghost:hover{background:var(--danger);color:#fff;}
 
   .actionbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;}
+  .returns-list-tools{display:flex;gap:10px;flex-wrap:wrap;margin:-6px 0 16px;}
+  .returns-list-tools input,.returns-list-tools select{
+    padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);
+    color:var(--text);font:inherit;font-size:14px;
+  }
+  .returns-list-tools input{flex:1;min-width:180px;}
 
   /* ---- Place Order filter bar: a bordered card of label-over-select
      fields, instead of loose inline labels + dropdowns crammed together.
@@ -3360,6 +3366,15 @@
       <span id="returnsAdjustCountBar" class="mono" style="color:var(--text-dim);font-size:12px;"></span>
       <button class="btn-ghost" onclick="loadReturnsAdjustments()">Refresh</button>
     </div>
+    <div class="returns-list-tools no-print">
+      <input type="search" id="returnsAdjustQuery" placeholder="Search name or barcode" autocomplete="off" oninput="onReturnsAdjustTools()">
+      <select id="returnsAdjustSort" onchange="onReturnsAdjustTools()" aria-label="Sort list">
+        <option value="date-desc">Sort by date (newest)</option>
+        <option value="date-asc">Sort by date (oldest)</option>
+        <option value="name-asc">Sort by name (A–Z)</option>
+        <option value="name-desc">Sort by name (Z–A)</option>
+      </select>
+    </div>
     <div id="returnsAdjustList"><div class="loading">Loading…</div></div>
   </div>
 
@@ -3378,6 +3393,15 @@
     <div class="actionbar">
       <span id="returnsWarehouseDamageCountBar" class="mono" style="color:var(--text-dim);font-size:12px;"></span>
       <button class="btn-ghost" onclick="loadReturnsWarehouseDamages()">Refresh</button>
+    </div>
+    <div class="returns-list-tools no-print">
+      <input type="search" id="returnsDamageQuery" placeholder="Search name or barcode" autocomplete="off" oninput="onReturnsDamageTools()">
+      <select id="returnsDamageSort" onchange="onReturnsDamageTools()" aria-label="Sort list">
+        <option value="date-desc">Sort by date (newest)</option>
+        <option value="date-asc">Sort by date (oldest)</option>
+        <option value="name-asc">Sort by name (A–Z)</option>
+        <option value="name-desc">Sort by name (Z–A)</option>
+      </select>
     </div>
     <div id="returnsWarehouseDamageList"><div class="loading">Loading…</div></div>
   </div>
@@ -3526,6 +3550,15 @@
         <button class="btn-ghost" onclick="promptReturnsAction(currentReturnsDisposalType,'print')">Print</button>
         <button class="btn-ghost" onclick="promptReturnsAction(currentReturnsDisposalType,'pdf')">Download PDF</button>
       </div>
+    </div>
+    <div class="returns-list-tools no-print">
+      <input type="search" id="returnsDisposalQuery" placeholder="Search name or barcode" autocomplete="off" oninput="onReturnsDisposalTools()">
+      <select id="returnsDisposalSort" onchange="onReturnsDisposalTools()" aria-label="Sort list">
+        <option value="date-desc">Sort by date (newest)</option>
+        <option value="date-asc">Sort by date (oldest)</option>
+        <option value="name-asc">Sort by name (A–Z)</option>
+        <option value="name-desc">Sort by name (Z–A)</option>
+      </select>
     </div>
     <table class="finaltable" id="returnsDisposalTable"></table>
   </div>
@@ -18320,6 +18353,90 @@ function updateReturnsPhotoBadgeCount(){
   if(returnsPhotoGalleryOwnerRender) returnsPhotoGalleryOwnerRender();
 }
 
+/* ---- Name / date sort and name-or-barcode search for Stock Adjusted,
+   Warehouse Damages, Charity List, and Bin List. The source arrays stay
+   complete; only the drawn rows change. ---- */
+const returnsListView = {
+  adjustments: { sort: 'date-desc', query: '' },
+  damages: { sort: 'date-desc', query: '' },
+  charity: { sort: 'date-desc', query: '' },
+  bin: { sort: 'date-desc', query: '' }
+};
+function returnsListTime(value){
+  if(value instanceof Date) return value.getTime();
+  const raw = String(value || '').trim();
+  if(!raw) return 0;
+  const direct = Date.parse(raw);
+  if(!isNaN(direct)) return direct;
+  const m = raw.match(/^(\d{1,2}) ([A-Za-z]{3}) (\d{4})(?:[ T](\d{2}):(\d{2}))?/);
+  if(!m) return 0;
+  const months = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+  const mo = months[m[2].toLowerCase()];
+  if(mo === undefined) return 0;
+  return new Date(Number(m[3]), mo, Number(m[1]), Number(m[4] || 0), Number(m[5] || 0)).getTime();
+}
+function returnsListArrange(items, opts){
+  const sort = opts.sort || 'date-desc';
+  const query = String(opts.query || '').trim().toLowerCase();
+  const nameKey = opts.nameKey;
+  const dateKey = opts.dateKey;
+  const rows = (items || []).filter(it => {
+    if(!query) return true;
+    const name = String(it[nameKey] || '').toLowerCase();
+    const code = it.barcode == null ? '' : String(it.barcode).toLowerCase();
+    return name.includes(query) || code.includes(query);
+  });
+  rows.sort((a, b) => {
+    if(sort === 'name-asc' || sort === 'name-desc'){
+      const c = String(a[nameKey] || '').localeCompare(String(b[nameKey] || ''), undefined, { sensitivity: 'base' });
+      if(c) return sort === 'name-asc' ? c : -c;
+    }
+    const da = returnsListTime(a[dateKey]);
+    const db = returnsListTime(b[dateKey]);
+    return sort === 'date-asc' ? da - db : db - da;
+  });
+  return rows;
+}
+function returnsListCountText(total, shown, noun){
+  const word = noun + (total === 1 ? '' : 's');
+  if(shown === total) return total + ' ' + word;
+  return shown + ' of ' + total + ' ' + word;
+}
+function onReturnsAdjustTools(){
+  const state = returnsListView.adjustments;
+  const q = document.getElementById('returnsAdjustQuery');
+  const s = document.getElementById('returnsAdjustSort');
+  if(q) state.query = q.value;
+  if(s) state.sort = s.value;
+  renderReturnsAdjustments();
+}
+function onReturnsDamageTools(){
+  const state = returnsListView.damages;
+  const q = document.getElementById('returnsDamageQuery');
+  const s = document.getElementById('returnsDamageSort');
+  if(q) state.query = q.value;
+  if(s) state.sort = s.value;
+  renderReturnsWarehouseDamages();
+}
+function returnsDisposalViewState(){
+  return currentReturnsDisposalType === 'BIN' ? returnsListView.bin : returnsListView.charity;
+}
+function syncReturnsDisposalTools(){
+  const state = returnsDisposalViewState();
+  const q = document.getElementById('returnsDisposalQuery');
+  const s = document.getElementById('returnsDisposalSort');
+  if(q) q.value = state.query;
+  if(s) s.value = state.sort;
+}
+function onReturnsDisposalTools(){
+  const state = returnsDisposalViewState();
+  const q = document.getElementById('returnsDisposalQuery');
+  const s = document.getElementById('returnsDisposalSort');
+  if(q) state.query = q.value;
+  if(s) state.sort = s.value;
+  renderReturnsDisposalTable();
+}
+
 /* ---- Stock Adjusted (Vector): write-offs synced from Vector by
    test_oracle.py into STOCK_ADJUSTMENTS. Tap a row -> the same supplier pick
    and quantity/reason modals the scanner uses (quantity pre-filled from the
@@ -18351,12 +18468,18 @@ async function loadReturnsAdjustments(){
 function renderReturnsAdjustments(){
   const box = document.getElementById('returnsAdjustList');
   const bar = document.getElementById('returnsAdjustCountBar');
-  if(bar) bar.textContent = returnsAdjustItems.length + ' write-off' + (returnsAdjustItems.length===1?'':'s');
+  const state = returnsListView.adjustments;
+  const shown = returnsListArrange(returnsAdjustItems, { sort: state.sort, query: state.query, nameKey: 'stock_name', dateKey: 'adjust_datetime_txt' });
+  if(bar) bar.textContent = returnsListCountText(returnsAdjustItems.length, shown.length, 'write-off');
   if(returnsAdjustItems.length === 0){
     box.innerHTML = '<div class="empty-hint">Nothing waiting — every Vector write-off has been added to a return or cleared.</div>';
     return;
   }
-  box.innerHTML = returnsAdjustItems.map(it => {
+  if(shown.length === 0){
+    box.innerHTML = '<div class="empty-hint">No write-offs match that search.</div>';
+    return;
+  }
+  box.innerHTML = shown.map(it => {
     const qty = Math.abs(Number(it.adjust_qty)) || 0;
     return `
     <div class="pickrow" style="cursor:pointer;" onclick="pickReturnsAdjustment(${Number(it.stockadjustid)})">
@@ -18453,12 +18576,18 @@ async function loadReturnsWarehouseDamages(){
 function renderReturnsWarehouseDamages(){
   const box = document.getElementById('returnsWarehouseDamageList');
   const bar = document.getElementById('returnsWarehouseDamageCountBar');
-  if(bar) bar.textContent = returnsWarehouseDamageItems.length + ' item' + (returnsWarehouseDamageItems.length===1?'':'s');
+  const state = returnsListView.damages;
+  const shown = returnsListArrange(returnsWarehouseDamageItems, { sort: state.sort, query: state.query, nameKey: 'item_name', dateKey: 'created_at_txt' });
+  if(bar) bar.textContent = returnsListCountText(returnsWarehouseDamageItems.length, shown.length, 'item');
   if(returnsWarehouseDamageItems.length === 0){
     box.innerHTML = '<div class="empty-hint">Nothing waiting — every logged damage has been added to a return or cleared.</div>';
     return;
   }
-  box.innerHTML = returnsWarehouseDamageItems.map(it => {
+  if(shown.length === 0){
+    box.innerHTML = '<div class="empty-hint">No items match that search.</div>';
+    return;
+  }
+  box.innerHTML = shown.map(it => {
     const qty = Math.abs(Number(it.quantity)) || 0;
     const photoCount = Number(it.image_count) || 0;
     const locNote = it.location ? (' &middot; 📍 ' + escapeHtml(it.location)) : '';
@@ -19605,6 +19734,7 @@ async function openReturnsDisposal(type){
   document.getElementById('returnsDisposalMeta').textContent = 'Date list printed: ' + new Date().toLocaleDateString('en-GB');
   document.getElementById('returnsDisposalTable').innerHTML = '';
   document.getElementById('returnsDisposalCount').textContent = 'Loading…';
+  syncReturnsDisposalTools();
   showView('view-returns-disposal');
   try{
     const data = await apiGet('returns/bin-charity/' + type + '/');
@@ -19619,11 +19749,19 @@ async function openReturnsDisposal(type){
 function renderReturnsDisposalTable(){
   const table = document.getElementById('returnsDisposalTable');
   const readOnly = !!currentReturnsDisposalClosure;
+  const state = returnsDisposalViewState();
+  const shown = returnsListArrange(currentReturnsDisposalItems, { sort: state.sort, query: state.query, nameKey: 'item_name', dateKey: 'moved_at' });
+  const countEl = document.getElementById('returnsDisposalCount');
+  if(countEl) countEl.textContent = returnsListCountText(currentReturnsDisposalItems.length, shown.length, 'item');
   if(currentReturnsDisposalItems.length === 0){
     table.innerHTML = '<caption class="empty-hint">' + (readOnly ? 'This closed list has no items.' : 'Nothing here yet.') + '</caption>';
     return;
   }
-  const rows = currentReturnsDisposalItems.map(it => `
+  if(shown.length === 0){
+    table.innerHTML = '<caption class="empty-hint">No items match that search.</caption>';
+    return;
+  }
+  const rows = shown.map(it => `
     <tr>
       <td>${escapeHtml(it.item_name)}</td>
       <td>${escapeHtml(it.supplier_name)}</td>
@@ -19636,7 +19774,7 @@ function renderReturnsDisposalTable(){
       <td class="no-print">${readOnly ? '' : `<a href="#" class="minibtn minibtn-undo" onclick="event.preventDefault(); unmoveReturnsDisposalItem(${it.item_id})">Undo</a>`}</td>
     </tr>
   `).join('');
-  const totals = returnsItemsTotals(currentReturnsDisposalItems);
+  const totals = returnsItemsTotals(shown);
   table.innerHTML = `
     <thead><tr><th>Item</th><th>Supplier</th><th class="qtycell">Cost Price</th><th class="qtycell">Qty</th><th class="qtycell">VAT</th><th class="qtycell">Total</th><th class="loc-col">Location</th><th class="no-print">Photos</th><th class="no-print"></th></tr></thead>
     <tbody>${rows}</tbody>
@@ -19730,6 +19868,7 @@ async function openReturnsDisposalClosedDetail(closeId){
     document.getElementById('returnsDisposalClosedBackBtn').style.display = '';
     document.getElementById('returnsDisposalViewClosedBtn').style.display = 'none';
     document.getElementById('returnsDisposalCloseBtn').style.display = 'none';
+    syncReturnsDisposalTools();
     showView('view-returns-disposal');
     renderReturnsDisposalTable();
   }catch(e){
